@@ -5,10 +5,16 @@
   "dependencies": {
     "@vercel/edge": "^0.1.2",
     "cors": "^2.8.5",
-    "node-fetch": "^3.2.10",
+    "express": "^4.21.2",
+    "node-fetch": "^3.3.2",
     "tweetnacl": "^1.0.3"
   },
   "scripts": {
     "start": "vercel dev"
-  }
+  },
+  "description": "---\r name: HTML Starter\r slug: html-starter-with-analytics\r description: HTML5 template with analytics and advanced routing configuration.\r deployUrl: https://vercel.com/new/clone?repository-url=https://github.com/vercel/examples/tree/main/solutions/html&project-name=html\r relatedTemplates:\r   - nextjs-boilerplate\r ---",
+  "main": "middleware.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }
