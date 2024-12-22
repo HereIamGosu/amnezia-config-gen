@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "dependencies": {
     "@vercel/edge": "^0.1.2",
-    "node-fetch": "^2.6.1",
+    "cors": "^2.8.5",
+    "node-fetch": "^3.2.10",
     "tweetnacl": "^1.0.3"
   },
   "scripts": {

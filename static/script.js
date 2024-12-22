@@ -3,40 +3,38 @@ async function generateConfig() {
     const button_text = document.querySelector('#generateButton .button__text');
     const status = document.getElementById('status');
     
-    // Изменяем состояние кнопки на загрузку
     button.disabled = true;
     button.classList.add("button--loading");
+    status.textContent = "Генерация конфигурации...";
 
     try {
-        // Запрашиваем конфигурацию сгенерированную на сервере
-        const response = await fetch(`/warp`);
+        const response = await fetch(`https://amnezia-config-bpuusmrvw-hereiamgosus-projects.vercel.app/warp`);
         const data = await response.json();
 
         if (data.success) {
-            // Функция для скачивания сгенерированного файла
             const downloadFile = () => {
                 const blob = new Blob([data.content], { type: 'text/plain' });
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = 'AmneziaWarp.conf'; // Название файла
+                link.download = 'AmneziaWarp.conf';
                 link.click();
-                URL.revokeObjectURL(link.href); // Освобождаем память
+                URL.revokeObjectURL(link.href);
             };
 
-            // Изменяем текст на кнопке и назначаем действие при клике
-            button_text.textContent = 'Скачать AmneziaWarp.conf'; // Текст кнопки
+            button_text.textContent = 'Скачать AmneziaWarp.conf';
             button.onclick = downloadFile;
-            downloadFile(); // Автоматический запуск скачивания
+            status.textContent = "Конфигурация успешно сгенерирована!";
         } else {
-            status.textContent = 'Ошибка: ' + data.message; // Отображение ошибки
+            status.textContent = 'Ошибка: ' + data.message;
         }
     } catch (error) {
-        status.textContent = 'Произошла ошибка при генерации.'; // Ошибка при запросе
+        status.textContent = 'Произошла ошибка при генерации. Попробуйте снова.';
     } finally {
-        button.disabled = false; // Восстанавливаем кнопку
+        button.disabled = false;
         button.classList.remove("button--loading");
     }
 }
+
 
 // Привязываем функцию к кнопке
 document.getElementById('generateButton').onclick = generateConfig;
