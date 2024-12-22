@@ -59,8 +59,13 @@ button:disabled {
 
 /* Кнопка генерации конфигурации */
 #generateButton {
-  background: linear-gradient(90deg, var(--color-primary, #0a9dc4), var(--color-secondary, #444c6b));
-  box-shadow: 0 4px 8px rgba(10, 157, 196, 0.2), 0 6px 20px rgba(68, 76, 107, 0.2);
+  background: linear-gradient(
+    90deg,
+    var(--color-primary, #0a9dc4),
+    var(--color-secondary, #444c6b)
+  );
+  box-shadow: 0 4px 8px rgba(10, 157, 196, 0.2),
+    0 6px 20px rgba(68, 76, 107, 0.2);
 }
 
 #generateButton:hover {
@@ -175,4 +180,18 @@ button.button--loading {
 
 .overlay .close-button:hover {
   color: var(--color-primary, #0a9dc4);
+}
+
+/* Элемент с классом .thank-you */
+.thank-you {
+  position: absolute;
+  bottom: 20px; /* Расстояние от нижнего края страницы */
+  left: 50%;
+  transform: translateX(-50%); /* Центрирование по горизонтали */
+  font-size: 16px;
+  color: var(--color-text, #333);
+  background-color: var(--color-background, #fff);
+  padding: 10px;
+  border-radius: 5px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 }
