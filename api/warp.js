@@ -115,6 +115,6 @@ module.exports = async (req, res) => {
         res.status(200).json({ success: true, content: config });
     } catch (error) {
         console.error('Ошибка при генерации конфигурации:', error);
-        res.status(500).json({ success: false, message: 'Ошибка на сервере' });
+        res.status(500).json({ success: false, message: 'Ошибка на сервере.' });
     }
 };
