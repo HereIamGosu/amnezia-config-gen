@@ -1,24 +1,34 @@
 {
-    "version": 2,
-    "builds": [
+  "version": 2,
+  "builds": [
       {
-        "src": "api/**/*.js",
-        "use": "@vercel/node"
+          "src": "api/**/*.js",
+          "use": "@vercel/node"
       },
       {
-        "src": "public/**/*",
-        "use": "@vercel/static"
+          "src": "public/**/*",
+          "use": "@vercel/static"
       }
-    ],
-    "routes": [
+  ],
+  "routes": [
       {
-        "src": "/api/(.*)",
-        "dest": "/api/$1.js"
+          "src": "/api/(.*)",
+          "dest": "/api/$1.js"
       },
       {
-        "src": "/(.*)",
-        "dest": "/public/$1"
+          "src": "/(.*)",
+          "dest": "/public/$1"
       }
-    ]
-  }
-  
+  ],
+  "headers": [
+      {
+          "source": "/(.*)",
+          "headers": [
+              {
+                  "key": "Permissions-Policy",
+                  "value": "fullscreen=(self), geolocation=()"
+              }
+          ]
+      }
+  ]
+}

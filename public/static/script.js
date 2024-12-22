@@ -70,9 +70,16 @@ document.getElementById('schedulerButton').addEventListener('click', async funct
         }
 
         const blob = await response.blob();
-        downloadFile(blob, 'SchedulerAmnezia.bat');
+        // Создаём объект URL из Blob
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = 'SchedulerAmnezia.bat';
+        link.click();
+        URL.revokeObjectURL(blobUrl);
     } catch (error) {
         console.error('Ошибка при скачивании файла:', error);
         alert('Не удалось скачать файл. Попробуйте позже.');
     }
 });
+
