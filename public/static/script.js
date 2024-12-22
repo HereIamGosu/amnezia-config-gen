@@ -1,4 +1,4 @@
-// public/static/script.js
+// src/script.js
 
 async function generateConfig() {
     const button = document.getElementById('generateButton');
