@@ -27,7 +27,10 @@ function generateHeaders(token = null) {
 // Централизованная обработка ошибок и запросов
 function handleApiRequest(method, endpoint, body = null, token = null) {
     return new Promise((resolve, reject) => {
+        // Генерация заголовков для запроса
         const headers = generateHeaders(token);
+
+        // Опции для запроса
         const options = {
             hostname: 'api.cloudflareclient.com',
             port: 443,
@@ -36,41 +39,57 @@ function handleApiRequest(method, endpoint, body = null, token = null) {
             headers: headers,
         };
 
+        // Добавляем тело запроса, если оно есть
         if (body) {
             options.body = JSON.stringify(body);
         }
 
+        // Выполнение запроса
         const req = https.request(options, (res) => {
             let data = '';
+
+            // Слушаем поступающие данные
             res.on('data', (chunk) => {
                 data += chunk;
             });
 
+            // После получения всех данных
             res.on('end', () => {
-                console.log('API response:', data);  // Логируем весь ответ от сервера
+                console.log('API response:', data);  // Логируем ответ от API
+
                 try {
-                    const parsedData = JSON.parse(data);  // Пытаемся распарсить JSON
+                    const parsedData = JSON.parse(data);  // Парсим JSON ответ
+
+                    // Проверка статуса ответа
                     if (res.statusCode === 200) {
                         resolve(parsedData);
                     } else {
-                        reject(`Ошибка: ${parsedData.message || 'Неизвестная ошибка'}`);
+                        // Обработка ошибок на уровне API
+                        const errorMessage = parsedData.message || `Ошибка с кодом ${res.statusCode}`;
+                        reject(new Error(`API Error: ${errorMessage}`));
                     }
                 } catch (error) {
-                    reject(`Ошибка при парсинге ответа: ${error.message}`);
+                    // Ошибка при парсинге JSON
+                    reject(new Error(`Ошибка при парсинге ответа: ${error.message}`));
                 }
             });
         });
 
+        // Обработка ошибок запроса
         req.on('error', (e) => {
-            reject(`Ошибка запроса: ${e.message}`);
+            reject(new Error(`Ошибка запроса: ${e.message}`));
         });
 
+        // Если есть тело, отправляем его в запросе
         if (body) {
-            req.write(JSON.stringify(body));
+            req.write(options.body);
         }
+
+        // Завершаем запрос
         req.end();
     });
 }
+
 
 
 // Генерация конфигурации для WARP
