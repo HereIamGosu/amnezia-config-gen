@@ -21,15 +21,22 @@ async function generateConfig() {
     status.textContent = "Генерация конфигурации...";
 
     try {
-        const response = await fetch('/api/warp');
+        const response = await fetch('/api/warp', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
         const data = await response.json();
 
         if (data.success) {
+            const decodedConfig = atob(data.content);
             buttonText.textContent = 'Скачать AmneziaWarp.conf';
             // Удаление старого обработчика и добавление нового
             button.removeEventListener('click', generateConfig);
-            button.addEventListener('click', () => downloadFile(data.content, 'AmneziaWarp.conf'));
-            downloadFile(data.content, 'AmneziaWarp.conf');
+            button.addEventListener('click', () => downloadFile(decodedConfig, 'AmneziaWarp.conf'));
+            downloadFile(decodedConfig, 'AmneziaWarp.conf');
             status.textContent = "Конфигурация успешно сгенерирована!";
         } else {
             status.textContent = `Ошибка: ${data.message}`;

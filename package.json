@@ -1,11 +1,12 @@
 {
   "name": "amnezia-config-generator",
   "version": "1.0.0",
+  "description": "Генератор конфигураций для AmneziaWG",
+  "main": "api/warp.js",
+  "scripts": {
+    "start": "node api/warp.js"
+  },
   "dependencies": {
-    "@vercel/edge": "^0.1.2",
-    "cors": "^2.8.5",
-    "express": "^4.21.2",
-    "node-fetch": "^3.3.2",
     "tweetnacl": "^1.0.3",
     "uuid": "^8.3.2"
   },
