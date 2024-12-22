@@ -111,7 +111,7 @@ button.button--loading {
 /* Статус ошибки */
 #status {
   margin-bottom: 20px;
-  color: #f15874;
+  color: #434343;
   font-size: 16px;
   font-weight: bold;
 }
