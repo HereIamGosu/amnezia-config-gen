@@ -28,7 +28,16 @@ async function generateConfig() {
             },
         });
 
-        const data = await response.json();
+        let data;
+        const contentType = response.headers.get('content-type');
+
+        if (contentType && contentType.includes('application/json')) {
+            data = await response.json();
+        } else {
+            // Если не JSON, читаем как текст и выбрасываем ошибку
+            const text = await response.text();
+            throw new Error(text);
+        }
 
         if (data.success) {
             const decodedConfig = atob(data.content);
@@ -43,7 +52,7 @@ async function generateConfig() {
         }
     } catch (error) {
         console.error('Ошибка при генерации конфигурации:', error);
-        status.textContent = 'Произошла ошибка при генерации. Попробуйте снова.';
+        status.textContent = `Ошибка при генерации: ${error.message}`;
     } finally {
         button.disabled = false;
         button.classList.remove("button--loading");
