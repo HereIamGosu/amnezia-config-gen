@@ -5,12 +5,12 @@ body {
   align-items: center;
   height: 100vh;
   margin: 0;
-  background-color: #f5f5f5;  /* Светлый фон */
+  background-color: #f4f4f4;
   font-family: "Roboto", sans-serif;
-  color: #333;  /* Темный текст */
+  color: #333;
 }
 
-/* Контейнер с основным контентом */
+/* Контейнер с кнопками */
 .container {
   max-width: 95%;
   width: 400px;
@@ -19,7 +19,7 @@ body {
   text-align: center;
   align-items: center;
   padding: 30px;
-  background-color: #ffffff;  /* Белый фон для контейнера */
+  background-color: #fff;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
   border-radius: 10px;
 }
@@ -36,7 +36,7 @@ button {
   margin-bottom: 20px;
   padding: 12px 20px;
   font-size: 18px;
-  color: #ffffff;  /* Белый текст на кнопках */
+  color: #fff;
   border: none;
   border-radius: 5px;
   cursor: pointer;
@@ -59,22 +59,23 @@ button:disabled {
 
 /* Кнопка генерации конфигурации */
 #generateButton {
-  background: linear-gradient(90deg, #007bff, #00c4cc);  /* Градиент для кнопки */
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(90deg, #2ecc71, #00bcd4);
+  box-shadow: 0 4px 8px rgba(46, 204, 113, 0.2),
+    0 6px 20px rgba(0, 188, 212, 0.2);
 }
 
 #generateButton:hover {
-  background: linear-gradient(90deg, #006bb3, #00a6b3);
+  background: linear-gradient(90deg, #27ae60, #0097a7);
 }
 
 /* Кнопка скачивания файла */
 #schedulerButton {
-  background-color: #d1a84f;
+  background-color: #f15874;
   box-shadow: 0 4px 8px rgba(241, 88, 116, 0.2);
 }
 
 #schedulerButton:hover {
-  background-color: #b18d40;
+  background-color: #e14e65;
 }
 
 /* Индикатор загрузки */
@@ -83,7 +84,7 @@ button:disabled {
   width: 18px;
   height: 18px;
   border: solid rgba(0, 0, 0, 0.1);
-  border-top-color: #ff4f5a;  /* Красный для индикатора загрузки */
+  border-top-color: #f15874;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -110,7 +111,7 @@ button.button--loading {
 /* Статус ошибки */
 #status {
   margin-bottom: 20px;
-  color: #ff4f5a;  /* Красный текст для ошибок */
+  color: #434343;
   font-size: 16px;
   font-weight: bold;
 }
@@ -119,82 +120,141 @@ button.button--loading {
 .instruction {
   margin-left: 40px;
   padding: 20px;
-  background-color: #ffffff;  /* Белый фон для инструкции */
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-}
-
-/* Стили для инструкции справа */
-.instruction {
-  margin-left: 40px;
-  padding: 20px;
-  background-color: var(--color-background, #fff);
+  background-color: #fff;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
   border-radius: 10px;
+  width: 650px;
+  text-align: left;
+}
+
+.instruction h2 {
+  font-size: 20px;
+  margin-bottom: 15px;
+}
+
+.instruction ol {
+  margin-left: 20px;
   font-size: 16px;
-  color: var(--color-text, #333);
 }
 
-.instruction h3 {
-  font-size: 18px;
-  color: var(--color-primary, #0a9dc4);
-  margin-bottom: 10px;
+.instruction a {
+  color: #2ecc71;
+  text-decoration: none;
 }
 
-.instruction ul {
-  padding-left: 20px;
-  list-style-type: disc;
+.instruction a:hover {
+  text-decoration: underline;
 }
 
-.instruction ul li {
-  font-size: 14px;
-  color: var(--color-text-secondary, #6c757d);
-  margin-bottom: 10px;
+.instruction p {
+  font-size: 16px;
+  margin-top: 10px;
 }
 
-.instruction ul li:last-child {
-  margin-bottom: 0;
-}
-
-/* Оверлей для загрузки */
-.overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: var(--overlay-background, rgba(53, 61, 62, 0.5));
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 100;
-}
-
-/* Кнопка закрытия оверлея */
-.overlay .close-button {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  font-size: 24px;
-  color: var(--color-text, #333);
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-.overlay .close-button:hover {
-  color: var(--color-primary, #0a9dc4);
-}
-
-/* Элемент с классом .thank-you */
 .thank-you {
   position: absolute;
-  bottom: 20px; /* Расстояние от нижнего края страницы */
+  width: 70%;
+  bottom: 10px;
   left: 50%;
-  transform: translateX(-50%); /* Центрирование по горизонтали */
-  font-size: 16px;
-  color: var(--color-text, #333);
-  background-color: var(--color-background, #fff);
-  padding: 10px;
-  border-radius: 5px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  transform: translateX(-50%);
+  font-size: 14px;
+  color: #b0b0b0; /* бледно-серый цвет */
+  text-align: center;
+}
+
+.thank-you a {
+  color: #b0b0b0; /* цвет ссылки такой же, как и текст */
+  text-decoration: none;
+}
+
+.thank-you a:hover {
+  text-decoration: underline;
+}
+
+/* Адаптивные стили для мобильных устройств */
+@media (max-width: 768px) {
+  /* Контейнер с кнопками */
+  .container {
+    width: 90%; /* Уменьшаем ширину контейнера */
+    padding: 20px; /* Уменьшаем отступы */
+  }
+
+  /* Картинка */
+  img {
+    margin-bottom: 15px;
+  }
+
+  /* Кнопки */
+  button {
+    font-size: 16px; /* Уменьшаем размер шрифта для кнопок */
+    padding: 10px 15px; /* Уменьшаем отступы кнопок */
+  }
+
+  /* Статус ошибки */
+  #status {
+    font-size: 14px; /* Уменьшаем размер шрифта */
+  }
+
+  /* Стили для инструкции справа */
+  .instruction {
+    margin-left: 0;
+    width: 100%;
+    margin-top: 20px; /* Добавляем отступ сверху для адаптивности */
+  }
+
+  .instruction h2 {
+    font-size: 18px; /* Уменьшаем размер заголовка */
+  }
+
+  .instruction ol {
+    font-size: 14px; /* Уменьшаем размер шрифта в списке */
+  }
+
+  .instruction p {
+    font-size: 14px; /* Уменьшаем размер шрифта */
+  }
+
+  /* Стили для нижнего блока */
+  .thank-you {
+    width: 90%;
+    font-size: 12px;
+  }
+}
+
+/* Адаптивные стили для мобильных устройств с маленькими экранами */
+@media (max-width: 480px) {
+  /* Контейнер с кнопками */
+  .container {
+    width: 95%; /* Еще больше уменьшаем ширину */
+    padding: 15px; /* Уменьшаем отступы */
+  }
+
+  /* Кнопки */
+  button {
+    font-size: 14px; /* Еще больше уменьшаем размер шрифта */
+    padding: 8px 12px; /* Уменьшаем отступы кнопок */
+  }
+
+  /* Стили для инструкции справа */
+  .instruction {
+    width: 100%; /* Инструкция занимает всю ширину */
+    padding: 15px; /* Уменьшаем отступы */
+  }
+
+  .instruction h2 {
+    font-size: 16px; /* Уменьшаем размер заголовка */
+  }
+
+  .instruction ol {
+    font-size: 12px; /* Уменьшаем размер шрифта в списке */
+  }
+
+  .instruction p {
+    font-size: 12px; /* Уменьшаем размер шрифта */
+  }
+
+  .thank-you {
+    width: 90%; /* Уменьшаем ширину блока */
+    font-size: 10px; /* Уменьшаем размер шрифта */
+  }
 }
