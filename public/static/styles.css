@@ -5,12 +5,12 @@ body {
   align-items: center;
   height: 100vh;
   margin: 0;
-  background-color: var(--color-light-background, #f4f4f4);
+  background-color: #f5f5f5;  /* Светлый фон */
   font-family: "Roboto", sans-serif;
-  color: var(--color-text, #333);
+  color: #333;  /* Темный текст */
 }
 
-/* Контейнер с кнопками */
+/* Контейнер с основным контентом */
 .container {
   max-width: 95%;
   width: 400px;
@@ -19,7 +19,7 @@ body {
   text-align: center;
   align-items: center;
   padding: 30px;
-  background-color: var(--color-background, #fff);
+  background-color: #ffffff;  /* Белый фон для контейнера */
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
   border-radius: 10px;
 }
@@ -36,7 +36,7 @@ button {
   margin-bottom: 20px;
   padding: 12px 20px;
   font-size: 18px;
-  color: var(--color-button-text, #fff);
+  color: #ffffff;  /* Белый текст на кнопках */
   border: none;
   border-radius: 5px;
   cursor: pointer;
@@ -59,27 +59,22 @@ button:disabled {
 
 /* Кнопка генерации конфигурации */
 #generateButton {
-  background: linear-gradient(
-    90deg,
-    var(--color-primary, #0a9dc4),
-    var(--color-secondary, #444c6b)
-  );
-  box-shadow: 0 4px 8px rgba(10, 157, 196, 0.2),
-    0 6px 20px rgba(68, 76, 107, 0.2);
+  background: linear-gradient(90deg, #007bff, #00c4cc);  /* Градиент для кнопки */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 #generateButton:hover {
-  background: linear-gradient(90deg, #27ae60, #0097a7);
+  background: linear-gradient(90deg, #006bb3, #00a6b3);
 }
 
 /* Кнопка скачивания файла */
 #schedulerButton {
-  background-color: var(--color-negative, #b5050f);
-  box-shadow: 0 4px 8px rgba(181, 5, 15, 0.2);
+  background-color: #ff4f5a;  /* Красный для ошибки */
+  box-shadow: 0 4px 8px rgba(255, 79, 90, 0.2);
 }
 
 #schedulerButton:hover {
-  background-color: var(--color-negative-hover, #8b0000);
+  background-color: #e64347;  /* Тёмный красный при наведении */
 }
 
 /* Индикатор загрузки */
@@ -88,7 +83,7 @@ button:disabled {
   width: 18px;
   height: 18px;
   border: solid rgba(0, 0, 0, 0.1);
-  border-top-color: var(--color-negative, #b5050f);
+  border-top-color: #ff4f5a;  /* Красный для индикатора загрузки */
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -115,9 +110,17 @@ button.button--loading {
 /* Статус ошибки */
 #status {
   margin-bottom: 20px;
-  color: var(--color-negative, #b5050f);
+  color: #ff4f5a;  /* Красный текст для ошибок */
   font-size: 16px;
   font-weight: bold;
+}
+
+/* Стили для инструкции справа */
+.instruction {
+  margin-left: 40px;
+  padding: 20px;
+  background-color: #ffffff;  /* Белый фон для инструкции */
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
 
 /* Стили для инструкции справа */
