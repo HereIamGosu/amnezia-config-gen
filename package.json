@@ -1,5 +1,4 @@
 {
-  "private": true,
   "name": "amnezia-config-generator",
   "version": "1.0.0",
   "dependencies": {
@@ -13,7 +12,7 @@
     "start": "vercel dev"
   },
   "description": "---\r name: HTML Starter\r slug: html-starter-with-analytics\r description: HTML5 template with analytics and advanced routing configuration.\r deployUrl: https://vercel.com/new/clone?repository-url=https://github.com/vercel/examples/tree/main/solutions/html&project-name=html\r relatedTemplates:\r   - nextjs-boilerplate\r ---",
-  "main": "middleware.js",
+  "main": "server.js",
   "keywords": [],
   "author": "",
   "license": "ISC"
