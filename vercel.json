@@ -19,16 +19,5 @@
           "src": "/(.*)",
           "dest": "/public/$1"
       }
-  ],
-  "headers": [
-      {
-          "source": "/(.*)",
-          "headers": [
-              {
-                  "key": "Permissions-Policy",
-                  "value": "fullscreen=(self), geolocation=()"
-              }
-          ]
-      }
   ]
 }
