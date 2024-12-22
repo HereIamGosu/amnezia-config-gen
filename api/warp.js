@@ -36,6 +36,10 @@ function handleApiRequest(method, endpoint, body = null, token = null) {
             headers: headers,
         };
 
+        if (body) {
+            options.body = JSON.stringify(body);
+        }
+
         const req = https.request(options, (res) => {
             let data = '';
             res.on('data', (chunk) => {
@@ -43,40 +47,31 @@ function handleApiRequest(method, endpoint, body = null, token = null) {
             });
 
             res.on('end', () => {
-                console.log(`API response for ${method} ${endpoint}:`, data);
-                if (res.statusCode >= 200 && res.statusCode < 300) {
-                    try {
-                        const parsedData = JSON.parse(data);
+                console.log('API response:', data);  // Логируем весь ответ от сервера
+                try {
+                    const parsedData = JSON.parse(data);  // Пытаемся распарсить JSON
+                    if (res.statusCode === 200) {
                         resolve(parsedData);
-                    } catch (e) {
-                        console.error('Ошибка парсинга JSON:', e.message);
-                        reject({ message: 'Ошибка парсинга JSON', error: e.message });
+                    } else {
+                        reject(`Ошибка: ${parsedData.message || 'Неизвестная ошибка'}`);
                     }
-                } else {
-                    // Проверка, является ли ответ JSON
-                    try {
-                        const errorData = JSON.parse(data);
-                        reject({ message: `Ошибка при запросе к API: ${res.statusCode}`, data: errorData });
-                    } catch (e) {
-                        // Если ответ не JSON, отправляем как есть
-                        reject({ message: `Ошибка при запросе к API: ${res.statusCode}`, data });
-                    }
+                } catch (error) {
+                    reject(`Ошибка при парсинге ответа: ${error.message}`);
                 }
             });
         });
 
         req.on('error', (e) => {
-            console.error(`Сетевая ошибка при запросе к API: ${e.message}`);
-            reject({ message: `Сетевая ошибка: ${e.message}` });
+            reject(`Ошибка запроса: ${e.message}`);
         });
 
         if (body) {
             req.write(JSON.stringify(body));
         }
-
         req.end();
     });
 }
+
 
 // Генерация конфигурации для WARP
 async function generateWarpConfig() {
