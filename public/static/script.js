@@ -1,8 +1,19 @@
 // public/static/script.js
 
+// Функция для скачивания файла
+function downloadFile(content, filename) {
+    const blob = new Blob([content], { type: 'text/plain' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(link.href);
+}
+
+// Генерация конфигурации
 async function generateConfig() {
     const button = document.getElementById('generateButton');
-    const button_text = document.querySelector('#generateButton .button__text');
+    const buttonText = document.querySelector('#generateButton .button__text');
     const status = document.getElementById('status');
 
     button.disabled = true;
@@ -14,25 +25,17 @@ async function generateConfig() {
         const data = await response.json();
 
         if (data.success) {
-            const downloadFile = () => {
-                const blob = new Blob([data.content], { type: 'text/plain' });
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = 'AmneziaWarp.conf';
-                link.click();
-                URL.revokeObjectURL(link.href);
-            };
-
-            button_text.textContent = 'Скачать AmneziaWarp.conf';
-            button.removeEventListener('click', generateConfig); // Удаляем старый обработчик
-            button.addEventListener('click', downloadFile); // Добавляем новый обработчик
-            downloadFile();
+            buttonText.textContent = 'Скачать AmneziaWarp.conf';
+            // Удаление старого обработчика и добавление нового
+            button.removeEventListener('click', generateConfig);
+            button.addEventListener('click', () => downloadFile(data.content, 'AmneziaWarp.conf'));
+            downloadFile(data.content, 'AmneziaWarp.conf');
             status.textContent = "Конфигурация успешно сгенерирована!";
         } else {
-            status.textContent = 'Ошибка: ' + data.message;
+            status.textContent = `Ошибка: ${data.message}`;
         }
     } catch (error) {
-        console.error(error);
+        console.error('Ошибка при генерации конфигурации:', error);
         status.textContent = 'Произошла ошибка при генерации. Попробуйте снова.';
     } finally {
         button.disabled = false;
@@ -40,8 +43,10 @@ async function generateConfig() {
     }
 }
 
+// Обработчик для кнопки генерации конфигурации
 document.getElementById('generateButton').addEventListener('click', generateConfig);
 
+// Обработчик для кнопки скачивания другого файла
 document.getElementById('schedulerButton').addEventListener('click', async function() {
     const url = 'https://raw.githubusercontent.com/HereIamGosu/warp-config-generator/main/SchedulerAmnezia.bat';
     try {
@@ -51,14 +56,7 @@ document.getElementById('schedulerButton').addEventListener('click', async funct
         }
 
         const blob = await response.blob();
-        const urlBlob = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = urlBlob;
-        a.download = 'SchedulerAmnezia.bat';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(urlBlob);
+        downloadFile(blob, 'SchedulerAmnezia.bat');
     } catch (error) {
         console.error('Ошибка при скачивании файла:', error);
         alert('Не удалось скачать файл. Попробуйте позже.');
