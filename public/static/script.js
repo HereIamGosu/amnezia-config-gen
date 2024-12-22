@@ -19,38 +19,29 @@ async function generateConfig() {
     status.textContent = "Генерация конфигурации...";
 
     try {
-        // Запрос к API для получения конфигурации
-        const response = await fetch('/api/warp', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
-
+        const response = await fetch('/api/warp');
+        
         if (!response.ok) {
             throw new Error(`Ошибка HTTP: ${response.status}`);
         }
 
-        // Проверка типа контента, если это JSON
-        const contentType = response.headers.get('content-type');
         let data;
-
-        if (contentType && contentType.includes('application/json')) {
+        try {
             data = await response.json();
-        } else {
-            // Если не JSON, читаем как текст
-            const text = await response.text();
-            throw new Error(`Ожидался JSON, но получен: ${text}`);
+        } catch (error) {
+            const text = await response.text();  // Если это не JSON, пробуем получить текст
+            console.error('Ошибка при парсинге JSON:', text);
+            status.textContent = 'Ошибка: не удалось распарсить данные.';
+            return;
         }
 
-        // Обработка успешного ответа
         if (data.success) {
-            const decodedConfig = atob(data.content);
+            const decodedConfig = atob(data.content);  // Расшифровываем base64-строку конфигурации
             buttonText.textContent = 'Скачать AmneziaWarp.conf';
-
-            // Скачивание файла
-            button.removeEventListener('click', generateConfig);  // Удаляем старый обработчик
-            button.addEventListener('click', () => downloadFile(decodedConfig, 'AmneziaWarp.conf'));  // Добавляем новый
+            
+            // Удаляем старый обработчик и добавляем новый
+            button.removeEventListener('click', generateConfig);
+            button.addEventListener('click', () => downloadFile(decodedConfig, 'AmneziaWarp.conf'));
 
             downloadFile(decodedConfig, 'AmneziaWarp.conf');
             status.textContent = "Конфигурация успешно сгенерирована!";
@@ -75,7 +66,7 @@ document.getElementById('schedulerButton').addEventListener('click', async funct
     try {
         const response = await fetch(url);
         if (!response.ok) {
-            throw new Error(`HTTP error! статус: ${response.status}`);
+            throw new Error(`Ошибка HTTP: ${response.status}`);
         }
 
         const blob = await response.blob();
