@@ -70,12 +70,12 @@ button:disabled {
 
 /* Кнопка скачивания файла */
 #schedulerButton {
-  background-color: #f15874;
+  background-color: #d1a84f;
   box-shadow: 0 4px 8px rgba(241, 88, 116, 0.2);
 }
 
 #schedulerButton:hover {
-  background-color: #e14e65;
+  background-color: #b18d40;
 }
 
 /* Индикатор загрузки */
