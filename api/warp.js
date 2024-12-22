@@ -71,16 +71,12 @@ Endpoint = ${peer_endpoint}`;
 }
 
 module.exports = async (req, res) => {
-    if (req.method !== 'GET') {
-        res.status(405).json({ success: false, message: 'Method not allowed' });
-        return;
-    }
-
     try {
-        const content = await generateWarpConfig();
-        res.status(200).json({ success: true, content });
+        // Логика генерации конфигурации
+        const config = generateConfig(); // предполагаемая функция, которая генерирует конфиг
+        res.status(200).json({ success: true, content: config });
     } catch (error) {
-        console.error('Ошибка при обработке запроса:', error);
-        res.status(500).json({ success: false, message: 'Произошла ошибка на сервере. Попробуйте позже.' });
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Ошибка на сервере' });
     }
 };
