@@ -52,7 +52,14 @@ function handleApiRequest(method, endpoint, body = null, token = null) {
                         reject({ message: 'Ошибка парсинга JSON', error: e.message });
                     }
                 } else {
-                    reject({ message: `Ошибка при запросе к API: ${res.statusCode}`, data });
+                    // Проверка, является ли ответ JSON
+                    try {
+                        const errorData = JSON.parse(data);
+                        reject({ message: `Ошибка при запросе к API: ${res.statusCode}`, data: errorData });
+                    } catch (e) {
+                        // Если ответ не JSON, отправляем как есть
+                        reject({ message: `Ошибка при запросе к API: ${res.statusCode}`, data });
+                    }
                 }
             });
         });
