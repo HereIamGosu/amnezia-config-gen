@@ -1,5 +1,3 @@
-// public/static/script.js
-
 // Функция для скачивания файла
 function downloadFile(content, filename) {
     const blob = new Blob([content], { type: 'text/plain' });
@@ -21,6 +19,7 @@ async function generateConfig() {
     status.textContent = "Генерация конфигурации...";
 
     try {
+        // Запрос к API для получения конфигурации
         const response = await fetch('/api/warp', {
             method: 'GET',
             headers: {
@@ -28,23 +27,31 @@ async function generateConfig() {
             },
         });
 
-        let data;
+        if (!response.ok) {
+            throw new Error(`Ошибка HTTP: ${response.status}`);
+        }
+
+        // Проверка типа контента, если это JSON
         const contentType = response.headers.get('content-type');
+        let data;
 
         if (contentType && contentType.includes('application/json')) {
             data = await response.json();
         } else {
-            // Если не JSON, читаем как текст и выбрасываем ошибку
+            // Если не JSON, читаем как текст
             const text = await response.text();
-            throw new Error(text);
+            throw new Error(`Ожидался JSON, но получен: ${text}`);
         }
 
+        // Обработка успешного ответа
         if (data.success) {
             const decodedConfig = atob(data.content);
             buttonText.textContent = 'Скачать AmneziaWarp.conf';
-            // Удаление старого обработчика и добавление нового
-            button.removeEventListener('click', generateConfig);
-            button.addEventListener('click', () => downloadFile(decodedConfig, 'AmneziaWarp.conf'));
+
+            // Скачивание файла
+            button.removeEventListener('click', generateConfig);  // Удаляем старый обработчик
+            button.addEventListener('click', () => downloadFile(decodedConfig, 'AmneziaWarp.conf'));  // Добавляем новый
+
             downloadFile(decodedConfig, 'AmneziaWarp.conf');
             status.textContent = "Конфигурация успешно сгенерирована!";
         } else {
