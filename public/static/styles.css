@@ -56,7 +56,7 @@ button:disabled {
 
 /* Кнопка генерации конфигурации */
 #generateButton {
-  background: linear-gradient(90deg, #2ecc71, #00bcd4);
+  background: linear-gradient(90deg, #2ecc71, #00bcd5);
   box-shadow: 0 4px 8px rgba(46, 204, 113, 0.2),
     0 6px 20px rgba(0, 188, 212, 0.2);
 }
