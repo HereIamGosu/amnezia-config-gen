@@ -1,4 +1,4 @@
-// src/script.js
+// public/static/script.js
 
 async function generateConfig() {
     const button = document.getElementById('generateButton');
@@ -7,10 +7,11 @@ async function generateConfig() {
     
     button.disabled = true;
     button.classList.add("button--loading");
-
+    status.textContent = "Генерация конфигурации...";
+    
     try {
-        // Отправка запроса на сервер
-        const response = await fetch('/warp');
+        // Отправка запроса на серверную функцию
+        const response = await fetch('/api/warp');
         const data = await response.json();
 
         if (data.success) {
@@ -26,11 +27,13 @@ async function generateConfig() {
             button_text.textContent = 'Скачать AmneziaWarp.conf';
             button.onclick = downloadFile;
             downloadFile();
+            status.textContent = "Конфигурация успешно сгенерирована!";
         } else {
             status.textContent = 'Ошибка: ' + data.message;
         }
     } catch (error) {
-        status.textContent = 'Произошла ошибка при генерации.';
+        console.error(error);
+        status.textContent = 'Произошла ошибка при генерации. Попробуйте снова.';
     } finally {
         button.disabled = false;
         button.classList.remove("button--loading");
@@ -38,7 +41,6 @@ async function generateConfig() {
 }
 
 document.getElementById('generateButton').onclick = generateConfig;
-
 
 document.getElementById('schedulerButton').onclick = async function() {
     const url = 'https://raw.githubusercontent.com/HereIamGosu/warp-config-generator/main/SchedulerAmnezia.bat';
