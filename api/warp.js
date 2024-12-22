@@ -48,7 +48,8 @@ function handleApiRequest(method, endpoint, body = null, token = null) {
                 console.log('API response:', data);  // Логируем весь ответ от сервера
                 if (res.statusCode >= 200 && res.statusCode < 300) {
                     try {
-                        resolve(JSON.parse(data));
+                        const parsedData = JSON.parse(data);
+                        resolve(parsedData);
                     } catch (e) {
                         reject({ message: 'Ошибка парсинга JSON', error: e.message });
                     }
@@ -93,7 +94,11 @@ async function generateWarpConfig() {
         throw new Error(`Ошибка при регистрации устройства: ${error.message}`);
     }
 
-    // Извлекаем значения из ответа регистрации
+    // Проверка наличия необходимых данных в ответе регистрации
+    if (!regResponse.result || !regResponse.result.id || !regResponse.result.token) {
+        throw new Error('Ошибка: отсутствуют id или token в ответе регистрации');
+    }
+
     const { id, token } = regResponse.result;
 
     let warpResponse;
@@ -105,11 +110,39 @@ async function generateWarpConfig() {
         throw new Error(`Ошибка при включении WARP: ${error.message}`);
     }
 
-    // Извлекаем значения из ответа активации WARP
-    const { peer_pub, peer_endpoint, client_ipv4, client_ipv6 } = warpResponse.result.config.peers[0];
+    // Проверка наличия данных в ответе активации WARP
+    if (!warpResponse.result || !warpResponse.result.config || !warpResponse.result.config.peers || !warpResponse.result.config.peers[0]) {
+        throw new Error('Ошибка: отсутствуют данные для формирования конфигурации WARP');
+    }
+
+    const peer = warpResponse.result.config.peers[0];
+    const { public_key: peer_pub, endpoint, allowed_ips: allowed_ips_raw } = peer;
+
+    // Проверка наличия необходимых полей
+    if (!peer_pub || !endpoint) {
+        throw new Error('Ошибка: недостающие данные для формирования конфигурации WARP');
+    }
+
+    // Извлечение хоста и порта из endpoint
+    const { host, port } = endpoint;
+    if (!host || !port) {
+        throw new Error('Ошибка: недостающие данные в endpoint');
+    }
+
+    const peer_endpoint = `${host}:${port}`;
+
+    // Извлечение адресов из интерфейса
+    const interfaceConfig = warpResponse.result.config.interface;
+    const client_ipv4 = interfaceConfig.addresses.v4;
+    const client_ipv6 = interfaceConfig.addresses.v6;
+
+    if (!client_ipv4 || !client_ipv6) {
+        throw new Error('Ошибка: отсутствуют клиентские IP-адреса');
+    }
+
     console.log('Peer info:', { peer_pub, peer_endpoint, client_ipv4, client_ipv6 });
 
-    // Формируем конфигурацию
+    // Формируем конфигурацию WireGuard
     const conf = `
 [Interface]
 PrivateKey = ${privKey}
@@ -144,5 +177,18 @@ async function getWarpConfigLink() {
     }
 }
 
-// Экспортируем функцию для использования
-module.exports = { getWarpConfigLink };
+// Экспортируем функцию для использования в Vercel API Route
+module.exports = async (req, res) => {
+    if (req.method !== 'GET') {
+        res.status(405).json({ success: false, message: 'Method not allowed' });
+        return;
+    }
+
+    try {
+        const config = await generateWarpConfig();
+        res.status(200).json({ success: true, content: config });
+    } catch (error) {
+        console.error('Ошибка при генерации конфигурации:', error);
+        res.status(500).json({ success: false, message: 'Ошибка на сервере' });
+    }
+};
