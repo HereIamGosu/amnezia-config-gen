@@ -1,9 +1,19 @@
 // api/warp.js
-const fetch = require('node-fetch');
 const nacl = require('tweetnacl');
 const { Buffer } = require('buffer');
+const { v4: uuidv4 } = require('uuid');
 
-async function apiRequest(method, endpoint, body = null, token = null) {
+// Генерация ключей
+function generateKeys() {
+    const keyPair = nacl.box.keyPair();
+    return {
+        privKey: Buffer.from(keyPair.secretKey).toString('base64'),
+        pubKey: Buffer.from(keyPair.publicKey).toString('base64')
+    };
+}
+
+// Формирование заголовков для запросов
+function generateHeaders(token = null) {
     const headers = {
         'Content-Type': 'application/json',
     };
@@ -11,6 +21,13 @@ async function apiRequest(method, endpoint, body = null, token = null) {
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
     }
+
+    return headers;
+}
+
+// Отправка запроса к API
+async function apiRequest(method, endpoint, body = null, token = null) {
+    const headers = generateHeaders(token);
 
     const options = {
         method,
@@ -21,20 +38,25 @@ async function apiRequest(method, endpoint, body = null, token = null) {
         options.body = JSON.stringify(body);
     }
 
-    const response = await fetch(`https://api.cloudflareclient.com/v0i1909051800/${endpoint}`, options);
-    if (!response.ok) {
-        throw new Error(`Ошибка при запросе к API: ${response.statusText}`);
+    try {
+        const response = await fetch(`https://api.cloudflareclient.com/v0i1909051800/${endpoint}`, options);
+        if (!response.ok) {
+            throw new Error(`Ошибка при запросе к API: ${response.statusText}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error(`Ошибка в запросе к API: ${error.message}`);
+        throw error; // Перебрасываем ошибку, чтобы она была обработана в вызывающей функции
     }
-    return await response.json();
 }
 
+// Генерация конфигурации для WARP
 async function generateWarpConfig() {
-    const keyPair = nacl.box.keyPair();
-    const privKey = Buffer.from(keyPair.secretKey).toString('base64');
-    const pubKey = Buffer.from(keyPair.publicKey).toString('base64');
+    const { privKey, pubKey } = generateKeys();
 
+    // Регистрация устройства
     const regBody = {
-        install_id: "",
+        install_id: uuidv4(),
         tos: new Date().toISOString(),
         key: pubKey,
         fcm_token: "",
@@ -42,12 +64,28 @@ async function generateWarpConfig() {
         locale: "en_US"
     };
 
-    let regResponse = await apiRequest('POST', 'reg', regBody);
+    let regResponse;
+    try {
+        regResponse = await apiRequest('POST', 'reg', regBody);
+    } catch (error) {
+        console.error('Ошибка при регистрации устройства:', error);
+        throw new Error('Ошибка при регистрации устройства');
+    }
+
     const { id, token } = regResponse.result;
 
-    let warpResponse = await apiRequest('PATCH', `reg/${id}`, { warp_enabled: true }, token);
+    // Включение WARP
+    let warpResponse;
+    try {
+        warpResponse = await apiRequest('PATCH', `reg/${id}`, { warp_enabled: true }, token);
+    } catch (error) {
+        console.error('Ошибка при включении WARP:', error);
+        throw new Error('Ошибка при включении WARP');
+    }
+
     const { peer_pub, peer_endpoint, client_ipv4, client_ipv6 } = warpResponse.result.config.peers[0];
 
+    // Формируем конфиг
     const conf = `
 [Interface]
 PrivateKey = ${privKey}
@@ -71,12 +109,16 @@ Endpoint = ${peer_endpoint}`;
 }
 
 module.exports = async (req, res) => {
+    if (req.method !== 'GET') {
+        res.status(405).json({ success: false, message: 'Method not allowed' });
+        return;
+    }
+
     try {
-        // Логика генерации конфигурации
-        const config = generateConfig(); // предполагаемая функция, которая генерирует конфиг
+        const config = await generateWarpConfig();
         res.status(200).json({ success: true, content: config });
     } catch (error) {
-        console.error(error);
+        console.error('Ошибка при генерации конфигурации:', error);
         res.status(500).json({ success: false, message: 'Ошибка на сервере' });
     }
 };

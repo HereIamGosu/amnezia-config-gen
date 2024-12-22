@@ -1,10 +1,10 @@
-// src/script.js
+// public/static/script.js
 
 async function generateConfig() {
     const button = document.getElementById('generateButton');
     const button_text = document.querySelector('#generateButton .button__text');
     const status = document.getElementById('status');
-    
+
     button.disabled = true;
     button.classList.add("button--loading");
     status.textContent = "Генерация конфигурации...";
@@ -24,7 +24,8 @@ async function generateConfig() {
             };
 
             button_text.textContent = 'Скачать AmneziaWarp.conf';
-            button.onclick = downloadFile;
+            button.removeEventListener('click', generateConfig); // Удаляем старый обработчик
+            button.addEventListener('click', downloadFile); // Добавляем новый обработчик
             downloadFile();
             status.textContent = "Конфигурация успешно сгенерирована!";
         } else {
