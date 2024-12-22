@@ -25,14 +25,10 @@ function generateHeaders(token = null) {
     return headers;
 }
 
-// Отправка запроса к API
-async function apiRequest(method, endpoint, body = null, token = null) {
+// Централизованная обработка ошибок
+async function handleApiRequest(method, endpoint, body = null, token = null) {
     const headers = generateHeaders(token);
-
-    const options = {
-        method,
-        headers,
-    };
+    const options = { method, headers };
 
     if (body) {
         options.body = JSON.stringify(body);
@@ -46,7 +42,7 @@ async function apiRequest(method, endpoint, body = null, token = null) {
         return await response.json();
     } catch (error) {
         console.error(`Ошибка в запросе к API: ${error.message}`);
-        throw error; // Перебрасываем ошибку, чтобы она была обработана в вызывающей функции
+        throw error; // Перебрасываем ошибку для дальнейшей обработки
     }
 }
 
@@ -66,7 +62,7 @@ async function generateWarpConfig() {
 
     let regResponse;
     try {
-        regResponse = await apiRequest('POST', 'reg', regBody);
+        regResponse = await handleApiRequest('POST', 'reg', regBody);
     } catch (error) {
         console.error('Ошибка при регистрации устройства:', error);
         throw new Error('Ошибка при регистрации устройства');
@@ -77,7 +73,7 @@ async function generateWarpConfig() {
     // Включение WARP
     let warpResponse;
     try {
-        warpResponse = await apiRequest('PATCH', `reg/${id}`, { warp_enabled: true }, token);
+        warpResponse = await handleApiRequest('PATCH', `reg/${id}`, { warp_enabled: true }, token);
     } catch (error) {
         console.error('Ошибка при включении WARP:', error);
         throw new Error('Ошибка при включении WARP');
