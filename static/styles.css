@@ -1,0 +1,167 @@
+/* Основные стили страницы */
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    background-color: #f4f4f4;
+    font-family: 'Roboto', sans-serif;
+    color: #333;
+}
+
+/* Контейнер с кнопками */
+.container {
+    max-width: 95%;
+    width: 400px;
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+    align-items: center;
+    padding: 30px;
+    background-color: #fff;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+}
+
+/* Картинка */
+img {
+    max-width: 100%;
+    margin-bottom: 20px;
+}
+
+/* Кнопки */
+button {
+    width: 100%;
+    margin-bottom: 20px;
+    padding: 12px 20px;
+    font-size: 18px;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    font-weight: bold;
+}
+
+button:hover {
+    transform: translateY(-2px);
+}
+
+button:active {
+    transform: translateY(1px);
+}
+
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+/* Кнопка генерации конфигурации */
+#generateButton {
+    background: linear-gradient(90deg, #2ecc71, #00bcd4);
+    box-shadow: 0 4px 8px rgba(46, 204, 113, 0.2), 0 6px 20px rgba(0, 188, 212, 0.2);
+}
+
+#generateButton:hover {
+    background: linear-gradient(90deg, #27ae60, #0097a7);
+}
+
+/* Кнопка скачивания файла */
+#schedulerButton {
+    background-color: #f15874;
+    box-shadow: 0 4px 8px rgba(241, 88, 116, 0.2);
+}
+
+#schedulerButton:hover {
+    background-color: #e14e65;
+}
+
+/* Индикатор загрузки */
+.button--loading::after {
+    content: "";
+    width: 18px;
+    height: 18px;
+    border: solid rgba(0, 0, 0, 0.1);
+    border-top-color: #f15874;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+button.button--loading {
+    display: flex;
+    justify-content: center;
+}
+
+.button--loading .button__text {
+    display: none;
+}
+
+/* Анимация вращения */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Статус ошибки */
+#status {
+    margin-bottom: 20px;
+    color: #f15874;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+/* Стили для инструкции справа */
+.instruction {
+    margin-left: 40px;
+    padding: 20px;
+    background-color: #fff;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    width: 650px;
+    text-align: left;
+}
+
+.instruction h2 {
+    font-size: 20px;
+    margin-bottom: 15px;
+}
+
+.instruction ol {
+    margin-left: 20px;
+    font-size: 16px;
+}
+
+.instruction a {
+    color: #2ecc71;
+    text-decoration: none;
+}
+
+.instruction a:hover {
+    text-decoration: underline;
+}
+
+.instruction p {
+    font-size: 16px;
+    margin-top: 10px;
+}
+
+.thank-you {
+            position: absolute;
+            width: 70%;    
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: #B0B0B0; /* бледно-серый цвет */
+            text-align: center;
+        }
+
+        .thank-you a {
+            color: #B0B0B0; /* цвет ссылки такой же, как и текст */
+            text-decoration: none;
+        }
+
+        .thank-you a:hover {
+            text-decoration: underline;
+        }
