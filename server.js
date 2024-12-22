@@ -1,12 +1,15 @@
 // server.js
 const express = require('express');
 const { generateWarpConfig } = require('./api/warp'); // Функция для генерации конфигурации WARP
+const { logger, errorHandler } = require('./middleware'); // Подключаем middleware
+
 
 const app = express();
 const port = 3000;
 
-// Раздача статики
-app.use(express.static('public'));
+// Подключение middleware
+app.use(logger);
+app.use(express.static('public')); // Для раздачи статики
 
 // Обработка запроса на генерацию конфигурации
 app.get('/warp', async (req, res) => {
@@ -18,6 +21,9 @@ app.get('/warp', async (req, res) => {
         res.status(500).json({ success: false, message: 'Ошибка при генерации конфигурации' });
     }
 });
+
+// Обработка ошибок
+app.use(errorHandler);
 
 // Запуск сервера
 app.listen(port, () => {

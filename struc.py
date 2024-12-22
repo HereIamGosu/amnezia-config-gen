@@ -1,5 +1,6 @@
 import os
 
+
 def print_tree(path, indent="", ignore_folders=None):
     """Рекурсивно обходит папку и выводит структуру файлов в виде дерева."""
     if ignore_folders is None:
@@ -26,6 +27,7 @@ def print_tree(path, indent="", ignore_folders=None):
             print_tree(full_path, indent + "    ", ignore_folders)
         else:
             print(f"{indent}[Файл] {entry}")
+
 
 # Задайте путь к папке, структуру которой хотите вывести
 directory_path = r"E:\Coding\HTML, JS (WEB)\AmneziaWG Config Generator\amnezia-config-gen"  # замените на нужный путь
