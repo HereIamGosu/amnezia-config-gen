@@ -1,15 +1,21 @@
 /* Основные стили страницы */
 body {
-  margin: 0;
+  margin: 0; /* Убираем отступы по умолчанию */
   padding: 0;
   background-color: #c0c0c0; /* Серый фон Windows 95 */
   font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
   color: #000;
+
+  /* Flexbox для центрирования содержимого */
+  display: flex;
+  justify-content: center; /* Горизонтальное центрирование */
+  align-items: center; /* Вертикальное центрирование */
+  min-height: 100vh; /* Минимальная высота тела страницы - 100% высоты окна браузера */
 }
 
 /* Окно в стиле Windows 95 */
 .window {
-  width: 90vw; /* Используем 90% ширины окна просмотра */
+  width: 65vw; /* Изменено согласно запросу */
   max-width: 1200px; /* Максимальная ширина для очень больших экранов */
   margin: 20px auto;
   border: 2px solid #000080; /* Тёмно-синий цвет */
@@ -126,7 +132,7 @@ body {
 
 /* Картинка */
 img {
-  max-width: 85%;
+  max-width: 80%;
   height: auto;
   margin-bottom: 20px;
   image-rendering: pixelated; /* Пиксельная графика */
@@ -287,19 +293,30 @@ button.button--loading {
   color: #ff0000;
 }
 
-/* Адаптивные стили для мобильных устройств */
-@media (max-width: 1200px) {
+/* Адаптивные стили для экранов различных размеров */
+
+/* Для очень больших экранов */
+@media (min-width: 1201px) {
+  .window {
+    width: 65vw;
+  }
+}
+
+/* Для больших экранов (Laptop) */
+@media (max-width: 1200px) and (min-width: 1025px) {
+  .window {
+    width: 75vw;
+  }
+}
+
+/* Для средних экранов (Tablet) */
+@media (max-width: 1024px) and (min-width: 769px) {
   .window {
     width: 85vw;
   }
 }
 
-@media (max-width: 1024px) {
-  .window {
-    width: 90vw;
-  }
-}
-
+/* Для малых экранов (Mobile и планшеты) */
 @media (max-width: 768px) {
   .content-wrapper {
     flex-direction: column;
@@ -359,6 +376,7 @@ button.button--loading {
   }
 }
 
+/* Для очень маленьких экранов (Mobile) */
 @media (max-width: 480px) {
   .window {
     width: 95vw; /* Максимальная ширина для очень маленьких экранов */
