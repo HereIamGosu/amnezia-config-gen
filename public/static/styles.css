@@ -9,14 +9,15 @@ body {
 
 /* Окно в стиле Windows 95 */
 .window {
-  width: 65vw;
-  max-width: 1000px;
+  width: 90vw; /* Используем 90% ширины окна просмотра */
+  max-width: 1200px; /* Максимальная ширина для очень больших экранов */
   margin: 20px auto;
   border: 2px solid #000080; /* Тёмно-синий цвет */
   background-color: #c0c0c0;
   box-shadow: 5px 5px #808080;
   display: flex;
   flex-direction: column;
+  border-radius: 4px;
 }
 
 /* Заголовок окна */
@@ -106,12 +107,12 @@ body {
   align-items: flex-start;
   width: 100%;
   gap: 20px;
+  flex-wrap: wrap; /* Позволяет элементам переноситься на новую строку при необходимости */
 }
 
 /* Контейнер с кнопками */
 .container {
-  flex: 1;
-  max-width: 400px;
+  flex: 1 1 300px; /* Гибкий размер с минимальной шириной 300px */
   display: flex;
   flex-direction: column;
   text-align: center;
@@ -125,7 +126,8 @@ body {
 
 /* Картинка */
 img {
-  max-width: 100%;
+  max-width: 85%;
+  height: auto;
   margin-bottom: 20px;
   image-rendering: pixelated; /* Пиксельная графика */
 }
@@ -221,10 +223,9 @@ button.button--loading {
 
 /* Стили для правой секции: инструкция и thank-you */
 .right-section {
+  flex: 1 1 400px; /* Гибкий размер с минимальной шириной 400px */
   display: flex;
   flex-direction: column;
-  flex: 1;
-  max-width: 650px;
   gap: 20px;
 }
 
@@ -287,12 +288,19 @@ button.button--loading {
 }
 
 /* Адаптивные стили для мобильных устройств */
-@media (max-width: 768px) {
-  .window-content {
-    flex-direction: column;
-    align-items: center;
+@media (max-width: 1200px) {
+  .window {
+    width: 85vw;
   }
+}
 
+@media (max-width: 1024px) {
+  .window {
+    width: 90vw;
+  }
+}
+
+@media (max-width: 768px) {
   .content-wrapper {
     flex-direction: column;
     align-items: center;
@@ -300,7 +308,7 @@ button.button--loading {
 
   .right-section {
     width: 100%;
-    max-width: 100%;
+    max-width: 650px;
   }
 
   /* Контейнер с кнопками */
@@ -351,11 +359,13 @@ button.button--loading {
   }
 }
 
-/* Адаптивные стили для мобильных устройств с маленькими экранами */
 @media (max-width: 480px) {
-  /* Контейнер с кнопками */
+  .window {
+    width: 95vw; /* Максимальная ширина для очень маленьких экранов */
+  }
+
   .container {
-    width: 95%; /* Еще больше уменьшаем ширину */
+    width: 95%; /* Еще больше уменьшаем ширину контейнера */
     padding: 15px; /* Уменьшаем отступы */
   }
 
