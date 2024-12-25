@@ -1,13 +1,100 @@
 /* Основные стили страницы */
 body {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
   margin: 0;
-  background-color: #f4f4f4;
-  font-family: "Roboto", sans-serif;
-  color: #333;
+  padding: 0;
+  background-color: #c0c0c0; /* Серый фон Windows 95 */
+  font-family: "MS Sans Serif", sans-serif;
+  color: #000;
+  font-family: 'Press Start 2P', cursive, 'MS Sans Serif', sans-serif;
+}
+
+/* Окно в стиле Windows 95 */
+.window {
+  width: 800px;
+  margin: 20px auto;
+  border: 2px solid #000080; /* Тёмно-синий цвет */
+  background-color: #c0c0c0;
+  box-shadow: 5px 5px #808080;
+}
+
+/* Заголовок окна */
+.window-header {
+  background-color: #000080; /* Тёмно-синий фон */
+  color: #ffffff;
+  padding: 4px 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 16px;
+  border-bottom: 2px solid #ffffff;
+}
+
+/* Название окна */
+.window-title {
+  font-weight: bold;
+}
+
+/* Кнопки управления окном */
+.window-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.window-button {
+  width: 16px;
+  height: 16px;
+  background-color: #c0c0c0;
+  border: 2px outset #ffffff;
+  cursor: pointer;
+  position: relative;
+}
+
+.close-button::after,
+.minimize-button::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 2px;
+  background-color: #000;
+  transform: translate(-50%, -50%);
+}
+
+.close-button::after {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.minimize-button::after {
+  width: 12px;
+}
+
+/* Стили для кнопок управления окном */
+.close-button {
+  background-color: #c0c0c0;
+  border: 2px outset #ffffff;
+  position: relative;
+}
+
+.close-button:hover {
+  background-color: #ff0000;
+}
+
+.minimize-button {
+  background-color: #c0c0c0;
+  border: 2px outset #ffffff;
+  position: relative;
+}
+
+.minimize-button:hover {
+  background-color: #ffff00;
+}
+
+/* Содержимое окна */
+.window-content {
+  padding: 10px;
+  background-color: #ffffff;
+  border-top: none;
 }
 
 /* Контейнер с кнопками */
@@ -19,37 +106,42 @@ body {
   text-align: center;
   align-items: center;
   padding: 30px;
+  background-color: #c0c0c0;
 }
 
 /* Картинка */
 img {
   max-width: 100%;
   margin-bottom: 20px;
+  image-rendering: pixelated; /* Пиксельная графика */
 }
 
 /* Кнопки */
-button {
+button.button {
   width: 100%;
   margin-bottom: 20px;
-  padding: 12px 20px;
-  font-size: 18px;
-  color: #fff;
-  border: none;
-  border-radius: 5px;
+  padding: 8px 10px;
+  font-size: 14px;
+  color: #000000;
+  background-color: #c0c0c0;
+  border: 2px outset #ffffff;
+  border-radius: 2px;
   cursor: pointer;
-  transition: background-color 0.3s ease, transform 0.2s ease;
+  transition: background-color 0.1s ease, transform 0.05s ease;
   font-weight: bold;
+  font-family: "MS Sans Serif", sans-serif;
 }
 
-button:hover {
-  transform: translateY(-2px);
+button.button:hover {
+  background-color: #808080;
 }
 
-button:active {
-  transform: translateY(1px);
+button.button:active {
+  transform: translateY(2px);
+  border: 2px inset #ffffff;
 }
 
-button:disabled {
+button.button:disabled {
   cursor: not-allowed;
   opacity: 0.7;
 }
@@ -117,16 +209,19 @@ button.button--loading {
 .instruction {
   margin-left: 40px;
   padding: 20px;
-  background-color: #fff;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  border-radius: 10px;
+  background-color: #c0c0c0;
+  box-shadow: 2px 2px #808080;
+  border: 2px solid #000080;
+  border-radius: 4px;
   width: 650px;
   text-align: left;
+  font-family: "MS Sans Serif", sans-serif;
 }
 
 .instruction h2 {
   font-size: 20px;
   margin-bottom: 15px;
+  color: #000080;
 }
 
 .instruction ol {
@@ -135,37 +230,35 @@ button.button--loading {
 }
 
 .instruction a {
-  color: #2ecc71;
-  text-decoration: none;
+  color: #0000ff;
+  text-decoration: underline;
 }
 
 .instruction a:hover {
-  text-decoration: underline;
+  color: #ff0000;
 }
 
-.instruction p {
-  font-size: 16px;
-  margin-top: 10px;
-}
-
+/* Стили для нижнего блока */
 .thank-you {
-  position: absolute;
-  width: 70%;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
+  margin-top: 20px;
+  padding: 10px;
+  background-color: #c0c0c0;
+  box-shadow: 2px 2px #808080;
+  border: 2px solid #000080;
+  border-radius: 4px;
   font-size: 14px;
-  color: #b0b0b0; /* бледно-серый цвет */
+  color: #000080;
   text-align: center;
+  font-family: "MS Sans Serif", sans-serif;
 }
 
 .thank-you a {
-  color: #b0b0b0; /* цвет ссылки такой же, как и текст */
-  text-decoration: none;
+  color: #000080;
+  text-decoration: underline;
 }
 
 .thank-you a:hover {
-  text-decoration: underline;
+  color: #ff0000;
 }
 
 /* Адаптивные стили для мобильных устройств */
@@ -182,9 +275,9 @@ button.button--loading {
   }
 
   /* Кнопки */
-  button {
-    font-size: 16px; /* Уменьшаем размер шрифта для кнопок */
-    padding: 10px 15px; /* Уменьшаем отступы кнопок */
+  button.button {
+    font-size: 12px; /* Уменьшаем размер шрифта для кнопок */
+    padding: 8px 10px; /* Уменьшаем отступы кнопок */
   }
 
   /* Статус ошибки */
@@ -197,6 +290,7 @@ button.button--loading {
     margin-left: 0;
     width: 100%;
     margin-top: 20px; /* Добавляем отступ сверху для адаптивности */
+    padding: 15px;
   }
 
   .instruction h2 {
@@ -227,15 +321,15 @@ button.button--loading {
   }
 
   /* Кнопки */
-  button {
-    font-size: 14px; /* Еще больше уменьшаем размер шрифта */
-    padding: 8px 12px; /* Уменьшаем отступы кнопок */
+  button.button {
+    font-size: 10px; /* Еще больше уменьшаем размер шрифта */
+    padding: 6px 8px; /* Уменьшаем отступы кнопок */
   }
 
   /* Стили для инструкции справа */
   .instruction {
     width: 100%; /* Инструкция занимает всю ширину */
-    padding: 15px; /* Уменьшаем отступы */
+    padding: 10px; /* Уменьшаем отступы */
   }
 
   .instruction h2 {
@@ -250,8 +344,69 @@ button.button--loading {
     font-size: 12px; /* Уменьшаем размер шрифта */
   }
 
+  /* Стили для нижнего блока */
   .thank-you {
     width: 90%; /* Уменьшаем ширину блока */
     font-size: 10px; /* Уменьшаем размер шрифта */
   }
+}
+
+/* Меню Windows 95 */
+.menu-bar {
+  display: flex;
+  background-color: #c0c0c0;
+  border-bottom: 2px solid #ffffff;
+  padding: 2px 4px;
+  font-family: "MS Sans Serif", sans-serif;
+}
+
+.menu-bar button {
+  background-color: #c0c0c0;
+  border: 2px outset #ffffff;
+  margin-right: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.menu-bar button:hover {
+  background-color: #808080;
+}
+
+.menu-bar button:active {
+  border: 2px inset #ffffff;
+  background-color: #c0c0c0;
+}
+
+/* Добавление меню в заголовок окна */
+.window-header::before {
+  content: "";
+  display: block;
+  position: absolute;
+  left: 0;
+  top: -22px;
+  width: 100%;
+  height: 20px;
+  background-color: #c0c0c0;
+  border-top: 2px solid #ffffff;
+  border-bottom: 2px solid #000080;
+}
+
+.window-content::before {
+  content: "";
+  display: block;
+  position: absolute;
+  left: 0;
+  top: -20px;
+  width: 100%;
+  height: 20px;
+  background-color: #c0c0c0;
+  border-bottom: 2px solid #000080;
+}
+
+.window-header .menu-bar {
+  position: absolute;
+  top: -20px;
+  left: 0;
+  width: 100%;
 }
