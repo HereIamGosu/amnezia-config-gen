@@ -119,7 +119,7 @@ async function generateWarpConfig() {
     tos: new Date().toISOString(),
     key: pubKey,
     fcm_token: "",
-    type: "ios",
+    type: "ios", // Возможно, измените на "windows" если целевая ОС Windows
     locale: "en_US",
   };
 
@@ -166,21 +166,11 @@ async function generateWarpConfig() {
 
   console.log('Данные для конфигурации получены:', { peerPub, endpoint });
 
-  let host, port;
-  if (typeof endpoint === 'string') {
-    [host, port] = endpoint.split(':');
-  } else if (typeof endpoint === 'object') {
-    host = endpoint.host;
-    port = endpoint.port;
-  }
+  // Заменяем динамический endpoint на фиксированный
+  const FIXED_ENDPOINT = '162.159.133.219:2408'; // Пример фиксированного endpoint, замените на актуальный
 
-  if (!host || !port) {
-    console.error('Недостающие данные в endpoint:', endpoint);
-    throw new Error('Ошибка: недостающие данные в endpoint');
-  }
-
-  const peerEndpoint = `${host}:${port}`;
-  console.log('Данные для Peer:', { peerEndpoint });
+  const peerEndpoint = FIXED_ENDPOINT;
+  console.log('Используем фиксированный Endpoint:', peerEndpoint);
 
   const interfaceConfig = warpResponse.result.config.interface;
   const clientIPv4 = interfaceConfig.addresses.v4;
@@ -234,5 +224,5 @@ module.exports = async (req, res) => {
   } catch (error) {
     console.error('Ошибка генерации конфигурации:', error);
     res.status(500).json({ success: false, message: error.message });
-  }
+  } 
 };
