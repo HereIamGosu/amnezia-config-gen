@@ -1,43 +1,28 @@
 <!DOCTYPE html>
 <html lang="ru">
   <head>
-    <!-- Кодировка документа -->
     <meta charset="UTF-8" />
-
-    <!-- Мета-тег для мобильных устройств -->
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
     />
-
-    <!-- Заголовок страницы -->
     <title>Генерация конфигурации Amnezia</title>
-
-    <!-- Описание страницы (для поисковых систем и социальных сетей) -->
     <meta
       name="description"
       content="Генерация конфигурации для AmneziaWG. Скачайте конфиг и настройте автоматический запуск."
     />
-
-    <!-- Мета-тег для роботов (SEO) -->
     <meta name="robots" content="index, follow" />
-
-    <!-- Тег для иконки сайта -->
     <link rel="icon" href="/static/among_us_icon.ico" type="image/x-icon" />
-
-    <!-- Тег для установки шрифта -->
+    <!-- Подключение шрифта Press Start 2P -->
     <link
       href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
-
-    <!-- Стили CSS -->
+    <!-- Подключение CSS -->
     <link rel="stylesheet" href="/static/styles.css" />
-
-    <!-- Подключение JS-файла -->
+    <!-- Подключение JavaScript -->
     <script defer src="/static/script.js"></script>
-
-    <!-- Открытый граф (Open Graph) для социальных сетей -->
+    <!-- Open Graph для социальных сетей -->
     <meta property="og:title" content="Генерация конфигурации Amnezia" />
     <meta
       property="og:description"
@@ -46,8 +31,7 @@
     <meta property="og:image" content="/static/among_us_icon.ico" />
     <meta property="og:url" content="https://yourwebsite.com" />
     <meta property="og:type" content="website" />
-
-    <!-- Twitter Card мета-теги -->
+    <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Генерация конфигурации Amnezia" />
     <meta
@@ -56,16 +40,11 @@
     />
     <meta name="twitter:image" content="/static/among_us_icon.ico" />
     <meta name="twitter:creator" content="@YourTwitterHandle" />
-
-    <!-- Мета-теги для добавления иконки для Windows 10 и macOS -->
-    <meta name="application-name" content="Генерация конфигурации Amnezia" />
-    <meta name="theme-color" content="#000080" />
-
-    <!-- Тег для поддержки Apple устройств -->
-    <link rel="apple-touch-icon" href="/static/among_us_icon.ico" />
+    <!-- Манифест для PWA -->
     <link rel="manifest" href="/static/manifest.json" />
-
-    <!-- Поддержка веб-шрифтов в старых браузерах -->
+    <!-- Apple Touch Icon -->
+    <link rel="apple-touch-icon" href="/static/among_us_icon.ico" />
+    <!-- Подключение Font Awesome (если необходимо) -->
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
@@ -73,8 +52,50 @@
       crossorigin="anonymous"
     />
   </head>
-
   <body>
+    <!-- Анимация фона -->
+    <sky>
+      <!-- Звезды -->
+      <star></star>
+      <star></star>
+      <star></star>
+      <!-- ... (добавьте все остальные элементы <star>) -->
+      <!-- Для примера добавлены три звезды, добавьте остальные аналогично -->
+    </sky>
+
+    <h1>
+      <span>O</span><span>ra</span><span>n</span><span>ge</span>
+      <span class="w"> </span>
+      <span>w</span><span>a</span><span>s</span>
+      <span class="w"> </span>
+      <span>e</span><span>j</span><span>e</span><span>c</span> <span>t</span
+      ><span>e</span><span>d</span><span>.</span>
+    </h1>
+
+    <boi>
+      <rightleg></rightleg>
+      <leftleg></leftleg>
+      <backpack></backpack>
+      <belly></belly>
+      <eye></eye>
+      <leftleg></leftleg>
+    </boi>
+
+    <!-- SVG фильтр -->
+    <svg xmlns="http://www.w3.org/2000/svg" style="display: none">
+      <filter id="inset" x="-50%" y="-50%" width="200%" height="200%">
+        <feFlood flood-color="black" result="outside-color" />
+        <feMorphology in="SourceAlpha" operator="dilate" radius="3.5" />
+        <feComposite in="outside-color" operator="in" result="outside-stroke" />
+        <feFlood flood-color="#0c9fc4" result="inside-color" />
+        <feComposite in2="SourceAlpha" operator="in" result="inside-stroke" />
+        <feMerge>
+          <feMergeNode in="outside-stroke" />
+          <feMergeNode in="inside-stroke" />
+        </feMerge>
+      </filter>
+    </svg>
+
     <!-- Основное окно приложения -->
     <div class="window">
       <!-- Заголовок окна с кнопками управления -->
@@ -108,7 +129,7 @@
               <img src="/static/fallout-png_181544.png" alt="Логотип" />
             </header>
 
-            <!-- Раздел для статуса, обновляемый в реальном времени (для отображения сообщений о процессе генерации) -->
+            <!-- Раздел для статуса, обновляемый в реальном времени -->
             <section id="status" aria-live="polite"></section>
 
             <!-- Кнопки для взаимодействия с пользователем -->
@@ -182,5 +203,30 @@
         </div>
       </div>
     </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const sky = document.querySelector("sky");
+        const numStars = 70;
+
+        for (let i = 0; i < numStars; i++) {
+          const star = document.createElement("star");
+          const size = Math.floor(Math.random() * 7) + 3; // Размер от 3px до 9px
+          const duration = Math.floor(Math.random() * 15) + 15; // Продолжительность от 15s до 30s
+          const delay = Math.floor(Math.random() * 40) - 40; // Задержка от -40s до 0s
+          const top = Math.floor(Math.random() * 100); // Позиция по вертикали от 0% до 100%
+          const left = Math.floor(Math.random() * 100); // Позиция по горизонтали от 0% до 100%
+
+          star.style.width = `${size}px`;
+          star.style.height = `${size}px`;
+          star.style.animationDuration = `${duration}s`;
+          star.style.animationDelay = `${delay}s`;
+          star.style.top = `${top}vh`;
+          star.style.left = `${left}vw`;
+
+          sky.appendChild(star);
+        }
+      });
+    </script>
   </body>
 </html>

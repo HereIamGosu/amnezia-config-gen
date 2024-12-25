@@ -11,19 +11,182 @@ body {
   justify-content: center; /* Горизонтальное центрирование */
   align-items: center; /* Вертикальное центрирование */
   min-height: 100vh; /* Минимальная высота тела страницы - 100% высоты окна браузера */
+  position: relative; /* Для позиционирования анимации */
+  overflow: hidden; /* Скрываем переполнение */
+}
+
+/* Анимация фона */
+sky {
+  position: fixed; /* Фиксированное позиционирование */
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: black;
+  z-index: -2; /* За окном */
+}
+
+star {
+  border-radius: 50%;
+  background: white;
+  position: absolute;
+  animation: star linear infinite;
+}
+
+/* Генерация звезд с помощью CSS */
+.star:nth-child(1) {
+  width: 5px;
+  height: 5px;
+  animation-duration: 20s;
+  animation-delay: -10s;
+  top: 10vh;
+  left: 20vw;
+}
+.star:nth-child(2) {
+  width: 6px;
+  height: 6px;
+  animation-duration: 25s;
+  animation-delay: -15s;
+  top: 30vh;
+  left: 40vw;
+}
+/* Продолжите для всех 70 звезд или используйте JavaScript для генерации звезд */
+
+/* Анимация звезд */
+@keyframes star {
+  from {
+    transform: translate3d(-100%, 0, 1px);
+  }
+  to {
+    transform: translate3d(100vw, 0, 1px);
+  }
+}
+
+/* Текстовая анимация */
+h1 {
+  position: fixed; /* Фиксированное позиционирование */
+  top: 10%;
+  width: 100%;
+  text-align: center;
+  color: white;
+  font-size: 20px;
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  z-index: -1; /* За окном, но поверх анимации */
+}
+
+span {
+  display: inline-block;
+  opacity: 0;
+  animation: fadeIn 5s infinite;
+}
+
+span.w {
+  display: inline;
+  width: 10px;
+}
+
+@keyframes fadeIn {
+  0%,
+  20% {
+    opacity: 0;
+  }
+  21%,
+  80% {
+    opacity: 1;
+  }
+  81%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Анимированный персонаж */
+boi {
+  position: fixed; /* Фиксированное позиционирование */
+  bottom: 10%;
+  right: 10%;
+  width: 100px; /* Установите подходящий размер */
+  height: 150px; /* Установите подходящий размер */
+  z-index: -1; /* За окном, но поверх анимации */
+  animation: eject 5s infinite linear;
+  transform-origin: 50% 50%;
+}
+
+@keyframes eject {
+  0% {
+    transform: translate3d(0, 0, 0px) rotate(0turn);
+  }
+  50%,
+  100% {
+    transform: translate3d(-200px, -50px, 0px) rotate(-2turn);
+  }
+}
+
+/* Пример стилей для частей персонажа */
+rightleg,
+leftleg,
+backpack,
+belly,
+eye {
+  position: absolute;
+  background: #c47a0c;
+  border: 2px solid black;
+}
+
+rightleg {
+  width: 30px;
+  height: 60px;
+  bottom: 0;
+  right: 10px;
+  /* Добавьте дополнительные стили и анимации */
+}
+
+leftleg {
+  width: 30px;
+  height: 60px;
+  bottom: 0;
+  left: 10px;
+  /* Добавьте дополнительные стили и анимации */
+}
+
+backpack {
+  width: 40px;
+  height: 50px;
+  top: 10px;
+  left: 20px;
+  /* Добавьте дополнительные стили и анимации */
+}
+
+belly {
+  width: 50px;
+  height: 70px;
+  top: 30px;
+  left: 25px;
+  /* Добавьте дополнительные стили и анимации */
+}
+
+eye {
+  width: 15px;
+  height: 20px;
+  top: 5px;
+  left: 30px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, #f9fff7 15%, #fff0 20%);
+  /* Добавьте дополнительные стили и анимации */
 }
 
 /* Окно в стиле Windows 95 */
 .window {
   width: 65vw; /* Изменено согласно запросу */
   max-width: 1200px; /* Максимальная ширина для очень больших экранов */
-  margin: 20px auto;
+  margin: 0 auto; /* Центрирование горизонтально */
   border: 2px solid #000080; /* Тёмно-синий цвет */
   background-color: #c0c0c0;
   box-shadow: 5px 5px #808080;
   display: flex;
   flex-direction: column;
   border-radius: 4px;
+  z-index: 1; /* Поверх анимации */
 }
 
 /* Заголовок окна */
@@ -132,7 +295,7 @@ body {
 
 /* Картинка */
 img {
-  max-width: 80%;
+  max-width: 100%;
   height: auto;
   margin-bottom: 20px;
   image-rendering: pixelated; /* Пиксельная графика */
@@ -205,7 +368,7 @@ button.button--loading {
   justify-content: center;
 }
 
-.button--loading .button__text {
+.button.button--loading .button__text {
   display: none;
 }
 
@@ -374,6 +537,11 @@ button.button--loading {
     width: 90%;
     font-size: 12px;
   }
+
+  /* Анимация текста на малых экранах */
+  h1 {
+    font-size: 16px;
+  }
 }
 
 /* Для очень маленьких экранов (Mobile) */
@@ -415,5 +583,37 @@ button.button--loading {
   .thank-you {
     width: 90%; /* Уменьшаем ширину блока */
     font-size: 10px; /* Уменьшаем размер шрифта */
+  }
+
+  /* Анимация текста на очень маленьких экранах */
+  h1 {
+    font-size: 14px;
+  }
+}
+
+/* Текстовая анимация */
+h1 span {
+  display: inline-block;
+  opacity: 0;
+  animation: fadeIn 5s infinite;
+}
+
+h1 span.w {
+  display: inline;
+  width: 10px;
+}
+
+@keyframes fadeIn {
+  0%,
+  20% {
+    opacity: 0;
+  }
+  21%,
+  80% {
+    opacity: 1;
+  }
+  81%,
+  100% {
+    opacity: 0;
   }
 }
