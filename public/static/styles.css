@@ -3,9 +3,8 @@ body {
   margin: 0;
   padding: 0;
   background-color: #c0c0c0; /* Серый фон Windows 95 */
-  font-family: "MS Sans Serif", sans-serif;
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
   color: #000;
-  font-family: 'Press Start 2P', cursive, 'MS Sans Serif', sans-serif;
 }
 
 /* Окно в стиле Windows 95 */
@@ -15,6 +14,8 @@ body {
   border: 2px solid #000080; /* Тёмно-синий цвет */
   background-color: #c0c0c0;
   box-shadow: 5px 5px #808080;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Заголовок окна */
@@ -27,6 +28,7 @@ body {
   align-items: center;
   font-size: 16px;
   border-bottom: 2px solid #ffffff;
+  position: relative;
 }
 
 /* Название окна */
@@ -49,8 +51,7 @@ body {
   position: relative;
 }
 
-.close-button::after,
-.minimize-button::after {
+.window-button::after {
   content: "";
   position: absolute;
   top: 50%;
@@ -73,7 +74,6 @@ body {
 .close-button {
   background-color: #c0c0c0;
   border: 2px outset #ffffff;
-  position: relative;
 }
 
 .close-button:hover {
@@ -83,11 +83,41 @@ body {
 .minimize-button {
   background-color: #c0c0c0;
   border: 2px outset #ffffff;
-  position: relative;
 }
 
 .minimize-button:hover {
   background-color: #ffff00;
+}
+
+/* Меню Windows 95 */
+.menu-bar {
+  display: flex;
+  background-color: #c0c0c0;
+  border-bottom: 2px solid #ffffff;
+  padding: 2px 4px;
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  position: absolute;
+  top: -22px;
+  left: 0;
+  width: 100%;
+}
+
+.menu-button {
+  background-color: #c0c0c0;
+  border: 2px outset #ffffff;
+  margin-right: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.menu-button:hover {
+  background-color: #808080;
+}
+
+.menu-button:active {
+  border: 2px inset #ffffff;
+  background-color: #c0c0c0;
 }
 
 /* Содержимое окна */
@@ -95,11 +125,14 @@ body {
   padding: 10px;
   background-color: #ffffff;
   border-top: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
 }
 
 /* Контейнер с кнопками */
 .container {
-  max-width: 95%;
+  max-width: 100%;
   width: 400px;
   display: flex;
   flex-direction: column;
@@ -129,7 +162,7 @@ button.button {
   cursor: pointer;
   transition: background-color 0.1s ease, transform 0.05s ease;
   font-weight: bold;
-  font-family: "MS Sans Serif", sans-serif;
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
 }
 
 button.button:hover {
@@ -215,7 +248,7 @@ button.button--loading {
   border-radius: 4px;
   width: 650px;
   text-align: left;
-  font-family: "MS Sans Serif", sans-serif;
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
 }
 
 .instruction h2 {
@@ -238,6 +271,11 @@ button.button--loading {
   color: #ff0000;
 }
 
+.instruction p {
+  font-size: 16px;
+  margin-top: 10px;
+}
+
 /* Стили для нижнего блока */
 .thank-you {
   margin-top: 20px;
@@ -249,7 +287,7 @@ button.button--loading {
   font-size: 14px;
   color: #000080;
   text-align: center;
-  font-family: "MS Sans Serif", sans-serif;
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
 }
 
 .thank-you a {
@@ -263,6 +301,11 @@ button.button--loading {
 
 /* Адаптивные стили для мобильных устройств */
 @media (max-width: 768px) {
+  .window-content {
+    flex-direction: column;
+    align-items: center;
+  }
+
   /* Контейнер с кнопками */
   .container {
     width: 90%; /* Уменьшаем ширину контейнера */
@@ -349,64 +392,4 @@ button.button--loading {
     width: 90%; /* Уменьшаем ширину блока */
     font-size: 10px; /* Уменьшаем размер шрифта */
   }
-}
-
-/* Меню Windows 95 */
-.menu-bar {
-  display: flex;
-  background-color: #c0c0c0;
-  border-bottom: 2px solid #ffffff;
-  padding: 2px 4px;
-  font-family: "MS Sans Serif", sans-serif;
-}
-
-.menu-bar button {
-  background-color: #c0c0c0;
-  border: 2px outset #ffffff;
-  margin-right: 4px;
-  padding: 2px 6px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.menu-bar button:hover {
-  background-color: #808080;
-}
-
-.menu-bar button:active {
-  border: 2px inset #ffffff;
-  background-color: #c0c0c0;
-}
-
-/* Добавление меню в заголовок окна */
-.window-header::before {
-  content: "";
-  display: block;
-  position: absolute;
-  left: 0;
-  top: -22px;
-  width: 100%;
-  height: 20px;
-  background-color: #c0c0c0;
-  border-top: 2px solid #ffffff;
-  border-bottom: 2px solid #000080;
-}
-
-.window-content::before {
-  content: "";
-  display: block;
-  position: absolute;
-  left: 0;
-  top: -20px;
-  width: 100%;
-  height: 20px;
-  background-color: #c0c0c0;
-  border-bottom: 2px solid #000080;
-}
-
-.window-header .menu-bar {
-  position: absolute;
-  top: -20px;
-  left: 0;
-  width: 100%;
 }
