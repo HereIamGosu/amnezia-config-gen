@@ -16,7 +16,7 @@ async function generateConfig() {
 
     button.disabled = true;
     button.classList.add("button--loading");
-    status.textContent = "Генерация конфигурации...";
+    status.textContent = "Генерация конфигурацЫИ...";
 
     try {
         const response = await fetch('/api/warp');
