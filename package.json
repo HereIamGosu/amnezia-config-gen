@@ -1,14 +1,19 @@
 {
   "name": "amnezia-config-generator",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Генератор конфигураций для AmneziaWG",
   "main": "api/warp.js",
   "scripts": {
-    "start": "node api/warp.js"
+    "start": "vercel dev",
+    "build": "echo \"No build step required\"",
+    "lint": "eslint ."
   },
   "dependencies": {
     "tweetnacl": "^1.0.3",
     "uuid": "^8.3.2"
+  },
+  "devDependencies": {
+    "eslint": "^8.0.0"
   },
   "keywords": [],
   "author": "",
