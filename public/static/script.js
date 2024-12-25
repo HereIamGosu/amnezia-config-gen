@@ -127,3 +127,22 @@ const downloadFile = (content, filename) => {
     }
   });
   
+  document.addEventListener('DOMContentLoaded', () => {
+    const closeButton = document.querySelector('.close-button');
+    const minimizeButton = document.querySelector('.minimize-button');
+  
+    closeButton.addEventListener('click', () => {
+      // Закрывает окно браузера (работает только для окон, открытых через window.open)
+      window.close();
+    });
+  
+    minimizeButton.addEventListener('click', () => {
+      // Скрывает содержимое окна
+      const windowContent = document.querySelector('.window-content');
+      if (windowContent.style.display === 'none') {
+        windowContent.style.display = 'flex';
+      } else {
+        windowContent.style.display = 'none';
+      }
+    });
+  });
