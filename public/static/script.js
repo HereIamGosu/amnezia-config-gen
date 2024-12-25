@@ -80,7 +80,7 @@ const downloadFile = (content, filename) => {
     const status = document.getElementById('status');
     status.textContent = 'Скачивание файла планировщика...';
   
-    const SCHEDULER_URL = 'https://raw.githubusercontent.com/HereIamGosu/amnezia-config-gen/SchedulerAmnezia.bat';
+    const SCHEDULER_URL = 'https://raw.githubusercontent.com/HereIamGosu/amnezia-config-gen/main/SchedulerAmnezia.bat';
     try {
       const response = await fetch(SCHEDULER_URL);
   
