@@ -45,6 +45,10 @@ function downloadFile(content, filename) {
       const data = await response.json();
   
       if (data.success) {
+        if (!data.content) {
+          throw new Error('Отсутствует содержимое конфигурации.');
+        }
+  
         const decodedConfig = atob(data.content);
         buttonText.textContent = 'Скачать AmneziaWarp.conf';
   

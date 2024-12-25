@@ -63,6 +63,7 @@ function handleApiRequest(method, endpoint, body = null, token = null) {
       });
 
       res.on('end', () => {
+        console.log(`Response from API (${method} ${endpoint}):`, responseData);
         try {
           const parsedData = JSON.parse(responseData);
           if (res.statusCode === 200) {
@@ -90,6 +91,23 @@ function handleApiRequest(method, endpoint, body = null, token = null) {
 }
 
 /**
+ * Фиксированный список AllowedIPs.
+ */
+const FIXED_ALLOWED_IPS = [
+  '138.128.136.0/21', '162.158.0.0/15', '172.64.0.0/13', '34.0.0.0/15',
+  '34.2.0.0/16', '34.3.0.0/23', '34.3.2.0/24', '35.192.0.0/12',
+  '35.208.0.0/12', '35.224.0.0/12', '35.240.0.0/13', '5.200.14.128/25',
+  '66.22.192.0/18', '13.32.0.0/32', '13.35.0.0/32', '13.48.0.0/32',
+  '13.64.0.0/32', '13.128.0.0/32', '13.192.0.0/32', '13.224.0.0/32',
+  '13.240.0.0/32', '13.248.0.0/32', '13.252.0.0/32', '13.254.0.0/32',
+  '13.255.0.0/32', '18.67.0.0/32', '23.20.0.0/32', '23.40.0.0/32',
+  '23.64.0.0/32', '23.128.0.0/32', '23.192.0.0/32', '23.224.0.0/32',
+  '23.240.0.0/32', '23.248.0.0/32', '23.252.0.0/32', '23.254.0.0/32',
+  '23.255.0.0/32', '34.200.0.0/32', '34.224.0.0/32', '34.240.0.0/32',
+  '35.255.255.0/32'
+];
+
+/**
  * Генерация конфигурационного файла WARP.
  * @returns {Promise<string>} Конфигурация WireGuard в формате строки.
  */
@@ -106,20 +124,76 @@ async function generateWarpConfig() {
   };
 
   // Регистрация устройства
-  const regResponse = await handleApiRequest('POST', 'reg', regBody);
+  let regResponse;
+  try {
+    regResponse = await handleApiRequest('POST', 'reg', regBody);
+    console.log('Регистрация устройства успешна:', regResponse);
+  } catch (error) {
+    console.error('Ошибка при регистрации устройства:', error);
+    throw new Error(`Ошибка при регистрации устройства: ${error.message}`);
+  }
+
+  if (!regResponse.result || !regResponse.result.id || !regResponse.result.token) {
+    console.error('Недостаточные данные в ответе регистрации:', regResponse);
+    throw new Error('Ошибка: отсутствуют id или token в ответе регистрации');
+  }
+
   const { id, token } = regResponse.result;
+  console.log(`Данные регистрации получены: id = ${id}, token = ${token}`);
 
   // Включение WARP
-  const warpResponse = await handleApiRequest('PATCH', `reg/${id}`, { warp_enabled: true }, token);
-  const peer = warpResponse.result.config.peers[0];
+  let warpResponse;
+  try {
+    warpResponse = await handleApiRequest('PATCH', `reg/${id}`, { warp_enabled: true }, token);
+    console.log('Включение WARP успешна:', warpResponse);
+  } catch (error) {
+    console.error('Ошибка при включении WARP:', error);
+    throw new Error(`Ошибка при включении WARP: ${error.message}`);
+  }
 
-  const { public_key: peerPub, endpoint, allowed_ips } = peer;
-  const [host, port] = typeof endpoint === 'string' ? endpoint.split(':') : [endpoint.host, endpoint.port];
+  if (!warpResponse.result || !warpResponse.result.config || !warpResponse.result.config.peers || !Array.isArray(warpResponse.result.config.peers) || warpResponse.result.config.peers.length === 0) {
+    console.error('Недостаточные данные в ответе включения WARP:', warpResponse);
+    throw new Error('Ошибка: отсутствуют данные для формирования конфигурации WARP');
+  }
+
+  const peer = warpResponse.result.config.peers[0];
+  const { public_key: peerPub, endpoint } = peer;
+
+  if (!peerPub || !endpoint) {
+    console.error('Недостающие данные для формирования конфигурации WARP:', peer);
+    throw new Error('Ошибка: недостающие данные для формирования конфигурации WARP');
+  }
+
+  console.log('Данные для конфигурации получены:', { peerPub, endpoint });
+
+  let host, port;
+  if (typeof endpoint === 'string') {
+    [host, port] = endpoint.split(':');
+  } else if (typeof endpoint === 'object') {
+    host = endpoint.host;
+    port = endpoint.port;
+  }
+
+  if (!host || !port) {
+    console.error('Недостающие данные в endpoint:', endpoint);
+    throw new Error('Ошибка: недостающие данные в endpoint');
+  }
+
+  const peerEndpoint = `${host}:${port}`;
+  console.log('Данные для Peer:', { peerEndpoint });
 
   const interfaceConfig = warpResponse.result.config.interface;
   const clientIPv4 = interfaceConfig.addresses.v4;
   const clientIPv6 = interfaceConfig.addresses.v6;
 
+  if (!clientIPv4 || !clientIPv6) {
+    console.error('Отсутствуют клиентские IP-адреса:', interfaceConfig);
+    throw new Error('Ошибка: отсутствуют клиентские IP-адреса');
+  }
+
+  console.log('Клиентские IP-адреса:', { clientIPv4, clientIPv6 });
+
+  // Используем фиксированный список AllowedIPs
   const conf = `[Interface]
 PrivateKey = ${privKey}
 Jc = 120
@@ -135,9 +209,10 @@ DNS = 1.1.1.1, 2606:4700:4700::1111, 1.0.0.1, 2606:4700:4700::1001
 
 [Peer]
 PublicKey = ${peerPub}
-AllowedIPs = ${allowed_ips.join(', ')}
-Endpoint = ${host}:${port}`;
+AllowedIPs = ${FIXED_ALLOWED_IPS.join(', ')}
+Endpoint = ${peerEndpoint}`;
 
+  console.log('Сформирована конфигурация WireGuard:', conf);
   return conf;
 }
 
