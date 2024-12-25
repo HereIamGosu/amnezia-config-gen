@@ -5,7 +5,7 @@
  * @param {string} content Содержимое файла.
  * @param {string} filename Имя файла для скачивания.
  */
-function downloadFile(content, filename) {
+const downloadFile = (content, filename) => {
     const blob = new Blob([content], { type: 'text/plain' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -15,12 +15,12 @@ function downloadFile(content, filename) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
-  }
+  };
   
   /**
    * Генерация конфигурационного файла.
    */
-  async function generateConfig() {
+  const generateConfig = async () => {
     const button = document.getElementById('generateButton');
     const buttonText = button.querySelector('.button__text');
     const status = document.getElementById('status');
@@ -64,24 +64,25 @@ function downloadFile(content, filename) {
         throw new Error(data.message || 'Неизвестная ошибка при генерации конфигурации.');
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Ошибка при генерации конфигурации:', error);
       status.textContent = `Ошибка: ${error.message}`;
     } finally {
       button.disabled = false;
       button.classList.remove('button--loading');
     }
-  }
+  };
   
   /**
    * Обработчик для кнопки скачивания файла планировщика.
    */
-  async function downloadScheduler() {
+  const downloadScheduler = async () => {
     const status = document.getElementById('status');
     status.textContent = 'Скачивание файла планировщика...';
   
+    const SCHEDULER_URL = 'https://raw.githubusercontent.com/HereIamGosu/warp-config-generator/main/SchedulerAmnezia.bat';
     try {
-      const url = 'https://raw.githubusercontent.com/HereIamGosu/warp-config-generator/main/SchedulerAmnezia.bat';
-      const response = await fetch(url);
+      const response = await fetch(SCHEDULER_URL);
   
       if (!response.ok) {
         throw new Error(`Ошибка HTTP: ${response.status}`);
@@ -100,18 +101,29 @@ function downloadFile(content, filename) {
   
       status.textContent = 'Файл планировщика успешно скачан!';
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Ошибка при скачивании файла:', error);
       status.textContent = 'Не удалось скачать файл. Попробуйте позже.';
-      alert('Не удалось скачать файл. Попробуйте позже.');
     }
-  }
+  };
   
   // Добавляем обработчики событий после загрузки DOM
   document.addEventListener('DOMContentLoaded', () => {
     const generateButton = document.getElementById('generateButton');
     const schedulerButton = document.getElementById('schedulerButton');
   
-    generateButton.addEventListener('click', generateConfig);
-    schedulerButton.addEventListener('click', downloadScheduler);
+    if (generateButton) {
+      generateButton.addEventListener('click', generateConfig);
+    } else {
+      // eslint-disable-next-line no-console
+      console.error('Кнопка "generateButton" не найдена.');
+    }
+  
+    if (schedulerButton) {
+      schedulerButton.addEventListener('click', downloadScheduler);
+    } else {
+      // eslint-disable-next-line no-console
+      console.error('Кнопка "schedulerButton" не найдена.');
+    }
   });
   

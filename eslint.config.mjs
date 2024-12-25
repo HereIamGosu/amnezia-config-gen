@@ -1,15 +1,36 @@
-import globals from "globals";
-import pluginJs from "@eslint/js";
+import globals from 'globals';
+import pluginJs from '@eslint/js';
 
 /** @type {import('eslint').Linter.Config[]} */
 export default [
   {
     languageOptions: {
       globals: {
-        ...globals.browser, // Глобальные переменные для браузерной среды
-        ...globals.node,    // Глобальные переменные для Node.js
+        ...globals.browser,
+        ...globals.node,
+      },
+      parserOptions: {
+        ecmaVersion: 2021,
+        sourceType: 'module',
       },
     },
   },
-  pluginJs.configs.recommended, // Рекомендуемая конфигурация для JS
+  pluginJs.configs.recommended,
+  {
+    rules: {
+      'no-unused-vars': ['error'],
+      'no-console': ['warn'],
+      'semi': ['error', 'always'],
+      'quotes': ['error', 'single'],
+      'prefer-const': ['error'],
+      'no-var': ['error'],
+      'arrow-body-style': ['error', 'as-needed'],
+    },
+  },
+  {
+    files: ['api/**/*.js'],
+    rules: {
+      'no-console': 'off', // Разрешаем console в серверных файлах
+    },
+  },
 ];
