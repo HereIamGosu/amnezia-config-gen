@@ -2,7 +2,7 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Генерация конфигурации Amnezia</title>
     <meta
       name="description"
@@ -14,26 +14,25 @@
     <script defer src="/static/script.js"></script>
   </head>
   <body>
-    <div class="container">
-      <img src="/static/fallout-png_181544.png" alt="Логотип" />
+    <main class="container">
+      <header>
+        <img src="/static/fallout-png_181544.png" alt="Логотип" />
+      </header>
 
-      <div id="status"></div>
+      <section id="status" aria-live="polite"></section>
 
       <div class="buttons">
-        <!-- Кнопка генерации конфигурации -->
         <button id="generateButton" class="button">
           <span class="button__text">Сгенерировать</span>
         </button>
 
-        <!-- Кнопка для скачивания файла планировщика -->
         <button id="schedulerButton" class="button">
           <span class="button__text">Скачать файл планировщика</span>
         </button>
       </div>
-    </div>
+    </main>
 
-    <!-- Инструкция справа -->
-    <div class="instruction">
+    <aside class="instruction">
       <h2>Инструкция по установке и настройке</h2>
       <ol>
         <li>
@@ -42,8 +41,10 @@
           <a
             href="https://github.com/amnezia-vpn/amneziawg-windows-client/releases/download/1.0.0/amneziawg-amd64-1.0.0.msi"
             target="_blank"
-            >ссылке для скачивания</a
+            rel="noopener noreferrer"
           >
+            ссылке для скачивания
+          </a>
           и загрузите установочный файл для Windows. Установите по стандартному
           пути "C:\Program Files\...".
         </li>
@@ -63,13 +64,16 @@
         Теперь AmneziaWG будет автоматически подключаться к нужному конфигу при
         входе в систему 🥸
       </p>
-    </div>
+    </aside>
 
-    <!-- Текст благодарности внизу страницы -->
-    <div class="thank-you">
+    <footer class="thank-you">
       По вопросам обращайтесь на
-      <a href="https://discord.gg/XGNtYyGbmM" target="_blank">сервер Валокды</a
+      <a
+        href="https://discord.gg/XGNtYyGbmM"
+        target="_blank"
+        rel="noopener noreferrer"
+        >сервер Валокды</a
       >. Если новичок - отпишитесь в канал "Фейсконтроль".
-    </div>
+    </footer>
   </body>
 </html>
