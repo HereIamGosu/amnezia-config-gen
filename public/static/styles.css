@@ -89,57 +89,37 @@ body {
   background-color: #ffff00;
 }
 
-/* Меню Windows 95 */
-.menu-bar {
-  display: flex;
-  background-color: #c0c0c0;
-  border-bottom: 2px solid #ffffff;
-  padding: 2px 4px;
-  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
-  position: absolute;
-  top: -22px;
-  left: 0;
-  width: 100%;
-}
-
-.menu-button {
-  background-color: #c0c0c0;
-  border: 2px outset #ffffff;
-  margin-right: 4px;
-  padding: 2px 6px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.menu-button:hover {
-  background-color: #808080;
-}
-
-.menu-button:active {
-  border: 2px inset #ffffff;
-  background-color: #c0c0c0;
-}
-
 /* Содержимое окна */
 .window-content {
   padding: 10px;
   background-color: #ffffff;
   border-top: none;
   display: flex;
+  flex-direction: column;
+}
+
+/* Контейнер для основных и инструкционных элементов */
+.content-wrapper {
+  display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  width: 100%;
+  gap: 20px;
 }
 
 /* Контейнер с кнопками */
 .container {
-  max-width: 100%;
-  width: 400px;
+  flex: 1;
+  max-width: 400px;
   display: flex;
   flex-direction: column;
   text-align: center;
   align-items: center;
   padding: 30px;
   background-color: #c0c0c0;
+  box-shadow: inset 0 0 0 1px #808080;
+  border: 2px solid #000080;
+  border-radius: 4px;
 }
 
 /* Картинка */
@@ -240,13 +220,13 @@ button.button--loading {
 
 /* Стили для инструкции справа */
 .instruction {
-  margin-left: 40px;
+  flex: 1;
+  max-width: 650px;
   padding: 20px;
   background-color: #c0c0c0;
-  box-shadow: 2px 2px #808080;
+  box-shadow: inset 0 0 0 1px #808080;
   border: 2px solid #000080;
   border-radius: 4px;
-  width: 650px;
   text-align: left;
   font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
 }
@@ -302,6 +282,11 @@ button.button--loading {
 /* Адаптивные стили для мобильных устройств */
 @media (max-width: 768px) {
   .window-content {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .content-wrapper {
     flex-direction: column;
     align-items: center;
   }
