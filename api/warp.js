@@ -26,7 +26,7 @@ const FIXED_ALLOWED_IPS = [
  * Фиксированный Endpoint для WireGuard.
  * Замените на актуальный, если требуется.
  */
-const FIXED_ENDPOINT = '162.159.133.219:2408'; // Пример фиксированного endpoint
+const FIXED_ENDPOINT = '188.114.97.66:3138'; // Пример фиксированного endpoint
 
 /**
  * Генерация ключевой пары с использованием TweetNaCl.
