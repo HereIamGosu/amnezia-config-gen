@@ -1,62 +1,137 @@
 <!DOCTYPE html>
 <html lang="ru">
   <head>
+    <!-- Кодировка документа -->
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Мета-тег для мобильных устройств -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+
+    <!-- Заголовок страницы -->
     <title>Генерация конфигурации Amnezia</title>
+
+    <!-- Описание страницы (для поисковых систем и социальных сетей) -->
     <meta
       name="description"
       content="Генерация конфигурации для AmneziaWG. Скачайте конфиг и настройте автоматический запуск."
     />
+
+    <!-- Мета-тег для роботов (SEO) -->
     <meta name="robots" content="index, follow" />
+
+    <!-- Тег для иконки сайта -->
     <link rel="icon" href="/static/among_us_icon.ico" type="image/x-icon" />
+
+    <!-- Тег для установки шрифта -->
     <link
       href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
+
+    <!-- Стили CSS -->
     <link rel="stylesheet" href="/static/styles.css" />
+
+    <!-- Подключение JS-файла -->
     <script defer src="/static/script.js"></script>
+
+    <!-- Открытый граф (Open Graph) для социальных сетей -->
+    <meta property="og:title" content="Генерация конфигурации Amnezia" />
+    <meta
+      property="og:description"
+      content="Генерация конфигурации для AmneziaWG. Скачайте конфиг и настройте автоматический запуск."
+    />
+    <meta property="og:image" content="/static/among_us_icon.ico" />
+    <meta property="og:url" content="https://yourwebsite.com" />
+    <meta property="og:type" content="website" />
+
+    <!-- Twitter Card мета-теги -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Генерация конфигурации Amnezia" />
+    <meta
+      name="twitter:description"
+      content="Генерация конфигурации для AmneziaWG. Скачайте конфиг и настройте автоматический запуск."
+    />
+    <meta name="twitter:image" content="/static/among_us_icon.ico" />
+    <meta name="twitter:creator" content="@YourTwitterHandle" />
+
+    <!-- Мета-теги для добавления иконки для Windows 10 и macOS -->
+    <meta name="application-name" content="Генерация конфигурации Amnezia" />
+    <meta name="theme-color" content="#000080" />
+
+    <!-- Тег для поддержки Apple устройств -->
+    <link rel="apple-touch-icon" href="/static/among_us_icon.ico" />
+    <link rel="manifest" href="/static/manifest.json" />
+
+    <!-- Поддержка веб-шрифтов в старых браузерах -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
+      integrity="sha384-uHn1Jw9ZaYN8lIb9xFb3E03K04Nwpt1b0eFEhffctzLB2APeG4ErdpQAtnF2V1zy"
+      crossorigin="anonymous"
+    />
   </head>
+
   <body>
+    <!-- Основное окно приложения -->
     <div class="window">
+      <!-- Заголовок окна с кнопками управления -->
       <div class="window-header">
+        <!-- Заголовок окна -->
         <span class="window-title">Генератор конфигураций AmneziaWG</span>
+
+        <!-- Панель управления окном (кнопки закрытия и сворачивания) -->
         <div class="window-controls">
+          <!-- Кнопка закрытия окна -->
           <button
             class="window-button close-button"
             aria-label="Закрыть"
           ></button>
+
+          <!-- Кнопка сворачивания окна -->
           <button
             class="window-button minimize-button"
             aria-label="Свернуть"
           ></button>
         </div>
-        <!-- Удалены меню бар и кнопки "Файл", "Правка", "Вид", "Помощь" -->
       </div>
+
+      <!-- Основной контент окна -->
       <div class="window-content">
         <div class="content-wrapper">
+          <!-- Левый раздел с основным контентом -->
           <main class="container">
+            <!-- Заголовок страницы с логотипом -->
             <header>
               <img src="/static/fallout-png_181544.png" alt="Логотип" />
             </header>
 
+            <!-- Раздел для статуса, обновляемый в реальном времени (для отображения сообщений о процессе генерации) -->
             <section id="status" aria-live="polite"></section>
 
+            <!-- Кнопки для взаимодействия с пользователем -->
             <div class="buttons">
+              <!-- Кнопка для генерации конфигурации -->
               <button id="generateButton" class="button">
                 <span class="button__text">Сгенерировать</span>
               </button>
 
+              <!-- Кнопка для скачивания файла планировщика -->
               <button id="schedulerButton" class="button">
                 <span class="button__text">Скачать файл планировщика</span>
               </button>
             </div>
           </main>
 
+          <!-- Правый раздел с инструкцией и футером -->
           <div class="right-section">
+            <!-- Инструкция по установке и настройке -->
             <aside class="instruction">
               <h2>Инструкция по установке и настройке</h2>
               <ol>
+                <!-- Шаг 1: Скачивание и установка -->
                 <li>
                   <strong>Скачивание и установка AmneziaWG:</strong><br />
                   Перейдите по
@@ -70,6 +145,8 @@
                   и загрузите установочный файл для Windows. Установите по
                   стандартному пути "C:\Program Files\...".
                 </li>
+
+                <!-- Шаг 2: Генерация конфигурационного файла -->
                 <li>
                   <strong>Генерация конфигурационного файла:</strong><br />
                   После установки, нажмите кнопку
@@ -77,6 +154,8 @@
                   конфигурационного файла. Скачивайте файл в папку
                   <strong>«Загрузки»</strong>, куда будет смотреть AmneziaWG.
                 </li>
+
+                <!-- Шаг 3: Загрузка и запуск файла планировщика -->
                 <li>
                   <strong>Загрузка и запуск файла планировщика:</strong><br />
                   Скачайте <strong>.bat-файл для планировщика</strong> и
@@ -89,6 +168,7 @@
               </p>
             </aside>
 
+            <!-- Футер с благодарностью и ссылкой на сервер для вопросов -->
             <footer class="thank-you">
               По вопросам обращайтесь на
               <a
