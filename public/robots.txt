@@ -10,7 +10,3 @@ Clean-param: utm_campaign
 Clean-param: utm_source
 Clean-param: utm_medium
 Clean-param: utm_term
-
-
-# Если хотите уменьшить нагрузку на сервер, можно добавить задержку для роботов
-Crawl-delay: 10
