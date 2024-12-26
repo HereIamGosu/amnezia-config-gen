@@ -9,6 +9,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@vercel/analytics": "^1.4.1",
     "tweetnacl": "^1.0.3",
     "uuid": "^8.3.2"
   },
