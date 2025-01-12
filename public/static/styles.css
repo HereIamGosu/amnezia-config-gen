@@ -423,15 +423,15 @@ button.button--loading {
   }
 
   .instruction h2 {
-    font-size: 18px; /* Увеличиваем размер заголовка */
+    font-size: 16px; /* Увеличиваем размер заголовка */
   }
 
   .instruction ol {
-    font-size: 14px; /* Увеличиваем размер шрифта в списке */
+    font-size: 12px; /* Увеличиваем размер шрифта в списке */
   }
 
   .instruction p {
-    font-size: 14px; /* Увеличиваем размер шрифта */
+    font-size: 12px; /* Увеличиваем размер шрифта */
   }
 
   .thank-you {
