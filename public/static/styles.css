@@ -317,19 +317,51 @@ button.button--loading {
   box-shadow: 2px 2px #808080;
   border: 2px solid #000080;
   border-radius: 4px;
-  font-size: 14px;
+  font-size: 12px; /* Уменьшаем размер шрифта */
   color: #000080;
   text-align: center;
   font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
 }
 
-.thank-you a {
-  color: #000080;
-  text-decoration: underline;
+.thank-you-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px; /* Уменьшаем расстояние между элементами */
 }
 
-.thank-you a:hover {
-  color: #ff0000;
+.thank-you p {
+  margin: 0;
+  line-height: 1.3; /* Уменьшаем интервал между строками */
+}
+
+.discord-link {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Расстояние между иконкой и текстом */
+  padding: 6px 12px;
+  background-color: #5865f2; /* Цвет Discord */
+  color: white;
+  border: 2px outset #ffffff;
+  border-radius: 2px;
+  text-decoration: none;
+  font-size: 12px;
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  transition: background-color 0.1s ease, transform 0.05s ease;
+}
+
+.discord-link:hover {
+  background-color: #4752c4; /* Цвет Discord при наведении */
+}
+
+.discord-link:active {
+  transform: translateY(2px);
+  border: 2px inset #ffffff;
+}
+
+.discord-icon {
+  width: 16px; /* Уменьшаем размер иконки */
+  height: 16px;
 }
 
 /* Стили для информационного сообщения */
