@@ -332,6 +332,33 @@ button.button--loading {
   color: #ff0000;
 }
 
+/* Стили для информационного сообщения */
+.info-message {
+  background-color: #c0c0c0;
+  border: 2px solid #000080;
+  box-shadow: inset 0 0 0 1px #808080;
+  padding: 15px;
+  margin-bottom: 20px;
+  text-align: center;
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  font-size: 14px;
+  color: #000080;
+  border-radius: 4px;
+}
+
+.info-message p {
+  margin: 10px 0;
+  line-height: 1.5;
+}
+
+.info-message p:first-child {
+  margin-top: 0;
+}
+
+.info-message p:last-child {
+  margin-bottom: 0;
+}
+
 /* Адаптивные стили для экранов различных размеров */
 
 /* Для очень больших экранов */
