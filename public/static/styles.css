@@ -337,18 +337,18 @@ button.button--loading {
   background-color: #c0c0c0;
   border: 2px solid #000080;
   box-shadow: inset 0 0 0 1px #808080;
-  padding: 15px;
-  margin-bottom: 20px;
+  padding: 10px; /* Уменьшаем отступы внутри сообщения */
+  margin-bottom: 15px; /* Уменьшаем отступ снизу */
   text-align: center;
   font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
-  font-size: 14px;
+  font-size: 12px; /* Уменьшаем размер шрифта */
   color: #000080;
   border-radius: 4px;
 }
 
 .info-message p {
-  margin: 10px 0;
-  line-height: 1.5;
+  margin: 5px 0; /* Уменьшаем отступы между строками */
+  line-height: 1.3; /* Уменьшаем интервал между строками */
 }
 
 .info-message p:first-child {
