@@ -310,7 +310,7 @@ button.button--loading {
   margin-top: 10px;
 }
 
-/* Стили для нижнего блока */
+/* Стили для блока благодарности и рекламы сервера */
 .thank-you {
   padding: 10px;
   background-color: #c0c0c0;
@@ -331,8 +331,15 @@ button.button--loading {
 }
 
 .thank-you p {
-  margin: 0;
+  margin: 0 0 15px 0; /* Увеличиваем отступ снизу для текста */
   line-height: 1.3; /* Уменьшаем интервал между строками */
+}
+
+.buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* Расстояние между кнопками */
+  width: 100%; /* Кнопки занимают всю ширину контейнера */
 }
 
 .discord-link,
@@ -348,6 +355,7 @@ button.button--loading {
   font-size: 12px;
   font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
   transition: background-color 0.1s ease, transform 0.05s ease;
+  width: 100%; /* Кнопки занимают всю ширину контейнера */
 }
 
 .discord-link {
@@ -360,12 +368,12 @@ button.button--loading {
 }
 
 .web-link {
-  background-color: #fef6d6; /* Жёлтый цвет для кнопки веб-страницы */
+  background-color: #d6dafe; /* Жёлтый цвет для кнопки веб-страницы */
   color: black;
 }
 
 .web-link:hover {
-  background-color: #fff1b7; /* Более тёмный жёлтый при наведении */
+  background-color: #aeb6ff; /* Более тёмный жёлтый при наведении */
 }
 
 .discord-link:active,
