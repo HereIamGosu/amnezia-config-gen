@@ -12,7 +12,7 @@ body {
   align-items: center; /* Вертикальное центрирование */
   min-height: 100vh; /* Минимальная высота тела страницы - 100% высоты окна браузера */
   position: relative; /* Для позиционирования анимации */
-  overflow: hidden; /* Скрываем переполнение */
+  overflow: auto; /* Скрываем переполнение */
 }
 
 /* Анимация фона */
@@ -48,16 +48,17 @@ star {
 
 /* Окно в стиле Windows 95 */
 .window {
-  width: 65vw; /* Изменено согласно запросу */
-  max-width: 1200px; /* Максимальная ширина для очень больших экранов */
-  margin: 0 auto; /* Центрирование горизонтально */
-  border: 2px solid #000080; /* Тёмно-синий цвет */
+  width: 65vw;
+  max-width: 1200px;
+  min-width: 300px; /* Минимальная ширина для маленьких экранов */
+  margin: 0 auto;
+  border: 2px solid #000080;
   background-color: #c0c0c0;
   box-shadow: 5px 5px #808080;
   display: flex;
   flex-direction: column;
   border-radius: 4px;
-  z-index: 1; /* Поверх анимации */
+  z-index: 1;
 }
 
 /* Заголовок окна */
@@ -350,7 +351,7 @@ button.button--loading {
   }
 }
 
-/* Для малых экранов (Mobile и планшеты) */
+/* Адаптивные стили для малых экранов (Mobile и планшеты) */
 @media (max-width: 768px) {
   .content-wrapper {
     flex-direction: column;
@@ -362,94 +363,78 @@ button.button--loading {
     max-width: 650px;
   }
 
-  /* Контейнер с кнопками */
   .container {
-    width: 90%; /* Уменьшаем ширину контейнера */
-    padding: 20px; /* Уменьшаем отступы */
+    width: 95%; /* Увеличиваем ширину контейнера */
+    padding: 20px; /* Увеличиваем отступы */
   }
 
-  /* Картинка */
   img {
     margin-bottom: 15px;
   }
 
-  /* Кнопки */
   button.button {
-    font-size: 12px; /* Уменьшаем размер шрифта для кнопок */
-    padding: 8px 10px; /* Уменьшаем отступы кнопок */
+    font-size: 12px; /* Увеличиваем размер шрифта для кнопок */
+    padding: 8px 10px;
   }
 
-  /* Статус ошибки */
   #status {
-    font-size: 14px; /* Уменьшаем размер шрифта */
+    font-size: 14px;
   }
 
-  /* Стили для инструкции справа */
   .instruction {
     width: 100%;
-    margin-top: 20px; /* Добавляем отступ сверху для адаптивности */
-    padding: 15px;
+    margin-top: 20px;
+    padding: 15px; /* Увеличиваем отступы для инструкции */
   }
 
   .instruction h2 {
-    font-size: 18px; /* Уменьшаем размер заголовка */
+    font-size: 18px; /* Увеличиваем размер заголовка */
   }
 
   .instruction ol {
-    font-size: 14px; /* Уменьшаем размер шрифта в списке */
+    font-size: 14px; /* Увеличиваем размер шрифта в списке */
   }
 
   .instruction p {
-    font-size: 14px; /* Уменьшаем размер шрифта */
+    font-size: 14px; /* Увеличиваем размер шрифта */
   }
 
-  /* Стили для нижнего блока */
   .thank-you {
     width: 90%;
     font-size: 12px;
   }
-
-  /* Анимация текста на малых экранах удалена */
 }
 
 /* Для очень маленьких экранов (Mobile) */
 @media (max-width: 480px) {
   .window {
-    width: 95vw; /* Максимальная ширина для очень маленьких экранов */
+    width: 95vw;
   }
 
   .container {
-    width: 95%; /* Еще больше уменьшаем ширину контейнера */
-    padding: 15px; /* Уменьшаем отступы */
+    width: 95%;
+    padding: 15px;
   }
 
-  /* Кнопки */
   button.button {
-    font-size: 10px; /* Еще больше уменьшаем размер шрифта */
-    padding: 6px 8px; /* Уменьшаем отступы кнопок */
-  }
-
-  /* Стили для инструкции справа */
-  .instruction {
-    width: 100%; /* Инструкция занимает всю ширину */
-    padding: 10px; /* Уменьшаем отступы */
+    font-size: 12px; /* Увеличиваем размер шрифта для кнопок */
+    padding: 6px 8px;
   }
 
   .instruction h2 {
-    font-size: 16px; /* Уменьшаем размер заголовка */
+    font-size: 18px; /* Увеличиваем размер заголовка */
   }
 
   .instruction ol {
-    font-size: 12px; /* Уменьшаем размер шрифта в списке */
+    font-size: 14px; /* Увеличиваем размер шрифта в списке */
   }
 
   .instruction p {
-    font-size: 12px; /* Уменьшаем размер шрифта */
+    font-size: 14px; /* Увеличиваем размер шрифта */
   }
 
-  /* Стили для нижнего блока */
   .thank-you {
-    width: 90%; /* Уменьшаем ширину блока */
-    font-size: 10px; /* Уменьшаем размер шрифта */
+    width: 90%;
+    font-size: 12px;
   }
 }
