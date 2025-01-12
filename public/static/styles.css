@@ -337,9 +337,10 @@ button.button--loading {
 
 .discord-link {
   display: flex;
-  align-items: center;
+  align-items: center; /* Центрируем элементы по вертикали */
+  justify-content: center; /* Центрируем элементы по горизонтали */
   gap: 8px; /* Расстояние между иконкой и текстом */
-  padding: 6px 12px;
+  padding: 8px 16px; /* Увеличиваем внутренние отступы */
   background-color: #5865f2; /* Цвет Discord */
   color: white;
   border: 2px outset #ffffff;
@@ -362,6 +363,7 @@ button.button--loading {
 .discord-icon {
   width: 16px; /* Уменьшаем размер иконки */
   height: 16px;
+  margin: 0; /* Убираем margin у иконки */
 }
 
 /* Стили для информационного сообщения */
