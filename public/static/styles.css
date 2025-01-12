@@ -1,3 +1,7 @@
+* {
+  box-sizing: border-box;
+}
+
 /* Основные стили страницы */
 body {
   margin: 0; /* Убираем отступы по умолчанию */
@@ -358,14 +362,11 @@ button.button--loading {
     align-items: center;
   }
 
+  .container,
   .right-section {
-    width: 100%;
-    max-width: 650px;
-  }
-
-  .container {
-    width: 95%; /* Увеличиваем ширину контейнера */
-    padding: 20px; /* Увеличиваем отступы */
+    width: 100%; /* Занимают всю ширину родительского контейнера */
+    max-width: 100%; /* Убедимся, что не выходят за пределы */
+    padding: 15px; /* Уменьшаем отступы для мобильных устройств */
   }
 
   img {
@@ -411,9 +412,9 @@ button.button--loading {
     width: 95vw;
   }
 
-  .container {
-    width: 95%;
-    padding: 15px;
+  .container,
+  .right-section {
+    padding: 10px; /* Уменьшаем отступы для очень маленьких экранов */
   }
 
   button.button {
