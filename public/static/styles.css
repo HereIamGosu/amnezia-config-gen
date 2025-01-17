@@ -212,6 +212,7 @@ button.button:disabled {
   background: linear-gradient(90deg, #2ecc71, #00bcd5);
   box-shadow: 0 4px 8px rgba(46, 204, 113, 0.2),
     0 6px 20px rgba(0, 188, 212, 0.2);
+  margin-bottom: 5px;
 }
 
 #generateButton:hover {
@@ -222,6 +223,7 @@ button.button:disabled {
 #schedulerButton {
   background-color: #f15874;
   box-shadow: 0 4px 8px rgba(241, 88, 116, 0.2);
+  margin-top: 10px;
 }
 
 #schedulerButton:hover {
@@ -339,6 +341,7 @@ button.button--loading {
   display: flex;
   flex-direction: column;
   width: 100%; /* Кнопки занимают всю ширину контейнера */
+  gap: 10px;
 }
 
 .discord-link,
@@ -422,7 +425,8 @@ button.button--loading {
   text-decoration: underline;
   cursor: pointer;
   font-size: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 10px; /* Отступ между текстом и следующей кнопкой */
+  text-align: center; /* Центрируем текст */
 }
 
 .info-link:hover {
