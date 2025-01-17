@@ -219,6 +219,8 @@
               <button id="schedulerButton" class="button">
                 <span class="button__text">Скачать файл планировщика</span>
               </button>
+
+              <p id="infoLink" class="info-link">Дополнительная информация</p>
             </div>
           </main>
 
@@ -303,6 +305,33 @@
             </footer>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div id="modal" class="modal">
+      <div class="modal-content">
+        <p>
+          Сгенерированная конфигурация настроена так, что она перенаправляет
+          только трафик, связанный с Discord. Это достигается за счёт указания
+          диапазонов IP-адресов Discord в переменной
+          <strong>AllowedIPs</strong> в файле конфигурации.
+        </p>
+        <p>
+          Если вы хотите, чтобы весь ваш интернет-трафик проходил через туннель
+          AmneziaWG, вы можете удалить строку с <strong>AllowedIPs</strong> из
+          конфигурационного файла.
+        </p>
+        <p>
+          Также вы можете заменить диапазоны IP-адресов на свои. Например, вы
+          можете указать диапазоны для других сервисов, таких как YouTube,
+          Twitch или любых других. Список IP-адресов для различных сервисов
+          можно найти на сайте
+          <a
+            href="https://rockblack.pro/vpn/dopolnitelno/diapazon-ip-adresov"
+            target="_blank"
+            >rockblack.pro</a
+          >.
+        </p>
       </div>
     </div>
 

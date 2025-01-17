@@ -146,3 +146,26 @@ const downloadFile = (content, filename) => {
       }
     });
   });
+
+
+// Добавляем обработчик для клика по тексту "Дополнительная информация"
+document.addEventListener('DOMContentLoaded', () => {
+  const infoLink = document.getElementById('infoLink');
+  const modal = document.getElementById('modal');
+
+  if (infoLink && modal) {
+    // Открытие модального окна
+    infoLink.addEventListener('click', () => {
+      modal.style.display = 'flex';
+    });
+
+    // Закрытие модального окна при клике вне его области
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) {
+        modal.style.display = 'none';
+      }
+    });
+  } else {
+    console.error('Элементы "infoLink" или "modal" не найдены.');
+  }
+});
