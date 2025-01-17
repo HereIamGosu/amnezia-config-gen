@@ -180,7 +180,7 @@ img {
 /* Кнопки */
 button.button {
   width: 100%;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
   padding: 12px 10px;
   font-size: 14px;
   color: #000000;
@@ -422,7 +422,7 @@ button.button--loading {
   text-decoration: underline;
   cursor: pointer;
   font-size: 12px;
-  margin-top: 10px;
+  margin-bottom: 10px;
 }
 
 .info-link:hover {
