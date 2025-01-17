@@ -341,7 +341,6 @@ button.button--loading {
   display: flex;
   flex-direction: column;
   width: 100%; /* Кнопки занимают всю ширину контейнера */
-  gap: 10px;
 }
 
 .discord-link,
