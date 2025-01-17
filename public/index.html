@@ -21,9 +21,16 @@
     <link rel="icon" href="/static/favicon.ico" type="image/x-icon" />
     <!-- Подключение шрифта Press Start 2P -->
     <link
+      rel="preload"
       href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
-      rel="stylesheet"
+      as="style"
+      onload="this.onload=null;this.rel='stylesheet'"
     />
+    <noscript
+      ><link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
+    /></noscript>
     <!-- Подключение CSS -->
     <link rel="stylesheet" href="/static/styles.css" />
     <!-- Подключение JavaScript -->
@@ -272,6 +279,8 @@
                     src="/static/discord-icon.png"
                     alt="Discord"
                     class="discord-icon"
+                    width="32"
+                    height="32"
                   />
                   Присоединиться к серверу
                 </a>
@@ -285,6 +294,8 @@
                     src="/static/globe-icon.png"
                     alt="Globe"
                     class="globe-icon"
+                    width="32"
+                    height="32"
                   />
                   Посетить веб-страницу
                 </a>
