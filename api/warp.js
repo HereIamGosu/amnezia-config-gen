@@ -35,7 +35,7 @@ async function getEndpointFromAPI() {
       tos: new Date().toISOString(),
       key: pubKey, // Используем реальный публичный ключ
       fcm_token: '',
-      type: 'windows', // Возможно, измените на 'windows', если целевая ОС Windows
+      type: 'windows',
       locale: 'en_US',
     });
 
