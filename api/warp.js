@@ -26,15 +26,20 @@ let cacheExpiry = null;
 
 async function getEndpointFromAPI() {
   try {
+    // Генерация ключевой пары
+    const { pubKey } = generateKeys();
+
+    // Отправка запроса на регистрацию устройства
     const response = await handleApiRequest('POST', 'reg', {
       install_id: uuidv4(),
       tos: new Date().toISOString(),
-      key: 'public_key_placeholder', // Замените на реальный ключ, если требуется
+      key: pubKey, // Используем реальный публичный ключ
       fcm_token: '',
-      type: 'ios', // Возможно, измените на 'windows', если целевая ОС Windows
+      type: 'windows', // Возможно, измените на 'windows', если целевая ОС Windows
       locale: 'en_US',
     });
 
+    // Проверка ответа API
     if (response && response.result && response.result.config && response.result.config.peers) {
       const peers = response.result.config.peers;
       if (peers.length > 0 && peers[0].endpoint) {
@@ -44,7 +49,7 @@ async function getEndpointFromAPI() {
     }
     throw new Error('Не удалось получить Endpoint из API.');
   } catch (error) {
-    console.error('Ошибка при получении Endpoint из API:', error);
+    console.error('Ошибка при получении Endpoint из API:', error.message || error);
     throw error;
   }
 }
@@ -137,7 +142,7 @@ const generateWarpConfig = async () => {
     tos: new Date().toISOString(),
     key: pubKey,
     fcm_token: '',
-    type: 'ios',
+    type: 'windows',
     locale: 'en_US',
   };
 
