@@ -39,12 +39,17 @@ async function getEndpointFromAPI() {
       locale: 'en_US',
     });
 
+    // Логирование ответа API для диагностики
+    console.log('Ответ API:', JSON.stringify(response, null, 2));
+
     // Проверка ответа API
     if (response && response.result && response.result.config && response.result.config.peers) {
       const peers = response.result.config.peers;
-      if (peers.length > 0 && peers[0].endpoint) {
+      if (peers.length > 0 && peers[0].endpoint && typeof peers[0].endpoint === 'string') {
         const [ip] = peers[0].endpoint.split(':');
         return ip; // Возвращаем только IP-адрес
+      } else {
+        throw new Error('Поле endpoint отсутствует или имеет некорректный формат.');
       }
     }
     throw new Error('Не удалось получить Endpoint из API.');
