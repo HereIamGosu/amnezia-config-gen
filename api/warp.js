@@ -1,13 +1,10 @@
-// api/warp.js
-
 const nacl = require('tweetnacl');
 const { Buffer } = require('buffer');
 const { v4: uuidv4 } = require('uuid');
 const https = require('https');
+const dns = require('dns');
+const net = require('net');
 
-/**
- * Фиксированный список AllowedIPs.
- */
 const FIXED_ALLOWED_IPS = [
   '138.128.136.0/21', '162.158.0.0/15', '172.64.0.0/13', '34.0.0.0/15',
   '34.2.0.0/16', '34.3.0.0/23', '34.3.2.0/24', '35.192.0.0/12',
@@ -22,16 +19,66 @@ const FIXED_ALLOWED_IPS = [
   '35.255.255.0/32'
 ];
 
-/**
- * Фиксированный Endpoint для WireGuard.
- * Замените на актуальный, если требуется.
- */
-const FIXED_ENDPOINT = '188.114.97.66:3138'; // Пример фиксированного endpoint
+const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5 минут
+const FALLBACK_IP = '188.114.97.66';
+const WARP_PORT = 3138;
 
-/**
- * Генерация ключевой пары с использованием TweetNaCl.
- * @returns {Object} Объект с приватным и публичным ключами в формате base64.
- */
+let cachedEndpointIP = null;
+let cacheExpiry = null;
+
+function checkEndpointAvailability(ip, port) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    // eslint-disable-next-line no-unused-vars
+    let isAvailable = false;
+
+    socket.setTimeout(2000); // Таймаут 2 секунды
+
+    socket.on('connect', () => {
+      isAvailable = true;
+      socket.destroy();
+      resolve(true);
+    });
+
+    socket.on('timeout', () => {
+      socket.destroy();
+      resolve(false);
+    });
+
+    socket.on('error', () => {
+      resolve(false);
+    });
+
+    socket.connect(port, ip);
+  });
+}
+
+async function resolveEndpoint() {
+  if (cachedEndpointIP && Date.now() < cacheExpiry) {
+    return cachedEndpointIP;
+  }
+
+  try {
+    const addresses = await dns.promises.resolve4('warp.cloudflare.com');
+    if (addresses.length === 0) {
+      throw new Error('No IP addresses resolved.');
+    }
+
+    for (const ip of addresses) {
+      if (await checkEndpointAvailability(ip, WARP_PORT)) {
+        cachedEndpointIP = ip;
+        cacheExpiry = Date.now() + CACHE_EXPIRY_TIME;
+        return cachedEndpointIP;
+      }
+    }
+
+    throw new Error('No available endpoints found.');
+  } catch (err) {
+    console.error('Endpoint resolution failed:', err);
+    return FALLBACK_IP;
+  }
+}
+
 const generateKeys = () => {
   const { secretKey, publicKey } = nacl.box.keyPair();
   const privKey = Buffer.from(secretKey).toString('base64');
@@ -39,11 +86,6 @@ const generateKeys = () => {
   return { privKey, pubKey };
 };
 
-/**
- * Формирование заголовков для HTTP-запросов.
- * @param {string|null} token Токен авторизации, если есть.
- * @returns {Object} Объект с заголовками.
- */
 const generateHeaders = (token = null) => {
   const headers = {
     'Content-Type': 'application/json',
@@ -54,126 +96,85 @@ const generateHeaders = (token = null) => {
   return headers;
 };
 
-/**
- * Выполнение HTTP-запроса к API Cloudflare.
- * @param {string} method HTTP-метод (GET, POST, PATCH и т.д.).
- * @param {string} endpoint Конечная точка API.
- * @param {Object|null} body Тело запроса.
- * @param {string|null} token Токен авторизации.
- * @returns {Promise<Object>} Ответ API в формате JSON.
- */
 const handleApiRequest = (method, endpoint, body = null, token = null) => new Promise((resolve, reject) => {
-    const headers = generateHeaders(token);
-    const data = body ? JSON.stringify(body) : null;
+  const headers = generateHeaders(token);
+  const data = body ? JSON.stringify(body) : null;
 
-    const options = {
-      hostname: 'api.cloudflareclient.com',
-      port: 443,
-      path: `/v0i1909051800/${endpoint}`,
-      method,
-      headers: {
-        ...headers,
-        'Content-Length': data ? Buffer.byteLength(data) : 0,
-      },
-    };
+  const options = {
+    hostname: 'api.cloudflareclient.com',
+    port: 443,
+    path: `/v0i1909051800/${endpoint}`,
+    method,
+    headers: {
+      ...headers,
+      'Content-Length': data ? Buffer.byteLength(data) : 0,
+    },
+  };
 
-    const req = https.request(options, (res) => {
-      let responseData = '';
+  const req = https.request(options, (res) => {
+    let responseData = '';
 
-      res.on('data', (chunk) => {
-        responseData += chunk;
-      });
+    res.on('data', (chunk) => {
+      responseData += chunk;
+    });
 
-      res.on('end', () => {
-        try {
-          const parsedData = JSON.parse(responseData);
-          if (res.statusCode === 200) {
-            resolve(parsedData);
-          } else {
-            const errorMessage = parsedData.message || `Ошибка с кодом ${res.statusCode}`;
-            reject(new Error(errorMessage));
-          }
-        } catch (error) {
-          reject(new Error('Не удалось обработать ответ сервера.'));
+    res.on('end', () => {
+      try {
+        const parsedData = JSON.parse(responseData);
+        if (res.statusCode === 200) {
+          resolve(parsedData);
+        } else {
+          const errorMessage = parsedData.message || `Ошибка с кодом ${res.statusCode}`;
+          reject(new Error(errorMessage));
         }
-      });
+      } catch (error) {
+        reject(new Error('Не удалось обработать ответ сервера.'));
+      }
     });
-
-    req.on('error', (e) => {
-      reject(new Error(`Ошибка запроса: ${e.message}`));
-    });
-
-    if (data) {
-      req.write(data);
-    }
-
-    req.end();
   });
 
-/**
- * Генерация конфигурационного файла WARP.
- * @returns {Promise<string>} Конфигурация WireGuard в формате строки.
- */
+  req.on('error', (e) => {
+    reject(new Error(`Ошибка запроса: ${e.message}`));
+  });
+
+  if (data) {
+    req.write(data);
+  }
+
+  req.end();
+});
+
 const generateWarpConfig = async () => {
   const { privKey, pubKey } = generateKeys();
-
   const regBody = {
     install_id: uuidv4(),
     tos: new Date().toISOString(),
     key: pubKey,
     fcm_token: '',
-    type: 'ios', // Возможно, измените на 'windows', если целевая ОС Windows
+    type: 'ios',
     locale: 'en_US',
   };
 
-  // Регистрация устройства
-  let regResponse;
-  try {
-    regResponse = await handleApiRequest('POST', 'reg', regBody);
-  } catch (error) {
-    throw new Error(`Ошибка при регистрации устройства: ${error.message}`);
-  }
+  const regResponse = await handleApiRequest('POST', 'reg', regBody);
+  const { id, token } = regResponse.result ?? {};
 
-  const { result } = regResponse;
-
-  if (!result || !result.id || !result.token) {
+  if (!id || !token) {
     throw new Error('Ошибка: отсутствуют id или token в ответе регистрации');
   }
 
-  const { id, token } = result;
+  await handleApiRequest('PATCH', `reg/${id}`, { warp_enabled: true }, token);
+  const { config } = regResponse.result;
 
-  // Включение WARP
-  let warpResponse;
-  try {
-    warpResponse = await handleApiRequest('PATCH', `reg/${id}`, { warp_enabled: true }, token);
-  } catch (error) {
-    throw new Error(`Ошибка при включении WARP: ${error.message}`);
-  }
-
-  const { config } = warpResponse.result;
-
-  if (!config || !config.peers || !Array.isArray(config.peers) || config.peers.length === 0) {
-    throw new Error('Ошибка: отсутствуют данные для формирования конфигурации WARP');
+  if (!config?.peers?.length || !config.peers[0].public_key) {
+    throw new Error('Ошибка: недостающие данные для формирования конфигурации WARP');
   }
 
   const { public_key: peerPub } = config.peers[0];
+  const { v4: clientIPv4, v6: clientIPv6 } = config.interface.addresses;
+  const endpointIP = await resolveEndpoint();
+  const peerEndpoint = `${endpointIP}:${WARP_PORT}`;
 
-  if (!peerPub) {
-    throw new Error('Ошибка: недостающий public_key в данных Peer');
-  }
-
-  const interfaceConfig = config.interface;
-  const { v4: clientIPv4, v6: clientIPv6 } = interfaceConfig.addresses;
-
-  if (!clientIPv4 || !clientIPv6) {
-    throw new Error('Ошибка: отсутствуют клиентские IP-адреса');
-  }
-
-  // Используем фиксированный Endpoint
-  const peerEndpoint = FIXED_ENDPOINT;
-
-  // Формирование конфигурации WireGuard
-  const conf = `[Interface]
+  return `[Interface]
 PrivateKey = ${privKey}
 Jc = 120
 Jmin = 23
@@ -190,15 +191,8 @@ DNS = 1.1.1.1, 2606:4700:4700::1111, 1.0.0.1, 2606:4700:4700::1001
 PublicKey = ${peerPub}
 AllowedIPs = ${FIXED_ALLOWED_IPS.join(', ')}
 Endpoint = ${peerEndpoint}`;
-
-  return conf;
 };
 
-/**
- * Обработчик HTTP-запросов к API.
- * @param {Object} req Объект запроса.
- * @param {Object} res Объект ответа.
- */
 module.exports = async (req, res) => {
   if (req.method !== 'GET') {
     res.status(405).json({ success: false, message: 'Метод не поддерживается.' });
