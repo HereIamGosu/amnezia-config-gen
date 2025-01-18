@@ -2,8 +2,6 @@ const nacl = require('tweetnacl');
 const { Buffer } = require('buffer');
 const { v4: uuidv4 } = require('uuid');
 const https = require('https');
-const dns = require('dns');
-const net = require('net');
 
 const FIXED_ALLOWED_IPS = [
   '138.128.136.0/21', '162.158.0.0/15', '172.64.0.0/13', '34.0.0.0/15',
@@ -26,31 +24,29 @@ const WARP_PORT = 3138;
 let cachedEndpointIP = null;
 let cacheExpiry = null;
 
-function checkEndpointAvailability(ip, port) {
-  return new Promise((resolve) => {
-    const socket = new net.Socket();
-    // eslint-disable-next-line no-unused-vars
-    let isAvailable = false;
-
-    socket.setTimeout(2000); // Таймаут 2 секунды
-
-    socket.on('connect', () => {
-      isAvailable = true;
-      socket.destroy();
-      resolve(true);
+async function getEndpointFromAPI() {
+  try {
+    const response = await handleApiRequest('POST', 'reg', {
+      install_id: uuidv4(),
+      tos: new Date().toISOString(),
+      key: 'public_key_placeholder', // Замените на реальный ключ, если требуется
+      fcm_token: '',
+      type: 'ios', // Возможно, измените на 'windows', если целевая ОС Windows
+      locale: 'en_US',
     });
 
-    socket.on('timeout', () => {
-      socket.destroy();
-      resolve(false);
-    });
-
-    socket.on('error', () => {
-      resolve(false);
-    });
-
-    socket.connect(port, ip);
-  });
+    if (response && response.result && response.result.config && response.result.config.peers) {
+      const peers = response.result.config.peers;
+      if (peers.length > 0 && peers[0].endpoint) {
+        const [ip] = peers[0].endpoint.split(':');
+        return ip; // Возвращаем только IP-адрес
+      }
+    }
+    throw new Error('Не удалось получить Endpoint из API.');
+  } catch (error) {
+    console.error('Ошибка при получении Endpoint из API:', error);
+    throw error;
+  }
 }
 
 async function resolveEndpoint() {
@@ -59,22 +55,12 @@ async function resolveEndpoint() {
   }
 
   try {
-    const addresses = await dns.promises.resolve4('warp.cloudflare.com');
-    if (addresses.length === 0) {
-      throw new Error('No IP addresses resolved.');
-    }
-
-    for (const ip of addresses) {
-      if (await checkEndpointAvailability(ip, WARP_PORT)) {
-        cachedEndpointIP = ip;
-        cacheExpiry = Date.now() + CACHE_EXPIRY_TIME;
-        return cachedEndpointIP;
-      }
-    }
-
-    throw new Error('No available endpoints found.');
+    const endpointIP = await getEndpointFromAPI();
+    cacheExpiry = Date.now() + CACHE_EXPIRY_TIME;
+    cachedEndpointIP = endpointIP;
+    return endpointIP;
   } catch (err) {
-    console.error('Endpoint resolution failed:', err);
+    console.error('Ошибка при получении Endpoint:', err);
     return FALLBACK_IP;
   }
 }
