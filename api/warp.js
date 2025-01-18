@@ -45,9 +45,16 @@ async function getEndpointFromAPI() {
     // Проверка ответа API
     if (response && response.result && response.result.config && response.result.config.peers) {
       const peers = response.result.config.peers;
-      if (peers.length > 0 && peers[0].endpoint && typeof peers[0].endpoint === 'string') {
-        const [ip] = peers[0].endpoint.split(':');
-        return ip; // Возвращаем только IP-адрес
+      if (peers.length > 0 && peers[0].endpoint) {
+        const endpoint = peers[0].endpoint;
+
+        // Извлечение IP-адреса из поля v4 или host
+        const ip = endpoint.v4 ? endpoint.v4.split(':')[0] : endpoint.host.split(':')[0];
+        if (ip) {
+          return ip; // Возвращаем только IP-адрес
+        } else {
+          throw new Error('Не удалось извлечь IP-адрес из endpoint.');
+        }
       } else {
         throw new Error('Поле endpoint отсутствует или имеет некорректный формат.');
       }
