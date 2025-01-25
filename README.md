@@ -62,4 +62,12 @@
 
 ## 🚀 Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=HereIamGosu/amnezia-config-gen&type=Date)](https://star-history.com/#HereIamGosu/amnezia-config-gen&Date)
+## Star History
+
+<a href="https://star-history.com/#HereIamGosu/amnezia-config-gen&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=HereIamGosu/amnezia-config-gen&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=HereIamGosu/amnezia-config-gen&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=HereIamGosu/amnezia-config-gen&type=Date" />
+ </picture>
+</a>
