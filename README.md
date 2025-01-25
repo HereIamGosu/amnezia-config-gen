@@ -59,3 +59,7 @@
 По вопросам и предложениям обращайтесь:
 - **Discord**: [Присоединиться к серверу](https://discord.gg/XGNtYyGbmM)
 - **Веб-страница**: [Посетить веб-страницу](https://valokda.vercel.app/)
+
+## 🚀 Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=HereIamGosu/amnezia-config-gen&type=Date)](https://star-history.com/#HereIamGosu/amnezia-config-gen&Date)
