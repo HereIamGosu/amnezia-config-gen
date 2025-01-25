@@ -62,8 +62,6 @@
 
 ## 🚀 Star History
 
-## Star History
-
 <a href="https://star-history.com/#HereIamGosu/amnezia-config-gen&Date">
  <picture>
    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=HereIamGosu/amnezia-config-gen&type=Date&theme=dark" />
