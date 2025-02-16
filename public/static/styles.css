@@ -475,6 +475,28 @@ button.button--loading {
   color: #ff0000;
 }
 
+/* Стили для секции доната */
+.donate-section {
+  padding: 10px;
+  text-align: center; /* Центрируем содержимое */
+}
+
+.donate-container {
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Центрируем элементы по горизонтали */
+  gap: 40px; /* Добавляем отступ между элементами */
+  flex-wrap: wrap; /* Разрешаем перенос элементов на новую строку при необходимости */
+}
+
+.donate-text {
+  color: #000;
+  font-size: 10px;
+  line-height: 1.5; /* Уменьшаем интервал между строками */
+  max-width: 300px;
+  margin: 0 auto; /* Центрируем текст */
+}
+
 /* Адаптивные стили для экранов различных размеров */
 
 /* Для очень больших экранов */
@@ -495,6 +517,9 @@ button.button--loading {
 @media (max-width: 1024px) and (min-width: 769px) {
   .window {
     width: 85vw;
+  }
+  .donate-text {
+    font-size: 11px;
   }
 }
 
@@ -547,6 +572,11 @@ button.button--loading {
     width: 90%;
     font-size: 12px;
   }
+
+  .donate-text {
+    font-size: 10px;
+    max-width: 100%; /* Делаем текст занимать всю ширину родительского контейнера */
+  }
 }
 
 /* Для очень маленьких экранов (Mobile) */
@@ -580,5 +610,10 @@ button.button--loading {
   .thank-you {
     width: 90%;
     font-size: 12px;
+  }
+
+  .donate-text {
+    font-size: 9px;
+    max-width: 100%; /* Делаем текст занимать всю ширину родительского контейнера */
   }
 }
