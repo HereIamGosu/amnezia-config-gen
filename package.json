@@ -6,6 +6,7 @@
   "scripts": {
     "start": "vercel dev",
     "build": "echo \"No build step required\"",
+    "presets:fallback": "node scripts/dump-presets-fallback.js",
     "lint": "eslint ."
   },
   "dependencies": {
