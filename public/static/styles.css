@@ -73,6 +73,7 @@ star {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   font-size: 16px;
   border-bottom: 2px solid #ffffff;
   position: relative;
@@ -81,6 +82,10 @@ star {
 /* Название окна */
 .window-title {
   font-weight: bold;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 /* Кнопки управления окном */
@@ -143,6 +148,7 @@ star {
   border-top: none;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 /* Контейнер для основных и инструкционных элементов */
@@ -151,6 +157,7 @@ star {
   justify-content: space-between;
   align-items: flex-start;
   width: 100%;
+  min-width: 0;
   gap: 20px;
   flex-wrap: wrap; /* Позволяет элементам переноситься на новую строку при необходимости */
 }
@@ -158,6 +165,7 @@ star {
 /* Контейнер с кнопками */
 .container {
   flex: 1 1 300px; /* Гибкий размер с минимальной шириной 300px */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   text-align: center;
@@ -269,6 +277,7 @@ button.button--loading {
 /* Стили для правой секции: инструкция и thank-you */
 .right-section {
   flex: 1 1 400px; /* Гибкий размер с минимальной шириной 400px */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -283,6 +292,7 @@ button.button--loading {
   border-radius: 4px;
   text-align: left;
   font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  overflow-wrap: anywhere;
 }
 
 .instruction h2 {
@@ -407,6 +417,8 @@ button.button--loading {
   font-size: 12px; /* Уменьшаем размер шрифта */
   color: #000080;
   border-radius: 4px;
+  overflow-wrap: anywhere;
+  max-width: 100%;
 }
 
 .info-message p {
@@ -454,14 +466,14 @@ button.info-link {
 .modal {
   display: none; /* По умолчанию скрыто */
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   background-color: rgba(0, 0, 0, 0.5); /* Затемнение фона */
   z-index: 1000;
   justify-content: center;
   align-items: center;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  box-sizing: border-box;
 }
 
 .modal-heading {
@@ -477,13 +489,18 @@ button.info-link {
   box-shadow: inset 0 0 0 1px #808080;
   padding: 20px;
   max-width: 500px;
-  width: 90%;
+  width: min(90vw, 500px);
+  max-height: 90vh;
+  max-height: 90dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   text-align: left;
   font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
   font-size: 12px;
   color: #000080;
   border-radius: 4px;
   position: relative;
+  overflow-wrap: anywhere;
 }
 
 .modal-content p {
@@ -550,9 +567,24 @@ button.info-link {
 
 /* Адаптивные стили для малых экранов (Mobile и планшеты) */
 @media (max-width: 768px) {
+  body {
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+      max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  }
+
+  .window {
+    max-width: 100%;
+  }
+
+  .window-header {
+    font-size: 11px;
+  }
+
   .content-wrapper {
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
   }
 
   .container,
@@ -567,12 +599,30 @@ button.info-link {
   }
 
   button.button {
-    font-size: 12px; /* Увеличиваем размер шрифта для кнопок */
-    padding: 8px 10px;
+    font-size: 11px;
+    padding: 10px 12px;
+    min-height: 44px;
+    line-height: 1.35;
+  }
+
+  .discord-link,
+  .web-link {
+    min-height: 44px;
+    padding: 10px 12px;
   }
 
   #status {
     font-size: 14px;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  button.info-link {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 4px;
   }
 
   .instruction {
@@ -594,7 +644,8 @@ button.info-link {
   }
 
   .thank-you {
-    width: 90%;
+    width: 100%;
+    max-width: 100%;
     font-size: 12px;
   }
 
@@ -607,7 +658,12 @@ button.info-link {
 /* Для очень маленьких экранов (Mobile) */
 @media (max-width: 480px) {
   .window {
-    width: 95vw;
+    width: min(95vw, 100%);
+    min-width: 0;
+  }
+
+  .window-header {
+    font-size: 9px;
   }
 
   .container,
@@ -616,8 +672,29 @@ button.info-link {
   }
 
   button.button {
-    font-size: 12px; /* Увеличиваем размер шрифта для кнопок */
-    padding: 6px 8px;
+    font-size: 10px;
+    padding: 10px 10px;
+    min-height: 44px;
+  }
+
+  .discord-link,
+  .web-link {
+    font-size: 10px;
+    padding: 10px 10px;
+    min-height: 44px;
+  }
+
+  .buttons {
+    gap: 14px;
+  }
+
+  .modal-heading {
+    font-size: 12px;
+  }
+
+  .modal-content {
+    padding: 16px;
+    font-size: 10px;
   }
 
   .instruction h2 {
@@ -633,7 +710,8 @@ button.info-link {
   }
 
   .thank-you {
-    width: 90%;
+    width: 100%;
+    max-width: 100%;
     font-size: 12px;
   }
 
