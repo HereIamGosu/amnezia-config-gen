@@ -23,6 +23,73 @@ const REQUEST_TIMEOUT_MS = 20000;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const API_PREFIX = '/v0i1909051800';
 
+/** AmneziaWG 2.0: H1–H4 as non-overlapping decimal ranges (see amneziawg-linux-kernel-module magic_header.c). */
+const AWG2_H_RANGES = {
+  H1: '1-1000000000',
+  H2: '1000000001-2000000000',
+  H3: '2000000001-3000000000',
+  H4: '3000000001-4294967295',
+};
+
+const resolveGenerationMode = (req) => {
+  let raw = '';
+  if (req.query && typeof req.query === 'object') {
+    raw = String(req.query.mode || req.query.awg || '').toLowerCase();
+  }
+  if (!raw && req.url) {
+    try {
+      const u = new URL(req.url, 'http://localhost');
+      raw = String(u.searchParams.get('mode') || u.searchParams.get('awg') || '').toLowerCase();
+    } catch {
+      raw = '';
+    }
+  }
+  if (raw === 'awg2' || raw === '2' || raw === 'v2') return 'awg2';
+  return 'legacy';
+};
+
+const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6) => `[Interface]
+PrivateKey = ${privKey}
+Jc = 120
+Jmin = 23
+Jmax = 911
+H1 = 1
+H2 = 2
+H3 = 3
+H4 = 4
+MTU = 1280
+Address = ${clientIPv4}/32, ${clientIPv6}/128
+DNS = 1.1.1.1, 2606:4700:4700::1111, 1.0.0.1, 2606:4700:4700::1001`;
+
+const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6) => `[Interface]
+PrivateKey = ${privKey}
+Jc = 120
+Jmin = 23
+Jmax = 911
+S1 = 88
+S2 = 88
+S3 = 64
+S4 = 96
+H1 = ${AWG2_H_RANGES.H1}
+H2 = ${AWG2_H_RANGES.H2}
+H3 = ${AWG2_H_RANGES.H3}
+H4 = ${AWG2_H_RANGES.H4}
+MTU = 1280
+Address = ${clientIPv4}/32, ${clientIPv6}/128
+DNS = 1.1.1.1, 2606:4700:4700::1111, 1.0.0.1, 2606:4700:4700::1001`;
+
+const buildFullConfig = (mode, privKey, peerPub, clientIPv4, clientIPv6, peerEndpoint) => {
+  const iface = mode === 'awg2'
+    ? buildInterfaceAwg2(privKey, clientIPv4, clientIPv6)
+    : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6);
+  return `${iface}
+
+[Peer]
+PublicKey = ${peerPub}
+AllowedIPs = ${FIXED_ALLOWED_IPS.join(', ')}
+Endpoint = ${peerEndpoint}`;
+};
+
 /**
  * Extract WireGuard endpoint host from Cloudflare peer.endpoint (same registration as keys).
  * @param {object} peer config.peers[0]
@@ -160,7 +227,7 @@ const mergeConfigAfterWarp = async (id, token, initialConfig) => {
   return initialConfig;
 };
 
-const generateWarpConfig = async () => {
+const generateWarpConfig = async (mode = 'legacy') => {
   const { privKey, pubKey } = generateKeys();
   const regBody = {
     install_id: uuidv4(),
@@ -196,23 +263,7 @@ const generateWarpConfig = async () => {
 
   const peerEndpoint = `${endpointHost}:${WARP_PORT}`;
 
-  return `[Interface]
-PrivateKey = ${privKey}
-Jc = 120
-Jmin = 23
-Jmax = 911
-H1 = 1
-H2 = 2
-H3 = 3
-H4 = 4
-MTU = 1280
-Address = ${clientIPv4}/32, ${clientIPv6}/128
-DNS = 1.1.1.1, 2606:4700:4700::1111, 1.0.0.1, 2606:4700:4700::1001
-
-[Peer]
-PublicKey = ${peerPub}
-AllowedIPs = ${FIXED_ALLOWED_IPS.join(', ')}
-Endpoint = ${peerEndpoint}`;
+  return buildFullConfig(mode, privKey, peerPub, clientIPv4, clientIPv6, peerEndpoint);
 };
 
 module.exports = async (req, res) => {
@@ -222,9 +273,10 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const conf = await generateWarpConfig();
+    const mode = resolveGenerationMode(req);
+    const conf = await generateWarpConfig(mode);
     const confEncoded = Buffer.from(conf).toString('base64');
-    res.status(200).json({ success: true, content: confEncoded });
+    res.status(200).json({ success: true, content: confEncoded, mode });
   } catch (error) {
     console.error('Ошибка генерации конфигурации:', error);
     res.status(500).json({ success: false, message: error.message });

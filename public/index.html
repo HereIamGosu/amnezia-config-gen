@@ -207,6 +207,11 @@
                 Конфигурацию можно сгенерировать для любых устройств. Она
                 содержит заранее внесённые маршруты для Discord.
               </p>
+              <p>
+                <strong>Legacy</strong> — формат как раньше (фиксированные H1–H4).
+                <strong>AmneziaWG 2.0</strong> — диапазоны H1–H4 и параметры S3/S4;
+                нужен клиент с поддержкой AWG 2.0 (например AmneziaVPN 4.8.12.9 и новее).
+              </p>
               <p>Файл планировщика доступен только для Windows.</p>
             </div>
 
@@ -215,9 +220,11 @@
 
             <!-- Кнопки для взаимодействия с пользователем -->
             <div class="buttons">
-              <!-- Кнопка для генерации конфигурации -->
-              <button id="generateButton" class="button">
-                <span class="button__text">Сгенерировать</span>
+              <button id="generateButton" class="button" type="button">
+                <span class="button__text">Сгенерировать (Legacy)</span>
+              </button>
+              <button id="generateButtonAwg2" class="button" type="button">
+                <span class="button__text">Сгенерировать AmneziaWG 2.0</span>
               </button>
 
               <button type="button" id="infoLink" class="info-link">
@@ -255,9 +262,10 @@
                 <!-- Шаг 2: Генерация конфигурационного файла -->
                 <li>
                   <strong>Генерация конфигурационного файла:</strong><br />
-                  После установки, нажмите кнопку
-                  <strong>«Сгенерировать»</strong> слева для создания
-                  конфигурационного файла. Скачивайте файл в папку
+                  После установки выберите слева
+                  <strong>«Сгенерировать (Legacy)»</strong> или
+                  <strong>«Сгенерировать AmneziaWG 2.0»</strong> в зависимости от
+                  версии клиента. Сохраните файл в папку
                   <strong>«Загрузки»</strong>, куда будет смотреть AmneziaWG.
                 </li>
 
