@@ -14,74 +14,52 @@ const FIXED_ALLOWED_IPS = [
   '23.64.0.0/32', '23.128.0.0/32', '23.192.0.0/32', '23.224.0.0/32',
   '23.240.0.0/32', '23.248.0.0/32', '23.252.0.0/32', '23.254.0.0/32',
   '23.255.0.0/32', '34.200.0.0/32', '34.224.0.0/32', '34.240.0.0/32',
-  '35.255.255.0/32'
+  '35.255.255.0/32',
 ];
 
-const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5 минут
 const FALLBACK_IP = '188.114.97.66';
 const WARP_PORT = 3138;
+const REQUEST_TIMEOUT_MS = 20000;
+const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+const API_PREFIX = '/v0i1909051800';
 
-let cachedEndpointIP = null;
-let cacheExpiry = null;
+/**
+ * Extract WireGuard endpoint host from Cloudflare peer.endpoint (same registration as keys).
+ * @param {object} peer config.peers[0]
+ * @returns {string|null} host IP or IPv6 literal (no brackets)
+ */
+const extractEndpointHostFromPeer = (peer) => {
+  const endpoint = peer?.endpoint;
+  if (!endpoint) return null;
 
-async function getEndpointFromAPI() {
-  try {
-    // Генерация ключевой пары
-    const { pubKey } = generateKeys();
+  if (endpoint.v4) {
+    const host = String(endpoint.v4).split(':')[0];
+    return host || null;
+  }
 
-    // Отправка запроса на регистрацию устройства
-    const response = await handleApiRequest('POST', 'reg', {
-      install_id: uuidv4(),
-      tos: new Date().toISOString(),
-      key: pubKey, // Используем реальный публичный ключ
-      fcm_token: '',
-      type: 'windows',
-      locale: 'en_US',
-    });
-
-    if (process.env.VERCEL_ENV !== 'production') {
-      console.log('Ответ API:', JSON.stringify(response, null, 2));
+  if (endpoint.host) {
+    const raw = String(endpoint.host).trim();
+    if (raw.startsWith('[')) {
+      const end = raw.indexOf(']');
+      if (end > 1) return raw.slice(1, end);
     }
-
-    // Проверка ответа API
-    if (response && response.result && response.result.config && response.result.config.peers) {
-      const peers = response.result.config.peers;
-      if (peers.length > 0 && peers[0].endpoint) {
-        const endpoint = peers[0].endpoint;
-
-        // Извлечение IP-адреса из поля v4 или host
-        const ip = endpoint.v4 ? endpoint.v4.split(':')[0] : endpoint.host.split(':')[0];
-        if (ip) {
-          return ip; // Возвращаем только IP-адрес
-        } else {
-          throw new Error('Не удалось извлечь IP-адрес из endpoint.');
-        }
-      } else {
-        throw new Error('Поле endpoint отсутствует или имеет некорректный формат.');
-      }
+    const lastColon = raw.lastIndexOf(':');
+    if (lastColon > 0 && /^\d{1,3}(\.\d{1,3}){3}$/.test(raw.slice(0, lastColon))) {
+      return raw.slice(0, lastColon);
     }
-    throw new Error('Не удалось получить Endpoint из API.');
-  } catch (error) {
-    console.error('Ошибка при получении Endpoint из API:', error.message || error);
-    throw error;
-  }
-}
-
-async function resolveEndpoint() {
-  if (cachedEndpointIP && Date.now() < cacheExpiry) {
-    return cachedEndpointIP;
+    if (lastColon > 0 && raw.slice(lastColon + 1).length > 0 && /^\d+$/.test(raw.slice(lastColon + 1))) {
+      return raw.slice(0, lastColon);
+    }
+    return raw;
   }
 
-  try {
-    const endpointIP = await getEndpointFromAPI();
-    cacheExpiry = Date.now() + CACHE_EXPIRY_TIME;
-    cachedEndpointIP = endpointIP;
-    return endpointIP;
-  } catch (err) {
-    console.error('Ошибка при получении Endpoint:', err);
-    return FALLBACK_IP;
-  }
-}
+  return null;
+};
+
+const pickEndpointHost = (config) => {
+  const peer = config?.peers?.[0];
+  return extractEndpointHostFromPeer(peer);
+};
 
 const generateKeys = () => {
   const { secretKey, publicKey } = nacl.box.keyPair();
@@ -95,58 +73,92 @@ const generateHeaders = (token = null) => {
     'Content-Type': 'application/json',
   };
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers.Authorization = `Bearer ${token}`;
   }
   return headers;
 };
 
-const handleApiRequest = (method, endpoint, body = null, token = null) => new Promise((resolve, reject) => {
-  const headers = generateHeaders(token);
-  const data = body ? JSON.stringify(body) : null;
+const handleApiRequest = (method, endpointPath, body = null, token = null) =>
+  new Promise((resolve, reject) => {
+    const headers = generateHeaders(token);
+    const data = body ? JSON.stringify(body) : null;
 
-  const options = {
-    hostname: 'api.cloudflareclient.com',
-    port: 443,
-    path: `/v0i1909051800/${endpoint}`,
-    method,
-    headers: {
-      ...headers,
-      'Content-Length': data ? Buffer.byteLength(data) : 0,
-    },
-  };
+    const options = {
+      hostname: 'api.cloudflareclient.com',
+      port: 443,
+      path: `${API_PREFIX}/${endpointPath}`,
+      method,
+      headers: {
+        ...headers,
+        'Content-Length': data ? Buffer.byteLength(data) : 0,
+      },
+    };
 
-  const req = https.request(options, (res) => {
-    let responseData = '';
+    let settled = false;
+    const finish = (err, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (err) reject(err);
+      else resolve(value);
+    };
 
-    res.on('data', (chunk) => {
-      responseData += chunk;
-    });
+    const timer = setTimeout(() => {
+      req.destroy();
+      finish(new Error('Таймаут запроса к Cloudflare API.'));
+    }, REQUEST_TIMEOUT_MS);
 
-    res.on('end', () => {
-      try {
-        const parsedData = JSON.parse(responseData);
-        if (res.statusCode === 200) {
-          resolve(parsedData);
-        } else {
-          const errorMessage = parsedData.message || `Ошибка с кодом ${res.statusCode}`;
-          reject(new Error(errorMessage));
+    const req = https.request(options, (res) => {
+      let responseData = '';
+      let totalBytes = 0;
+
+      res.on('data', (chunk) => {
+        totalBytes += chunk.length;
+        if (totalBytes > MAX_RESPONSE_BYTES) {
+          req.destroy();
+          finish(new Error('Ответ Cloudflare API слишком большой.'));
+          return;
         }
-      } catch (error) {
-        reject(new Error('Не удалось обработать ответ сервера.'));
-      }
+        responseData += chunk;
+      });
+
+      res.on('end', () => {
+        try {
+          const parsedData = responseData ? JSON.parse(responseData) : {};
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            finish(null, parsedData);
+            return;
+          }
+          const errorMessage = parsedData.message || `Ошибка с кодом ${res.statusCode}`;
+          finish(new Error(errorMessage));
+        } catch {
+          finish(new Error('Не удалось обработать ответ сервера.'));
+        }
+      });
     });
+
+    req.on('error', (e) => {
+      finish(new Error(`Ошибка запроса: ${e.message}`));
+    });
+
+    if (data) req.write(data);
+    req.end();
   });
 
-  req.on('error', (e) => {
-    reject(new Error(`Ошибка запроса: ${e.message}`));
-  });
-
-  if (data) {
-    req.write(data);
+const mergeConfigAfterWarp = async (id, token, initialConfig) => {
+  try {
+    const refreshed = await handleApiRequest('GET', `reg/${id}`, null, token);
+    const next = refreshed?.result?.config;
+    if (next?.peers?.length && next.peers[0]?.public_key) {
+      return next;
+    }
+  } catch (e) {
+    if (process.env.VERCEL_ENV !== 'production') {
+      console.warn('GET reg/{id} after PATCH failed, using POST reg config:', e.message || e);
+    }
   }
-
-  req.end();
-});
+  return initialConfig;
+};
 
 const generateWarpConfig = async () => {
   const { privKey, pubKey } = generateKeys();
@@ -167,16 +179,22 @@ const generateWarpConfig = async () => {
   }
 
   await handleApiRequest('PATCH', `reg/${id}`, { warp_enabled: true }, token);
-  const { config } = regResponse.result;
 
-  if (!config?.peers?.length || !config.peers[0].public_key) {
+  const initialConfig = regResponse.result?.config;
+  if (!initialConfig?.peers?.length || !initialConfig.peers[0].public_key) {
     throw new Error('Ошибка: недостающие данные для формирования конфигурации WARP');
   }
 
+  const config = await mergeConfigAfterWarp(id, token, initialConfig);
   const { public_key: peerPub } = config.peers[0];
   const { v4: clientIPv4, v6: clientIPv6 } = config.interface.addresses;
-  const endpointIP = await resolveEndpoint();
-  const peerEndpoint = `${endpointIP}:${WARP_PORT}`;
+
+  let endpointHost = pickEndpointHost(config);
+  if (!endpointHost) {
+    endpointHost = FALLBACK_IP;
+  }
+
+  const peerEndpoint = `${endpointHost}:${WARP_PORT}`;
 
   return `[Interface]
 PrivateKey = ${privKey}
