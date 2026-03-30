@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
@@ -26,7 +26,10 @@
       rel="preload"
       href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
       as="style"
-      onload="this.onload=null;this.rel='stylesheet'"
+      onload="
+        this.onload = null;
+        this.rel = 'stylesheet';
+      "
     />
     <noscript
       ><link
@@ -51,17 +54,17 @@
             return;
           }
         }
-        (k = e.createElement(t)),
+        ((k = e.createElement(t)),
           (a = e.getElementsByTagName(t)[0]),
           (k.async = 1),
           (k.src = r),
-          a.parentNode.insertBefore(k, a);
+          a.parentNode.insertBefore(k, a));
       })(
         window,
         document,
         "script",
         "https://mc.yandex.ru/metrika/tag.js",
-        "ym"
+        "ym",
       );
 
       ym(99328227, "init", {
@@ -207,11 +210,6 @@
                 Конфигурацию можно сгенерировать для любых устройств. Она
                 содержит заранее внесённые маршруты для Discord.
               </p>
-              <p>
-                <strong>Legacy</strong> — формат как раньше (фиксированные H1–H4).
-                <strong>AmneziaWG 2.0</strong> — диапазоны H1–H4 и параметры S3/S4;
-                нужен клиент с поддержкой AWG 2.0 (например AmneziaVPN 4.8.12.9 и новее).
-              </p>
               <p>Файл планировщика доступен только для Windows.</p>
             </div>
 
@@ -264,8 +262,8 @@
                   <strong>Генерация конфигурационного файла:</strong><br />
                   После установки выберите слева
                   <strong>«Сгенерировать (Legacy)»</strong> или
-                  <strong>«Сгенерировать AmneziaWG 2.0»</strong> в зависимости от
-                  версии клиента. Сохраните файл в папку
+                  <strong>«Сгенерировать AmneziaWG 2.0»</strong> в зависимости
+                  от версии клиента. Сохраните файл в папку
                   <strong>«Загрузки»</strong>, куда будет смотреть AmneziaWG.
                 </li>
 
