@@ -207,16 +207,20 @@ button.button:disabled {
   opacity: 0.7;
 }
 
-/* Кнопка генерации конфигурации */
-#generateButton {
+/* Primary generate action: AmneziaWG 2.0 (gradient; Legacy uses default .button gray) */
+#generateButtonAwg2 {
   background: linear-gradient(90deg, #2ecc71, #00bcd5);
   box-shadow: 0 4px 8px rgba(46, 204, 113, 0.2),
     0 6px 20px rgba(0, 188, 212, 0.2);
   margin-bottom: 5px;
 }
 
-#generateButton:hover {
+#generateButtonAwg2:hover {
   background: linear-gradient(90deg, #27ae60, #0097a7);
+}
+
+#generateButton {
+  margin-bottom: 5px;
 }
 
 /* Кнопка скачивания файла */
