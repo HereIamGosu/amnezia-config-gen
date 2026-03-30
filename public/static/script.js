@@ -19,24 +19,38 @@ const downloadFile = (content, filename) => {
     URL.revokeObjectURL(link.href);
   };
   
+  const GENERATE_BUTTON_IDS = ['generateButton', 'generateButtonAwg2'];
+
+  const setAllGenerateButtonsDisabled = (disabled) => {
+    GENERATE_BUTTON_IDS.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = disabled;
+    });
+  };
+
   /**
-   * Генерация конфигурационного файла.
+   * Генерация конфигурационного файла (Legacy AmneziaWG или AmneziaWG 2.0).
+   * @param {{ buttonId: string, mode: string, filename: string, readyDownloadText: string, loadingLabel: string, boundGenerateClick: () => void }} options
    */
-  const generateConfig = async () => {
-    const button = document.getElementById('generateButton');
+  const generateConfig = async (options) => {
+    const { buttonId, mode, filename, readyDownloadText, loadingLabel, boundGenerateClick } = options;
+    const button = document.getElementById(buttonId);
+    if (!button) {
+      return;
+    }
     const buttonText = button.querySelector('.button__text');
     const status = document.getElementById('status');
-  
-    button.disabled = true;
+
+    setAllGenerateButtonsDisabled(true);
     button.classList.add('button--loading');
-    status.textContent = 'Генерация конфигурации...';
-  
+    status.textContent = loadingLabel;
+
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), API_WARP_TIMEOUT_MS);
       let response;
       try {
-        response = await fetch('/api/warp', {
+        response = await fetch(`/api/warp?mode=${encodeURIComponent(mode)}`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -68,16 +82,20 @@ const downloadFile = (content, filename) => {
         }
   
         const decodedConfig = atob(data.content);
-        buttonText.textContent = 'Скачать AmneziaWarp.conf';
-  
-        // Обработчик для скачивания файла при повторном клике
-        const downloadHandler = () => downloadFile(decodedConfig, 'AmneziaWarp.conf');
-        button.removeEventListener('click', generateConfig);
+        buttonText.textContent = readyDownloadText;
+
+        const downloadHandler = () => downloadFile(decodedConfig, filename);
+
+        if (boundGenerateClick) {
+          button.removeEventListener('click', boundGenerateClick);
+        }
         button.addEventListener('click', downloadHandler);
-  
-        // Сразу скачиваем файл после генерации
+
         downloadHandler();
-        status.textContent = 'Конфигурация успешно сгенерирована!';
+        status.textContent =
+          mode === 'awg2'
+            ? 'Конфигурация AmneziaWG 2.0 успешно сгенерирована! Нужен клиент AmneziaVPN 4.8.12.9+ или совместимый AWG 2.0.'
+            : 'Конфигурация Legacy успешно сгенерирована!';
       } else {
         throw new Error(data.message || 'Неизвестная ошибка при генерации конфигурации.');
       }
@@ -90,7 +108,7 @@ const downloadFile = (content, filename) => {
           : error.message;
       status.textContent = `Ошибка: ${message}`;
     } finally {
-      button.disabled = false;
+      setAllGenerateButtonsDisabled(false);
       button.classList.remove('button--loading');
     }
   };
@@ -131,13 +149,43 @@ const downloadFile = (content, filename) => {
   
   document.addEventListener('DOMContentLoaded', () => {
     const generateButton = document.getElementById('generateButton');
+    const generateButtonAwg2 = document.getElementById('generateButtonAwg2');
     const schedulerButton = document.getElementById('schedulerButton');
 
+    /** @type {{ buttonId: string, mode: string, filename: string, readyDownloadText: string, loadingLabel: string, boundGenerateClick: () => void }} */
+    const legacyOptions = {
+      buttonId: 'generateButton',
+      mode: 'legacy',
+      filename: 'AmneziaWarp.conf',
+      readyDownloadText: 'Скачать AmneziaWarp.conf',
+      loadingLabel: 'Генерация конфигурации (Legacy)...',
+      boundGenerateClick: () => {},
+    };
+    legacyOptions.boundGenerateClick = () => generateConfig(legacyOptions);
+
+    /** @type {{ buttonId: string, mode: string, filename: string, readyDownloadText: string, loadingLabel: string, boundGenerateClick: () => void }} */
+    const awg2Options = {
+      buttonId: 'generateButtonAwg2',
+      mode: 'awg2',
+      filename: 'AmneziaWarp-AWG2.conf',
+      readyDownloadText: 'Скачать AmneziaWarp-AWG2.conf',
+      loadingLabel: 'Генерация конфигурации (AmneziaWG 2.0)...',
+      boundGenerateClick: () => {},
+    };
+    awg2Options.boundGenerateClick = () => generateConfig(awg2Options);
+
     if (generateButton) {
-      generateButton.addEventListener('click', generateConfig);
+      generateButton.addEventListener('click', legacyOptions.boundGenerateClick);
     } else {
       // eslint-disable-next-line no-console
       console.error('Кнопка "generateButton" не найдена.');
+    }
+
+    if (generateButtonAwg2) {
+      generateButtonAwg2.addEventListener('click', awg2Options.boundGenerateClick);
+    } else {
+      // eslint-disable-next-line no-console
+      console.error('Кнопка "generateButtonAwg2" не найдена.');
     }
 
     if (schedulerButton) {
