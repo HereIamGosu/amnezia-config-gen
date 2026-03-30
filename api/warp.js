@@ -39,8 +39,9 @@ async function getEndpointFromAPI() {
       locale: 'en_US',
     });
 
-    // Логирование ответа API для диагностики
-    console.log('Ответ API:', JSON.stringify(response, null, 2));
+    if (process.env.VERCEL_ENV !== 'production') {
+      console.log('Ответ API:', JSON.stringify(response, null, 2));
+    }
 
     // Проверка ответа API
     if (response && response.result && response.result.config && response.result.config.peers) {
