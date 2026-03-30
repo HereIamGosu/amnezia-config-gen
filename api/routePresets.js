@@ -71,6 +71,11 @@ const ROUTE_PRESETS = {
       'activate.viber.com',
     ],
   },
+  tiktok: {
+    label: 'TikTok',
+    category: 'social',
+    sites: ['tiktok.com', 'tiktokcdn.com', 'ttlivecdn.com'],
+  },
   itch_io: {
     label: 'Itch.io',
     category: 'gaming',
@@ -154,6 +159,30 @@ const ROUTE_PRESETS = {
       'rezka.cc',
     ],
   },
+  spotify: {
+    label: 'Spotify',
+    category: 'more',
+    popular: true,
+    sites: ['spotify.com', 'scdn.co', 'spotifycdn.com'],
+  },
+  openai: {
+    label: 'ChatGPT / OpenAI',
+    category: 'more',
+    popular: true,
+    sites: ['openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com'],
+  },
+  notion: {
+    label: 'Notion',
+    category: 'more',
+    popular: true,
+    sites: ['notion.so', 'notionusercontent.com'],
+  },
+  linkedin: {
+    label: 'LinkedIn',
+    category: 'more',
+    popular: true,
+    sites: ['linkedin.com', 'licdn.com'],
+  },
   vk: {
     label: 'ВКонтакте',
     category: 'more',
@@ -219,11 +248,6 @@ const ROUTE_PRESETS = {
     category: 'more',
     sites: ['max.ru', 'web.max.ru', 'api.max.ru'],
   },
-  tiktok: {
-    label: 'TikTok',
-    category: 'more',
-    sites: ['tiktok.com', 'tiktokcdn.com', 'ttlivecdn.com'],
-  },
   reddit: {
     label: 'Reddit',
     category: 'more',
@@ -238,11 +262,6 @@ const ROUTE_PRESETS = {
     label: 'Netflix',
     category: 'more',
     sites: ['netflix.com', 'nflxvideo.net', 'nflximg.net', 'nflxso.net'],
-  },
-  spotify: {
-    label: 'Spotify',
-    category: 'more',
-    sites: ['spotify.com', 'scdn.co', 'spotifycdn.com'],
   },
   twitch: {
     label: 'Twitch',
@@ -265,11 +284,6 @@ const ROUTE_PRESETS = {
     category: 'more',
     sites: ['cloudflare.com', 'one.one.one.one'],
   },
-  linkedin: {
-    label: 'LinkedIn',
-    category: 'more',
-    sites: ['linkedin.com', 'licdn.com'],
-  },
   microsoft: {
     label: 'Microsoft / Outlook',
     category: 'more',
@@ -281,20 +295,10 @@ const ROUTE_PRESETS = {
       'office365.com',
     ],
   },
-  openai: {
-    label: 'ChatGPT / OpenAI',
-    category: 'more',
-    sites: ['openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com'],
-  },
   zoom: {
     label: 'Zoom',
     category: 'more',
     sites: ['zoom.us', 'zoomgov.com', 'zoom.com'],
-  },
-  notion: {
-    label: 'Notion',
-    category: 'more',
-    sites: ['notion.so', 'notionusercontent.com'],
   },
   proton: {
     label: 'Proton',
@@ -305,7 +309,7 @@ const ROUTE_PRESETS = {
 
 const PRESET_CATEGORY_ORDER = ['social', 'gaming', 'torrent', 'more'];
 
-/** Быстрый выбор: соцсети, игры, торренты и пресеты с popular (остальное «Дополнительно» — вручную). */
+/** Быстрый выбор: все пресеты вне «more», плюс записи more с popular: true. */
 const PRESET_GROUP_RF_POPULAR = Object.entries(ROUTE_PRESETS)
   .filter(([, v]) => v.category !== 'more' || v.popular === true)
   .map(([id]) => id);
