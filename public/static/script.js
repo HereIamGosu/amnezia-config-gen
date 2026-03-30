@@ -406,12 +406,9 @@ const generateConfig = async (options) => {
       button.addEventListener('click', downloadHandler);
 
       downloadHandler();
-      const routesNote = data.routesSource === 'presets'
-        ? ` Маршруты: ${(data.routesPresets || []).join(', ')}.`
-        : '';
       status.textContent = mode === 'awg2'
-        ? `Конфигурация AmneziaWG 2.0 успешно сгенерирована! Нужен клиент AmneziaVPN 4.8.12.9+ или совместимый AWG 2.0.${routesNote}`
-        : `Конфигурация Legacy успешно сгенерирована!${routesNote}`;
+        ? 'Конфигурация AmneziaWG 2.0 успешно сгенерирована! Нужен клиент AmneziaVPN 4.8.12.9+ или совместимый AWG 2.0.'
+        : 'Конфигурация Legacy успешно сгенерирована!';
     } else {
       throw new Error(data.message || 'Неизвестная ошибка при генерации конфигурации.');
     }
