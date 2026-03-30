@@ -135,8 +135,8 @@
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
-      integrity="sha384-uHn1Jw9ZaYN8lIb9xFb3E03K04Nwpt1b0eFEhffctzLB2APeG4ErdpQAtnF2V1zy"
       crossorigin="anonymous"
+      referrerpolicy="no-referrer"
     />
   </head>
   <body>
@@ -220,7 +220,9 @@
                 <span class="button__text">Сгенерировать</span>
               </button>
 
-              <p id="infoLink" class="info-link">Дополнительная информация</p>
+              <button type="button" id="infoLink" class="info-link">
+                Дополнительная информация
+              </button>
 
               <!-- Кнопка для скачивания файла планировщика -->
               <button id="schedulerButton" class="button">
@@ -309,6 +311,7 @@
                 <div class="donate-section">
                   <div class="donate-container">
                     <iframe
+                      title="Форма пожертвования ЮMoney"
                       src="https://yoomoney.ru/quickpay/fundraise/button?billNumber=18ER903VDJE.250216&"
                       width="270"
                       height="50"
@@ -330,8 +333,18 @@
       </div>
     </div>
 
-    <div id="modal" class="modal">
+    <div
+      id="modal"
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modalHeading"
+      aria-hidden="true"
+    >
       <div class="modal-content">
+        <h2 id="modalHeading" class="modal-heading">
+          Дополнительная информация
+        </h2>
         <p>
           Сгенерированная конфигурация настроена так, что она перенаправляет
           только трафик, связанный с Discord. Это достигается за счёт указания

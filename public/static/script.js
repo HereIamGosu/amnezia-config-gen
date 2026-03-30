@@ -1,5 +1,7 @@
 // public/static/script.js
 
+const API_WARP_TIMEOUT_MS = 45000;
+
 /**
  * Функция для скачивания файла.
  * @param {string} content Содержимое файла.
@@ -30,16 +32,32 @@ const downloadFile = (content, filename) => {
     status.textContent = 'Генерация конфигурации...';
   
     try {
-      const response = await fetch('/api/warp', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), API_WARP_TIMEOUT_MS);
+      let response;
+      try {
+        response = await fetch('/api/warp', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
   
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Ошибка HTTP: ${response.status}`);
+        let message = `Ошибка HTTP: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          if (errorData && errorData.message) {
+            message = errorData.message;
+          }
+        } catch {
+          /* non-JSON error body */
+        }
+        throw new Error(message);
       }
   
       const data = await response.json();
@@ -66,7 +84,11 @@ const downloadFile = (content, filename) => {
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Ошибка при генерации конфигурации:', error);
-      status.textContent = `Ошибка: ${error.message}`;
+      const message =
+        error && error.name === 'AbortError'
+          ? 'Превышено время ожидания ответа. Попробуйте ещё раз.'
+          : error.message;
+      status.textContent = `Ошибка: ${message}`;
     } finally {
       button.disabled = false;
       button.classList.remove('button--loading');
@@ -107,65 +129,79 @@ const downloadFile = (content, filename) => {
     }
   };
   
-  // Добавляем обработчики событий после загрузки DOM
   document.addEventListener('DOMContentLoaded', () => {
     const generateButton = document.getElementById('generateButton');
     const schedulerButton = document.getElementById('schedulerButton');
-  
+
     if (generateButton) {
       generateButton.addEventListener('click', generateConfig);
     } else {
       // eslint-disable-next-line no-console
       console.error('Кнопка "generateButton" не найдена.');
     }
-  
+
     if (schedulerButton) {
       schedulerButton.addEventListener('click', downloadScheduler);
     } else {
       // eslint-disable-next-line no-console
       console.error('Кнопка "schedulerButton" не найдена.');
     }
-  });
-  
-  document.addEventListener('DOMContentLoaded', () => {
+
     const closeButton = document.querySelector('.close-button');
     const minimizeButton = document.querySelector('.minimize-button');
-  
-    closeButton.addEventListener('click', () => {
-      // Закрывает окно браузера (работает только для окон, открытых через window.open)
-      window.close();
-    });
-  
-    minimizeButton.addEventListener('click', () => {
-      // Скрывает содержимое окна
-      const windowContent = document.querySelector('.window-content');
-      if (windowContent.style.display === 'none') {
-        windowContent.style.display = 'flex';
-      } else {
-        windowContent.style.display = 'none';
-      }
-    });
-  });
 
+    if (closeButton) {
+      closeButton.addEventListener('click', () => {
+        window.close();
+      });
+    }
 
-// Добавляем обработчик для клика по тексту "Дополнительная информация"
-document.addEventListener('DOMContentLoaded', () => {
-  const infoLink = document.getElementById('infoLink');
-  const modal = document.getElementById('modal');
+    if (minimizeButton) {
+      minimizeButton.addEventListener('click', () => {
+        const windowContent = document.querySelector('.window-content');
+        if (!windowContent) {
+          return;
+        }
+        if (windowContent.style.display === 'none') {
+          windowContent.style.display = 'flex';
+        } else {
+          windowContent.style.display = 'none';
+        }
+      });
+    }
 
-  if (infoLink && modal) {
-    // Открытие модального окна
-    infoLink.addEventListener('click', () => {
-      modal.style.display = 'flex';
-    });
+    const infoLink = document.getElementById('infoLink');
+    const modal = document.getElementById('modal');
 
-    // Закрытие модального окна при клике вне его области
-    modal.addEventListener('click', (event) => {
-      if (event.target === modal) {
+    if (infoLink && modal) {
+      const closeModal = () => {
         modal.style.display = 'none';
-      }
-    });
-  } else {
-    console.error('Элементы "infoLink" или "modal" не найдены.');
-  }
-});
+        modal.setAttribute('aria-hidden', 'true');
+      };
+
+      const openModal = () => {
+        modal.style.display = 'flex';
+        modal.setAttribute('aria-hidden', 'false');
+      };
+
+      infoLink.addEventListener('click', openModal);
+
+      modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+          closeModal();
+        }
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') {
+          return;
+        }
+        if (modal.style.display === 'flex') {
+          closeModal();
+        }
+      });
+    } else {
+      // eslint-disable-next-line no-console
+      console.error('Элементы "infoLink" или "modal" не найдены.');
+    }
+  });
