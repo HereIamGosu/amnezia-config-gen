@@ -1,5 +1,6 @@
 const nacl = require('tweetnacl');
 const { Buffer } = require('buffer');
+const { randomInt } = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const https = require('https');
 
@@ -17,18 +18,87 @@ const FIXED_ALLOWED_IPS = [
   '35.255.255.0/32',
 ];
 
-const FALLBACK_IP = '188.114.97.66';
+/** Tried when Cloudflare omits endpoint in JSON (best-effort anycast fallbacks). */
+const FALLBACK_ENDPOINT_HOSTS = ['188.114.97.66', '162.159.192.1'];
 const WARP_PORT = 3138;
 const REQUEST_TIMEOUT_MS = 20000;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const API_PREFIX = '/v0i1909051800';
+const CLOUDFLARE_API_HOST = 'api.cloudflareclient.com';
 
-/** AmneziaWG 2.0: H1–H4 as non-overlapping decimal ranges (see amneziawg-linux-kernel-module magic_header.c). */
-const AWG2_H_RANGES = {
-  H1: '1-1000000000',
-  H2: '1000000001-2000000000',
-  H3: '2000000001-3000000000',
-  H4: '3000000001-4294967295',
+const RETRY_MAX_ATTEMPTS = 6;
+const RETRY_BASE_DELAY_MS = 450;
+const RETRY_MAX_DELAY_MS = 12000;
+
+const UINT32_MAX = 0xffffffff;
+/** Minimum width of each H1..H4 uint32 band (non-overlapping partition). */
+const AWG2_MIN_H_BAND = 65536;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * AmneziaWG 2.0 magic headers: per amneziawg-go device/magic-header.go — spec is
+ * either one uint32 or "start-end". Ranges must not overlap (merge checks in uapi.go).
+ * Runtime: each sent packet picks a random header value inside its Hi range.
+ * Fixed global quarters give per-packet entropy but identical bands for all users;
+ * we randomize the three cut points so each generated config gets its own partition.
+ */
+const generateAwg2MagicHeaderRanges = () => {
+  const c1Min = 1 + AWG2_MIN_H_BAND;
+  const c1Max = UINT32_MAX - 3 * AWG2_MIN_H_BAND;
+  const c1 = randomInt(c1Min, c1Max + 1);
+  const c2Min = c1 + AWG2_MIN_H_BAND;
+  const c2Max = UINT32_MAX - 2 * AWG2_MIN_H_BAND;
+  const c2 = randomInt(c2Min, c2Max + 1);
+  const c3Min = c2 + AWG2_MIN_H_BAND;
+  const c3Max = UINT32_MAX - AWG2_MIN_H_BAND;
+  const c3 = randomInt(c3Min, c3Max + 1);
+  return {
+    H1: `1-${c1}`,
+    H2: `${c1 + 1}-${c2}`,
+    H3: `${c2 + 1}-${c3}`,
+    H4: `${c3 + 1}-${UINT32_MAX}`,
+  };
+};
+
+/** S1+56 must not equal S2 (padded init vs response size clash; see AmneziaWG 2.0 notes). */
+const pickAwg2Padding = () => {
+  let s1;
+  let s2;
+  for (let k = 0; k < 64; k += 1) {
+    s1 = randomInt(40, 129);
+    s2 = randomInt(40, 129);
+    if (s1 + 56 !== s2) break;
+  }
+  return {
+    s1,
+    s2,
+    s3: randomInt(32, 129),
+    s4: randomInt(48, 161),
+  };
+};
+
+const pickJunkParams = () => {
+  const jc = randomInt(96, 161);
+  const jmin = randomInt(16, 36);
+  const jmax = randomInt(Math.max(jmin + 300, 550), 1001);
+  return { jc, jmin, jmax };
+};
+
+const buildAwg2Obfuscation = () => {
+  const headers = generateAwg2MagicHeaderRanges();
+  const pad = pickAwg2Padding();
+  const junk = pickJunkParams();
+  return {
+    ...headers,
+    S1: pad.s1,
+    S2: pad.s2,
+    S3: pad.s3,
+    S4: pad.s4,
+    Jc: junk.jc,
+    Jmin: junk.jmin,
+    Jmax: junk.jmax,
+  };
 };
 
 const resolveGenerationMode = (req) => {
@@ -61,26 +131,26 @@ MTU = 1280
 Address = ${clientIPv4}/32, ${clientIPv6}/128
 DNS = 1.1.1.1, 2606:4700:4700::1111, 1.0.0.1, 2606:4700:4700::1001`;
 
-const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6) => `[Interface]
+const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6, obf) => `[Interface]
 PrivateKey = ${privKey}
-Jc = 120
-Jmin = 23
-Jmax = 911
-S1 = 88
-S2 = 88
-S3 = 64
-S4 = 96
-H1 = ${AWG2_H_RANGES.H1}
-H2 = ${AWG2_H_RANGES.H2}
-H3 = ${AWG2_H_RANGES.H3}
-H4 = ${AWG2_H_RANGES.H4}
+Jc = ${obf.Jc}
+Jmin = ${obf.Jmin}
+Jmax = ${obf.Jmax}
+S1 = ${obf.S1}
+S2 = ${obf.S2}
+S3 = ${obf.S3}
+S4 = ${obf.S4}
+H1 = ${obf.H1}
+H2 = ${obf.H2}
+H3 = ${obf.H3}
+H4 = ${obf.H4}
 MTU = 1280
 Address = ${clientIPv4}/32, ${clientIPv6}/128
 DNS = 1.1.1.1, 2606:4700:4700::1111, 1.0.0.1, 2606:4700:4700::1001`;
 
-const buildFullConfig = (mode, privKey, peerPub, clientIPv4, clientIPv6, peerEndpoint) => {
+const buildFullConfig = (mode, privKey, peerPub, clientIPv4, clientIPv6, peerEndpoint, awg2Obf) => {
   const iface = mode === 'awg2'
-    ? buildInterfaceAwg2(privKey, clientIPv4, clientIPv6)
+    ? buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf)
     : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6);
   return `${iface}
 
@@ -128,6 +198,13 @@ const pickEndpointHost = (config) => {
   return extractEndpointHostFromPeer(peer);
 };
 
+const resolveEndpointHostWithFallback = (config) => {
+  const fromPeer = pickEndpointHost(config);
+  if (fromPeer) return fromPeer;
+  const idx = randomInt(0, FALLBACK_ENDPOINT_HOSTS.length);
+  return FALLBACK_ENDPOINT_HOSTS[idx];
+};
+
 const generateKeys = () => {
   const { secretKey, publicKey } = nacl.box.keyPair();
   const privKey = Buffer.from(secretKey).toString('base64');
@@ -145,16 +222,30 @@ const generateHeaders = (token = null) => {
   return headers;
 };
 
-const handleApiRequest = (method, endpointPath, body = null, token = null) =>
+const isTransientApiFailure = (err) => {
+  if (!err) return false;
+  const code = err.statusCode;
+  if (code === 429 || code === 502 || code === 503 || code === 504) return true;
+  const sys = err.code;
+  if (sys && ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'EPIPE'].includes(sys)) {
+    return true;
+  }
+  const msg = String(err.message || '');
+  if (/таймаут|timeout|Timeout|socket hang up/i.test(msg)) return true;
+  return false;
+};
+
+const httpRequestOnce = (method, endpointPath, body = null, token = null) =>
   new Promise((resolve, reject) => {
     const headers = generateHeaders(token);
     const data = body ? JSON.stringify(body) : null;
 
     const options = {
-      hostname: 'api.cloudflareclient.com',
+      hostname: CLOUDFLARE_API_HOST,
       port: 443,
       path: `${API_PREFIX}/${endpointPath}`,
       method,
+      agent: false,
       headers: {
         ...headers,
         'Content-Length': data ? Buffer.byteLength(data) : 0,
@@ -197,20 +288,47 @@ const handleApiRequest = (method, endpointPath, body = null, token = null) =>
             return;
           }
           const errorMessage = parsedData.message || `Ошибка с кодом ${res.statusCode}`;
-          finish(new Error(errorMessage));
+          const err = new Error(errorMessage);
+          err.statusCode = res.statusCode;
+          finish(err);
         } catch {
-          finish(new Error('Не удалось обработать ответ сервера.'));
+          const err = new Error('Не удалось обработать ответ сервера.');
+          err.statusCode = res.statusCode;
+          finish(err);
         }
       });
     });
 
     req.on('error', (e) => {
-      finish(new Error(`Ошибка запроса: ${e.message}`));
+      const err = new Error(`Ошибка запроса: ${e.message}`);
+      err.code = e.code;
+      finish(err);
     });
 
     if (data) req.write(data);
     req.end();
   });
+
+const handleApiRequest = async (method, endpointPath, body = null, token = null) => {
+  let lastErr;
+  for (let attempt = 0; attempt < RETRY_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await httpRequestOnce(method, endpointPath, body, token);
+    } catch (err) {
+      lastErr = err;
+      if (!isTransientApiFailure(err) || attempt === RETRY_MAX_ATTEMPTS - 1) {
+        throw err;
+      }
+      const jitter = randomInt(0, 320);
+      const delay = Math.min(
+        RETRY_MAX_DELAY_MS,
+        RETRY_BASE_DELAY_MS * 2 ** attempt + jitter,
+      );
+      await sleep(delay);
+    }
+  }
+  throw lastErr;
+};
 
 const mergeConfigAfterWarp = async (id, token, initialConfig) => {
   try {
@@ -256,14 +374,12 @@ const generateWarpConfig = async (mode = 'legacy') => {
   const { public_key: peerPub } = config.peers[0];
   const { v4: clientIPv4, v6: clientIPv6 } = config.interface.addresses;
 
-  let endpointHost = pickEndpointHost(config);
-  if (!endpointHost) {
-    endpointHost = FALLBACK_IP;
-  }
-
+  const endpointHost = resolveEndpointHostWithFallback(config);
   const peerEndpoint = `${endpointHost}:${WARP_PORT}`;
 
-  return buildFullConfig(mode, privKey, peerPub, clientIPv4, clientIPv6, peerEndpoint);
+  const awg2Obf = mode === 'awg2' ? buildAwg2Obfuscation() : null;
+
+  return buildFullConfig(mode, privKey, peerPub, clientIPv4, clientIPv6, peerEndpoint, awg2Obf);
 };
 
 module.exports = async (req, res) => {
