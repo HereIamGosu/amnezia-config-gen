@@ -180,7 +180,7 @@ img {
 /* Кнопки */
 button.button {
   width: 100%;
-  margin-bottom: 10px;
+  margin-bottom: 0;
   padding: 12px 10px;
   font-size: 14px;
   color: #000000;
@@ -212,22 +212,16 @@ button.button:disabled {
   background: linear-gradient(90deg, #2ecc71, #00bcd5);
   box-shadow: 0 4px 8px rgba(46, 204, 113, 0.2),
     0 6px 20px rgba(0, 188, 212, 0.2);
-  margin-bottom: 5px;
 }
 
 #generateButtonAwg2:hover {
   background: linear-gradient(90deg, #27ae60, #0097a7);
 }
 
-#generateButton {
-  margin-bottom: 5px;
-}
-
 /* Кнопка скачивания файла */
 #schedulerButton {
   background-color: #f15874;
   box-shadow: 0 4px 8px rgba(241, 88, 116, 0.2);
-  margin-top: 10px;
 }
 
 #schedulerButton:hover {
@@ -344,7 +338,13 @@ button.button--loading {
 .buttons {
   display: flex;
   flex-direction: column;
+  gap: 18px;
   width: 100%; /* Кнопки занимают всю ширину контейнера */
+}
+
+.buttons > * {
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 .discord-link,
@@ -428,7 +428,6 @@ button.button--loading {
   text-decoration: underline;
   cursor: pointer;
   font-size: 12px;
-  margin-bottom: 10px; /* Отступ между текстом и следующей кнопкой */
   text-align: center; /* Центрируем текст */
 }
 
