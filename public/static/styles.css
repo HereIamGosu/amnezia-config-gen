@@ -517,6 +517,10 @@ button.info-link {
   color: #ff0000;
 }
 
+.modal-content.settings-modal__dialog {
+  padding: 0;
+}
+
 /* Стили для секции доната */
 .donate-section {
   padding: 10px;
@@ -537,6 +541,241 @@ button.info-link {
   line-height: 1.5; /* Уменьшаем интервал между строками */
   max-width: 300px;
   margin: 0 auto; /* Центрируем текст */
+}
+
+/* Buttons row: gen buttons + gear toggle */
+.buttons__row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.buttons__gen-stack {
+  flex: 1 1 0%;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.settings-toggle {
+  flex: 0 0 44px;
+  width: 44px;
+  min-height: 44px;
+  font-size: 22px;
+  line-height: 1;
+  background-color: #c0c0c0;
+  border: 2px outset #fff;
+  border-radius: 2px;
+  cursor: pointer;
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.1s ease;
+}
+
+.settings-toggle:hover {
+  background-color: #a0a0a0;
+}
+
+.settings-toggle:active,
+.settings-toggle[aria-expanded="true"] {
+  border: 2px inset #fff;
+  background-color: #9090a0;
+}
+
+/* Settings modal (above info modal) */
+.modal.settings-modal {
+  z-index: 1001;
+}
+
+.settings-modal__dialog {
+  max-width: min(92vw, 720px);
+  width: 100%;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: min(90vh, 900px);
+  max-height: min(90dvh, 900px);
+}
+
+.settings-modal__titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: linear-gradient(90deg, #000080 0%, #1084d0 100%);
+  border-bottom: 2px solid #000080;
+  flex-shrink: 0;
+}
+
+.settings-modal__title {
+  flex: 1;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  text-align: left;
+  line-height: 1.3;
+  text-shadow: 1px 1px 0 #000;
+}
+
+.settings-modal__close {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  font-family: "MS Sans Serif", Tahoma, sans-serif;
+  color: #000;
+  background-color: #c0c0c0;
+  border: 2px outset #fff;
+  cursor: pointer;
+}
+
+.settings-modal__close:active {
+  border: 2px inset #fff;
+}
+
+.settings-modal__body {
+  padding: 14px 16px 16px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background-color: #c0c0c0;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.settings-modal__subsection {
+  margin: 14px 0 8px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #000080;
+  letter-spacing: 0.02em;
+}
+
+.settings-modal__subsection:first-of-type {
+  margin-top: 4px;
+}
+
+.cfg-tiles--routes {
+  margin-bottom: 4px;
+}
+
+.settings-panel__group {
+  border: 2px groove #c0c0c0;
+  padding: 10px;
+  margin: 0 0 10px;
+}
+
+.settings-panel__group:last-child {
+  margin-bottom: 0;
+}
+
+.settings-panel__group > legend {
+  font-size: 10px;
+  font-weight: bold;
+  color: #000080;
+  padding: 0 6px;
+}
+
+.settings-panel__hint {
+  margin: 0 0 8px;
+  font-size: 8px;
+  line-height: 1.5;
+  color: #222;
+}
+
+/* Tile grid for DNS / route presets */
+.cfg-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.cfg-tile {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 8px;
+  line-height: 1.2;
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  background-color: #c0c0c0;
+  border: 2px outset #fff;
+  border-radius: 2px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.1s ease;
+}
+
+.cfg-tile:hover {
+  background-color: #b0c4de;
+}
+
+.cfg-tile--active {
+  background-color: #6b8cce;
+  color: #fff;
+  border: 2px inset #fff;
+}
+
+.cfg-tile--active:hover {
+  background-color: #5a7abf;
+}
+
+.cfg-tile input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cfg-tile span {
+  cursor: pointer;
+}
+
+/* Quick action buttons (Популярное в РФ / Снять всё) */
+.cfg-tiles-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.cfg-tiles-action {
+  flex: 1 1 auto;
+  min-width: 120px;
+  padding: 8px 10px;
+  font-size: 8px;
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  background-color: #c0c0c0;
+  border: 2px outset #fff;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.cfg-tiles-action:hover {
+  background-color: #a8b8c8;
+}
+
+.cfg-tiles-action:active {
+  border: 2px inset #fff;
+}
+
+.preset-stats {
+  min-height: 1.5em;
+  margin: 0;
+  font-size: 8px;
+  color: #333;
+  line-height: 1.4;
+}
+
+.preset-stats--warn {
+  color: #8b4513;
 }
 
 /* Адаптивные стили для экранов различных размеров */
@@ -695,6 +934,10 @@ button.info-link {
   .modal-content {
     padding: 16px;
     font-size: 10px;
+  }
+
+  .modal-content.settings-modal__dialog {
+    padding: 0;
   }
 
   .instruction h2 {

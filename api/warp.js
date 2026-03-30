@@ -3,20 +3,10 @@ const { Buffer } = require('buffer');
 const { randomInt } = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const https = require('https');
+const { expandPresetsToSites, parsePresetKeysFromRequest, getDnsString, parseDnsKeyFromRequest, DNS_DEFAULT_KEY } = require('./routePresets');
+const { fetchCidrsForDomains } = require('./ipListFetch');
 
-const FIXED_ALLOWED_IPS = [
-  '138.128.136.0/21', '162.158.0.0/15', '172.64.0.0/13', '34.0.0.0/15',
-  '34.2.0.0/16', '34.3.0.0/23', '34.3.2.0/24', '35.192.0.0/12',
-  '35.208.0.0/12', '35.224.0.0/12', '35.240.0.0/13', '5.200.14.128/25',
-  '66.22.192.0/18', '13.32.0.0/32', '13.35.0.0/32', '13.48.0.0/32',
-  '13.64.0.0/32', '13.128.0.0/32', '13.192.0.0/32', '13.224.0.0/32',
-  '13.240.0.0/32', '13.248.0.0/32', '13.252.0.0/32', '13.254.0.0/32',
-  '13.255.0.0/32', '18.67.0.0/32', '23.20.0.0/32', '23.40.0.0/32',
-  '23.64.0.0/32', '23.128.0.0/32', '23.192.0.0/32', '23.224.0.0/32',
-  '23.240.0.0/32', '23.248.0.0/32', '23.252.0.0/32', '23.254.0.0/32',
-  '23.255.0.0/32', '34.200.0.0/32', '34.224.0.0/32', '34.240.0.0/32',
-  '35.255.255.0/32',
-];
+const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0', '::/0'];
 
 /** Tried when Cloudflare omits endpoint in JSON (best-effort anycast fallbacks). */
 const FALLBACK_ENDPOINT_HOSTS = ['188.114.97.66', '162.159.192.1'];
@@ -118,7 +108,7 @@ const resolveGenerationMode = (req) => {
   return 'legacy';
 };
 
-const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6) => `[Interface]
+const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6, dnsLine) => `[Interface]
 PrivateKey = ${privKey}
 Jc = 120
 Jmin = 23
@@ -129,9 +119,9 @@ H3 = 3
 H4 = 4
 MTU = 1280
 Address = ${clientIPv4}/32, ${clientIPv6}/128
-DNS = 1.1.1.1, 2606:4700:4700::1111, 1.0.0.1, 2606:4700:4700::1001`;
+DNS = ${dnsLine}`;
 
-const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6, obf) => `[Interface]
+const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6, obf, dnsLine) => `[Interface]
 PrivateKey = ${privKey}
 Jc = ${obf.Jc}
 Jmin = ${obf.Jmin}
@@ -146,17 +136,18 @@ H3 = ${obf.H3}
 H4 = ${obf.H4}
 MTU = 1280
 Address = ${clientIPv4}/32, ${clientIPv6}/128
-DNS = 1.1.1.1, 2606:4700:4700::1111, 1.0.0.1, 2606:4700:4700::1001`;
+DNS = ${dnsLine}`;
 
-const buildFullConfig = (mode, privKey, peerPub, clientIPv4, clientIPv6, peerEndpoint, awg2Obf) => {
+const buildFullConfig = (mode, privKey, peerPub, clientIPv4, clientIPv6, peerEndpoint, awg2Obf, allowedIpList, dnsLine) => {
   const iface = mode === 'awg2'
-    ? buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf)
-    : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6);
+    ? buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine)
+    : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine);
+  const allowed = (allowedIpList && allowedIpList.length ? allowedIpList : DEFAULT_ALLOWED_IPS).join(', ');
   return `${iface}
 
 [Peer]
 PublicKey = ${peerPub}
-AllowedIPs = ${FIXED_ALLOWED_IPS.join(', ')}
+AllowedIPs = ${allowed}
 Endpoint = ${peerEndpoint}`;
 };
 
@@ -345,7 +336,33 @@ const mergeConfigAfterWarp = async (id, token, initialConfig) => {
   return initialConfig;
 };
 
-const generateWarpConfig = async (mode = 'legacy') => {
+const resolveAllowedIpsFromPresets = async (presetKeys) => {
+  if (!presetKeys.length) {
+    return { cidrs: null, routesSource: 'default' };
+  }
+  const { sites, unknown } = expandPresetsToSites(presetKeys);
+  if (unknown.length) {
+    const err = new Error(`Неизвестные пресеты маршрутов: ${unknown.join(', ')}`);
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!sites.length) {
+    const err = new Error('Не заданы домены для выбранных пресетов.');
+    err.statusCode = 400;
+    throw err;
+  }
+  const cidrs = await fetchCidrsForDomains(sites);
+  if (!cidrs.length) {
+    const err = new Error(
+      'Сервис списков IP вернул пустой ответ. Попробуйте другой набор пресетов или повторите позже.',
+    );
+    err.statusCode = 502;
+    throw err;
+  }
+  return { cidrs, routesSource: 'presets', sitesResolved: sites.length };
+};
+
+const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '') => {
   const { privKey, pubKey } = generateKeys();
   const regBody = {
     install_id: uuidv4(),
@@ -378,8 +395,23 @@ const generateWarpConfig = async (mode = 'legacy') => {
   const peerEndpoint = `${endpointHost}:${WARP_PORT}`;
 
   const awg2Obf = mode === 'awg2' ? buildAwg2Obfuscation() : null;
+  const { cidrs: routeCidrs, routesSource, sitesResolved } = await resolveAllowedIpsFromPresets(presetKeys);
+  const dnsLine = getDnsString(dnsKey || DNS_DEFAULT_KEY);
 
-  return buildFullConfig(mode, privKey, peerPub, clientIPv4, clientIPv6, peerEndpoint, awg2Obf);
+  return {
+    text: buildFullConfig(
+      mode,
+      privKey,
+      peerPub,
+      clientIPv4,
+      clientIPv6,
+      peerEndpoint,
+      awg2Obf,
+      routeCidrs,
+      dnsLine,
+    ),
+    meta: { routesSource, sitesResolved: sitesResolved ?? 0, presetsUsed: presetKeys.length },
+  };
 };
 
 module.exports = async (req, res) => {
@@ -390,11 +422,23 @@ module.exports = async (req, res) => {
 
   try {
     const mode = resolveGenerationMode(req);
-    const conf = await generateWarpConfig(mode);
+    const presetKeys = parsePresetKeysFromRequest(req);
+    const dnsKey = parseDnsKeyFromRequest(req);
+    const { text: conf, meta } = await generateWarpConfig(mode, presetKeys, dnsKey);
     const confEncoded = Buffer.from(conf).toString('base64');
-    res.status(200).json({ success: true, content: confEncoded, mode });
+    res.status(200).json({
+      success: true,
+      content: confEncoded,
+      mode,
+      routesSource: meta.routesSource,
+      routesPresets: presetKeys.length ? presetKeys : undefined,
+      presetSitesCount: meta.sitesResolved || undefined,
+    });
   } catch (error) {
     console.error('Ошибка генерации конфигурации:', error);
-    res.status(500).json({ success: false, message: error.message });
+    const sc = error.statusCode;
+    const code =
+      typeof sc === 'number' && sc >= 400 && sc < 600 ? sc : 500;
+    res.status(code).json({ success: false, message: error.message });
   }
 };

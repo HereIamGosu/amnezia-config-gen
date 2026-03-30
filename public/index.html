@@ -204,8 +204,9 @@
             <!-- Сообщение о конфигурации и файле планировщика -->
             <div class="info-message">
               <p>
-                Конфигурацию можно сгенерировать для любых устройств. Она
-                содержит заранее внесённые маршруты для Discord.
+                Конфигурацию можно сгенерировать для любых устройств. По
+                умолчанию весь трафик идёт через туннель.                 Пресеты маршрутов и DNS можно задать в модальном окне по кнопке
+                <strong>⚙</strong> рядом с кнопками генерации.
               </p>
               <p>Файл планировщика доступен только для Windows.</p>
             </div>
@@ -215,12 +216,24 @@
 
             <!-- Кнопки для взаимодействия с пользователем -->
             <div class="buttons">
-              <button id="generateButton" class="button" type="button">
-                <span class="button__text">Сгенерировать (Legacy)</span>
-              </button>
-              <button id="generateButtonAwg2" class="button" type="button">
-                <span class="button__text">Сгенерировать AmneziaWG 2.0</span>
-              </button>
+              <div class="buttons__row">
+                <div class="buttons__gen-stack">
+                  <button id="generateButton" class="button" type="button">
+                    <span class="button__text">Сгенерировать (Legacy)</span>
+                  </button>
+                  <button id="generateButtonAwg2" class="button" type="button">
+                    <span class="button__text">Сгенерировать AmneziaWG 2.0</span>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  id="settingsToggle"
+                  class="settings-toggle"
+                  aria-expanded="false"
+                  aria-controls="settingsModal"
+                  title="Настройки конфигурации"
+                >⚙</button>
+              </div>
 
               <button type="button" id="infoLink" class="info-link">
                 Дополнительная информация
@@ -349,27 +362,79 @@
           Дополнительная информация
         </h2>
         <p>
-          Сгенерированная конфигурация настроена так, что она перенаправляет
-          только трафик, связанный с Discord. Это достигается за счёт указания
-          диапазонов IP-адресов Discord в переменной
-          <strong>AllowedIPs</strong> в файле конфигурации.
+          По умолчанию весь трафик идёт через туннель (<strong>AllowedIPs = 0.0.0.0/0, ::/0</strong>).
+          В модальном окне настроек (кнопка ⚙) можно выбрать DNS-сервер и
+          отметить пресеты — тогда в
+          <strong>AllowedIPs</strong> попадут только подсети выбранных пресетов.
         </p>
         <p>
-          Если вы хотите, чтобы весь ваш интернет-трафик проходил через туннель
-          AmneziaWG, вы можете удалить строку с <strong>AllowedIPs</strong> из
-          конфигурационного файла.
-        </p>
-        <p>
-          Также вы можете заменить диапазоны IP-адресов на свои. Например, вы
-          можете указать диапазоны для других сервисов (YouTube, Spotify, Twitch
-          или любых других). Список IP-адресов для различных сервисов можно
-          найти на ресурсе
+          Также вы можете вручную заменить диапазоны IP-адресов на свои.
+          Список IP-адресов для различных сервисов можно найти на ресурсе
           <a
             href="https://rockblack.pro/vpn/dopolnitelno/diapazon-ip-adresov"
             target="_blank"
             >rockblack.pro</a
           >.
         </p>
+      </div>
+    </div>
+
+    <div
+      id="settingsModal"
+      class="modal settings-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settingsModalTitle"
+      aria-hidden="true"
+    >
+      <div class="modal-content settings-modal__dialog">
+        <div class="settings-modal__titlebar">
+          <h2 id="settingsModalTitle" class="settings-modal__title">
+            Настройки конфигурации
+          </h2>
+          <button
+            type="button"
+            class="settings-modal__close"
+            id="settingsModalClose"
+            aria-label="Закрыть"
+          >
+            ×
+          </button>
+        </div>
+        <div class="settings-modal__body">
+          <fieldset class="settings-panel__group">
+            <legend>DNS-сервер</legend>
+            <div id="dnsTiles" class="cfg-tiles"></div>
+          </fieldset>
+          <fieldset class="settings-panel__group">
+            <legend>Пресеты маршрутов (AllowedIPs)</legend>
+            <p class="settings-panel__hint">
+              Отметьте пресеты — при генерации их подсети (IPv4 и IPv6)
+              будут запрошены и объединены в <strong>AllowedIPs</strong>. Если ничего
+              не выбрано, туннель охватывает весь трафик
+              (<strong>0.0.0.0/0, ::/0</strong>).
+            </p>
+            <div class="cfg-tiles-actions">
+              <button type="button" class="cfg-tiles-action" id="presetRfPopular">
+                Основной набор
+              </button>
+              <button type="button" class="cfg-tiles-action" id="presetClear">
+                Снять всё
+              </button>
+            </div>
+            <p id="presetStats" class="preset-stats" aria-live="polite"></p>
+            <h3 class="settings-modal__subsection">
+              Социальные сети и мессенджеры
+            </h3>
+            <div id="routeTilesSocial" class="cfg-tiles cfg-tiles--routes"></div>
+            <h3 class="settings-modal__subsection">Игровые платформы</h3>
+            <div id="routeTilesGaming" class="cfg-tiles cfg-tiles--routes"></div>
+            <h3 class="settings-modal__subsection">Торрент-трекеры</h3>
+            <div id="routeTilesTorrent" class="cfg-tiles cfg-tiles--routes"></div>
+            <h3 class="settings-modal__subsection">Дополнительно</h3>
+            <div id="routeTilesMore" class="cfg-tiles cfg-tiles--routes"></div>
+          </fieldset>
+        </div>
       </div>
     </div>
 
