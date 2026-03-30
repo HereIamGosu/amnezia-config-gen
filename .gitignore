@@ -61,3 +61,5 @@ ehthumbs.db
 
 # Linux trash folder
 .trash/
+
+.cursor/
