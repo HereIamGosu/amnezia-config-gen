@@ -8,6 +8,14 @@ const { expandPresetsToSites, parsePresetKeysFromRequest, getDnsString, parseDns
 const { fetchCidrsForDomains } = require('./ipListFetch');
 const { generateSignatureChain } = require('./cpsSignatureGenerator');
 
+/** Embedded AmneziaWG I1 CPS chain (`<b 0x…>`); not from Cloudflare JSON; i2–i5 are generated separately. */
+let warpAmneziaCpsPayload = '';
+try {
+  warpAmneziaCpsPayload = require('./warpAmneziaCpsPayload');
+} catch {
+  warpAmneziaCpsPayload = '';
+}
+
 const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0', '::/0'];
 
 /** WARP server peer public key (Cloudflare); used if registration JSON omits it. */
@@ -494,7 +502,7 @@ const collectWarpGenExtras = (req, body) => {
 };
 
 /**
- * High-level presets: fixed engage host/ports and optional default CPS i1 (runtime-generated when no i1/i1Ref).
+ * High-level presets: fixed engage host/ports and optional embedded I1 from `warpAmneziaCpsPayload.js` when no i1/i1Ref.
  * @param {string} name query/body `template`
  * @returns {{ engageHost: string|null, defaultEngagePort: number|null, defaultKeepalive: number|null, useEmbeddedAmneziaI1: boolean, plainAddress: boolean, forceLegacy: boolean, awg2WarpSafe?: boolean }}
  */
@@ -619,10 +627,8 @@ const resolveSignaturePacketsForGeneration = async (extras, mode) => {
     i1 = normalizeCpsPayload(extras.i1Raw);
   } else if (extras.i1Ref) {
     i1 = normalizeCpsPayload(await loadI1FromRef(extras.i1Ref));
-  } else if (mode === 'legacy' && extras.useEmbeddedAmneziaI1) {
-    i1 = normalizeCpsPayload(gen.i1);
-  } else if (mode === 'awg2') {
-    i1 = normalizeCpsPayload(gen.i1);
+  } else if (extras.useEmbeddedAmneziaI1 && warpAmneziaCpsPayload) {
+    i1 = normalizeCpsPayload(warpAmneziaCpsPayload);
   }
 
   out.i1 = i1;
