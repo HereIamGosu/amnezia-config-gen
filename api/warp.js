@@ -6,7 +6,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const { expandPresetsToSites, parsePresetKeysFromRequest, getDnsString, parseDnsKeyFromRequest, DNS_DEFAULT_KEY } = require('./routePresets');
 const { fetchCidrsForDomains } = require('./ipListFetch');
-const { generateSignatureChain } = require('./cpsSignatureGenerator');
+const { generateI2toI5Packets } = require('./cpsSignatureGenerator');
 
 /** Embedded AmneziaWG I1 CPS chain (`<b 0x…>`); not from Cloudflare JSON; i2–i5 are generated separately. */
 let warpAmneziaCpsPayload = '';
@@ -521,7 +521,7 @@ const resolveTemplateOptions = (name) => {
     };
   }
   /**
-   * Same peer/DNS/Address as warp_amnezia; AWG 2.0 layout with runtime CPS `i1`–`i5`, doc-bounded S3/S4 and Jc/Jmin/Jmax;
+   * Same peer/DNS/Address as warp_amnezia; AWG 2.0 layout: embedded `i1` + generated `i2`–`i5`, doc-bounded S3/S4 and Jc/Jmin/Jmax;
    * H1–H4 stay 1–4 for Cloudflare stock WireGuard (random H bands break WARP).
    */
   if (
@@ -613,13 +613,13 @@ const resolvePeerEndpointForConfig = (config, extras) => {
 };
 
 /**
- * Resolve i1–i5 for config generation. AWG 2.0: full chain from generateSignatureChain(), with per-field overrides.
+ * Resolve i1–i5 for config generation. i1: user, i1Ref, or warpAmneziaCpsPayload.js when useEmbeddedAmneziaI1. i2–i5: generateI2toI5Packets() or overrides.
  * Legacy: only i1 (I1 =) is emitted; i2–i5 ignored.
  * @param {ReturnType<typeof collectWarpGenExtras>} extras
  * @param {'legacy'|'awg2'} mode
  */
 const resolveSignaturePacketsForGeneration = async (extras, mode) => {
-  const gen = generateSignatureChain();
+  const genTail = generateI2toI5Packets();
   const out = { i1: '', i2: '', i3: '', i4: '', i5: '' };
 
   let i1 = '';
@@ -637,10 +637,10 @@ const resolveSignaturePacketsForGeneration = async (extras, mode) => {
     return out;
   }
 
-  out.i2 = extras.i2Raw != null ? normalizeCpsPayload(extras.i2Raw) : gen.i2;
-  out.i3 = extras.i3Raw != null ? normalizeCpsPayload(extras.i3Raw) : gen.i3;
-  out.i4 = extras.i4Raw != null ? normalizeCpsPayload(extras.i4Raw) : gen.i4;
-  out.i5 = extras.i5Raw != null ? normalizeCpsPayload(extras.i5Raw) : gen.i5;
+  out.i2 = extras.i2Raw != null ? normalizeCpsPayload(extras.i2Raw) : genTail.i2;
+  out.i3 = extras.i3Raw != null ? normalizeCpsPayload(extras.i3Raw) : genTail.i3;
+  out.i4 = extras.i4Raw != null ? normalizeCpsPayload(extras.i4Raw) : genTail.i4;
+  out.i5 = extras.i5Raw != null ? normalizeCpsPayload(extras.i5Raw) : genTail.i5;
 
   return out;
 };
