@@ -8,7 +8,24 @@ const path = require('path');
 const { expandPresetsToSites, parsePresetKeysFromRequest, getDnsString, parseDnsKeyFromRequest, DNS_DEFAULT_KEY } = require('./routePresets');
 const { fetchCidrsForDomains } = require('./ipListFetch');
 
+/** Reference AmneziaWG I1 obfuscation chain (`<b 0x…>`); not derivable from Cloudflare JSON. */
+let warpAmneziaCpsPayload = '';
+try {
+  warpAmneziaCpsPayload = require('./warpAmneziaCpsPayload');
+} catch {
+  warpAmneziaCpsPayload = '';
+}
+
 const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0', '::/0'];
+
+/** WARP server peer public key (Cloudflare); used if registration JSON omits it. */
+const KNOWN_WARP_PEER_PUBLIC_KEY = 'bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=';
+/** DNS name used by wgcf and many Amnezia exports instead of raw API endpoint IPs. */
+const ENGAGE_CLOUDFLARE_HOST = 'engage.cloudflareclient.com';
+/** wgcf / common WireGuard WARP profile port. */
+const WARP_PORT_WGCF_ENGAGE = 2408;
+/** Port seen in Amnezia-style exports (differs from API 3138 and wgcf 2408). */
+const WARP_PORT_AMNEZIA_ENGAGE = 4500;
 
 /** Tried when Cloudflare omits endpoint in JSON (best-effort anycast fallbacks). */
 const FALLBACK_ENDPOINT_HOSTS = ['188.114.97.66', '162.159.192.1'];
@@ -125,12 +142,16 @@ const resolveModeFromInput = (raw) => {
 /**
  * Legacy profile: field order and explicit S1/S2=0 match common WARP/Amnezia exports (Jc/Jmin/Jmax + H1..4).
  * @param {string} i1Optional full value after `I1 = ` (e.g. `<b 0x...>`), or empty to omit
+ * @param {boolean} plainAddress if true, omit /32 and /128 (some exports use bare IPs)
  */
-const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6, dnsLine, i1Optional = '') => {
+const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6, dnsLine, i1Optional = '', plainAddress = false) => {
+  const addrLine = plainAddress
+    ? `Address = ${clientIPv4}, ${clientIPv6}`
+    : `Address = ${clientIPv4}/32, ${clientIPv6}/128`;
   const lines = [
     '[Interface]',
     `PrivateKey = ${privKey}`,
-    `Address = ${clientIPv4}/32, ${clientIPv6}/128`,
+    addrLine,
     `DNS = ${dnsLine}`,
     'MTU = 1280',
     'S1 = 0',
@@ -172,9 +193,10 @@ DNS = ${dnsLine}`;
  */
 const buildFullConfig = (mode, privKey, peerPub, clientIPv4, clientIPv6, peerEndpoint, awg2Obf, allowedIpList, dnsLine, ifaceExtras = {}) => {
   const i1 = ifaceExtras.i1 || '';
+  const plainAddress = Boolean(ifaceExtras.plainAddress);
   const iface = mode === 'awg2'
     ? buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, i1)
-    : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine, i1);
+    : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine, i1, plainAddress);
   const allowed = (allowedIpList && allowedIpList.length ? allowedIpList : DEFAULT_ALLOWED_IPS).join(', ');
   let peerBlock = `[Peer]
 PublicKey = ${peerPub}
@@ -364,11 +386,89 @@ const collectWarpGenExtras = (req, body) => {
   const i1RefRaw = b.i1Ref ?? pickQuery(req, 'i1Ref');
   const i1Ref = i1RefRaw != null && String(i1RefRaw).trim() !== '' ? String(i1RefRaw).trim() : null;
   const i1Raw = b.i1 != null ? String(b.i1) : null;
-  return { peerEndpoint, warpPort, persistentKeepalive, i1Ref, i1Raw };
+  const pa = b.plainAddress ?? pickQuery(req, 'plainAddress');
+  const plainAddress =
+    pa === true ||
+    String(pa ?? '')
+      .toLowerCase() === '1' ||
+    String(pa ?? '')
+      .toLowerCase() === 'true';
+  return { peerEndpoint, warpPort, persistentKeepalive, i1Ref, i1Raw, plainAddress };
+};
+
+/**
+ * High-level presets: fixed engage host/ports and optional embedded I1 (AmneziaWG obfuscation chain; not from CF API).
+ * @param {string} name query/body `template`
+ * @returns {{ engageHost: string|null, defaultEngagePort: number|null, defaultKeepalive: number|null, useEmbeddedAmneziaI1: boolean, plainAddress: boolean, forceLegacy: boolean }}
+ */
+const resolveTemplateOptions = (name) => {
+  const n = String(name ?? '')
+    .trim()
+    .toLowerCase();
+  if (n === 'warp_amnezia' || n === 'amnezia' || n === 'amnezia_warp') {
+    return {
+      engageHost: ENGAGE_CLOUDFLARE_HOST,
+      defaultEngagePort: WARP_PORT_AMNEZIA_ENGAGE,
+      defaultKeepalive: 25,
+      useEmbeddedAmneziaI1: true,
+      plainAddress: true,
+      forceLegacy: true,
+    };
+  }
+  if (n === 'wgcf') {
+    return {
+      engageHost: ENGAGE_CLOUDFLARE_HOST,
+      defaultEngagePort: WARP_PORT_WGCF_ENGAGE,
+      defaultKeepalive: null,
+      useEmbeddedAmneziaI1: false,
+      plainAddress: false,
+      forceLegacy: false,
+    };
+  }
+  return {
+    engageHost: null,
+    defaultEngagePort: null,
+    defaultKeepalive: null,
+    useEmbeddedAmneziaI1: false,
+    plainAddress: false,
+    forceLegacy: false,
+  };
+};
+
+/**
+ * @param {ReturnType<typeof collectWarpGenExtras>} extras
+ * @param {ReturnType<typeof resolveTemplateOptions>} tmpl
+ */
+const mergeTemplateIntoExtras = (extras, tmpl) => {
+  const out = { ...extras };
+  if (tmpl.engageHost) out.engageHost = tmpl.engageHost;
+  if (tmpl.defaultEngagePort != null && out.warpPort == null) out.warpPort = tmpl.defaultEngagePort;
+  if (tmpl.defaultKeepalive != null && out.persistentKeepalive == null) {
+    out.persistentKeepalive = tmpl.defaultKeepalive;
+  }
+  if (
+    tmpl.useEmbeddedAmneziaI1 &&
+    !out.i1Ref &&
+    (out.i1Raw == null || String(out.i1Raw).trim() === '')
+  ) {
+    out.useEmbeddedAmneziaI1 = true;
+  }
+  if (tmpl.plainAddress) out.plainAddress = true;
+  out.forceLegacy = Boolean(tmpl.forceLegacy);
+  return out;
 };
 
 const resolvePeerEndpointForConfig = (config, extras) => {
   if (extras.peerEndpoint) return extras.peerEndpoint;
+  if (extras.engageHost) {
+    const port =
+      extras.warpPort != null
+        ? extras.warpPort
+        : extras.defaultEngagePort != null
+          ? extras.defaultEngagePort
+          : WARP_PORT;
+    return `${extras.engageHost}:${port}`;
+  }
   const host = resolveEndpointHostWithFallback(config);
   const port = extras.warpPort != null ? extras.warpPort : WARP_PORT;
   return `${host}:${port}`;
@@ -379,6 +479,9 @@ const resolveI1ForGeneration = async (extras) => {
     return normalizeI1Payload(extras.i1Raw);
   }
   if (extras.i1Ref) return normalizeI1Payload(await loadI1FromRef(extras.i1Ref));
+  if (extras.useEmbeddedAmneziaI1 && warpAmneziaCpsPayload) {
+    return normalizeI1Payload(warpAmneziaCpsPayload);
+  }
   return '';
 };
 
@@ -575,12 +678,13 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
   await handleApiRequest('PATCH', `reg/${id}`, { warp_enabled: true }, token);
 
   const initialConfig = regResponse.result?.config;
-  if (!initialConfig?.peers?.length || !initialConfig.peers[0].public_key) {
+  if (!initialConfig?.peers?.length) {
     throw new Error('Ошибка: недостающие данные для формирования конфигурации WARP');
   }
 
   const config = await mergeConfigAfterWarp(id, token, initialConfig);
-  const { public_key: peerPub } = config.peers[0];
+  let peerPub = config.peers[0]?.public_key;
+  if (!peerPub) peerPub = KNOWN_WARP_PEER_PUBLIC_KEY;
   const { v4: clientIPv4, v6: clientIPv6 } = config.interface.addresses;
 
   const peerEndpoint = resolvePeerEndpointForConfig(config, warpExtras);
@@ -604,6 +708,7 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
       {
         i1,
         persistentKeepalive: warpExtras.persistentKeepalive,
+        plainAddress: warpExtras.plainAddress,
       },
     ),
     meta: { routesSource, sitesResolved: sitesResolved ?? 0, presetsUsed: presetKeys.length },
@@ -631,7 +736,7 @@ module.exports = async (req, res) => {
       }
     }
 
-    const mode =
+    let mode =
       body.mode != null ? resolveModeFromInput(body.mode) : resolveGenerationMode(req);
     const fromBody = parsePresetKeysFromBody(body.presets);
     const presetKeys = fromBody.length ? fromBody : parsePresetKeysFromRequest(req);
@@ -640,7 +745,14 @@ module.exports = async (req, res) => {
         ? String(body.dns).trim().toLowerCase()
         : parseDnsKeyFromRequest(req);
 
-    const warpExtras = collectWarpGenExtras(req, body);
+    const templateRaw =
+      body.template != null && String(body.template).trim() !== ''
+        ? String(body.template).trim()
+        : pickQuery(req, 'template');
+    const tmpl = resolveTemplateOptions(templateRaw);
+    const warpExtras = mergeTemplateIntoExtras(collectWarpGenExtras(req, body), tmpl);
+    if (warpExtras.forceLegacy) mode = 'legacy';
+    delete warpExtras.forceLegacy;
 
     const { text: conf, meta } = await generateWarpConfig(mode, presetKeys, dnsKey, warpExtras);
     const confEncoded = Buffer.from(conf).toString('base64');

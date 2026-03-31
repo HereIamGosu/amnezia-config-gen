@@ -398,7 +398,8 @@ const parsePresetKeysFromRequest = (req) => {
 const DNS_PRESETS = {
   cloudflare: {
     label: 'Cloudflare',
-    dns: '1.1.1.1, 2606:4700:4700::1111, 1.0.0.1, 2606:4700:4700::1001',
+    // Order matches typical WARP / 1.1.1.1 app export: IPv4 primary, IPv4 secondary, then IPv6 pair.
+    dns: '1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001',
   },
   google: {
     label: 'Google',
