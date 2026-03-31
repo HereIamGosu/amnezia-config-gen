@@ -6,14 +6,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const { expandPresetsToSites, parsePresetKeysFromRequest, getDnsString, parseDnsKeyFromRequest, DNS_DEFAULT_KEY } = require('./routePresets');
 const { fetchCidrsForDomains } = require('./ipListFetch');
-
-/** Embedded AmneziaWG I1 obfuscation chain (`<b 0x…>`); not provided by Cloudflare JSON. */
-let warpAmneziaCpsPayload = '';
-try {
-  warpAmneziaCpsPayload = require('./warpAmneziaCpsPayload');
-} catch {
-  warpAmneziaCpsPayload = '';
-}
+const { generateSignatureChain } = require('./cpsSignatureGenerator');
 
 const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0', '::/0'];
 
@@ -32,8 +25,8 @@ const WARP_PORT_AMNEZIA_ENGAGE = 4500;
 /** Tried when Cloudflare omits endpoint in JSON (best-effort anycast fallbacks). */
 const FALLBACK_ENDPOINT_HOSTS = ['188.114.97.66', '162.159.192.1'];
 const WARP_PORT = 3138;
-/** Max length of I1 CPS payload (AmneziaWG); avoids huge query/body abuse. */
-const MAX_I1_LEN = 512 * 1024;
+/** Max length per CPS line (i1–i5, AmneziaWG); avoids huge query/body abuse. */
+const MAX_CPS_LINE_LEN = 512 * 1024;
 const I1_REF_SAFE = /^[a-zA-Z0-9._-]+$/;
 const REQUEST_TIMEOUT_MS = 20000;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -78,34 +71,43 @@ const generateAwg2MagicHeaderRanges = () => {
   };
 };
 
-/** S1+56 must not equal S2 (padded init vs response size clash; see AmneziaWG 2.0 notes). */
-const pickAwg2Padding = () => {
+/** AmneziaWG 2.0 spec: S1–S3 are 0..64 bytes, S4 is 0..32 bytes. */
+const AWG2_S123_MAX = 64;
+const AWG2_S4_MAX = 32;
+/** AmneziaWG 2.0 spec: Jc is 0..10, Jmin/Jmax are 64..1024 bytes. */
+const AWG2_JC_MAX = 10;
+const AWG2_JMIN_MIN = 64;
+const AWG2_JMAX_MAX = 1024;
+
+/** S1+56 must not equal S2 (padded init vs response size clash; AmneziaWG 2.0 notes). */
+const pickAwg2PaddingDocCompliant = () => {
   let s1;
   let s2;
-  for (let k = 0; k < 64; k += 1) {
-    s1 = randomInt(40, 129);
-    s2 = randomInt(40, 129);
+  for (let k = 0; k < 128; k += 1) {
+    s1 = randomInt(0, AWG2_S123_MAX + 1);
+    s2 = randomInt(0, AWG2_S123_MAX + 1);
     if (s1 + 56 !== s2) break;
   }
   return {
     s1,
     s2,
-    s3: randomInt(32, 129),
-    s4: randomInt(48, 161),
+    s3: randomInt(0, AWG2_S123_MAX + 1),
+    s4: randomInt(0, AWG2_S4_MAX + 1),
   };
 };
 
-const pickJunkParams = () => {
-  const jc = randomInt(96, 161);
-  const jmin = randomInt(16, 36);
-  const jmax = randomInt(Math.max(jmin + 300, 550), 1001);
+/** Junk train parameters within documented AWG 2.0 bounds (Jc 1..10 so generated configs send junk). */
+const pickAwg2JunkDocCompliant = () => {
+  const jc = randomInt(1, AWG2_JC_MAX + 1);
+  const jmin = randomInt(AWG2_JMIN_MIN, 801);
+  const jmax = randomInt(Math.max(jmin + 32, AWG2_JMIN_MIN + 1), AWG2_JMAX_MAX + 1);
   return { jc, jmin, jmax };
 };
 
 const buildAwg2Obfuscation = () => {
   const headers = generateAwg2MagicHeaderRanges();
-  const pad = pickAwg2Padding();
-  const junk = pickJunkParams();
+  const pad = pickAwg2PaddingDocCompliant();
+  const junk = pickAwg2JunkDocCompliant();
   return {
     ...headers,
     S1: pad.s1,
@@ -119,11 +121,11 @@ const buildAwg2Obfuscation = () => {
 };
 
 /**
- * AmneziaWG 2.0 extras (S3/S4 padding) while keeping WireGuard message types 1–4 on the wire.
- * Cloudflare WARP speaks stock WireGuard; random H1–H4 bands from buildAwg2Obfuscation break the handshake.
+ * WARP-safe AWG 2.0: H1–H4 stay WireGuard types 1–4 (Cloudflare peer is stock WG).
+ * Padding S3/S4 and junk Jc/Jmin/Jmax use AmneziaWG 2.0 documented ranges so clients accept the config.
  */
 const buildAwg2WarpSafeObfuscation = () => {
-  const pad = pickAwg2Padding();
+  const junk = pickAwg2JunkDocCompliant();
   return {
     H1: '1',
     H2: '2',
@@ -131,12 +133,20 @@ const buildAwg2WarpSafeObfuscation = () => {
     H4: '4',
     S1: 0,
     S2: 0,
-    S3: pad.s3,
-    S4: pad.s4,
-    Jc: 120,
-    Jmin: 23,
-    Jmax: 911,
+    S3: randomInt(0, AWG2_S123_MAX + 1),
+    S4: randomInt(0, AWG2_S4_MAX + 1),
+    Jc: junk.jc,
+    Jmin: junk.jmin,
+    Jmax: junk.jmax,
   };
+};
+
+const appendAwg2SignatureLines = (lines, packets) => {
+  if (!packets || typeof packets !== 'object') return;
+  for (let n = 1; n <= 5; n += 1) {
+    const v = packets[`i${n}`];
+    if (v && String(v).trim()) lines.push(`i${n} = ${v}`);
+  }
 };
 
 const resolveGenerationMode = (req) => {
@@ -194,70 +204,74 @@ const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6, dnsLine, i1Option
 /**
  * @param {boolean} plainAddress if true, omit /32 and /128 (Amnezia WARP exports often use bare IPs)
  */
-const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress = false, i1Optional = '') => {
-  const addrLine = plainAddress
-    ? `Address = ${clientIPv4}, ${clientIPv6}`
-    : `Address = ${clientIPv4}/32, ${clientIPv6}/128`;
-  const core = `[Interface]
-PrivateKey = ${privKey}
-Jc = ${obf.Jc}
-Jmin = ${obf.Jmin}
-Jmax = ${obf.Jmax}
-S1 = ${obf.S1}
-S2 = ${obf.S2}
-S3 = ${obf.S3}
-S4 = ${obf.S4}
-H1 = ${obf.H1}
-H2 = ${obf.H2}
-H3 = ${obf.H3}
-H4 = ${obf.H4}
-MTU = 1280
-${addrLine}
-DNS = ${dnsLine}`;
-  return i1Optional ? `${core}\nI1 = ${i1Optional}` : core;
-};
-
-/**
- * AWG 2.0 profile for WARP: same field order as Legacy, plus S3/S4; H1–H4 and Jc/Jmin/Jmax match Legacy (CF-compatible).
- */
-const buildInterfaceAwg2WarpSafe = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress, i1Optional = '') => {
+const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress = false, signaturePackets = {}) => {
   const addrLine = plainAddress
     ? `Address = ${clientIPv4}, ${clientIPv6}`
     : `Address = ${clientIPv4}/32, ${clientIPv6}/128`;
   const lines = [
     '[Interface]',
-    `PrivateKey = ${privKey}`,
     addrLine,
+    `PrivateKey = ${privKey}`,
     `DNS = ${dnsLine}`,
     'MTU = 1280',
+    `Jc = ${obf.Jc}`,
+    `Jmin = ${obf.Jmin}`,
+    `Jmax = ${obf.Jmax}`,
     `S1 = ${obf.S1}`,
     `S2 = ${obf.S2}`,
     `S3 = ${obf.S3}`,
     `S4 = ${obf.S4}`,
-    `Jc = ${obf.Jc}`,
-    `Jmin = ${obf.Jmin}`,
-    `Jmax = ${obf.Jmax}`,
     `H1 = ${obf.H1}`,
     `H2 = ${obf.H2}`,
     `H3 = ${obf.H3}`,
     `H4 = ${obf.H4}`,
   ];
-  if (i1Optional) lines.push(`I1 = ${i1Optional}`);
+  appendAwg2SignatureLines(lines, signaturePackets);
   return lines.join('\n');
 };
 
 /**
- * @param {{ i1?: string, persistentKeepalive?: number|null, awg2WarpSafe?: boolean }} ifaceExtras
+ * AWG 2.0 [Interface] layout per Amnezia docs (Address, keys, DNS, junk, S1–S4, H1–H4, CPS lines `i1`–`i5`).
+ * WARP preset: H1–H4 = 1..4; S3/S4 and Jc/Jmin/Jmax in documented ranges.
+ */
+const buildInterfaceAwg2WarpSafe = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress, signaturePackets = {}) => {
+  const addrLine = plainAddress
+    ? `Address = ${clientIPv4}, ${clientIPv6}`
+    : `Address = ${clientIPv4}/32, ${clientIPv6}/128`;
+  const lines = [
+    '[Interface]',
+    addrLine,
+    `PrivateKey = ${privKey}`,
+    `DNS = ${dnsLine}`,
+    'MTU = 1280',
+    `Jc = ${obf.Jc}`,
+    `Jmin = ${obf.Jmin}`,
+    `Jmax = ${obf.Jmax}`,
+    `S1 = ${obf.S1}`,
+    `S2 = ${obf.S2}`,
+    `S3 = ${obf.S3}`,
+    `S4 = ${obf.S4}`,
+    `H1 = ${obf.H1}`,
+    `H2 = ${obf.H2}`,
+    `H3 = ${obf.H3}`,
+    `H4 = ${obf.H4}`,
+  ];
+  appendAwg2SignatureLines(lines, signaturePackets);
+  return lines.join('\n');
+};
+
+/**
+ * @param {{ signaturePackets?: { i1?: string, i2?: string, i3?: string, i4?: string, i5?: string }, persistentKeepalive?: number|null, awg2WarpSafe?: boolean }} ifaceExtras
  */
 const buildFullConfig = (mode, privKey, peerPub, clientIPv4, clientIPv6, peerEndpoint, awg2Obf, allowedIpList, dnsLine, ifaceExtras = {}) => {
-  const i1 = ifaceExtras.i1 || '';
+  const packets = ifaceExtras.signaturePackets && typeof ifaceExtras.signaturePackets === 'object' ? ifaceExtras.signaturePackets : {};
   const plainAddress = Boolean(ifaceExtras.plainAddress);
   const iface =
     mode === 'awg2'
       ? ifaceExtras.awg2WarpSafe
-        ? buildInterfaceAwg2WarpSafe(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1)
-        : buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1)
-      : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine, i1, plainAddress);
+        ? buildInterfaceAwg2WarpSafe(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, packets)
+        : buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, packets)
+      : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine, packets.i1 || '', plainAddress);
   const allowed = (allowedIpList && allowedIpList.length ? allowedIpList : DEFAULT_ALLOWED_IPS).join(', ');
   let peerBlock = `[Peer]
 PublicKey = ${peerPub}
@@ -349,11 +363,11 @@ const readRequestJson = (req) =>
     req.on('error', reject);
   });
 
-const normalizeI1Payload = (s) => {
+const normalizeCpsPayload = (s) => {
   const t = String(s ?? '').trim();
   if (!t) return '';
-  if (t.length > MAX_I1_LEN) {
-    const err = new Error('Поле I1 слишком большое.');
+  if (t.length > MAX_CPS_LINE_LEN) {
+    const err = new Error('Строка CPS (i1–i5) слишком большая.');
     err.statusCode = 413;
     throw err;
   }
@@ -446,7 +460,18 @@ const collectWarpGenExtras = (req, body) => {
   );
   const i1RefRaw = b.i1Ref ?? pickQuery(req, 'i1Ref');
   const i1Ref = i1RefRaw != null && String(i1RefRaw).trim() !== '' ? String(i1RefRaw).trim() : null;
-  const i1Raw = b.i1 != null ? String(b.i1) : null;
+  const pickIxRaw = (key) => {
+    const fromBody = b[key];
+    if (fromBody != null) return String(fromBody);
+    const q = pickQuery(req, key);
+    return q == null ? null : String(q);
+  };
+  const trimOrNull = (v) => (v != null && String(v).trim() !== '' ? String(v).trim() : null);
+  const i1Raw = trimOrNull(pickIxRaw('i1'));
+  const i2Raw = trimOrNull(pickIxRaw('i2'));
+  const i3Raw = trimOrNull(pickIxRaw('i3'));
+  const i4Raw = trimOrNull(pickIxRaw('i4'));
+  const i5Raw = trimOrNull(pickIxRaw('i5'));
   const pa = b.plainAddress ?? pickQuery(req, 'plainAddress');
   const plainAddress =
     pa === true ||
@@ -454,11 +479,22 @@ const collectWarpGenExtras = (req, body) => {
       .toLowerCase() === '1' ||
     String(pa ?? '')
       .toLowerCase() === 'true';
-  return { peerEndpoint, warpPort, persistentKeepalive, i1Ref, i1Raw, plainAddress };
+  return {
+    peerEndpoint,
+    warpPort,
+    persistentKeepalive,
+    i1Ref,
+    i1Raw,
+    i2Raw,
+    i3Raw,
+    i4Raw,
+    i5Raw,
+    plainAddress,
+  };
 };
 
 /**
- * High-level presets: fixed engage host/ports and optional embedded I1 (AmneziaWG obfuscation chain; not from CF API).
+ * High-level presets: fixed engage host/ports and optional default CPS i1 (runtime-generated when no i1/i1Ref).
  * @param {string} name query/body `template`
  * @returns {{ engageHost: string|null, defaultEngagePort: number|null, defaultKeepalive: number|null, useEmbeddedAmneziaI1: boolean, plainAddress: boolean, forceLegacy: boolean, awg2WarpSafe?: boolean }}
  */
@@ -477,8 +513,8 @@ const resolveTemplateOptions = (name) => {
     };
   }
   /**
-   * Same peer/DNS/Address/I1 as warp_amnezia; [Interface] uses S3/S4 (AWG 2.0) but H1–H4 stay 1–4 so the tunnel
-   * stays compatible with Cloudflare’s stock WireGuard (random H bands break WARP).
+   * Same peer/DNS/Address as warp_amnezia; AWG 2.0 layout with runtime CPS `i1`–`i5`, doc-bounded S3/S4 and Jc/Jmin/Jmax;
+   * H1–H4 stay 1–4 for Cloudflare stock WireGuard (random H bands break WARP).
    */
   if (
     n === 'warp_amnezia_awg2' ||
@@ -568,15 +604,39 @@ const resolvePeerEndpointForConfig = (config, extras) => {
   return `${host}:${port}`;
 };
 
-const resolveI1ForGeneration = async (extras) => {
+/**
+ * Resolve i1–i5 for config generation. AWG 2.0: full chain from generateSignatureChain(), with per-field overrides.
+ * Legacy: only i1 (I1 =) is emitted; i2–i5 ignored.
+ * @param {ReturnType<typeof collectWarpGenExtras>} extras
+ * @param {'legacy'|'awg2'} mode
+ */
+const resolveSignaturePacketsForGeneration = async (extras, mode) => {
+  const gen = generateSignatureChain();
+  const out = { i1: '', i2: '', i3: '', i4: '', i5: '' };
+
+  let i1 = '';
   if (extras.i1Raw != null && String(extras.i1Raw).trim() !== '') {
-    return normalizeI1Payload(extras.i1Raw);
+    i1 = normalizeCpsPayload(extras.i1Raw);
+  } else if (extras.i1Ref) {
+    i1 = normalizeCpsPayload(await loadI1FromRef(extras.i1Ref));
+  } else if (mode === 'legacy' && extras.useEmbeddedAmneziaI1) {
+    i1 = normalizeCpsPayload(gen.i1);
+  } else if (mode === 'awg2') {
+    i1 = normalizeCpsPayload(gen.i1);
   }
-  if (extras.i1Ref) return normalizeI1Payload(await loadI1FromRef(extras.i1Ref));
-  if (extras.useEmbeddedAmneziaI1 && warpAmneziaCpsPayload) {
-    return normalizeI1Payload(warpAmneziaCpsPayload);
+
+  out.i1 = i1;
+
+  if (mode !== 'awg2') {
+    return out;
   }
-  return '';
+
+  out.i2 = extras.i2Raw != null ? normalizeCpsPayload(extras.i2Raw) : gen.i2;
+  out.i3 = extras.i3Raw != null ? normalizeCpsPayload(extras.i3Raw) : gen.i3;
+  out.i4 = extras.i4Raw != null ? normalizeCpsPayload(extras.i4Raw) : gen.i4;
+  out.i5 = extras.i5Raw != null ? normalizeCpsPayload(extras.i5Raw) : gen.i5;
+
+  return out;
 };
 
 const generateKeys = () => {
@@ -750,7 +810,7 @@ const resolveAllowedIpsFromPresets = async (presetKeys) => {
  * @param {string} mode
  * @param {string[]} presetKeys
  * @param {string} dnsKey
- * @param {object} warpExtras результат collectWarpGenExtras (peerEndpoint, warpPort, persistentKeepalive, i1Ref, i1Raw)
+ * @param {object} warpExtras результат collectWarpGenExtras
  */
 const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '', warpExtras = {}) => {
   const { privKey, pubKey } = generateKeys();
@@ -789,7 +849,7 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
     mode === 'awg2' ? (awg2WarpSafe ? buildAwg2WarpSafeObfuscation() : buildAwg2Obfuscation()) : null;
   const { cidrs: routeCidrs, routesSource, sitesResolved } = await resolveAllowedIpsFromPresets(presetKeys);
   const dnsLine = getDnsString(dnsKey || DNS_DEFAULT_KEY);
-  const i1 = await resolveI1ForGeneration(warpExtras);
+  const signaturePackets = await resolveSignaturePacketsForGeneration(warpExtras, mode);
 
   return {
     text: buildFullConfig(
@@ -803,7 +863,7 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
       routeCidrs,
       dnsLine,
       {
-        i1,
+        signaturePackets,
         persistentKeepalive: warpExtras.persistentKeepalive,
         plainAddress: warpExtras.plainAddress,
         awg2WarpSafe: warpExtras.awg2WarpSafe,
