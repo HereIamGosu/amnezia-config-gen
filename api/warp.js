@@ -3,6 +3,8 @@ const { Buffer } = require('buffer');
 const { randomInt } = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const https = require('https');
+const fs = require('fs').promises;
+const path = require('path');
 const { expandPresetsToSites, parsePresetKeysFromRequest, getDnsString, parseDnsKeyFromRequest, DNS_DEFAULT_KEY } = require('./routePresets');
 const { fetchCidrsForDomains } = require('./ipListFetch');
 
@@ -11,6 +13,9 @@ const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0', '::/0'];
 /** Tried when Cloudflare omits endpoint in JSON (best-effort anycast fallbacks). */
 const FALLBACK_ENDPOINT_HOSTS = ['188.114.97.66', '162.159.192.1'];
 const WARP_PORT = 3138;
+/** Max length of I1 CPS payload (AmneziaWG); avoids huge query/body abuse. */
+const MAX_I1_LEN = 512 * 1024;
+const I1_REF_SAFE = /^[a-zA-Z0-9._-]+$/;
 const REQUEST_TIMEOUT_MS = 20000;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const API_PREFIX = '/v0i1909051800';
@@ -111,20 +116,39 @@ const resolveGenerationMode = (req) => {
   return 'legacy';
 };
 
-const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6, dnsLine) => `[Interface]
-PrivateKey = ${privKey}
-Jc = 120
-Jmin = 23
-Jmax = 911
-H1 = 1
-H2 = 2
-H3 = 3
-H4 = 4
-MTU = 1280
-Address = ${clientIPv4}/32, ${clientIPv6}/128
-DNS = ${dnsLine}`;
+const resolveModeFromInput = (raw) => {
+  const s = String(raw ?? '').toLowerCase();
+  if (s === 'awg2' || s === '2' || s === 'v2') return 'awg2';
+  return 'legacy';
+};
 
-const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6, obf, dnsLine) => `[Interface]
+/**
+ * Legacy profile: field order and explicit S1/S2=0 match common WARP/Amnezia exports (Jc/Jmin/Jmax + H1..4).
+ * @param {string} i1Optional full value after `I1 = ` (e.g. `<b 0x...>`), or empty to omit
+ */
+const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6, dnsLine, i1Optional = '') => {
+  const lines = [
+    '[Interface]',
+    `PrivateKey = ${privKey}`,
+    `Address = ${clientIPv4}/32, ${clientIPv6}/128`,
+    `DNS = ${dnsLine}`,
+    'MTU = 1280',
+    'S1 = 0',
+    'S2 = 0',
+    'Jc = 120',
+    'Jmin = 23',
+    'Jmax = 911',
+    'H1 = 1',
+    'H2 = 2',
+    'H3 = 3',
+    'H4 = 4',
+  ];
+  if (i1Optional) lines.push(`I1 = ${i1Optional}`);
+  return lines.join('\n');
+};
+
+const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, i1Optional = '') => {
+  const core = `[Interface]
 PrivateKey = ${privKey}
 Jc = ${obf.Jc}
 Jmin = ${obf.Jmin}
@@ -140,18 +164,25 @@ H4 = ${obf.H4}
 MTU = 1280
 Address = ${clientIPv4}/32, ${clientIPv6}/128
 DNS = ${dnsLine}`;
+  return i1Optional ? `${core}\nI1 = ${i1Optional}` : core;
+};
 
-const buildFullConfig = (mode, privKey, peerPub, clientIPv4, clientIPv6, peerEndpoint, awg2Obf, allowedIpList, dnsLine) => {
+/**
+ * @param {{ i1?: string, persistentKeepalive?: number|null }} ifaceExtras
+ */
+const buildFullConfig = (mode, privKey, peerPub, clientIPv4, clientIPv6, peerEndpoint, awg2Obf, allowedIpList, dnsLine, ifaceExtras = {}) => {
+  const i1 = ifaceExtras.i1 || '';
   const iface = mode === 'awg2'
-    ? buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine)
-    : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine);
+    ? buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, i1)
+    : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine, i1);
   const allowed = (allowedIpList && allowedIpList.length ? allowedIpList : DEFAULT_ALLOWED_IPS).join(', ');
-  return `${iface}
-
-[Peer]
+  let peerBlock = `[Peer]
 PublicKey = ${peerPub}
 AllowedIPs = ${allowed}
 Endpoint = ${peerEndpoint}`;
+  const ka = ifaceExtras.persistentKeepalive;
+  if (ka != null && ka > 0) peerBlock += `\nPersistentKeepalive = ${ka}`;
+  return `${iface}\n\n${peerBlock}`;
 };
 
 /**
@@ -197,6 +228,158 @@ const resolveEndpointHostWithFallback = (config) => {
   if (fromPeer) return fromPeer;
   const idx = randomInt(0, FALLBACK_ENDPOINT_HOSTS.length);
   return FALLBACK_ENDPOINT_HOSTS[idx];
+};
+
+/**
+ * @param {import('http').IncomingMessage} req
+ * @param {string} key
+ * @returns {string|undefined}
+ */
+const pickQuery = (req, key) => {
+  if (req.query && typeof req.query === 'object' && req.query[key] != null) {
+    const v = req.query[key];
+    return Array.isArray(v) ? String(v[0]) : String(v);
+  }
+  if (req.url) {
+    try {
+      const got = new URL(req.url, 'http://localhost').searchParams.get(key);
+      return got == null ? undefined : got;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+};
+
+const readRequestJson = (req) =>
+  new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      try {
+        const raw = Buffer.concat(chunks).toString('utf8');
+        resolve(raw ? JSON.parse(raw) : {});
+      } catch (e) {
+        reject(e);
+      }
+    });
+    req.on('error', reject);
+  });
+
+const normalizeI1Payload = (s) => {
+  const t = String(s ?? '').trim();
+  if (!t) return '';
+  if (t.length > MAX_I1_LEN) {
+    const err = new Error('Поле I1 слишком большое.');
+    err.statusCode = 413;
+    throw err;
+  }
+  return t;
+};
+
+const loadI1FromRef = async (ref) => {
+  const raw = String(ref ?? '').trim();
+  if (!I1_REF_SAFE.test(raw)) {
+    const err = new Error('Некорректный i1Ref (только буквы, цифры, . _ -).');
+    err.statusCode = 400;
+    throw err;
+  }
+  const baseName = raw.endsWith('.txt') ? raw : `${raw}.txt`;
+  const safeFile = path.basename(baseName);
+  const fp = path.join(__dirname, 'cps-presets', safeFile);
+  try {
+    const text = await fs.readFile(fp, 'utf8');
+    return text.trim();
+  } catch {
+    const err = new Error('Файл пресета I1 не найден (api/cps-presets/).');
+    err.statusCode = 404;
+    throw err;
+  }
+};
+
+/**
+ * @param {unknown} presets
+ * @returns {string[]}
+ */
+const parsePresetKeysFromBody = (presets) => {
+  if (Array.isArray(presets)) {
+    const seen = new Set();
+    return presets
+      .map((x) => String(x).trim().toLowerCase())
+      .filter((x) => {
+        if (!x || seen.has(x)) return false;
+        seen.add(x);
+        return true;
+      });
+  }
+  if (typeof presets === 'string' && presets.trim()) {
+    const out = [];
+    const seen = new Set();
+    presets.split(/[,;]+/).forEach((p) => {
+      const x = p.trim().toLowerCase();
+      if (x && !seen.has(x)) {
+        seen.add(x);
+        out.push(x);
+      }
+    });
+    return out;
+  }
+  return [];
+};
+
+const parseWarpPort = (v) => {
+  if (v == null || v === '') return null;
+  const n = Number.parseInt(String(v), 10);
+  if (!Number.isFinite(n) || n < 1 || n > 65535) return null;
+  return n;
+};
+
+const parsePersistentKeepalive = (v) => {
+  if (v == null || v === '') return null;
+  const n = Number.parseInt(String(v), 10);
+  if (!Number.isFinite(n) || n < 0 || n > 65535) return null;
+  return n === 0 ? null : n;
+};
+
+const parsePeerEndpointOverride = (v) => {
+  const s = String(v ?? '').trim();
+  if (!s || !s.includes(':')) return null;
+  return s;
+};
+
+/**
+ * Merge query + JSON body options for WARP config extras.
+ * @param {import('http').IncomingMessage} req
+ * @param {Record<string, unknown>} body
+ */
+const collectWarpGenExtras = (req, body) => {
+  const b = body && typeof body === 'object' ? body : {};
+  const peerEndpoint = parsePeerEndpointOverride(
+    b.peerEndpoint ?? b.endpoint ?? pickQuery(req, 'peerEndpoint') ?? pickQuery(req, 'endpoint'),
+  );
+  const warpPort = parseWarpPort(b.warpPort ?? pickQuery(req, 'warpPort'));
+  const persistentKeepalive = parsePersistentKeepalive(
+    b.persistentKeepalive ?? b.keepalive ?? pickQuery(req, 'persistentKeepalive') ?? pickQuery(req, 'keepalive'),
+  );
+  const i1RefRaw = b.i1Ref ?? pickQuery(req, 'i1Ref');
+  const i1Ref = i1RefRaw != null && String(i1RefRaw).trim() !== '' ? String(i1RefRaw).trim() : null;
+  const i1Raw = b.i1 != null ? String(b.i1) : null;
+  return { peerEndpoint, warpPort, persistentKeepalive, i1Ref, i1Raw };
+};
+
+const resolvePeerEndpointForConfig = (config, extras) => {
+  if (extras.peerEndpoint) return extras.peerEndpoint;
+  const host = resolveEndpointHostWithFallback(config);
+  const port = extras.warpPort != null ? extras.warpPort : WARP_PORT;
+  return `${host}:${port}`;
+};
+
+const resolveI1ForGeneration = async (extras) => {
+  if (extras.i1Raw != null && String(extras.i1Raw).trim() !== '') {
+    return normalizeI1Payload(extras.i1Raw);
+  }
+  if (extras.i1Ref) return normalizeI1Payload(await loadI1FromRef(extras.i1Ref));
+  return '';
 };
 
 const generateKeys = () => {
@@ -365,7 +548,13 @@ const resolveAllowedIpsFromPresets = async (presetKeys) => {
   return { cidrs, routesSource: 'presets', sitesResolved: sites.length };
 };
 
-const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '') => {
+/**
+ * @param {string} mode
+ * @param {string[]} presetKeys
+ * @param {string} dnsKey
+ * @param {object} warpExtras результат collectWarpGenExtras (peerEndpoint, warpPort, persistentKeepalive, i1Ref, i1Raw)
+ */
+const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '', warpExtras = {}) => {
   const { privKey, pubKey } = generateKeys();
   const regBody = {
     install_id: uuidv4(),
@@ -394,12 +583,12 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '')
   const { public_key: peerPub } = config.peers[0];
   const { v4: clientIPv4, v6: clientIPv6 } = config.interface.addresses;
 
-  const endpointHost = resolveEndpointHostWithFallback(config);
-  const peerEndpoint = `${endpointHost}:${WARP_PORT}`;
+  const peerEndpoint = resolvePeerEndpointForConfig(config, warpExtras);
 
   const awg2Obf = mode === 'awg2' ? buildAwg2Obfuscation() : null;
   const { cidrs: routeCidrs, routesSource, sitesResolved } = await resolveAllowedIpsFromPresets(presetKeys);
   const dnsLine = getDnsString(dnsKey || DNS_DEFAULT_KEY);
+  const i1 = await resolveI1ForGeneration(warpExtras);
 
   return {
     text: buildFullConfig(
@@ -412,22 +601,48 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '')
       awg2Obf,
       routeCidrs,
       dnsLine,
+      {
+        i1,
+        persistentKeepalive: warpExtras.persistentKeepalive,
+      },
     ),
     meta: { routesSource, sitesResolved: sitesResolved ?? 0, presetsUsed: presetKeys.length },
   };
 };
 
 module.exports = async (req, res) => {
-  if (req.method !== 'GET') {
+  if (req.method !== 'GET' && req.method !== 'POST') {
     res.status(405).json({ success: false, message: 'Метод не поддерживается.' });
     return;
   }
 
   try {
-    const mode = resolveGenerationMode(req);
-    const presetKeys = parsePresetKeysFromRequest(req);
-    const dnsKey = parseDnsKeyFromRequest(req);
-    const { text: conf, meta } = await generateWarpConfig(mode, presetKeys, dnsKey);
+    let body = {};
+    if (req.method === 'POST') {
+      if (req.body != null && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+        body = req.body;
+      } else {
+        try {
+          body = await readRequestJson(req);
+        } catch {
+          res.status(400).json({ success: false, message: 'Некорректное JSON-тело запроса.' });
+          return;
+        }
+      }
+    }
+
+    const mode =
+      body.mode != null ? resolveModeFromInput(body.mode) : resolveGenerationMode(req);
+    const fromBody = parsePresetKeysFromBody(body.presets);
+    const presetKeys = fromBody.length ? fromBody : parsePresetKeysFromRequest(req);
+    const dnsKey =
+      body.dns != null && String(body.dns).trim() !== ''
+        ? String(body.dns).trim().toLowerCase()
+        : parseDnsKeyFromRequest(req);
+
+    const warpExtras = collectWarpGenExtras(req, body);
+
+    const { text: conf, meta } = await generateWarpConfig(mode, presetKeys, dnsKey, warpExtras);
     const confEncoded = Buffer.from(conf).toString('base64');
     res.status(200).json({
       success: true,
