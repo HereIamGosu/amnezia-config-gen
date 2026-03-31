@@ -11,8 +11,7 @@
   },
   "dependencies": {
     "@vercel/analytics": "^1.4.1",
-    "tweetnacl": "^1.0.3",
-    "uuid": "^8.3.2"
+    "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

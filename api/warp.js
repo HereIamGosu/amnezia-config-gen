@@ -1,14 +1,13 @@
 const nacl = require('tweetnacl');
 const { Buffer } = require('buffer');
 const { randomInt } = require('crypto');
-const { v4: uuidv4 } = require('uuid');
 const https = require('https');
 const fs = require('fs').promises;
 const path = require('path');
 const { expandPresetsToSites, parsePresetKeysFromRequest, getDnsString, parseDnsKeyFromRequest, DNS_DEFAULT_KEY } = require('./routePresets');
 const { fetchCidrsForDomains } = require('./ipListFetch');
 
-/** Reference AmneziaWG I1 obfuscation chain (`<b 0x…>`); not derivable from Cloudflare JSON. */
+/** Embedded AmneziaWG I1 obfuscation chain (`<b 0x…>`); not provided by Cloudflare JSON. */
 let warpAmneziaCpsPayload = '';
 try {
   warpAmneziaCpsPayload = require('./warpAmneziaCpsPayload');
@@ -495,6 +494,7 @@ const generateKeys = () => {
 const generateHeaders = (token = null) => {
   const headers = {
     'Content-Type': 'application/json',
+    'User-Agent': 'okhttp/3.12.1',
   };
   if (token) {
     headers.Authorization = `Bearer ${token}`;
@@ -660,11 +660,11 @@ const resolveAllowedIpsFromPresets = async (presetKeys) => {
 const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '', warpExtras = {}) => {
   const { privKey, pubKey } = generateKeys();
   const regBody = {
-    install_id: uuidv4(),
+    install_id: '',
     tos: new Date().toISOString(),
     key: pubKey,
     fcm_token: '',
-    type: 'windows',
+    type: 'ios',
     locale: 'en_US',
   };
 
@@ -745,10 +745,16 @@ module.exports = async (req, res) => {
         ? String(body.dns).trim().toLowerCase()
         : parseDnsKeyFromRequest(req);
 
-    const templateRaw =
+    const templateFromRequest =
       body.template != null && String(body.template).trim() !== ''
         ? String(body.template).trim()
         : pickQuery(req, 'template');
+    const templateRaw =
+      templateFromRequest && String(templateFromRequest).trim() !== ''
+        ? String(templateFromRequest).trim()
+        : mode === 'legacy'
+          ? 'warp_amnezia'
+          : '';
     const tmpl = resolveTemplateOptions(templateRaw);
     const warpExtras = mergeTemplateIntoExtras(collectWarpGenExtras(req, body), tmpl);
     if (warpExtras.forceLegacy) mode = 'legacy';
