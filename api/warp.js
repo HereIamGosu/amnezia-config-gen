@@ -118,6 +118,27 @@ const buildAwg2Obfuscation = () => {
   };
 };
 
+/**
+ * AmneziaWG 2.0 extras (S3/S4 padding) while keeping WireGuard message types 1–4 on the wire.
+ * Cloudflare WARP speaks stock WireGuard; random H1–H4 bands from buildAwg2Obfuscation break the handshake.
+ */
+const buildAwg2WarpSafeObfuscation = () => {
+  const pad = pickAwg2Padding();
+  return {
+    H1: '1',
+    H2: '2',
+    H3: '3',
+    H4: '4',
+    S1: 0,
+    S2: 0,
+    S3: pad.s3,
+    S4: pad.s4,
+    Jc: 120,
+    Jmin: 23,
+    Jmax: 911,
+  };
+};
+
 const resolveGenerationMode = (req) => {
   let raw = '';
   if (req.query && typeof req.query === 'object') {
@@ -197,14 +218,46 @@ DNS = ${dnsLine}`;
 };
 
 /**
- * @param {{ i1?: string, persistentKeepalive?: number|null }} ifaceExtras
+ * AWG 2.0 profile for WARP: same field order as Legacy, plus S3/S4; H1–H4 and Jc/Jmin/Jmax match Legacy (CF-compatible).
+ */
+const buildInterfaceAwg2WarpSafe = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress, i1Optional = '') => {
+  const addrLine = plainAddress
+    ? `Address = ${clientIPv4}, ${clientIPv6}`
+    : `Address = ${clientIPv4}/32, ${clientIPv6}/128`;
+  const lines = [
+    '[Interface]',
+    `PrivateKey = ${privKey}`,
+    addrLine,
+    `DNS = ${dnsLine}`,
+    'MTU = 1280',
+    `S1 = ${obf.S1}`,
+    `S2 = ${obf.S2}`,
+    `S3 = ${obf.S3}`,
+    `S4 = ${obf.S4}`,
+    `Jc = ${obf.Jc}`,
+    `Jmin = ${obf.Jmin}`,
+    `Jmax = ${obf.Jmax}`,
+    `H1 = ${obf.H1}`,
+    `H2 = ${obf.H2}`,
+    `H3 = ${obf.H3}`,
+    `H4 = ${obf.H4}`,
+  ];
+  if (i1Optional) lines.push(`I1 = ${i1Optional}`);
+  return lines.join('\n');
+};
+
+/**
+ * @param {{ i1?: string, persistentKeepalive?: number|null, awg2WarpSafe?: boolean }} ifaceExtras
  */
 const buildFullConfig = (mode, privKey, peerPub, clientIPv4, clientIPv6, peerEndpoint, awg2Obf, allowedIpList, dnsLine, ifaceExtras = {}) => {
   const i1 = ifaceExtras.i1 || '';
   const plainAddress = Boolean(ifaceExtras.plainAddress);
-  const iface = mode === 'awg2'
-    ? buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1)
-    : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine, i1, plainAddress);
+  const iface =
+    mode === 'awg2'
+      ? ifaceExtras.awg2WarpSafe
+        ? buildInterfaceAwg2WarpSafe(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1)
+        : buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1)
+      : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine, i1, plainAddress);
   const allowed = (allowedIpList && allowedIpList.length ? allowedIpList : DEFAULT_ALLOWED_IPS).join(', ');
   let peerBlock = `[Peer]
 PublicKey = ${peerPub}
@@ -407,7 +460,7 @@ const collectWarpGenExtras = (req, body) => {
 /**
  * High-level presets: fixed engage host/ports and optional embedded I1 (AmneziaWG obfuscation chain; not from CF API).
  * @param {string} name query/body `template`
- * @returns {{ engageHost: string|null, defaultEngagePort: number|null, defaultKeepalive: number|null, useEmbeddedAmneziaI1: boolean, plainAddress: boolean, forceLegacy: boolean }}
+ * @returns {{ engageHost: string|null, defaultEngagePort: number|null, defaultKeepalive: number|null, useEmbeddedAmneziaI1: boolean, plainAddress: boolean, forceLegacy: boolean, awg2WarpSafe?: boolean }}
  */
 const resolveTemplateOptions = (name) => {
   const n = String(name ?? '')
@@ -423,7 +476,10 @@ const resolveTemplateOptions = (name) => {
       forceLegacy: true,
     };
   }
-  /** Same peer/DNS/Address/I1 defaults as warp_amnezia, but keep AmneziaWG 2.0 interface (Jc/S1–S4/H ranges). */
+  /**
+   * Same peer/DNS/Address/I1 as warp_amnezia; [Interface] uses S3/S4 (AWG 2.0) but H1–H4 stay 1–4 so the tunnel
+   * stays compatible with Cloudflare’s stock WireGuard (random H bands break WARP).
+   */
   if (
     n === 'warp_amnezia_awg2' ||
     n === 'amnezia_awg2' ||
@@ -437,6 +493,19 @@ const resolveTemplateOptions = (name) => {
       useEmbeddedAmneziaI1: true,
       plainAddress: true,
       forceLegacy: false,
+      awg2WarpSafe: true,
+    };
+  }
+  /** Random H1–H4 bands (DPI-oriented); not usable with Cloudflare WARP — for self-hosted AWG peers only. */
+  if (n === 'awg2_random' || n === 'awg2_dpi') {
+    return {
+      engageHost: null,
+      defaultEngagePort: null,
+      defaultKeepalive: null,
+      useEmbeddedAmneziaI1: false,
+      plainAddress: false,
+      forceLegacy: false,
+      awg2WarpSafe: false,
     };
   }
   if (n === 'wgcf') {
@@ -479,6 +548,7 @@ const mergeTemplateIntoExtras = (extras, tmpl) => {
   }
   if (tmpl.plainAddress) out.plainAddress = true;
   out.forceLegacy = Boolean(tmpl.forceLegacy);
+  if (tmpl.awg2WarpSafe) out.awg2WarpSafe = true;
   return out;
 };
 
@@ -714,7 +784,9 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
 
   const peerEndpoint = resolvePeerEndpointForConfig(config, warpExtras);
 
-  const awg2Obf = mode === 'awg2' ? buildAwg2Obfuscation() : null;
+  const awg2WarpSafe = Boolean(warpExtras.awg2WarpSafe);
+  const awg2Obf =
+    mode === 'awg2' ? (awg2WarpSafe ? buildAwg2WarpSafeObfuscation() : buildAwg2Obfuscation()) : null;
   const { cidrs: routeCidrs, routesSource, sitesResolved } = await resolveAllowedIpsFromPresets(presetKeys);
   const dnsLine = getDnsString(dnsKey || DNS_DEFAULT_KEY);
   const i1 = await resolveI1ForGeneration(warpExtras);
@@ -734,6 +806,7 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
         i1,
         persistentKeepalive: warpExtras.persistentKeepalive,
         plainAddress: warpExtras.plainAddress,
+        awg2WarpSafe: warpExtras.awg2WarpSafe,
       },
     ),
     meta: { routesSource, sitesResolved: sitesResolved ?? 0, presetsUsed: presetKeys.length },
