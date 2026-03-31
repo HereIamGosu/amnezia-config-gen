@@ -20,34 +20,37 @@ const RETRY_MAX_ATTEMPTS = 6;
 const RETRY_BASE_DELAY_MS = 450;
 const RETRY_MAX_DELAY_MS = 12000;
 
-const UINT32_MAX = 0xffffffff;
-/** Minimum width of each H1..H4 uint32 band (non-overlapping partition). */
+/**
+ * AmneziaWG 2.0 H1–H4: amneziawg-go parses decimal uint32 (device/magic-header.go) and
+ * checks non-overlap (device/uapi.go mergeWithDevice). Many desktop clients and installers
+ * (e.g. wiresock/amneziawg-install README) constrain values to 5..2147483647 so headers fit
+ * signed int32 and avoid 1..4 (WireGuard message type constants). We partition that span only.
+ */
+const AWG2_H_MIN = 5;
+const AWG2_H_MAX = 0x7fffffff;
+/** Minimum width of each H1..H4 band (non-overlapping partition inside [AWG2_H_MIN, AWG2_H_MAX]). */
 const AWG2_MIN_H_BAND = 65536;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * AmneziaWG 2.0 magic headers: per amneziawg-go device/magic-header.go — spec is
- * either one uint32 or "start-end". Ranges must not overlap (merge checks in uapi.go).
- * Runtime: each sent packet picks a random header value inside its Hi range.
- * Fixed global quarters give per-packet entropy but identical bands for all users;
- * we randomize the three cut points so each generated config gets its own partition.
+ * Random non-overlapping H1..H4 ranges; runtime each packet uses a random value inside its band.
  */
 const generateAwg2MagicHeaderRanges = () => {
-  const c1Min = 1 + AWG2_MIN_H_BAND;
-  const c1Max = UINT32_MAX - 3 * AWG2_MIN_H_BAND;
+  const c1Min = AWG2_H_MIN + AWG2_MIN_H_BAND - 1;
+  const c1Max = AWG2_H_MAX - 3 * AWG2_MIN_H_BAND;
   const c1 = randomInt(c1Min, c1Max + 1);
   const c2Min = c1 + AWG2_MIN_H_BAND;
-  const c2Max = UINT32_MAX - 2 * AWG2_MIN_H_BAND;
+  const c2Max = AWG2_H_MAX - 2 * AWG2_MIN_H_BAND;
   const c2 = randomInt(c2Min, c2Max + 1);
   const c3Min = c2 + AWG2_MIN_H_BAND;
-  const c3Max = UINT32_MAX - AWG2_MIN_H_BAND;
+  const c3Max = AWG2_H_MAX - AWG2_MIN_H_BAND;
   const c3 = randomInt(c3Min, c3Max + 1);
   return {
-    H1: `1-${c1}`,
+    H1: `${AWG2_H_MIN}-${c1}`,
     H2: `${c1 + 1}-${c2}`,
     H3: `${c2 + 1}-${c3}`,
-    H4: `${c3 + 1}-${UINT32_MAX}`,
+    H4: `${c3 + 1}-${AWG2_H_MAX}`,
   };
 };
 
