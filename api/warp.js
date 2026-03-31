@@ -26,8 +26,14 @@ const KNOWN_WARP_PEER_PUBLIC_KEY = 'bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
 const ENGAGE_CLOUDFLARE_HOST = 'engage.cloudflareclient.com';
 /** wgcf / common WireGuard WARP profile port. */
 const WARP_PORT_WGCF_ENGAGE = 2408;
-/** Port seen in Amnezia-style exports (differs from API 3138 and wgcf 2408). */
-const WARP_PORT_AMNEZIA_ENGAGE = 4500;
+/**
+ * Cloudflare One Client firewall: WireGuard default UDP 2408; fallbacks 500, 1701, 4500.
+ * Used for `warp_amnezia*` engage hostname — one port chosen per generation (unless overridden).
+ * @see https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/deployment/firewall/
+ */
+const WARP_WIREGUARD_ENGAGE_UDP_PORTS = Object.freeze([2408, 500, 1701, 4500]);
+const pickRandomWarpEngageUdpPort = () =>
+  WARP_WIREGUARD_ENGAGE_UDP_PORTS[randomInt(0, WARP_WIREGUARD_ENGAGE_UDP_PORTS.length)];
 
 /** Tried when Cloudflare omits endpoint in JSON (best-effort anycast fallbacks). */
 const FALLBACK_ENDPOINT_HOSTS = ['188.114.97.66', '162.159.192.1'];
@@ -473,7 +479,7 @@ const collectWarpGenExtras = (req, body) => {
 /**
  * High-level presets: fixed engage host/ports and optional embedded I1 (AmneziaWG obfuscation chain; not from CF API).
  * @param {string} name query/body `template`
- * @returns {{ engageHost: string|null, defaultEngagePort: number|null, defaultKeepalive: number|null, useEmbeddedAmneziaI1: boolean, plainAddress: boolean, forceLegacy: boolean, awg2WarpSafe?: boolean }}
+ * @returns {{ engageHost: string|null, defaultEngagePort: number|null, defaultKeepalive: number|null, useEmbeddedAmneziaI1: boolean, plainAddress: boolean, forceLegacy: boolean, awg2WarpSafe?: boolean, useRandomOfficialEngagePort?: boolean }}
  */
 const resolveTemplateOptions = (name) => {
   const n = String(name ?? '')
@@ -482,7 +488,8 @@ const resolveTemplateOptions = (name) => {
   if (n === 'warp_amnezia' || n === 'amnezia' || n === 'amnezia_warp') {
     return {
       engageHost: ENGAGE_CLOUDFLARE_HOST,
-      defaultEngagePort: WARP_PORT_AMNEZIA_ENGAGE,
+      defaultEngagePort: null,
+      useRandomOfficialEngagePort: true,
       defaultKeepalive: 25,
       useEmbeddedAmneziaI1: true,
       plainAddress: true,
@@ -501,7 +508,8 @@ const resolveTemplateOptions = (name) => {
   ) {
     return {
       engageHost: ENGAGE_CLOUDFLARE_HOST,
-      defaultEngagePort: WARP_PORT_AMNEZIA_ENGAGE,
+      defaultEngagePort: null,
+      useRandomOfficialEngagePort: true,
       defaultKeepalive: 25,
       useEmbeddedAmneziaI1: true,
       plainAddress: true,
@@ -548,7 +556,11 @@ const resolveTemplateOptions = (name) => {
 const mergeTemplateIntoExtras = (extras, tmpl) => {
   const out = { ...extras };
   if (tmpl.engageHost) out.engageHost = tmpl.engageHost;
-  if (tmpl.defaultEngagePort != null && out.warpPort == null) out.warpPort = tmpl.defaultEngagePort;
+  if (tmpl.engageHost && out.warpPort == null && tmpl.useRandomOfficialEngagePort) {
+    out.warpPort = pickRandomWarpEngageUdpPort();
+  } else if (tmpl.defaultEngagePort != null && out.warpPort == null) {
+    out.warpPort = tmpl.defaultEngagePort;
+  }
   if (tmpl.defaultKeepalive != null && out.persistentKeepalive == null) {
     out.persistentKeepalive = tmpl.defaultKeepalive;
   }
