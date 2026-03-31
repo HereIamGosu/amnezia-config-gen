@@ -117,6 +117,18 @@ const pickAwg2JunkDocCompliant = () => {
   return { jc, jmin, jmax };
 };
 
+/**
+ * S4 prepends random bytes to each transport packet (not keepalive). Reduce TUN MTU so IPv4+UDP
+ * payloads stay under path MTU (see amneziawg-go RoutineSequentialSender + user docs).
+ */
+const AWG2_TUN_MTU_BASE = 1420;
+const AWG2_TUN_MTU_FLOOR = 1280;
+
+const computeAwg2InterfaceMtu = (s4) => {
+  const pad = Math.max(0, Number(s4) | 0);
+  return Math.max(AWG2_TUN_MTU_FLOOR, AWG2_TUN_MTU_BASE - pad);
+};
+
 const buildAwg2Obfuscation = () => {
   const headers = generateAwg2MagicHeaderRanges();
   const pad = pickAwg2PaddingDocCompliant();
@@ -213,12 +225,13 @@ const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plain
   const addrLine = plainAddress
     ? `Address = ${clientIPv4}, ${clientIPv6}`
     : `Address = ${clientIPv4}/32, ${clientIPv6}/128`;
+  const mtu = computeAwg2InterfaceMtu(obf.S4);
   const lines = [
     '[Interface]',
-    addrLine,
     `PrivateKey = ${privKey}`,
+    addrLine,
     `DNS = ${dnsLine}`,
-    'MTU = 1280',
+    `MTU = ${mtu}`,
     `Jc = ${obf.Jc}`,
     `Jmin = ${obf.Jmin}`,
     `Jmax = ${obf.Jmax}`,
@@ -243,12 +256,13 @@ const buildInterfaceAwg2WarpSafe = (privKey, clientIPv4, clientIPv6, obf, dnsLin
   const addrLine = plainAddress
     ? `Address = ${clientIPv4}, ${clientIPv6}`
     : `Address = ${clientIPv4}/32, ${clientIPv6}/128`;
+  const mtu = computeAwg2InterfaceMtu(obf.S4);
   const lines = [
     '[Interface]',
-    addrLine,
     `PrivateKey = ${privKey}`,
+    addrLine,
     `DNS = ${dnsLine}`,
-    'MTU = 1280',
+    `MTU = ${mtu}`,
     `Jc = ${obf.Jc}`,
     `Jmin = ${obf.Jmin}`,
     `Jmax = ${obf.Jmax}`,
