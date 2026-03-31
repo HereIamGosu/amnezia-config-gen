@@ -94,12 +94,16 @@ const AWG2_JMAX_MAX = 1024;
 
 /** S1+56 must not equal S2 (padded init vs response size clash; AmneziaWG 2.0 notes). */
 const pickAwg2PaddingDocCompliant = () => {
-  let s1;
-  let s2;
+  let s1 = 0;
+  let s2 = 0;
   for (let k = 0; k < 128; k += 1) {
     s1 = randomInt(0, AWG2_S123_MAX + 1);
     s2 = randomInt(0, AWG2_S123_MAX + 1);
     if (s1 + 56 !== s2) break;
+  }
+  if (s1 + 56 === s2) {
+    s2 = (s2 + 1) % (AWG2_S123_MAX + 1);
+    if (s1 + 56 === s2) s2 = 0;
   }
   return {
     s1,
@@ -120,11 +124,19 @@ const pickAwg2JunkDocCompliant = () => {
 /**
  * S4 prepends random bytes to each transport packet (not keepalive). Reduce TUN MTU so IPv4+UDP
  * payloads stay under path MTU (see amneziawg-go RoutineSequentialSender + user docs).
+ * Peers that send stock WireGuard (no S4 prefix) require S4=0 in config; see buildAwg2WarpSafeObfuscation.
  */
 const AWG2_TUN_MTU_BASE = 1420;
 const AWG2_TUN_MTU_FLOOR = 1280;
+/** Same as legacy WARP in this project; safe on IPv4 tunnels and matches proven WARP exports. */
+const AWG2_MTU_STOCK_PEER = 1280;
 
-const computeAwg2InterfaceMtu = (s4) => {
+/**
+ * @param {number} s4
+ * @param {{ stockWireGuardPeer?: boolean }} [opts] If true, peer is stock WG (e.g. Cloudflare): omit S4-based math; use fixed MTU.
+ */
+const computeAwg2InterfaceMtu = (s4, opts = {}) => {
+  if (opts.stockWireGuardPeer) return AWG2_MTU_STOCK_PEER;
   const pad = Math.max(0, Number(s4) | 0);
   return Math.max(AWG2_TUN_MTU_FLOOR, AWG2_TUN_MTU_BASE - pad);
 };
@@ -147,7 +159,10 @@ const buildAwg2Obfuscation = () => {
 
 /**
  * WARP-safe AWG 2.0: H1–H4 stay WireGuard types 1–4 (Cloudflare peer is stock WG).
- * Padding S3/S4 and junk Jc/Jmin/Jmax use AmneziaWG 2.0 documented ranges so clients accept the config.
+ * S1/S2/S3/S4 must stay 0: stock WireGuard sends handshake/cookie/transport without AWG padding; the
+ * AmneziaWG receive path strips S2/S3/S4 from incoming packets — non-zero values desync parsing and
+ * break the tunnel. Junk (Jc/Jmin/Jmax) only affects pre-handshake UDP noise client→server; keep
+ * within doc bounds. Optional i1 CPS still runs before Init (server ignores until valid handshake).
  */
 const buildAwg2WarpSafeObfuscation = () => {
   const junk = pickAwg2JunkDocCompliant();
@@ -158,8 +173,8 @@ const buildAwg2WarpSafeObfuscation = () => {
     H4: '4',
     S1: 0,
     S2: 0,
-    S3: randomInt(0, AWG2_S123_MAX + 1),
-    S4: randomInt(0, AWG2_S4_MAX + 1),
+    S3: 0,
+    S4: 0,
     Jc: junk.jc,
     Jmin: junk.jmin,
     Jmax: junk.jmax,
@@ -250,13 +265,13 @@ const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plain
 
 /**
  * AWG 2.0 [Interface] layout per Amnezia docs (Address, keys, DNS, junk, S1–S4, H1–H4, CPS line `i1`).
- * WARP preset: H1–H4 = 1..4; S3/S4 and Jc/Jmin/Jmax in documented ranges.
+ * WARP preset: H1–H4 = 1..4; S1–S4 = 0 (stock peer); MTU 1280 like legacy WARP.
  */
 const buildInterfaceAwg2WarpSafe = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress, i1Optional = '') => {
   const addrLine = plainAddress
     ? `Address = ${clientIPv4}, ${clientIPv6}`
     : `Address = ${clientIPv4}/32, ${clientIPv6}/128`;
-  const mtu = computeAwg2InterfaceMtu(obf.S4);
+  const mtu = computeAwg2InterfaceMtu(obf.S4, { stockWireGuardPeer: true });
   const lines = [
     '[Interface]',
     `PrivateKey = ${privKey}`,
