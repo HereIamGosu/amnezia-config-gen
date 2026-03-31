@@ -149,6 +149,8 @@ const getSelectedDnsKey = () => cfgState.selectedDns || '';
 const buildWarpQueryString = (mode) => {
   const params = new URLSearchParams();
   params.set('mode', mode);
+  if (mode === 'legacy') params.set('template', 'warp_amnezia');
+  if (mode === 'awg2') params.set('template', 'warp_amnezia_awg2');
   const routeIds = getSelectedRouteIds();
   if (routeIds.length) params.set('presets', routeIds.join(','));
   const dns = getSelectedDnsKey();

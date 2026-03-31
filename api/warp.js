@@ -19,7 +19,10 @@ const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0', '::/0'];
 
 /** WARP server peer public key (Cloudflare); used if registration JSON omits it. */
 const KNOWN_WARP_PEER_PUBLIC_KEY = 'bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=';
-/** DNS name used by wgcf and many Amnezia exports instead of raw API endpoint IPs. */
+/**
+ * DNS name used by wgcf and Amnezia exports instead of raw API endpoint IPs.
+ * WireGuard resolves `Endpoint` at connect time; keeping the hostname avoids stale anycast IPs in the file.
+ */
 const ENGAGE_CLOUDFLARE_HOST = 'engage.cloudflareclient.com';
 /** wgcf / common WireGuard WARP profile port. */
 const WARP_PORT_WGCF_ENGAGE = 2408;
@@ -167,7 +170,13 @@ const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6, dnsLine, i1Option
   return lines.join('\n');
 };
 
-const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, i1Optional = '') => {
+/**
+ * @param {boolean} plainAddress if true, omit /32 and /128 (Amnezia WARP exports often use bare IPs)
+ */
+const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress = false, i1Optional = '') => {
+  const addrLine = plainAddress
+    ? `Address = ${clientIPv4}, ${clientIPv6}`
+    : `Address = ${clientIPv4}/32, ${clientIPv6}/128`;
   const core = `[Interface]
 PrivateKey = ${privKey}
 Jc = ${obf.Jc}
@@ -182,7 +191,7 @@ H2 = ${obf.H2}
 H3 = ${obf.H3}
 H4 = ${obf.H4}
 MTU = 1280
-Address = ${clientIPv4}/32, ${clientIPv6}/128
+${addrLine}
 DNS = ${dnsLine}`;
   return i1Optional ? `${core}\nI1 = ${i1Optional}` : core;
 };
@@ -194,7 +203,7 @@ const buildFullConfig = (mode, privKey, peerPub, clientIPv4, clientIPv6, peerEnd
   const i1 = ifaceExtras.i1 || '';
   const plainAddress = Boolean(ifaceExtras.plainAddress);
   const iface = mode === 'awg2'
-    ? buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, i1)
+    ? buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1)
     : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine, i1, plainAddress);
   const allowed = (allowedIpList && allowedIpList.length ? allowedIpList : DEFAULT_ALLOWED_IPS).join(', ');
   let peerBlock = `[Peer]
@@ -412,6 +421,22 @@ const resolveTemplateOptions = (name) => {
       useEmbeddedAmneziaI1: true,
       plainAddress: true,
       forceLegacy: true,
+    };
+  }
+  /** Same peer/DNS/Address/I1 defaults as warp_amnezia, but keep AmneziaWG 2.0 interface (Jc/S1–S4/H ranges). */
+  if (
+    n === 'warp_amnezia_awg2' ||
+    n === 'amnezia_awg2' ||
+    n === 'awg2_amnezia' ||
+    n === 'warp_awg2_amnezia'
+  ) {
+    return {
+      engageHost: ENGAGE_CLOUDFLARE_HOST,
+      defaultEngagePort: WARP_PORT_AMNEZIA_ENGAGE,
+      defaultKeepalive: 25,
+      useEmbeddedAmneziaI1: true,
+      plainAddress: true,
+      forceLegacy: false,
     };
   }
   if (n === 'wgcf') {
@@ -754,7 +779,9 @@ module.exports = async (req, res) => {
         ? String(templateFromRequest).trim()
         : mode === 'legacy'
           ? 'warp_amnezia'
-          : '';
+          : mode === 'awg2'
+            ? 'warp_amnezia_awg2'
+            : '';
     const tmpl = resolveTemplateOptions(templateRaw);
     const warpExtras = mergeTemplateIntoExtras(collectWarpGenExtras(req, body), tmpl);
     if (warpExtras.forceLegacy) mode = 'legacy';
