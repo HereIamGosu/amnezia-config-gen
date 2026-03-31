@@ -1,67 +1,138 @@
-# 🌐🔧 Генератор конфигурации AmneziaWG
+# 🌐🔧Генератор конфигурации AmneziaWG
 
-Веб-приложение предназначено для генерации конфигурационных файлов для **AmneziaWG** — клиента WireGuard. Оно позволяет пользователю создать конфигурацию, скачать её и использовать в своей системе, а также получить файл планировщика для автоматического подключения при запуске системы. Проект уже развёрнут и доступен по адресу: [https://valokda-amnezia.vercel.app/](https://valokda-amnezia.vercel.app/).
+Веб-интерфейс и HTTP API для сборки файлов `.conf` под клиент **AmneziaWG** (WireGuard с расширениями Amnezia). Основной сценарий — профиль **Cloudflare WARP**: регистрация через официальный API, выдача ключа и параметров туннеля, опционально сужение `AllowedIPs` по выбранным пресетам доменов.
+
+Публичный инстанс: [valokda-amnezia.vercel.app](https://valokda-amnezia.vercel.app/).
 
 ![Интерфейс приложения](https://i.imgur.com/xjgNNQX.png)
 
-## ✨ Основные особенности
+## Возможности
 
-- **Генерация конфигурации** для AmneziaWG с предустановленными маршрутами для Discord: режим **Legacy** (порядок полей как в типичном экспорте WARP: `Address`/`DNS`/`MTU`, явные **`S1 = 0`**, **`S2 = 0`**, затем Jc/Jmin/Jmax и H1=1..H4=4; при необходимости строка **`I1`** для CPS) или **AmneziaWG 2.0** для **WARP** (`template=warp_amnezia_awg2`, в т.ч. по умолчанию для `mode=awg2`): **H1–H4 = 1..4** (пир Cloudflare — обычный WireGuard; случайные полосы H ломают рукопожатие), **`S1`/`S2` = 0**, случайные **`S3`/`S4`** в пределах документации 2.0 (**S1–S3 ≤ 64**, **S4 ≤ 32** байт), **Jc/Jmin/Jmax** в пределах 2.0 (**Jc 1–10**, **Jmin/Jmax 64–1024**), порядок секции `[Interface]` как в примерах AWG 2.0, CPS-строка с ключом **`i1`** (не `I1`). Для **своего** сервера AmneziaWG 2.0 с произвольными полосами H — **`template=awg2_random`** (без пресета engage/I1; endpoint задаёте сами; те же лимиты S/J по доке).
-- **Скачивание сгенерированного конфигурационного файла** в формате `.conf`.
-- **Скачивание .bat-файла** для автоматического запуска AmneziaWG при старте системы (только для Windows). По умолчанию в `SchedulerAmnezia.bat` указан конфиг `AmneziaWarp-AWG2.conf` в папке «Загрузки»; для Legacy замените `CONFIG_FILE` на `AmneziaWarp.conf`.
-- **Инструкция по установке и настройке** прямо на сайте.
-- **Динамическое обновление Endpoint** — приоритетно из ответа Cloudflare; при отсутствии хоста в JSON — случайный выбор из запасных WARP-совместимых адресов.
-- **Устойчивость Cloudflare API** — повторные попытки с экспоненциальной задержкой при таймаутах, сбросах соединения, 429 и 502/503/504 (см. `api/warp.js`).
-- **DNS** — по умолчанию в UI и в `GET /api/warp` без параметра `dns` используется пресет **Cloudflare** (`dns=cloudflare`), плитка подписана «(по умолчанию)».
-- **Пресеты маршрутов** — в настройках (⚙) можно выбрать пресеты по категориям (соцсети, игры, торренты, дополнительно); для них на сервере собираются подсети IPv4 и IPv6 в `AllowedIPs`. Без выбора — полный туннель. В ответе `GET /api/iplist` у каждого пресета есть поле `category`: `social` \| `gaming` \| `torrent` \| `more`. **API WARP:** `GET` или `POST /api/warp` — параметры query дублируются в JSON-теле `POST` (удобно для большого **`i1`**). При **`mode=legacy`** без параметра **`template`** сервер применяет те же настройки, что и **`template=warp_amnezia`** (plain `Address`, `engage.cloudflareclient.com:4500`, `PersistentKeepalive = 25`, встроенный **`I1`** при отсутствии **`i1`**/**`i1Ref`**). При **`mode=awg2`** без **`template`** — как **`template=warp_amnezia_awg2`**: тот же **`Endpoint`**/keepalive/plain **`Address`**, встроенная цепочка CPS в строке **`i1`** (если не заданы **`i1`**/**`i1Ref`**), **H1–H4 = 1..4**, **S3/S4** и **Jc/Jmin/Jmax** в допустимых для AWG 2.0 диапазонах (см. выше). Шаблоны: **`template=warp_amnezia`** (принудительно Legacy, `Endpoint = engage.cloudflareclient.com:4500` если не задан свой endpoint, **`keepalive=25`** по умолчанию, **`Address`** без `/32` и `/128`, **`I1`** из `api/warpAmneziaCpsPayload.js` если нет **`i1`**/**`i1Ref`**), **`template=warp_amnezia_awg2`** (то же для peer/`i1`/Address, S3/S4 + WARP-совместимые H1–H4 и J по доке 2.0), **`template=awg2_random`** / **`awg2_dpi`** (случайные полосы H1–H4, не для Cloudflare WARP) или **`template=wgcf`** (тот же хост, порт **2408**, без встроенного I1). **`plainAddress=1`** или **`true`** — вручную убрать маски с адресов. Поле **`I1`** (CPS / obfuscation chain в AmneziaWG) **не** выдаётся Cloudflare API; его передают в **`i1`**, **`i1Ref`** (`api/cps-presets/*.txt`) или используют шаблон `warp_amnezia`. Поля: `mode`, `presets`, `dns`, **`peerEndpoint`** или **`endpoint`** (целиком `хост:порт`), **`warpPort`** (если endpoint не задан — порт к хосту из ответа Cloudflare, либо из шаблона engage), **`persistentKeepalive`** или **`keepalive`** (напр. `25`; `0` — строка не пишется), **`i1`**, **`i1Ref`**. Примеры: `GET /api/warp?template=warp_amnezia`; `GET /api/warp?mode=legacy&keepalive=25&endpoint=engage.cloudflareclient.com%3A4500`. Предпросмотр CIDR: `GET /api/iplist?presets=...`. Если открыта только статика (`public`), UI подхватывает `public/static/presets-fallback.json` (список пресетов и DNS-плитки); предпросмотр CIDR и генерация с маршрутами по-прежнему требуют `vercel dev` или деплой. После правок в `api/routePresets.js` обновите файл: `npm run presets:fallback`.
-- **Совместимость** с операционными системами Windows, Linux и Android (конфигурация работает на всех платформах, файл планировщика — только для Windows).
+- Два формата конфига: **Legacy** (`mode=legacy`) и **AmneziaWG 2.0** (`mode=awg2`).
+- Пресеты маршрутов: наборы доменов → агрегированные IPv4/IPv6 CIDR в `AllowedIPs`; без выбора — `0.0.0.0/0`, `::/0`.
+- Несколько пресетов DNS для строки `DNS` в конфиге.
+- Скачивание `.conf` и вспомогательного `SchedulerAmnezia.bat` (Windows, автозапуск через планировщик; путь к конфигу внутри bat нужно проверить под свою установку).
+- Запросы к Cloudflare WARP API с повторными попытками при сетевых ошибках и ответах 429 / 502 / 503 / 504.
 
-## 🚀 Как использовать
+## Требования
 
-1. Перейдите на веб-сайт: [https://valokda-amnezia.vercel.app/](https://valokda-amnezia.vercel.app/).
-2. Нажмите **«Сгенерировать (Legacy)»** или **«Сгенерировать AmneziaWG 2.0»** в зависимости от версии клиента. API: `GET /api/warp?mode=legacy` или `GET /api/warp?mode=awg2` (в ответе также поле `mode`); при необходимости — `POST` с JSON (см. выше).
-3. Скачайте сгенерированный файл и настройте AmneziaWG согласно инструкциям на сайте.
-4. Для автоматической настройки запуска AmneziaWG при старте системы:
-   - Скачайте **.bat-файл для планировщика**.
-   - Запустите его **от имени администратора**.
+- **Node.js** (LTS достаточно).
+- **Vercel CLI** для локального запуска серверных функций: `npm i -g vercel` или использование `npx vercel dev`.
 
-## 📂 Структура проекта
+Отдельного `.env` для работы API не требуется: обращение идёт к публичному `api.cloudflareclient.com`.
 
-- **/static** — статические файлы (изображения, стили и скрипты).
-- **index.html** — главный HTML-файл, который загружается при посещении страницы.
-- **styles.css** — стили для веб-приложения.
-- **script.js** — JavaScript-код для взаимодействия с интерфейсом и генерации конфигурации.
-- **api/warp.js** — серверless-обработчик Vercel: регистрация WARP через `api.cloudflareclient.com` (пустой `install_id`, `type: ios`, заголовок `User-Agent: okhttp/3.12.1`), ретраи, сборка `.conf` для Legacy или AWG 2.0; шаблоны **`template`** (`warp_amnezia`, `warp_amnezia_awg2`, `wgcf`, `awg2_random` / `awg2_dpi` для своего AWG-пира), запасной **`PublicKey`** пира, **`engage.cloudflareclient.com`** (резолвится клиентом WireGuard при подключении) с портами 2408/4500; опционально `AllowedIPs` по `presets`, `I1`/`i1Ref`/встроенный пресет, `PersistentKeepalive`, `plainAddress`. **`api/warpAmneziaCpsPayload.js`** — встроенная строка I1 для пресетов amnezia. Каталог **`api/cps-presets/`** — текстовые файлы для `i1Ref` (см. `README.txt` внутри).
-- **api/iplist.js** — метаданные пресетов и предпросмотр CIDR для выбранных пресетов.
-- **api/ipListFetch.js**, **api/routePresets.js** — запрос CIDR по доменам и каталог пресетов.
-- **README.md** — документация проекта.
+## Локальный запуск
 
-## 🤝 Вклад
+```bash
+npm install
+npm start
+```
 
-Если вы хотите внести изменения или улучшения в проект, пожалуйста:
+`npm start` вызывает `vercel dev`: поднимаются маршруты из `vercel.json` (`/api/*` → функции в `api/`, статика из `public/`).
 
-1. Создайте **форк** репозитория.
-2. Создайте новую ветку для ваших изменений:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-3. Внесите изменения и закоммитьте их:
-   ```bash
-   git commit -m "Добавлен новый функционал: ваш_функционал"
-   ```
-4. Отправьте изменения в ваш форк:
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-5. Создайте **пулл-реквест** в основной репозиторий.
+Открыть в браузере корень сайта (порт покажет CLI, обычно `http://localhost:3000`).
 
-## 📞 Контакты
+Если открыть только статические файлы из `public/` без `vercel dev`, интерфейс подгрузит список пресетов из `public/static/presets-fallback.json`, но вызовы `/api/iplist` и `/api/warp` работать не будут.
 
-По вопросам и предложениям обращайтесь:
-- **Discord**: [Присоединиться к серверу](https://discord.gg/XGNtYyGbmM)
-- **Веб-страница**: [Посетить веб-страницу](https://valokda.vercel.app/)
+## Деплой
 
-## 🚀 Star History
+Проект рассчитан на **Vercel**: в корне `vercel.json` (сборка `@vercel/node` для `api/**/*.js`, `@vercel/static` для `public/**/*`, переписывание `/api/(.*)` на `/api/$1.js`).
+
+Подключите репозиторий в панели Vercel или выполните `vercel` / `vercel --prod` из каталога проекта.
+
+## Структура репозитория
+
+| Путь | Назначение |
+|------|------------|
+| `public/index.html` | Точка входа UI |
+| `public/static/script.js`, `styles.css` | Логика и стили |
+| `public/static/presets-fallback.json` | Запасной каталог пресетов без API |
+| `api/warp.js` | Генерация WARP-конфига |
+| `api/iplist.js` | Список пресетов и предпросмотр CIDR |
+| `api/routePresets.js` | Каталог пресетов и DNS |
+| `api/ipListFetch.js` | Получение CIDR по доменам |
+| `api/warpAmneziaCpsPayload.js` | Встроенная цепочка для поля obfuscation (шаблоны `warp_amnezia*`) |
+| `api/cps-presets/` | Текстовые файлы для `i1Ref` |
+| `scripts/dump-presets-fallback.js` | Обновление `presets-fallback.json` из `routePresets.js` |
+| `SchedulerAmnezia.bat` | Шаблон планировщика Windows |
+
+## API
+
+### `GET` / `POST` `/api/warp`
+
+Возвращает JSON: `success`, при успехе — `content` (тело `.conf` в **base64**), `mode` (`legacy` | `awg2`), опционально `routesSource`, `routesPresets`, `presetSitesCount`.
+
+Параметры задаются query-строкой (`GET`) или полями JSON-тела (`POST`). Имена в теле совместимы с query (удобно для длинного `i1`).
+
+| Параметр | Описание |
+|----------|----------|
+| `mode` | `legacy` (по умолчанию) или `awg2` (алиасы: `2`, `v2`; также query `awg`) |
+| `presets` | Ключи пресетов через запятую или массив в JSON |
+| `dns` | Ключ пресета DNS; по умолчанию как в UI — cloudflare |
+| `template` | См. раздел «Шаблоны» |
+| `peerEndpoint`, `endpoint` | Полная строка `хост:порт` для `Endpoint` (если задана — используется как есть) |
+| `warpPort` | Порт, если endpoint собирается из ответа API или из шаблона engage |
+| `persistentKeepalive`, `keepalive` | Например `25`; `0` — строка keepalive не пишется |
+| `i1` | Сырая строка для CPS / obfuscation (AWG 2.0) |
+| `i1Ref` | Имя файла из `api/cps-presets/` |
+| `plainAddress` | `1` / `true` — в `Address` без `/32` и `/128` |
+
+Ошибки: JSON с `success: false`, `message`; коды 4xx/5xx по ситуации.
+
+### `GET` `/api/iplist`
+
+Без query-параметра `presets`: ответ со списком пресетов (`presets`, категории, `dnsPresets`, `dnsDefault` и т.д.).
+
+С `?presets=key1,key2`: разрешение доменов, затем `cidrs`, `sites`, счётчики. Неизвестные ключи — `400` с перечислением.
+
+## Шаблоны (`template`)
+
+| Значение | Назначение |
+|----------|------------|
+| *(нет)* + `mode=legacy` | Как `warp_amnezia` |
+| *(нет)* + `mode=awg2` | Как `warp_amnezia_awg2` |
+| `warp_amnezia`, `amnezia`, `amnezia_warp` | Legacy, engage-хост, встроенный I1 при отсутствии `i1`/`i1Ref`, `plainAddress`, keepalive 25 |
+| `warp_amnezia_awg2`, … | То же для peer/DNS/Address/i1, формат AWG 2.0, H1–H4 фиксированы 1..4 (совместимость с пиром Cloudflare) |
+| `wgcf` | `engage.cloudflareclient.com`, UDP **2408**, без встроенного I1 |
+| `awg2_random`, `awg2_dpi` | Случайные полосы H — **не** для WARP Cloudflare; свой endpoint задаёте сами |
+
+Поле **I1** / цепочка obfuscation в ответ Cloudflare не входит; источники: `i1`, `i1Ref` или встроенный payload для шаблонов `warp_amnezia*`.
+
+## Endpoint и порты
+
+- Если в JSON регистрации есть данные пира — приоритет у них (хост/порт), пока не переопределено `peerEndpoint` / `endpoint`.
+- Для шаблонов **`warp_amnezia`*** с хостом `engage.cloudflareclient.com` при каждой генерации выбирается один UDP-порт из **2408, 500, 1701, 4500** (как в документации Cloudflare для WireGuard WARP), если не заданы `warpPort` или полный `endpoint`.
+- Для **`wgcf`** порт engage фиксирован: **2408**.
+- При отсутствии хоста в JSON используются запасные IP и порт API (**3138**), см. код `api/warp.js`.
+
+## Ограничения AWG 2.0 для WARP
+
+Для пира Cloudflare в шаблоне `warp_amnezia_awg2` параметры подбираются так, чтобы не ломать рукопожатие: фиксированные **H1–H4 = 1..4**, **S1/S2 = 0**, **S3/S4** и **Jc/Jmin/Jmax** в допустимых по документации AmneziaWG 2.0 диапазонах (в т.ч. S1–S3 ≤ 64 байт, S4 ≤ 32, Jc 1–10, Jmin/Jmax 64–1024). В секции `[Interface]` для AWG 2.0 используется ключ **`i1`**, не `I1`.
+
+## Скрипты npm
+
+| Команда | Действие |
+|---------|----------|
+| `npm start` | `vercel dev` |
+| `npm run build` | Заглушка (сборка фронта не требуется) |
+| `npm run presets:fallback` | Пересобрать `public/static/presets-fallback.json` после правок `api/routePresets.js` |
+| `npm run lint` | `eslint .` (в монорепозитории с лишними каталогами может затронуть не только проект) |
+
+Для проверки одного файла: `npx eslint api/warp.js`.
+
+## Участие
+
+1. Форк репозитория.
+2. Ветка: `git checkout -b feature/краткое-описание`.
+3. Коммиты и push в форк.
+4. Pull request в основной репозиторий.
+
+## Контакты
+
+- Discord: [сервер](https://discord.gg/XGNtYyGbmM)
+- Веб-сайт сервера: [valokda.vercel.app](https://valokda.vercel.app/)
+
+## Star History
 
 <a href="https://star-history.com/#HereIamGosu/amnezia-config-gen&Date">
  <picture>
