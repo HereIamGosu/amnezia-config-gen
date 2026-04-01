@@ -341,7 +341,8 @@ const initSettingsPanel = async () => {
 };
 
 const downloadFile = (content, filename) => {
-  const blob = new Blob([content], { type: 'text/plain' });
+  // application/octet-stream avoids mobile browsers appending .txt to .conf (text/plain triggers that).
+  const blob = new Blob([content], { type: 'application/octet-stream' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = filename;
