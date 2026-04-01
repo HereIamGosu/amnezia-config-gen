@@ -427,37 +427,32 @@ const generateConfig = async (options) => {
   }
 };
 
-const downloadScheduler = async () => {
+/**
+ * @param {string} staticPath path relative to site root, e.g. static/SchedulerAmnezia-15.bat
+ * @param {string} downloadName filename for Save dialog
+ * @param {string} doneMessage status text on success
+ */
+const downloadSchedulerBat = async (staticPath, downloadName, doneMessage) => {
   const status = document.getElementById('status');
-  status.textContent = 'Скачивание файла планировщика...';
-
-  const SCHEDULER_URL = 'https://raw.githubusercontent.com/HereIamGosu/amnezia-config-gen/main/SchedulerAmnezia.bat';
+  status.textContent = 'Скачивание bat планировщика...';
+  const url = new URL(staticPath, window.location.href);
   try {
-    const response = await fetch(SCHEDULER_URL);
+    const response = await fetch(url.href);
     if (!response.ok) throw new Error(`Ошибка HTTP: ${response.status}`);
-
-    const blob = await response.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = blobUrl;
-    link.download = 'SchedulerAmnezia.bat';
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(blobUrl);
-
-    status.textContent = 'Файл планировщика успешно скачан!';
+    const text = await response.text();
+    downloadFile(text, downloadName);
+    status.textContent = doneMessage;
   } catch (error) {
-    console.error('Ошибка при скачивании файла:', error);
-    status.textContent = 'Не удалось скачать файл. Попробуйте позже.';
+    console.error('Ошибка при скачивании bat:', error);
+    status.textContent = 'Не удалось скачать bat. Нужен запуск сайта через хостинг (не file://) или скопируйте файлы из папки public/static репозитория.';
   }
 };
 
 document.addEventListener('DOMContentLoaded', () => {
   const generateButton = document.getElementById('generateButton');
   const generateButtonAwg2 = document.getElementById('generateButtonAwg2');
-  const schedulerButton = document.getElementById('schedulerButton');
+  const schedulerButton15 = document.getElementById('schedulerButton15');
+  const schedulerButton20 = document.getElementById('schedulerButton20');
 
   const legacyOptions = {
     buttonId: 'generateButton',
@@ -491,10 +486,28 @@ document.addEventListener('DOMContentLoaded', () => {
     console.error('Кнопка "generateButtonAwg2" не найдена.');
   }
 
-  if (schedulerButton) {
-    schedulerButton.addEventListener('click', downloadScheduler);
+  if (schedulerButton15) {
+    schedulerButton15.addEventListener('click', () =>
+      downloadSchedulerBat(
+        'static/SchedulerAmnezia-15.bat',
+        'SchedulerAmnezia-15.bat',
+        'Скачан планировщик для 1.5 (AmneziaWarp.conf).',
+      ),
+    );
   } else {
-    console.error('Кнопка "schedulerButton" не найдена.');
+    console.error('Кнопка "schedulerButton15" не найдена.');
+  }
+
+  if (schedulerButton20) {
+    schedulerButton20.addEventListener('click', () =>
+      downloadSchedulerBat(
+        'static/SchedulerAmnezia-20.bat',
+        'SchedulerAmnezia-20.bat',
+        'Скачан планировщик для 2.0 (AmneziaWarp-AWG2.conf).',
+      ),
+    );
+  } else {
+    console.error('Кнопка "schedulerButton20" не найдена.');
   }
 
   initSettingsPanel();
