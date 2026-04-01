@@ -226,13 +226,24 @@ button.button:disabled {
   background: linear-gradient(90deg, #27ae60, #0097a7);
 }
 
-/* Кнопка скачивания файла */
-#schedulerButton {
+/* Ряд кнопок планировщика Windows (1.5 / 2.0) */
+.buttons__scheduler-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.buttons__scheduler-row .button--scheduler {
+  flex: 1 1 calc(50% - 6px);
+  min-width: min(100%, 200px);
   background-color: #f15874;
   box-shadow: 0 4px 8px rgba(241, 88, 116, 0.2);
 }
 
-#schedulerButton:hover {
+.buttons__scheduler-row .button--scheduler:hover {
   background-color: #e14e65;
 }
 

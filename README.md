@@ -11,7 +11,7 @@
 - Два формата конфига: **Legacy** (`mode=legacy`) и **AmneziaWG 2.0** (`mode=awg2`).
 - Пресеты маршрутов: наборы доменов → агрегированные IPv4/IPv6 CIDR в `AllowedIPs`; без выбора — `0.0.0.0/0`, `::/0`.
 - Несколько пресетов DNS для строки `DNS` в конфиге.
-- Скачивание `.conf` и вспомогательного `SchedulerAmnezia.bat` (Windows, автозапуск через планировщик; путь к конфигу внутри bat нужно проверить под свою установку).
+- Скачивание `.conf` и двух шаблонов планировщика Windows: `public/static/SchedulerAmnezia-15.bat` (Legacy 1.5 → `AmneziaWarp.conf`) и `SchedulerAmnezia-20.bat` (AWG 2.0 → `AmneziaWarp-AWG2.conf`); путь к `amneziawg.exe` при необходимости правьте в bat.
 - Запросы к Cloudflare WARP API с повторными попытками при сетевых ошибках и ответах 429 / 502 / 503 / 504.
 
 ## Требования
@@ -54,7 +54,7 @@ npm start
 | `api/warpAmneziaCpsPayload.js` | Встроенная цепочка для поля obfuscation (шаблоны `warp_amnezia*`) |
 | `api/cps-presets/` | Текстовые файлы для `i1Ref` |
 | `scripts/dump-presets-fallback.js` | Обновление `presets-fallback.json` из `routePresets.js` |
-| `SchedulerAmnezia.bat` | Шаблон планировщика Windows |
+| `public/static/SchedulerAmnezia-15.bat`, `SchedulerAmnezia-20.bat` | Шаблоны планировщика Windows под 1.5 и 2.0 |
 
 ## API
 
