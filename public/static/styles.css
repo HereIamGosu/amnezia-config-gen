@@ -19,6 +19,24 @@ body {
   overflow: auto; /* Скрываем переполнение */
 }
 
+/* Match surrounding typography (browser default is monospace) */
+code,
+kbd,
+samp {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  padding: 0.1em 0.25em;
+  margin: 0 0.05em;
+  background-color: #d4d4d4;
+  border: 1px solid #808080;
+  border-radius: 2px;
+  vertical-align: baseline;
+  box-shadow: inset 1px 1px 0 #fff;
+}
+
 /* Анимация фона */
 sky {
   position: fixed; /* Фиксированное позиционирование */
@@ -52,8 +70,8 @@ star {
 
 /* Окно в стиле Windows 95 */
 .window {
-  width: 65vw;
-  max-width: 1200px;
+  width: 78vw;
+  max-width: 1400px;
   min-width: 300px; /* Минимальная ширина для маленьких экранов */
   margin: 0 auto;
   border: 2px solid #000080;
@@ -307,14 +325,16 @@ button.button--loading {
 }
 
 .instruction h2 {
-  font-size: 20px;
-  margin-bottom: 15px;
+  font-size: 16px;
+  margin-bottom: 12px;
   color: #000080;
+  line-height: 1.35;
 }
 
 .instruction ol {
   margin-left: 20px;
-  font-size: 16px;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .instruction a {
@@ -327,8 +347,9 @@ button.button--loading {
 }
 
 .instruction p {
-  font-size: 16px;
+  font-size: 12px;
   margin-top: 10px;
+  line-height: 1.55;
 }
 
 /* Стили для блока благодарности и рекламы сервера */
@@ -794,21 +815,21 @@ button.info-link {
 /* Для очень больших экранов */
 @media (min-width: 1201px) {
   .window {
-    width: 65vw;
+    width: 78vw;
   }
 }
 
 /* Для больших экранов (Laptop) */
 @media (max-width: 1200px) and (min-width: 1025px) {
   .window {
-    width: 75vw;
+    width: 88vw;
   }
 }
 
 /* Для средних экранов (Tablet) */
 @media (max-width: 1024px) and (min-width: 769px) {
   .window {
-    width: 85vw;
+    width: 92vw;
   }
   .donate-text {
     font-size: 11px;
@@ -882,15 +903,15 @@ button.info-link {
   }
 
   .instruction h2 {
-    font-size: 18px; /* Увеличиваем размер заголовка */
+    font-size: 14px;
   }
 
   .instruction ol {
-    font-size: 14px; /* Увеличиваем размер шрифта в списке */
+    font-size: 11px;
   }
 
   .instruction p {
-    font-size: 14px; /* Увеличиваем размер шрифта */
+    font-size: 11px;
   }
 
   .thank-you {
@@ -952,15 +973,15 @@ button.info-link {
   }
 
   .instruction h2 {
-    font-size: 16px; /* Увеличиваем размер заголовка */
+    font-size: 13px;
   }
 
   .instruction ol {
-    font-size: 12px; /* Увеличиваем размер шрифта в списке */
+    font-size: 11px;
   }
 
   .instruction p {
-    font-size: 12px; /* Увеличиваем размер шрифта */
+    font-size: 11px;
   }
 
   .thank-you {
