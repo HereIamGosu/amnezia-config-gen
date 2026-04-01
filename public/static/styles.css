@@ -377,6 +377,20 @@ button.button--loading {
   line-height: 1.3; /* Уменьшаем интервал между строками */
 }
 
+.thank-you p:last-child {
+  margin-bottom: 0;
+}
+
+/* Inline links inside thank-you blocks (not Discord / web buttons) */
+.thank-you a:not(.discord-link):not(.web-link) {
+  color: #0000ff;
+  text-decoration: underline;
+}
+
+.thank-you a:not(.discord-link):not(.web-link):hover {
+  color: #ff0000;
+}
+
 .buttons {
   display: flex;
   flex-direction: column;
