@@ -18,21 +18,13 @@
     <meta name="author" content="HereIamGosu" />
     <meta name="copyright" content="HereIamGosu" />
     <link rel="icon" href="static/favicon.ico" type="image/x-icon" />
-    <!-- Подключение шрифта Press Start 2P -->
+    <!-- Press Start 2P: прямой stylesheet (без preload+onload — иначе шрифт может не подгрузиться при CSP / без инлайн-скриптов) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      rel="preload"
+      rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
-      as="style"
-      onload="
-        this.onload = null;
-        this.rel = 'stylesheet';
-      "
     />
-    <noscript
-      ><link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
-    /></noscript>
     <!-- Подключение CSS -->
     <link rel="stylesheet" href="static/styles.css" />
     <!-- Подключение JavaScript -->
