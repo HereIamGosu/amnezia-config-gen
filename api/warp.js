@@ -37,7 +37,6 @@ const pickRandomWarpEngageUdpPort = () =>
 
 /** Tried when Cloudflare omits endpoint in JSON (best-effort anycast fallbacks). */
 const FALLBACK_ENDPOINT_HOSTS = ['188.114.97.66', '162.159.192.1'];
-const WARP_PORT = 3138;
 /** Max length of I1 CPS payload (AmneziaWG); avoids huge query/body abuse. */
 const MAX_I1_LEN = 512 * 1024;
 const I1_REF_SAFE = /^[a-zA-Z0-9._-]+$/;
@@ -502,7 +501,14 @@ const collectWarpGenExtras = (req, body) => {
       .toLowerCase() === '1' ||
     String(pa ?? '')
       .toLowerCase() === 'true';
-  return { peerEndpoint, warpPort, persistentKeepalive, i1Ref, i1Raw, plainAddress };
+  const rawRand = b.randomEngagePort ?? pickQuery(req, 'randomEngagePort');
+  const randomEngagePort =
+    rawRand === true ||
+    String(rawRand ?? '')
+      .toLowerCase() === '1' ||
+    String(rawRand ?? '')
+      .toLowerCase() === 'true';
+  return { peerEndpoint, warpPort, persistentKeepalive, i1Ref, i1Raw, plainAddress, randomEngagePort };
 };
 
 /**
@@ -517,8 +523,8 @@ const resolveTemplateOptions = (name) => {
   if (n === 'warp_amnezia' || n === 'amnezia' || n === 'amnezia_warp') {
     return {
       engageHost: ENGAGE_CLOUDFLARE_HOST,
-      defaultEngagePort: null,
-      useRandomOfficialEngagePort: true,
+      defaultEngagePort: WARP_PORT_WGCF_ENGAGE,
+      useRandomOfficialEngagePort: false,
       defaultKeepalive: 25,
       useEmbeddedAmneziaI1: true,
       plainAddress: true,
@@ -537,8 +543,8 @@ const resolveTemplateOptions = (name) => {
   ) {
     return {
       engageHost: ENGAGE_CLOUDFLARE_HOST,
-      defaultEngagePort: null,
-      useRandomOfficialEngagePort: true,
+      defaultEngagePort: WARP_PORT_WGCF_ENGAGE,
+      useRandomOfficialEngagePort: false,
       defaultKeepalive: 25,
       useEmbeddedAmneziaI1: true,
       plainAddress: true,
@@ -585,10 +591,14 @@ const resolveTemplateOptions = (name) => {
 const mergeTemplateIntoExtras = (extras, tmpl) => {
   const out = { ...extras };
   if (tmpl.engageHost) out.engageHost = tmpl.engageHost;
-  if (tmpl.engageHost && out.warpPort == null && tmpl.useRandomOfficialEngagePort) {
-    out.warpPort = pickRandomWarpEngageUdpPort();
-  } else if (tmpl.defaultEngagePort != null && out.warpPort == null) {
-    out.warpPort = tmpl.defaultEngagePort;
+  if (tmpl.engageHost && out.warpPort == null) {
+    if (out.randomEngagePort || tmpl.useRandomOfficialEngagePort) {
+      out.warpPort = pickRandomWarpEngageUdpPort();
+    } else if (tmpl.defaultEngagePort != null) {
+      out.warpPort = tmpl.defaultEngagePort;
+    } else {
+      out.warpPort = WARP_PORT_WGCF_ENGAGE;
+    }
   }
   if (tmpl.defaultKeepalive != null && out.persistentKeepalive == null) {
     out.persistentKeepalive = tmpl.defaultKeepalive;
@@ -614,11 +624,11 @@ const resolvePeerEndpointForConfig = (config, extras) => {
         ? extras.warpPort
         : extras.defaultEngagePort != null
           ? extras.defaultEngagePort
-          : WARP_PORT;
+          : WARP_PORT_WGCF_ENGAGE;
     return `${extras.engageHost}:${port}`;
   }
   const host = resolveEndpointHostWithFallback(config);
-  const port = extras.warpPort != null ? extras.warpPort : WARP_PORT;
+  const port = extras.warpPort != null ? extras.warpPort : WARP_PORT_WGCF_ENGAGE;
   return `${host}:${port}`;
 };
 
