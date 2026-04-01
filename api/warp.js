@@ -24,16 +24,13 @@ const KNOWN_WARP_PEER_PUBLIC_KEY = 'bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
  * WireGuard resolves `Endpoint` at connect time; keeping the hostname avoids stale anycast IPs in the file.
  */
 const ENGAGE_CLOUDFLARE_HOST = 'engage.cloudflareclient.com';
-/** wgcf / common WireGuard WARP profile port. */
-const WARP_PORT_WGCF_ENGAGE = 2408;
 /**
- * Cloudflare One Client firewall: WireGuard default UDP 2408; fallbacks 500, 1701, 4500.
- * Used for `warp_amnezia*` engage hostname — one port chosen per generation (unless overridden).
+ * Fixed UDP port for `engage.cloudflareclient.com` in this generator (no rotation).
+ * Aligns with typical working Amnezia 1.5 WARP exports. Standard wgcf profiles often use **2408**;
+ * override with query/body `warpPort` if your network requires it.
  * @see https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/deployment/firewall/
  */
-const WARP_WIREGUARD_ENGAGE_UDP_PORTS = Object.freeze([2408, 500, 1701, 4500]);
-const pickRandomWarpEngageUdpPort = () =>
-  WARP_WIREGUARD_ENGAGE_UDP_PORTS[randomInt(0, WARP_WIREGUARD_ENGAGE_UDP_PORTS.length)];
+const WARP_DEFAULT_ENGAGE_UDP_PORT = 4500;
 
 /** Tried when Cloudflare omits endpoint in JSON (best-effort anycast fallbacks). */
 const FALLBACK_ENDPOINT_HOSTS = ['188.114.97.66', '162.159.192.1'];
@@ -501,20 +498,13 @@ const collectWarpGenExtras = (req, body) => {
       .toLowerCase() === '1' ||
     String(pa ?? '')
       .toLowerCase() === 'true';
-  const rawRand = b.randomEngagePort ?? pickQuery(req, 'randomEngagePort');
-  const randomEngagePort =
-    rawRand === true ||
-    String(rawRand ?? '')
-      .toLowerCase() === '1' ||
-    String(rawRand ?? '')
-      .toLowerCase() === 'true';
-  return { peerEndpoint, warpPort, persistentKeepalive, i1Ref, i1Raw, plainAddress, randomEngagePort };
+  return { peerEndpoint, warpPort, persistentKeepalive, i1Ref, i1Raw, plainAddress };
 };
 
 /**
  * High-level presets: fixed engage host/ports and optional embedded I1 (AmneziaWG obfuscation chain; not from CF API).
  * @param {string} name query/body `template`
- * @returns {{ engageHost: string|null, defaultEngagePort: number|null, defaultKeepalive: number|null, useEmbeddedAmneziaI1: boolean, plainAddress: boolean, forceLegacy: boolean, awg2WarpSafe?: boolean, useRandomOfficialEngagePort?: boolean }}
+ * @returns {{ engageHost: string|null, defaultEngagePort: number|null, defaultKeepalive: number|null, useEmbeddedAmneziaI1: boolean, plainAddress: boolean, forceLegacy: boolean, awg2WarpSafe?: boolean }}
  */
 const resolveTemplateOptions = (name) => {
   const n = String(name ?? '')
@@ -523,8 +513,7 @@ const resolveTemplateOptions = (name) => {
   if (n === 'warp_amnezia' || n === 'amnezia' || n === 'amnezia_warp') {
     return {
       engageHost: ENGAGE_CLOUDFLARE_HOST,
-      defaultEngagePort: WARP_PORT_WGCF_ENGAGE,
-      useRandomOfficialEngagePort: false,
+      defaultEngagePort: WARP_DEFAULT_ENGAGE_UDP_PORT,
       defaultKeepalive: 25,
       useEmbeddedAmneziaI1: true,
       plainAddress: true,
@@ -543,8 +532,7 @@ const resolveTemplateOptions = (name) => {
   ) {
     return {
       engageHost: ENGAGE_CLOUDFLARE_HOST,
-      defaultEngagePort: WARP_PORT_WGCF_ENGAGE,
-      useRandomOfficialEngagePort: false,
+      defaultEngagePort: WARP_DEFAULT_ENGAGE_UDP_PORT,
       defaultKeepalive: 25,
       useEmbeddedAmneziaI1: true,
       plainAddress: true,
@@ -567,7 +555,7 @@ const resolveTemplateOptions = (name) => {
   if (n === 'wgcf') {
     return {
       engageHost: ENGAGE_CLOUDFLARE_HOST,
-      defaultEngagePort: WARP_PORT_WGCF_ENGAGE,
+      defaultEngagePort: WARP_DEFAULT_ENGAGE_UDP_PORT,
       defaultKeepalive: null,
       useEmbeddedAmneziaI1: false,
       plainAddress: false,
@@ -592,13 +580,8 @@ const mergeTemplateIntoExtras = (extras, tmpl) => {
   const out = { ...extras };
   if (tmpl.engageHost) out.engageHost = tmpl.engageHost;
   if (tmpl.engageHost && out.warpPort == null) {
-    if (out.randomEngagePort || tmpl.useRandomOfficialEngagePort) {
-      out.warpPort = pickRandomWarpEngageUdpPort();
-    } else if (tmpl.defaultEngagePort != null) {
-      out.warpPort = tmpl.defaultEngagePort;
-    } else {
-      out.warpPort = WARP_PORT_WGCF_ENGAGE;
-    }
+    out.warpPort =
+      tmpl.defaultEngagePort != null ? tmpl.defaultEngagePort : WARP_DEFAULT_ENGAGE_UDP_PORT;
   }
   if (tmpl.defaultKeepalive != null && out.persistentKeepalive == null) {
     out.persistentKeepalive = tmpl.defaultKeepalive;
@@ -624,11 +607,11 @@ const resolvePeerEndpointForConfig = (config, extras) => {
         ? extras.warpPort
         : extras.defaultEngagePort != null
           ? extras.defaultEngagePort
-          : WARP_PORT_WGCF_ENGAGE;
+          : WARP_DEFAULT_ENGAGE_UDP_PORT;
     return `${extras.engageHost}:${port}`;
   }
   const host = resolveEndpointHostWithFallback(config);
-  const port = extras.warpPort != null ? extras.warpPort : WARP_PORT_WGCF_ENGAGE;
+  const port = extras.warpPort != null ? extras.warpPort : WARP_DEFAULT_ENGAGE_UDP_PORT;
   return `${host}:${port}`;
 };
 

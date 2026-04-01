@@ -71,8 +71,7 @@ npm start
 | `dns` | Ключ пресета DNS; по умолчанию как в UI — cloudflare |
 | `template` | См. раздел «Шаблоны» |
 | `peerEndpoint`, `endpoint` | Полная строка `хост:порт` для `Endpoint` (если задана — используется как есть) |
-| `warpPort` | Порт UDP для `engage…` или IP-fallback (по умолчанию для WARP-шаблонов **2408**) |
-| `randomEngagePort` | `1` / `true` — вместо 2408 случайно **2408, 500, 1701, 4500** (только если нужен обход блокировки 2408; на мобильных сетях чаще хуже) |
+| `warpPort` | Порт UDP для `engage…` или IP-fallback (по умолчанию для WARP-шаблонов **4500**; для классического wgcf часто **2408**) |
 | `persistentKeepalive`, `keepalive` | Например `25`; `0` — строка keepalive не пишется |
 | `i1` | Сырая строка для CPS / obfuscation (AWG 2.0) |
 | `i1Ref` | Имя файла из `api/cps-presets/` |
@@ -94,7 +93,7 @@ npm start
 | *(нет)* + `mode=awg2` | Как `warp_amnezia_awg2` |
 | `warp_amnezia`, `amnezia`, `amnezia_warp` | Legacy, engage-хост, встроенный I1 при отсутствии `i1`/`i1Ref`, `plainAddress`, keepalive 25 |
 | `warp_amnezia_awg2`, … | То же для peer/DNS/Address/i1, формат AWG 2.0, H1–H4 фиксированы 1..4 (совместимость с пиром Cloudflare) |
-| `wgcf` | `engage.cloudflareclient.com`, UDP **2408**, без встроенного I1 |
+| `wgcf` | `engage.cloudflareclient.com`, UDP **4500** (как в экспорте Amnezia 1.5 здесь), без встроенного I1 |
 | `awg2_random`, `awg2_dpi` | Случайные полосы H — **не** для WARP Cloudflare; свой endpoint задаёте сами |
 
 Поле **I1** / цепочка obfuscation в ответ Cloudflare не входит; источники: `i1`, `i1Ref` или встроенный payload для шаблонов `warp_amnezia*`.
@@ -102,9 +101,8 @@ npm start
 ## Endpoint и порты
 
 - Если в JSON регистрации есть данные пира — приоритет у них (хост/порт), пока не переопределено `peerEndpoint` / `endpoint`.
-- Для шаблонов **`warp_amnezia`*** по умолчанию **`engage.cloudflareclient.com:2408`** (как **wgcf**). Случайный порт из **500 / 1701 / 4500** на части мобильных операторов **блокируется** или ведёт себя нестабильно — поэтому генератор больше не ротирует порт без запроса. Явная ротация: **`randomEngagePort=1`** или свой **`warpPort`**.
-- Для **`wgcf`** порт engage: **2408**.
-- Если хост берётся из запасных IP (редкий случай), порт WireGuard по умолчанию **2408** (не путать с HTTPS **443** к API регистрации).
+- Для шаблонов **`warp_amnezia`*** и **`wgcf`** по умолчанию фиксированно **`engage.cloudflareclient.com:4500`** (без ротации портов), как в типичном рабочем конфиге Amnezia 1.5. Нужен **2408** (как у чистого wgcf) — задайте **`warpPort=2408`**.
+- Если хост берётся из запасных IP (редкий случай), порт WireGuard по умолчанию **4500** (не путать с HTTPS **443** к API регистрации).
 
 ### Симптомы «нет интернета» / «подключился, сайты не грузятся»
 
