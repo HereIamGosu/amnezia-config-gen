@@ -147,6 +147,11 @@ const ROUTE_PRESETS = {
     popular: true,
     sites: ['animego.ru', 'animego.org', 'animego.me', 'animego.la'],
   },
+  roblox: {
+    label: 'Roblox',
+    category: 'more',
+    sites: ['roblox.com'],
+  },
   hdrezka: {
     label: 'HDrezka',
     category: 'more',
