@@ -154,15 +154,15 @@ const pickAwg2JunkDocCompliant = () => {
  * payloads stay under path MTU (see amneziawg-go RoutineSequentialSender + user docs).
  * Peers that send stock WireGuard (no S4 prefix) require S4=0 in config; see buildAwg2WarpSafeObfuscation.
  */
-const AWG2_TUN_MTU_BASE = 1420;
+const AWG2_TUN_MTU_BASE = 1280;
 const AWG2_TUN_MTU_FLOOR = 1280;
 /**
  * WARP-safe MTU for stock WireGuard peer (Cloudflare).
- * WireGuard overhead is ~60 bytes (IPv4+UDP+WG header); 1420 is standard for WG tunnels
+ * WireGuard overhead is ~60 bytes (IPv4+UDP+WG header); 1280 is standard for WG tunnels
  * over typical 1500-byte MTU links. 1280 was overly conservative and cost ~140 bytes/pkt.
- * Cloudflare WARP clients (wgcf, official 1.1.1.1 app) use 1420 by default.
+ * Cloudflare WARP clients (wgcf, official 1.1.1.1 app) use 1280 by default.
  */
-const AWG2_MTU_STOCK_PEER = 1420;
+const AWG2_MTU_STOCK_PEER = 1280;
 
 /**
  * @param {number} s4
@@ -251,7 +251,7 @@ const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6, dnsLine, i1Option
     `PrivateKey = ${privKey}`,
     addrLine,
     `DNS = ${dnsLine}`,
-    'MTU = 1420',
+    'MTU = 1280',
     'S1 = 0',
     'S2 = 0',
     'Jc = 120',
