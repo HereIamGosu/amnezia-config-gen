@@ -6,14 +6,29 @@ const fs = require('fs').promises;
 const path = require('path');
 const { expandPresetsToSites, parsePresetKeysFromRequest, getDnsString, parseDnsKeyFromRequest, DNS_DEFAULT_KEY } = require('./routePresets');
 const { fetchCidrsForDomains } = require('./ipListFetch');
+const { createRateLimiter } = require('./_rateLimit');
+
+/** 10 generations per minute per IP — prevents Cloudflare WARP registration abuse. */
+const warpLimiter = createRateLimiter({ windowMs: 60_000, maxHits: 10 });
 
 /** Embedded AmneziaWG I1 obfuscation chain (`<b 0x…>`); not provided by Cloudflare JSON. */
-let warpAmneziaCpsPayload = '';
+let warpAmneziaCpsPayloadStatic = '';
 try {
-  warpAmneziaCpsPayload = require('./warpAmneziaCpsPayload');
+  warpAmneziaCpsPayloadStatic = require('./warpAmneziaCpsPayload');
 } catch {
-  warpAmneziaCpsPayload = '';
+  warpAmneziaCpsPayloadStatic = '';
 }
+
+/**
+ * Generate a fresh random I1 CPS payload (`<b 0xHEX>`).
+ * Length randomised within [800, 1300] bytes — same ballpark as the static preset (~1250 bytes)
+ * but unique per config generation to defeat DPI signature matching.
+ */
+const generateRandomI1Payload = () => {
+  const len = randomInt(800, 1301);
+  const buf = require('crypto').randomBytes(len);
+  return `<b 0x${buf.toString('hex')}>`;
+};
 
 const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0', '::/0'];
 
@@ -58,6 +73,23 @@ const AWG2_H_MAX = 0x7fffffff;
 const AWG2_MIN_H_BAND = 65536;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Validate IPv4 address (e.g. 172.16.0.2). */
+const isValidIPv4 = (s) => {
+  if (typeof s !== 'string') return false;
+  const parts = s.split('.');
+  if (parts.length !== 4) return false;
+  return parts.every((p) => {
+    const n = Number(p);
+    return /^\d{1,3}$/.test(p) && n >= 0 && n <= 255;
+  });
+};
+
+/** Validate IPv6 address (simplified: 2-8 hex groups separated by colons, allows ::). */
+const isValidIPv6 = (s) => {
+  if (typeof s !== 'string') return false;
+  return /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/.test(s) || /^::$/.test(s);
+};
 
 /**
  * Random non-overlapping H1..H4 ranges; runtime each packet uses a random value inside its band.
@@ -124,8 +156,13 @@ const pickAwg2JunkDocCompliant = () => {
  */
 const AWG2_TUN_MTU_BASE = 1420;
 const AWG2_TUN_MTU_FLOOR = 1280;
-/** Same as legacy WARP in this project; safe on IPv4 tunnels and matches proven WARP exports. */
-const AWG2_MTU_STOCK_PEER = 1280;
+/**
+ * WARP-safe MTU for stock WireGuard peer (Cloudflare).
+ * WireGuard overhead is ~60 bytes (IPv4+UDP+WG header); 1420 is standard for WG tunnels
+ * over typical 1500-byte MTU links. 1280 was overly conservative and cost ~140 bytes/pkt.
+ * Cloudflare WARP clients (wgcf, official 1.1.1.1 app) use 1420 by default.
+ */
+const AWG2_MTU_STOCK_PEER = 1420;
 
 /**
  * @param {number} s4
@@ -214,7 +251,7 @@ const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6, dnsLine, i1Option
     `PrivateKey = ${privKey}`,
     addrLine,
     `DNS = ${dnsLine}`,
-    'MTU = 1280',
+    'MTU = 1420',
     'S1 = 0',
     'S2 = 0',
     'Jc = 120',
@@ -620,8 +657,14 @@ const resolveI1ForGeneration = async (extras) => {
     return normalizeI1Payload(extras.i1Raw);
   }
   if (extras.i1Ref) return normalizeI1Payload(await loadI1FromRef(extras.i1Ref));
-  if (extras.useEmbeddedAmneziaI1 && warpAmneziaCpsPayload) {
-    return normalizeI1Payload(warpAmneziaCpsPayload);
+  if (extras.useEmbeddedAmneziaI1) {
+    // Generate a unique random I1 per config to defeat DPI fingerprinting.
+    // Falls back to static payload only if crypto is somehow unavailable.
+    try {
+      return normalizeI1Payload(generateRandomI1Payload());
+    } catch {
+      if (warpAmneziaCpsPayloadStatic) return normalizeI1Payload(warpAmneziaCpsPayloadStatic);
+    }
   }
   return '';
 };
@@ -827,7 +870,13 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
   const config = await mergeConfigAfterWarp(id, token, initialConfig);
   let peerPub = config.peers[0]?.public_key;
   if (!peerPub) peerPub = KNOWN_WARP_PEER_PUBLIC_KEY;
-  const { v4: clientIPv4, v6: clientIPv6 } = config.interface.addresses;
+  const { v4: clientIPv4, v6: clientIPv6 } = config.interface?.addresses ?? {};
+  if (!clientIPv4 || !isValidIPv4(clientIPv4)) {
+    throw new Error(`Cloudflare вернул некорректный IPv4 адрес: ${clientIPv4 || '(пусто)'}`);
+  }
+  if (!clientIPv6 || !isValidIPv6(clientIPv6)) {
+    throw new Error(`Cloudflare вернул некорректный IPv6 адрес: ${clientIPv6 || '(пусто)'}`);
+  }
 
   const peerEndpoint = resolvePeerEndpointForConfig(config, warpExtras);
 
@@ -863,6 +912,14 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
 module.exports = async (req, res) => {
   if (req.method !== 'GET' && req.method !== 'POST') {
     res.status(405).json({ success: false, message: 'Метод не поддерживается.' });
+    return;
+  }
+
+  const { allowed, remaining, retryAfterMs } = warpLimiter.check(req);
+  res.setHeader('X-RateLimit-Remaining', String(remaining));
+  if (!allowed) {
+    res.setHeader('Retry-After', String(Math.ceil(retryAfterMs / 1000)));
+    res.status(429).json({ success: false, message: 'Слишком много запросов. Попробуйте позже.' });
     return;
   }
 
