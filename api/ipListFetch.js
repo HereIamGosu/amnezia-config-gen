@@ -9,6 +9,32 @@ const RETRY_MAX = 5;
 const RETRY_BASE_MS = 400;
 const RETRY_MAX_MS = 10000;
 
+/** In-memory CIDR cache: keyed by sorted comma-joined hostnames, TTL 10 min. */
+const CIDR_CACHE_TTL_MS = 10 * 60 * 1000;
+const CIDR_CACHE_MAX_ENTRIES = 200;
+/** @type {Map<string, { cidrs: string[], ts: number }>} */
+const cidrCache = new Map();
+
+const cidrCacheKey = (sites) => sites.slice().sort().join(',');
+
+const cidrCacheGet = (key) => {
+  const entry = cidrCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > CIDR_CACHE_TTL_MS) {
+    cidrCache.delete(key);
+    return null;
+  }
+  return entry.cidrs;
+};
+
+const cidrCacheSet = (key, cidrs) => {
+  if (cidrCache.size >= CIDR_CACHE_MAX_ENTRIES) {
+    const oldest = cidrCache.keys().next().value;
+    cidrCache.delete(oldest);
+  }
+  cidrCache.set(key, { cidrs, ts: Date.now() });
+};
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const isTransient = (err) => {
@@ -131,7 +157,7 @@ const fetchWithRetry = async (path) => {
 };
 
 /**
- * Fetch and merge IPv4+IPv6 CIDRs for hostnames.
+ * Fetch and merge IPv4+IPv6 CIDRs for hostnames (with in-memory cache, TTL 10 min).
  * @param {string[]} sites unique hostnames
  * @returns {Promise<string[]>}
  */
@@ -139,18 +165,23 @@ const fetchCidrsForDomains = async (sites) => {
   if (!sites.length) {
     return [];
   }
+  const cacheKey = cidrCacheKey(sites);
+  const cached = cidrCacheGet(cacheKey);
+  if (cached) return cached;
+
   const path4 = buildIpListPath(sites, 'cidr4');
   const data4 = await fetchWithRetry(path4);
   const merged = flattenCidrMap(data4);
-  let path6;
   try {
-    path6 = buildIpListPath(sites, 'cidr6');
+    const path6 = buildIpListPath(sites, 'cidr6');
     const data6 = await fetchWithRetry(path6);
     for (const c of flattenCidrMap(data6)) merged.add(c);
   } catch {
     /* IPv6 optional — many configs work with IPv4-only AllowedIPs */
   }
-  return Array.from(merged).sort();
+  const result = Array.from(merged).sort();
+  cidrCacheSet(cacheKey, result);
+  return result;
 };
 
 module.exports = {
