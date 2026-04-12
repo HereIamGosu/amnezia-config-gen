@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Генератор конфигураций AmneziaWG - Быстро и Просто</title>
+    <title>Генератор конфигов AmneziaWG — Cloudflare WARP бесплатно</title>
     <meta
       name="description"
-      content="Генерация конфигурации для AmneziaWG. Скачайте конфиг и настройте автоматический запуск. Быстрое и удобное решение для пользователей AmneziaWG на Windows."
+      content="Онлайн-генератор конфигураций AmneziaWG 1.5 и 2.0 на базе Cloudflare WARP. Без сервера, без регистрации. Работает на Windows, Android, iOS, Linux."
     />
     <meta
       name="keywords"
@@ -75,18 +75,18 @@
     </noscript>
     <!-- /Yandex.Metrika counter -->
     <!-- Open Graph для социальных сетей -->
-    <meta property="og:site_name" content="Генератор конфигураций AmneziaWG" />
+    <meta property="og:site_name" content="Генератор конфигов AmneziaWG" />
     <meta
       property="og:title"
-      content="Генерация конфигурации AmneziaWG - Быстро и Просто"
+      content="Генератор конфигов AmneziaWG — Cloudflare WARP бесплатно"
     />
     <meta
       property="og:description"
-      content="Генерация конфигурации для AmneziaWG. Скачайте конфиг и настройте автоматический запуск. Быстрое и удобное решение для пользователей AmneziaWG на Windows."
+      content="Онлайн-генератор конфигураций AmneziaWG 1.5 и 2.0 на базе Cloudflare WARP. Без сервера, без регистрации. Windows, Android, iOS, Linux."
     />
     <meta
       property="og:image"
-      content="https://valokda-amnezia.vercel.app/static/favicon.ico"
+      content="https://valokda-amnezia.vercel.app/static/og-preview.png"
     />
     <meta property="og:url" content="https://valokda-amnezia.vercel.app/" />
     <meta property="og:type" content="website" />
@@ -95,33 +95,75 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta
       name="twitter:title"
-      content="Генерация конфигурации AmneziaWG - Быстро и Просто"
+      content="Генератор конфигов AmneziaWG — Cloudflare WARP бесплатно"
     />
     <meta
       name="twitter:description"
-      content="Генерация конфигурации для AmneziaWG. Скачайте конфиг и настройте автоматический запуск. Удобно и быстро для пользователей AmneziaWG на Windows."
+      content="Онлайн-генератор конфигураций AmneziaWG 1.5 и 2.0 на базе Cloudflare WARP. Без сервера, без регистрации. Windows, Android, iOS, Linux."
     />
     <meta
       name="twitter:image"
-      content="https://valokda-amnezia.vercel.app/static/favicon.ico"
+      content="https://valokda-amnezia.vercel.app/static/og-preview.png"
     />
-    <meta name="twitter:creator" content="@YourTwitterHandle" />
     <!-- Манифест для PWA -->
     <link rel="manifest" href="/static/manifest.json" />
     <!-- Canonical URL -->
     <link rel="canonical" href="https://valokda-amnezia.vercel.app/" />
     <!-- Structured Data (JSON-LD) -->
     <script type="application/ld+json">
-      {
-        "@context": "http://schema.org",
-        "@type": "WebSite",
-        "name": "Генератор конфигураций AmneziaWG",
-        "url": "https://valokda-amnezia.vercel.app/",
-        "potentialAction": {
-          "@type": "InteractAction",
-          "name": "Сгенерировать"
+      [
+        {
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          "name": "Генератор конфигов AmneziaWG",
+          "url": "https://valokda-amnezia.vercel.app/",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://valokda-amnezia.vercel.app/",
+            "query-input": "required name=search_term_string"
+          }
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "SoftwareApplication",
+          "name": "Генератор конфигов AmneziaWG",
+          "applicationCategory": "NetworkingApplication",
+          "operatingSystem": "Windows, Android, iOS, Linux",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "RUB"
+          },
+          "url": "https://valokda-amnezia.vercel.app/",
+          "description": "Онлайн-генератор конфигураций AmneziaWG 1.5 и 2.0 на базе Cloudflare WARP. Без сервера, без регистрации."
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "HowTo",
+          "name": "Как настроить AmneziaWG через Cloudflare WARP",
+          "description": "Пошаговая инструкция по генерации и установке конфигурации AmneziaWG.",
+          "step": [
+            {
+              "@type": "HowToStep",
+              "position": 1,
+              "name": "Скачайте и установите AmneziaWG",
+              "text": "Перейдите на GitHub amnezia-vpn и скачайте установочный файл для вашей ОС."
+            },
+            {
+              "@type": "HowToStep",
+              "position": 2,
+              "name": "Сгенерируйте конфигурационный файл",
+              "text": "Нажмите «Сгенерировать AWG 1.5» или «Сгенерировать AWG 2.0» и сохраните файл в папку Загрузки."
+            },
+            {
+              "@type": "HowToStep",
+              "position": 3,
+              "name": "Запустите планировщик",
+              "text": "Скачайте bat-файл планировщика и запустите от имени администратора — AmneziaWG будет стартовать автоматически."
+            }
+          ]
         }
-      }
+      ]
     </script>
     <!-- Подключение Font Awesome (если необходимо) -->
     <link
@@ -190,20 +232,24 @@
           <main class="container">
             <!-- Заголовок страницы с логотипом -->
             <header>
-              <img src="static/among-us-imposter.gif" alt="Логотип" />
+              <img
+                src="static/among-us-imposter.gif"
+                alt="Генератор конфигов AmneziaWG — логотип"
+              />
             </header>
 
             <!-- Сообщение о конфигурации и файле планировщика -->
             <div class="info-message">
               <p>
                 Конфигурацию можно сгенерировать для любых устройств. По
-                умолчанию весь трафик идёт через туннель.                 Пресеты маршрутов и DNS можно задать в модальном окне по кнопке
+                умолчанию весь трафик идёт через туннель. Пресеты маршрутов и
+                DNS можно задать в модальном окне по кнопке
                 <strong>⚙</strong> рядом с кнопками генерации.
               </p>
               <p>
-                Для Windows — два отдельных <strong>.bat</strong> под версию клиента:
-                <strong>1.5 (Legacy)</strong> и <strong>2.0</strong>; в каждом указан свой
-                файл конфига в «Загрузках».
+                Для Windows — два отдельных <strong>.bat</strong> под версию
+                клиента: <strong>1.5 (Legacy)</strong> и <strong>2.0</strong>; в
+                каждом указан свой файл конфига в «Загрузках».
               </p>
             </div>
 
@@ -228,7 +274,9 @@
                   aria-expanded="false"
                   aria-controls="settingsModal"
                   title="Настройки конфигурации"
-                >⚙</button>
+                >
+                  ⚙
+                </button>
               </div>
 
               <button type="button" id="infoLink" class="info-link">
@@ -236,7 +284,11 @@
               </button>
 
               <!-- Планировщик Windows: отдельные bat под 1.5 и 2.0 -->
-              <div class="buttons__scheduler-row" role="group" aria-label="Скачать bat планировщика">
+              <div
+                class="buttons__scheduler-row"
+                role="group"
+                aria-label="Скачать bat планировщика"
+              >
                 <button
                   type="button"
                   id="schedulerButton15"
@@ -272,7 +324,7 @@
                   >
                     ссылке для скачивания
                   </a>
-                   и загрузите установочный файл для Windows. Установите по
+                  и загрузите установочный файл для Windows. Установите по
                   стандартному пути "C:\Program Files\...".
                 </li>
 
@@ -284,9 +336,8 @@
                   <code>AmneziaWarp.conf</code>) или
                   <strong>«Сгенерировать AWG 2.0»</strong> (файл
                   <code>AmneziaWarp-AWG2.conf</code>) — в зависимости от версии
-                  клиента. Сохраните конфиг в папку
-                  <strong>«Загрузки»</strong>: bat планировщика ожидает именно эти
-                  имена файлов.
+                  клиента. Сохраните конфиг в папку <strong>«Загрузки»</strong>:
+                  bat планировщика ожидает именно эти имена файлов.
                 </li>
 
                 <!-- Шаг 3: Загрузка и запуск файла планировщика -->
@@ -294,8 +345,9 @@
                   <strong>Загрузка и запуск bat планировщика:</strong><br />
                   Скачайте
                   <strong>«Планировщик для 1.5»</strong> или
-                  <strong>«Планировщик для 2.0»</strong> — тот, что соответствует
-                  вашему конфигу. Запустите выбранный <code>.bat</code>
+                  <strong>«Планировщик для 2.0»</strong> — тот, что
+                  соответствует вашему конфигу. Запустите выбранный
+                  <code>.bat</code>
                   <strong>от имени администратора</strong> один раз: будет
                   создана задача в планировщике Windows при входе в систему. При
                   смене версии клиента удалите старую задачу в
@@ -315,13 +367,15 @@
               <div class="thank-you-content">
                 <p>
                   Чуваки, а особенно сетевики, я очень рад, что моя поделка
-                  пользуется спросом. Я часто не понимаю, работает ли это; мир слишком переменчив. Всегда буду рад дружбе с
-                  вами, приходите в гости -
+                  пользуется спросом. Я часто не понимаю, работает ли это; мир
+                  слишком переменчив. Всегда буду рад дружбе с вами, приходите в
+                  гости -
                   <a
-                    href="https://t.me/+zzLANfsZVlJmYmMy"
+                    href="https://t.me/amnezia_config"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Telegram-канал</a>.
+                    >Telegram-канал</a
+                  >.
                 </p>
               </div>
             </section>
@@ -401,14 +455,26 @@
         <div class="info-section">
           <h3 class="info-section__title">&#x1F310; Маршруты и AllowedIPs</h3>
           <p>
-            По умолчанию весь трафик идёт через туннель
-            (<strong>AllowedIPs = 0.0.0.0/0, ::/0</strong>).
-            В настройках (кнопка ⚙) можно выбрать DNS-сервер и пресеты — тогда
-            через туннель пойдут только нужные подсети.
+            По умолчанию весь трафик идёт через туннель (<strong
+              >AllowedIPs = 0.0.0.0/0, ::/0</strong
+            >). В настройках (кнопка ⚙) можно выбрать DNS-сервер и пресеты —
+            тогда через туннель пойдут только нужные подсети.
           </p>
           <p>
-            IP-диапазоны можно заменить вручную. Актуальные списки —
-            на <a href="https://iplist.opencck.org/ru" target="_blank" rel="noopener noreferrer">opencck.org</a> и <a href="https://rockblack.pro/vpn/dopolnitelno/diapazon-ip-adresov" target="_blank" rel="noopener noreferrer">rockblack.pro</a>.
+            IP-диапазоны можно заменить вручную. Актуальные списки — на
+            <a
+              href="https://iplist.opencck.org/ru"
+              target="_blank"
+              rel="noopener noreferrer"
+              >opencck.org</a
+            >
+            и
+            <a
+              href="https://rockblack.pro/vpn/dopolnitelno/diapazon-ip-adresov"
+              target="_blank"
+              rel="noopener noreferrer"
+              >rockblack.pro</a
+            >.
           </p>
         </div>
 
@@ -417,7 +483,9 @@
           <h3 class="info-section__title">&#x2139; AWG 1.5 vs AWG 2.0</h3>
           <div class="info-compare">
             <div class="info-compare__col">
-              <div class="info-compare__label info-compare__label--legacy">AWG 1.5 (Legacy)</div>
+              <div class="info-compare__label info-compare__label--legacy">
+                AWG 1.5 (Legacy)
+              </div>
               <ul class="info-list">
                 <li>Статические параметры обфускации (Jc, S1–S4, H1–H4)</li>
                 <li>Маскирует только начало соединения</li>
@@ -426,9 +494,13 @@
               </ul>
             </div>
             <div class="info-compare__col">
-              <div class="info-compare__label info-compare__label--awg2">AWG 2.0</div>
+              <div class="info-compare__label info-compare__label--awg2">
+                AWG 2.0
+              </div>
               <ul class="info-list">
-                <li>Динамические заголовки + случайный padding во всех пакетах</li>
+                <li>
+                  Динамические заголовки + случайный padding во всех пакетах
+                </li>
                 <li>Имитирует QUIC/DNS на протяжении всей сессии</li>
                 <li>Сложнее для эвристического DPI-анализа</li>
                 <li>Требует клиент ≥ 4.8.12.9 (Amnezia)</li>
@@ -439,20 +511,28 @@
 
         <!-- Секция 3: Нужен ли сервер для AWG 2.0 -->
         <div class="info-section">
-          <h3 class="info-section__title">&#x26A0; Нужен ли сервер для AWG 2.0?</h3>
+          <h3 class="info-section__title">
+            &#x26A0; Нужен ли сервер для AWG 2.0?
+          </h3>
           <p>
             <strong>Для Cloudflare WARP — нет.</strong> Конфиги этого генератора
-            работают с публичным сервером Cloudflare без каких-либо настроек на стороне сервера.
+            работают с публичным сервером Cloudflare без каких-либо настроек на
+            стороне сервера.
           </p>
           <p>
             <strong>Для своего сервера — да.</strong> Самостоятельный AWG 2.0
             требует обновлённого ядра/модуля
             <code>amneziawg-linux-kernel-module</code> на сервере и новых
             конфигов клиентов (старые конфиги AWG 1.5 становятся несовместимы).
-            Подробнее — в <a href="https://docs.amnezia.org/documentation/instructions/new-amneziawg-selfhosted/" target="_blank" rel="noopener noreferrer">официальной документации</a>.
+            Подробнее — в
+            <a
+              href="https://docs.amnezia.org/documentation/instructions/new-amneziawg-selfhosted/"
+              target="_blank"
+              rel="noopener noreferrer"
+              >официальной документации</a
+            >.
           </p>
         </div>
-
       </div>
     </div>
 
@@ -486,13 +566,18 @@
           <fieldset class="settings-panel__group">
             <legend>Пресеты маршрутов (AllowedIPs)</legend>
             <p class="settings-panel__hint">
-              Отметьте пресеты — при генерации их подсети (IPv4 и IPv6)
-              будут запрошены и объединены в <strong>AllowedIPs</strong>. Если ничего
-              не выбрано, туннель охватывает весь трафик
-              (<strong>0.0.0.0/0, ::/0</strong>).
+              Отметьте пресеты — при генерации их подсети (IPv4 и IPv6) будут
+              запрошены и объединены в <strong>AllowedIPs</strong>. Если ничего
+              не выбрано, туннель охватывает весь трафик (<strong
+                >0.0.0.0/0, ::/0</strong
+              >).
             </p>
             <div class="cfg-tiles-actions">
-              <button type="button" class="cfg-tiles-action" id="presetRfPopular">
+              <button
+                type="button"
+                class="cfg-tiles-action"
+                id="presetRfPopular"
+              >
                 Основной набор
               </button>
               <button type="button" class="cfg-tiles-action" id="presetClear">
@@ -503,11 +588,20 @@
             <h3 class="settings-modal__subsection">
               Социальные сети и мессенджеры
             </h3>
-            <div id="routeTilesSocial" class="cfg-tiles cfg-tiles--routes"></div>
+            <div
+              id="routeTilesSocial"
+              class="cfg-tiles cfg-tiles--routes"
+            ></div>
             <h3 class="settings-modal__subsection">Игровые платформы</h3>
-            <div id="routeTilesGaming" class="cfg-tiles cfg-tiles--routes"></div>
+            <div
+              id="routeTilesGaming"
+              class="cfg-tiles cfg-tiles--routes"
+            ></div>
             <h3 class="settings-modal__subsection">Торрент-трекеры</h3>
-            <div id="routeTilesTorrent" class="cfg-tiles cfg-tiles--routes"></div>
+            <div
+              id="routeTilesTorrent"
+              class="cfg-tiles cfg-tiles--routes"
+            ></div>
             <h3 class="settings-modal__subsection">Дополнительно</h3>
             <div id="routeTilesMore" class="cfg-tiles cfg-tiles--routes"></div>
           </fieldset>
