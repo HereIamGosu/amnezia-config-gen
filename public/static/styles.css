@@ -549,6 +549,74 @@ button.info-link {
   overflow-wrap: anywhere;
 }
 
+/* Info modal — wider on desktop */
+.modal-content--info {
+  max-width: 720px;
+  width: min(94vw, 720px);
+}
+
+/* Info sections */
+.info-section {
+  border-top: 2px solid #808080;
+  padding-top: 10px;
+  margin-top: 10px;
+}
+
+.info-section:first-of-type {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.info-section__title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #000080;
+  margin: 0 0 8px;
+}
+
+/* Side-by-side comparison columns */
+.info-compare {
+  display: flex;
+  gap: 12px;
+}
+
+.info-compare__col {
+  flex: 1;
+  min-width: 0;
+}
+
+.info-compare__label {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 6px;
+  margin-bottom: 6px;
+  border: 2px solid #000080;
+  text-align: center;
+}
+
+.info-compare__label--legacy {
+  background-color: #d4d0c8;
+  color: #000080;
+}
+
+.info-compare__label--awg2 {
+  background-color: #000080;
+  color: #ffffff;
+}
+
+.info-list {
+  margin: 0;
+  padding-left: 14px;
+  font-size: 9px;
+  line-height: 1.7;
+  color: #000;
+}
+
+.info-list li {
+  margin-bottom: 4px;
+}
+
 .modal-content p {
   margin: 10px 0;
   line-height: 1.5;
@@ -938,6 +1006,12 @@ button.info-link {
     font-size: 10px;
     max-width: 100%; /* Делаем текст занимать всю ширину родительского контейнера */
   }
+
+  /* Stack info columns on tablet */
+  .info-compare {
+    flex-direction: column;
+    gap: 8px;
+  }
 }
 
 /* Для очень маленьких экранов (Mobile) */
@@ -982,8 +1056,26 @@ button.info-link {
     font-size: 10px;
   }
 
+  .modal-content--info {
+    width: min(96vw, 720px);
+  }
+
   .modal-content.settings-modal__dialog {
     padding: 0;
+  }
+
+  /* Stack comparison columns on mobile */
+  .info-compare {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .info-section__title {
+    font-size: 10px;
+  }
+
+  .info-list {
+    font-size: 8px;
   }
 
   .instruction h2 {
