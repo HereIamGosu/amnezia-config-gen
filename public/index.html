@@ -392,25 +392,67 @@
       aria-labelledby="modalHeading"
       aria-hidden="true"
     >
-      <div class="modal-content">
+      <div class="modal-content modal-content--info">
         <h2 id="modalHeading" class="modal-heading">
           Дополнительная информация
         </h2>
-        <p>
-          По умолчанию весь трафик идёт через туннель (<strong>AllowedIPs = 0.0.0.0/0, ::/0</strong>).
-          В модальном окне настроек (кнопка ⚙) можно выбрать DNS-сервер и
-          отметить пресеты — тогда в
-          <strong>AllowedIPs</strong> попадут только подсети выбранных пресетов.
-        </p>
-        <p>
-          Также вы можете вручную заменить диапазоны IP-адресов на свои.
-          Список IP-адресов для различных сервисов можно найти на ресурсе
-          <a
-            href="https://rockblack.pro/vpn/dopolnitelno/diapazon-ip-adresov"
-            target="_blank"
-            >rockblack.pro</a
-          >.
-        </p>
+
+        <!-- Секция 1: AllowedIPs и маршруты -->
+        <div class="info-section">
+          <h3 class="info-section__title">&#x1F310; Маршруты и AllowedIPs</h3>
+          <p>
+            По умолчанию весь трафик идёт через туннель
+            (<strong>AllowedIPs = 0.0.0.0/0, ::/0</strong>).
+            В настройках (кнопка ⚙) можно выбрать DNS-сервер и пресеты — тогда
+            через туннель пойдут только нужные подсети.
+          </p>
+          <p>
+            IP-диапазоны можно заменить вручную. Актуальные списки —
+            на <a href="https://iplist.opencck.org/ru" target="_blank" rel="noopener noreferrer">opencck.org</a> и <a href="https://rockblack.pro/vpn/dopolnitelno/diapazon-ip-adresov" target="_blank" rel="noopener noreferrer">rockblack.pro</a>.
+          </p>
+        </div>
+
+        <!-- Секция 2: AWG 1.5 vs AWG 2.0 -->
+        <div class="info-section">
+          <h3 class="info-section__title">&#x2139; AWG 1.5 vs AWG 2.0</h3>
+          <div class="info-compare">
+            <div class="info-compare__col">
+              <div class="info-compare__label info-compare__label--legacy">AWG 1.5 (Legacy)</div>
+              <ul class="info-list">
+                <li>Статические параметры обфускации (Jc, S1–S4, H1–H4)</li>
+                <li>Маскирует только начало соединения</li>
+                <li>Работает с Cloudflare WARP без сервера</li>
+                <li>Совместим со старыми клиентами</li>
+              </ul>
+            </div>
+            <div class="info-compare__col">
+              <div class="info-compare__label info-compare__label--awg2">AWG 2.0</div>
+              <ul class="info-list">
+                <li>Динамические заголовки + случайный padding во всех пакетах</li>
+                <li>Имитирует QUIC/DNS на протяжении всей сессии</li>
+                <li>Сложнее для эвристического DPI-анализа</li>
+                <li>Требует клиент ≥ 4.8.12.9 (Amnezia)</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Секция 3: Нужен ли сервер для AWG 2.0 -->
+        <div class="info-section">
+          <h3 class="info-section__title">&#x26A0; Нужен ли сервер для AWG 2.0?</h3>
+          <p>
+            <strong>Для Cloudflare WARP — нет.</strong> Конфиги этого генератора
+            работают с публичным сервером Cloudflare без каких-либо настроек на стороне сервера.
+          </p>
+          <p>
+            <strong>Для своего сервера — да.</strong> Самостоятельный AWG 2.0
+            требует обновлённого ядра/модуля
+            <code>amneziawg-linux-kernel-module</code> на сервере и новых
+            конфигов клиентов (старые конфиги AWG 1.5 становятся несовместимы).
+            Подробнее — в <a href="https://docs.amnezia.org/documentation/instructions/new-amneziawg-selfhosted/" target="_blank" rel="noopener noreferrer">официальной документации</a>.
+          </p>
+        </div>
+
       </div>
     </div>
 
