@@ -9,7 +9,11 @@
       "Bash(python3 -c ':*)",
       "Bash(node -e \"require\\('./api/warpCpsPayloads'\\); console.log\\('OK'\\)\" --cwd \"e:/Coding/HTML, JS \\(WEB\\)/AmneziaWG Config Generator/amnezia-config-gen\")",
       "Bash(node -e \"require\\('./api/warpCpsPayloads'\\); console.log\\('OK'\\)\")",
-      "Bash(node -c api/warp.js)"
+      "Bash(node -c api/warp.js)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:docs.amnezia.org)",
+      "WebFetch(domain:warp-generator.github.io)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

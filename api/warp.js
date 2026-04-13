@@ -275,7 +275,7 @@ const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plain
     `H3 = ${obf.H3}`,
     `H4 = ${obf.H4}`,
   ];
-  if (i1Optional) lines.push(`i1 = ${i1Optional}`);
+  if (i1Optional) lines.push(`I1 = ${i1Optional}`);
   return lines.join('\n');
 };
 
@@ -306,7 +306,7 @@ const buildInterfaceAwg2WarpSafe = (privKey, clientIPv4, clientIPv6, obf, dnsLin
     `H3 = ${obf.H3}`,
     `H4 = ${obf.H4}`,
   ];
-  if (i1Optional) lines.push(`i1 = ${i1Optional}`);
+  if (i1Optional) lines.push(`I1 = ${i1Optional}`);
   return lines.join('\n');
 };
 
