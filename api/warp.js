@@ -11,24 +11,7 @@ const { createRateLimiter } = require('./_rateLimit');
 /** 10 generations per minute per IP — prevents Cloudflare WARP registration abuse. */
 const warpLimiter = createRateLimiter({ windowMs: 60_000, maxHits: 10 });
 
-/** Embedded AmneziaWG I1 obfuscation chain (`<b 0x…>`); not provided by Cloudflare JSON. */
-let warpAmneziaCpsPayloadStatic = '';
-try {
-  warpAmneziaCpsPayloadStatic = require('./warpAmneziaCpsPayload');
-} catch {
-  warpAmneziaCpsPayloadStatic = '';
-}
-
-/**
- * Generate a fresh random I1 CPS payload (`<b 0xHEX>`).
- * Length randomised within [800, 1300] bytes — same ballpark as the static preset (~1250 bytes)
- * but unique per config generation to defeat DPI signature matching.
- */
-const generateRandomI1Payload = () => {
-  const len = randomInt(800, 1301);
-  const buf = require('crypto').randomBytes(len);
-  return `<b 0x${buf.toString('hex')}>`;
-};
+const { pickRandomCpsPayload } = require('./warpCpsPayloads');
 
 const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0', '::/0'];
 
@@ -658,13 +641,10 @@ const resolveI1ForGeneration = async (extras) => {
   }
   if (extras.i1Ref) return normalizeI1Payload(await loadI1FromRef(extras.i1Ref));
   if (extras.useEmbeddedAmneziaI1) {
-    // Generate a unique random I1 per config to defeat DPI fingerprinting.
-    // Falls back to static payload only if crypto is somehow unavailable.
-    try {
-      return normalizeI1Payload(generateRandomI1Payload());
-    } catch {
-      if (warpAmneziaCpsPayloadStatic) return normalizeI1Payload(warpAmneziaCpsPayloadStatic);
-    }
+    // Pick a verified CPS payload from the pool. Random bytes are NOT valid replacements —
+    // Cloudflare WARP requires a structured CPS binary header (0xCx 00 00 00 01...).
+    // Rotating across the pool provides DPI variety without breaking the handshake.
+    return normalizeI1Payload(pickRandomCpsPayload());
   }
   return '';
 };
