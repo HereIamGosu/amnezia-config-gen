@@ -4,7 +4,12 @@
       "Bash(node -e \"const p = require\\('./api/warpAmneziaCpsPayload'\\); console.log\\('length:', p.length, 'starts:', p.slice\\(0,10\\), 'ends:', p.slice\\(-5\\)\\)\")",
       "Bash(node -e ':*)",
       "Bash(npx eslint:*)",
-      "WebSearch"
+      "WebSearch",
+      "Read(//e/Coding/HTML, JS \\(WEB\\)/AmneziaWG Config Generator/**)",
+      "Bash(python3 -c ':*)",
+      "Bash(node -e \"require\\('./api/warpCpsPayloads'\\); console.log\\('OK'\\)\" --cwd \"e:/Coding/HTML, JS \\(WEB\\)/AmneziaWG Config Generator/amnezia-config-gen\")",
+      "Bash(node -e \"require\\('./api/warpCpsPayloads'\\); console.log\\('OK'\\)\")",
+      "Bash(node -c api/warp.js)"
     ]
   }
 }
