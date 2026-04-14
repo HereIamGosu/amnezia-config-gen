@@ -8,7 +8,7 @@ const API_WARP_TIMEOUT_MS = 120000;
  * may fail to apply the routing table. 500 is a conservative limit that works reliably
  * on all tested platforms. Users are warned at 80 % and blocked at 100 %.
  */
-const MAX_CIDR_LIMIT = 2000;
+const MAX_CIDR_LIMIT = 1000;
 
 /**
  * @param {Response} response
