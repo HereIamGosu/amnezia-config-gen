@@ -188,7 +188,7 @@
     </sky>
 
     <!-- SVG фильтр -->
-    <svg xmlns="http://www.w3.org/2000/svg" style="display: none">
+    <svg xmlns="http://www.w3.org/1000/svg" style="display: none">
       <filter id="inset" x="-50%" y="-50%" width="200%" height="200%">
         <feFlood flood-color="black" result="outside-color" />
         <feMorphology in="SourceAlpha" operator="dilate" radius="3.5" />
@@ -461,7 +461,7 @@
             тогда через туннель пойдут только нужные IPv4-подсети. IPv6 можно
             включить опционально, но это увеличивает число маршрутов в 2–3 раза
             и может вызывать сбои на роутерах и мобильных клиентах. Безопасный
-            лимит — <strong>2000 IPv4 CIDR</strong>.
+            лимит — <strong>1000 IPv4 CIDR</strong>.
           </p>
           <p>
             IP-диапазоны можно заменить вручную. Актуальные списки — на
@@ -572,7 +572,7 @@
               Отметьте пресеты — их IPv4-подсети добавятся в
               <strong>AllowedIPs</strong>. Если ничего не выбрано, весь трафик
               идёт через туннель (<strong>0.0.0.0/0, ::/0</strong>).
-              Лимит <strong>2000 IPv4 CIDR</strong> защищает роутеры и мобильные
+              Лимит <strong>1000 IPv4 CIDR</strong> защищает роутеры и мобильные
               устройства от переполнения таблицы маршрутов.
             </p>
             <div class="cfg-tiles-actions">
@@ -588,7 +588,7 @@
               </button>
             </div>
             <div class="cidr-limit-row">
-              <div id="cidrCounter" class="cidr-counter">IPv4 маршруты: 0 / 2000</div>
+              <div id="cidrCounter" class="cidr-counter">IPv4 маршруты: 0 / 1000</div>
               <label
                 class="ipv6-toggle"
                 title="IPv6 маршруты увеличивают число записей в 2–3 раза. Включайте только если клиент поддерживает IPv6 и ваш роутер справляется с большим количеством маршрутов."
