@@ -892,6 +892,59 @@ button.info-link {
   color: #8b4513;
 }
 
+/* CIDR limit row: counter + IPv6 toggle side by side */
+.cidr-limit-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.cidr-counter {
+  font-size: 8px;
+  color: #555;
+  white-space: nowrap;
+}
+
+.cidr-counter--warn {
+  color: #8b4513;
+  font-weight: bold;
+}
+
+.cidr-counter--over {
+  color: #c00;
+  font-weight: bold;
+}
+
+/* IPv6 toggle label */
+.ipv6-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 8px;
+  cursor: pointer;
+  color: #333;
+}
+
+.ipv6-toggle input[type="checkbox"] {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Disabled route tiles (limit reached) */
+.cfg-tile--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cfg-tile--disabled input[type="checkbox"] {
+  cursor: not-allowed;
+}
+
 /* Адаптивные стили для экранов различных размеров */
 
 /* Для очень больших экранов */

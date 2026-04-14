@@ -790,7 +790,11 @@ const mergeConfigAfterWarp = async (id, token, initialConfig) => {
   return initialConfig;
 };
 
-const resolveAllowedIpsFromPresets = async (presetKeys) => {
+/**
+ * @param {string[]} presetKeys
+ * @param {{ includeIpv6?: boolean }} [opts]
+ */
+const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false } = {}) => {
   if (!presetKeys.length) {
     return { cidrs: null, routesSource: 'default' };
   }
@@ -805,7 +809,8 @@ const resolveAllowedIpsFromPresets = async (presetKeys) => {
     err.statusCode = 400;
     throw err;
   }
-  const cidrs = await fetchCidrsForDomains(sites);
+  // IPv4-only by default: fewer routes, better compatibility with routers and mobile clients.
+  const cidrs = await fetchCidrsForDomains(sites, { includeIpv6 });
   if (!cidrs.length) {
     const err = new Error(
       'Сервис списков IP вернул пустой ответ. Попробуйте другой набор пресетов или повторите позже.',
@@ -821,8 +826,9 @@ const resolveAllowedIpsFromPresets = async (presetKeys) => {
  * @param {string[]} presetKeys
  * @param {string} dnsKey
  * @param {object} warpExtras результат collectWarpGenExtras (peerEndpoint, warpPort, persistentKeepalive, i1Ref, i1Raw)
+ * @param {{ includeIpv6?: boolean }} [routeOpts]
  */
-const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '', warpExtras = {}) => {
+const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '', warpExtras = {}, routeOpts = {}) => {
   const { privKey, pubKey } = generateKeys();
   const regBody = {
     install_id: '',
@@ -863,7 +869,7 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
   const awg2WarpSafe = Boolean(warpExtras.awg2WarpSafe);
   const awg2Obf =
     mode === 'awg2' ? (awg2WarpSafe ? buildAwg2WarpSafeObfuscation() : buildAwg2Obfuscation()) : null;
-  const { cidrs: routeCidrs, routesSource, sitesResolved } = await resolveAllowedIpsFromPresets(presetKeys);
+  const { cidrs: routeCidrs, routesSource, sitesResolved } = await resolveAllowedIpsFromPresets(presetKeys, routeOpts);
   const dnsLine = getDnsString(dnsKey || DNS_DEFAULT_KEY);
   const i1 = await resolveI1ForGeneration(warpExtras);
 
@@ -944,7 +950,9 @@ module.exports = async (req, res) => {
     if (warpExtras.forceLegacy) mode = 'legacy';
     delete warpExtras.forceLegacy;
 
-    const { text: conf, meta } = await generateWarpConfig(mode, presetKeys, dnsKey, warpExtras);
+    const ipv6Param = pickQuery(req, 'ipv6');
+    const includeIpv6 = ipv6Param === '1' || ipv6Param === 'true';
+    const { text: conf, meta } = await generateWarpConfig(mode, presetKeys, dnsKey, warpExtras, { includeIpv6 });
     const confEncoded = Buffer.from(conf).toString('base64');
     res.status(200).json({
       success: true,

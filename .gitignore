@@ -7,7 +7,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .pnpm-store/
-package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
@@ -24,7 +23,6 @@ pnpm-lock.yaml
 # Vercel
 # ============================================================
 .vercel/
-.vercel
 
 # ============================================================
 # Environment & secrets
@@ -70,7 +68,6 @@ $RECYCLE.BIN/
 # ============================================================
 # IDE / Editor
 # ============================================================
-.vscode/
 .idea/
 *.sublime-workspace
 *.sublime-project
@@ -95,6 +92,11 @@ $RECYCLE.BIN/
 # ============================================================
 jspm_packages/
 bower_components/
+
+# ============================================================
+# Claude Code (local AI assistant state)
+# ============================================================
+.claude/
 
 # ============================================================
 # Project-specific

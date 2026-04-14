@@ -458,7 +458,10 @@
             По умолчанию весь трафик идёт через туннель (<strong
               >AllowedIPs = 0.0.0.0/0, ::/0</strong
             >). В настройках (кнопка ⚙) можно выбрать DNS-сервер и пресеты —
-            тогда через туннель пойдут только нужные подсети.
+            тогда через туннель пойдут только нужные IPv4-подсети. IPv6 можно
+            включить опционально, но это увеличивает число маршрутов в 2–3 раза
+            и может вызывать сбои на роутерах и мобильных клиентах. Безопасный
+            лимит — <strong>500 IPv4 CIDR</strong>.
           </p>
           <p>
             IP-диапазоны можно заменить вручную. Актуальные списки — на
@@ -566,11 +569,11 @@
           <fieldset class="settings-panel__group">
             <legend>Пресеты маршрутов (AllowedIPs)</legend>
             <p class="settings-panel__hint">
-              Отметьте пресеты — при генерации их подсети (IPv4 и IPv6) будут
-              запрошены и объединены в <strong>AllowedIPs</strong>. Если ничего
-              не выбрано, туннель охватывает весь трафик (<strong
-                >0.0.0.0/0, ::/0</strong
-              >).
+              Отметьте пресеты — их IPv4-подсети добавятся в
+              <strong>AllowedIPs</strong>. Если ничего не выбрано, весь трафик
+              идёт через туннель (<strong>0.0.0.0/0, ::/0</strong>).
+              Лимит <strong>500 IPv4 CIDR</strong> защищает роутеры и мобильные
+              устройства от переполнения таблицы маршрутов.
             </p>
             <div class="cfg-tiles-actions">
               <button
@@ -583,6 +586,16 @@
               <button type="button" class="cfg-tiles-action" id="presetClear">
                 Снять всё
               </button>
+            </div>
+            <div class="cidr-limit-row">
+              <div id="cidrCounter" class="cidr-counter">IPv4 маршруты: 0 / 500</div>
+              <label
+                class="ipv6-toggle"
+                title="IPv6 маршруты увеличивают число записей в 2–3 раза. Включайте только если клиент поддерживает IPv6 и ваш роутер справляется с большим количеством маршрутов."
+              >
+                <input type="checkbox" id="ipv6Toggle" />
+                <span>+ IPv6 маршруты</span>
+              </label>
             </div>
             <p id="presetStats" class="preset-stats" aria-live="polite"></p>
             <h3 class="settings-modal__subsection">
