@@ -9,13 +9,14 @@ const RETRY_MAX = 5;
 const RETRY_BASE_MS = 400;
 const RETRY_MAX_MS = 10000;
 
-/** In-memory CIDR cache: keyed by sorted comma-joined hostnames, TTL 10 min. */
+/** In-memory CIDR cache: keyed by sorted comma-joined hostnames + ip version flag, TTL 10 min. */
 const CIDR_CACHE_TTL_MS = 10 * 60 * 1000;
 const CIDR_CACHE_MAX_ENTRIES = 200;
 /** @type {Map<string, { cidrs: string[], ts: number }>} */
 const cidrCache = new Map();
 
-const cidrCacheKey = (sites) => sites.slice().sort().join(',');
+const cidrCacheKey = (sites, includeIpv6) =>
+  `${sites.slice().sort().join(',')}_${includeIpv6 ? '46' : '4'}`;
 
 const cidrCacheGet = (key) => {
   const entry = cidrCache.get(key);
@@ -26,6 +27,9 @@ const cidrCacheGet = (key) => {
   }
   return entry.cidrs;
 };
+
+/** @param {string} cidr */
+const isIpv4Cidr = (cidr) => /^\d{1,3}(\.\d{1,3}){3}\/\d+$/.test(cidr);
 
 const cidrCacheSet = (key, cidrs) => {
   if (cidrCache.size >= CIDR_CACHE_MAX_ENTRIES) {
@@ -157,28 +161,35 @@ const fetchWithRetry = async (path) => {
 };
 
 /**
- * Fetch and merge IPv4+IPv6 CIDRs for hostnames (with in-memory cache, TTL 10 min).
+ * Fetch CIDRs for hostnames (with in-memory cache, TTL 10 min).
+ * By default only IPv4 CIDRs are returned. Pass { includeIpv6: true } to also include IPv6.
+ * IPv4-only is the safe default: fewer routes, better compatibility with routers and mobile clients.
  * @param {string[]} sites unique hostnames
+ * @param {{ includeIpv6?: boolean }} [opts]
  * @returns {Promise<string[]>}
  */
-const fetchCidrsForDomains = async (sites) => {
+const fetchCidrsForDomains = async (sites, { includeIpv6 = false } = {}) => {
   if (!sites.length) {
     return [];
   }
-  const cacheKey = cidrCacheKey(sites);
+  const cacheKey = cidrCacheKey(sites, includeIpv6);
   const cached = cidrCacheGet(cacheKey);
   if (cached) return cached;
 
   const path4 = buildIpListPath(sites, 'cidr4');
   const data4 = await fetchWithRetry(path4);
   const merged = flattenCidrMap(data4);
-  try {
-    const path6 = buildIpListPath(sites, 'cidr6');
-    const data6 = await fetchWithRetry(path6);
-    for (const c of flattenCidrMap(data6)) merged.add(c);
-  } catch {
-    /* IPv6 optional — many configs work with IPv4-only AllowedIPs */
+
+  if (includeIpv6) {
+    try {
+      const path6 = buildIpListPath(sites, 'cidr6');
+      const data6 = await fetchWithRetry(path6);
+      for (const c of flattenCidrMap(data6)) merged.add(c);
+    } catch {
+      /* IPv6 optional — many configs work with IPv4-only AllowedIPs */
+    }
   }
+
   const result = Array.from(merged).sort();
   cidrCacheSet(cacheKey, result);
   return result;
@@ -188,4 +199,5 @@ module.exports = {
   IP_LIST_HOST,
   fetchCidrsForDomains,
   buildIpListPath,
+  isIpv4Cidr,
 };

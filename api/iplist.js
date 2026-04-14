@@ -8,6 +8,14 @@ const {
 } = require('./routePresets');
 const { fetchCidrsForDomains } = require('./ipListFetch');
 
+const pickQuery = (req, key) => {
+  if (req.query && typeof req.query === 'object' && req.query[key] != null) {
+    const v = req.query[key];
+    return Array.isArray(v) ? String(v[0]) : String(v);
+  }
+  return undefined;
+};
+
 module.exports = async (req, res) => {
   if (req.method !== 'GET') {
     res.status(405).json({ success: false, message: 'Метод не поддерживается.' });
@@ -41,13 +49,30 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const cidrs = await fetchCidrsForDomains(sites);
+    const ipv6Param = pickQuery(req, 'ipv6');
+    const includeIpv6 = ipv6Param === '1' || ipv6Param === 'true';
+
+    // Always fetch IPv4-only CIDRs for the counter (fast, fewer routes)
+    const cidrs4 = await fetchCidrsForDomains(sites, { includeIpv6: false });
+    const count4 = cidrs4.length;
+
+    let cidrs = cidrs4;
+    let count6 = 0;
+
+    if (includeIpv6) {
+      const cidrsAll = await fetchCidrsForDomains(sites, { includeIpv6: true });
+      count6 = cidrsAll.length - count4;
+      cidrs = cidrsAll;
+    }
+
     res.status(200).json({
       success: true,
       presets: presetKeys,
       sitesQueried: sites.length,
       sites,
       count: cidrs.length,
+      count4,
+      count6,
       cidrs,
     });
   } catch (e) {
