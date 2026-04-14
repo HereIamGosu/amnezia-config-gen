@@ -60,6 +60,8 @@ const cfgState = {
   cidrCount4: 0,
   /** Whether IPv6 CIDRs should be included in the generated config. Off by default. */
   includeIpv6: false,
+  /** When true the CIDR limit is not enforced — tiles are never disabled. */
+  ignoreLimit: false,
 };
 
 const getPresetsFallbackUrl = () => {
@@ -175,17 +177,23 @@ const buildWarpQueryString = (mode) => {
 const updateCidrCounter = (count4) => {
   const el = document.getElementById('cidrCounter');
   if (!el) return;
-  el.textContent = `IPv4 маршруты: ${count4} / ${MAX_CIDR_LIMIT}`;
-  el.classList.toggle('cidr-counter--warn', count4 >= MAX_CIDR_LIMIT * 0.8 && count4 < MAX_CIDR_LIMIT);
-  el.classList.toggle('cidr-counter--over', count4 >= MAX_CIDR_LIMIT);
+  if (cfgState.ignoreLimit) {
+    el.textContent = `IPv4 маршруты: ${count4} (лимит отключён)`;
+    el.classList.remove('cidr-counter--warn', 'cidr-counter--over');
+  } else {
+    el.textContent = `IPv4 маршруты: ${count4} / ${MAX_CIDR_LIMIT}`;
+    el.classList.toggle('cidr-counter--warn', count4 >= MAX_CIDR_LIMIT * 0.8 && count4 < MAX_CIDR_LIMIT);
+    el.classList.toggle('cidr-counter--over', count4 >= MAX_CIDR_LIMIT);
+  }
 };
 
 /**
  * Disable unchecked route tiles when the CIDR limit is reached (or re-enable when below).
  * Already-checked tiles stay interactive so the user can deselect them.
+ * When cfgState.ignoreLimit is true, tiles are never disabled.
  */
 const updateTileDisabledState = () => {
-  const overLimit = cfgState.cidrCount4 >= MAX_CIDR_LIMIT;
+  const overLimit = !cfgState.ignoreLimit && cfgState.cidrCount4 >= MAX_CIDR_LIMIT;
   forEachRouteTile((tile) => {
     const cb = tile.querySelector('input[type="checkbox"]');
     if (!cb) return;
@@ -240,14 +248,15 @@ const refreshPresetStats = debounce(async () => {
     updateCidrCounter(count4);
     updateTileDisabledState();
 
-    const overLimit = count4 >= MAX_CIDR_LIMIT;
+    const overLimit = !cfgState.ignoreLimit && count4 >= MAX_CIDR_LIMIT;
     if (overLimit) {
       el.classList.add('preset-stats--warn');
       el.textContent = `Достигнут лимит маршрутов (${count4}/${MAX_CIDR_LIMIT} IPv4 CIDR). Некоторые устройства могут работать нестабильно. Рекомендуется отключить часть категорий.`;
     } else {
       el.classList.remove('preset-stats--warn');
       const ipv6Info = cfgState.includeIpv6 && data.count6 ? `, IPv6: +${data.count6}` : '';
-      el.textContent = `IPv4 маршруты: ${count4}${ipv6Info} (${data.sitesQueried} доменов в запросе).`;
+      const limitNote = cfgState.ignoreLimit && count4 >= MAX_CIDR_LIMIT ? ' ⚠ лимит превышен' : '';
+      el.textContent = `IPv4 маршруты: ${count4}${ipv6Info}${limitNote} (${data.sitesQueried} доменов в запросе).`;
     }
   } catch (err) {
     if (err && err.name === 'AbortError') return;
@@ -367,6 +376,16 @@ const initSettingsPanel = async () => {
       ipv6Toggle.addEventListener('change', () => {
         cfgState.includeIpv6 = ipv6Toggle.checked;
         refreshPresetStats();
+      });
+    }
+
+    const ignoreLimitToggle = document.getElementById('ignoreLimitToggle');
+    if (ignoreLimitToggle) {
+      ignoreLimitToggle.checked = cfgState.ignoreLimit;
+      ignoreLimitToggle.addEventListener('change', () => {
+        cfgState.ignoreLimit = ignoreLimitToggle.checked;
+        updateCidrCounter(cfgState.cidrCount4);
+        updateTileDisabledState();
       });
     }
 
