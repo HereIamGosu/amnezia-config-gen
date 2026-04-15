@@ -172,10 +172,7 @@
       crossorigin="anonymous"
       referrerpolicy="no-referrer"
     />
-    <!-- F-02: QR-код — клиентская генерация, без нагрузки на сервер -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
-      integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSr7FORoZPp5E3AXDAlPLv3+LFkLAMGFa7xA=="
-      crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
   </head>
   <body>
     <script>
@@ -280,9 +277,6 @@
                       <button type="button" class="button post-gen-row__download">
                         <span class="button__text">Скачать AmneziaWarp.conf</span>
                       </button>
-                      <button type="button" class="button button--icon-sq post-gen-row__qr" title="QR-код для импорта">
-                        <i class="fas fa-qrcode"></i>
-                      </button>
                       <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию">
                         <i class="fas fa-eye"></i>
                       </button>
@@ -297,9 +291,6 @@
                     <div id="postGenAwg2" class="post-gen-row" hidden>
                       <button type="button" class="button post-gen-row__download">
                         <span class="button__text">Скачать AmneziaWarp-AWG2.conf</span>
-                      </button>
-                      <button type="button" class="button button--icon-sq post-gen-row__qr" title="QR-код для импорта">
-                        <i class="fas fa-qrcode"></i>
                       </button>
                       <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию">
                         <i class="fas fa-eye"></i>
@@ -490,16 +481,6 @@
             </footer>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- F-02: Модальное окно QR-кода -->
-    <div id="qrModal" class="modal" role="dialog" aria-modal="true"
-         aria-labelledby="qrModalHeading" aria-hidden="true">
-      <div class="modal-content modal-content--qr">
-        <h2 id="qrModalHeading" class="modal-heading" data-i18n="qr_title">QR-код для импорта</h2>
-        <div id="qrCodeModal" class="qr-canvas-wrapper"></div>
-        <p id="qrModalWarning" class="qr-warning" hidden></p>
       </div>
     </div>
 

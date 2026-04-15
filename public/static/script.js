@@ -59,9 +59,6 @@ const switchLang = (lang) => {
 // F-02 / F-05 / F-07: Модальные окна
 // ─────────────────────────────────────────────────────────────
 
-/** Конфиг считается «слишком большим» для надёжного сканирования выше этого порога (байт UTF-8). */
-const QR_SIZE_WARN_BYTES = 2048;
-
 /** Открывает любое модальное окно по id. */
 const openModal = (id) => {
   const el = document.getElementById(id);
@@ -76,46 +73,6 @@ const closeModal = (id) => {
   if (!el) return;
   el.style.display = 'none';
   el.setAttribute('aria-hidden', 'true');
-};
-
-/**
- * Открывает модальное окно с QR-кодом для указанного конфига.
- * @param {string} decodedConfig
- */
-const openQrModal = (decodedConfig) => {
-  const container = document.getElementById('qrCodeModal');
-  const warning   = document.getElementById('qrModalWarning');
-
-  if (container) {
-    container.innerHTML = '';
-
-    const byteLen = new TextEncoder().encode(decodedConfig).length;
-    const tooBig  = byteLen > QR_SIZE_WARN_BYTES;
-
-    if (warning) {
-      warning.hidden = !tooBig;
-      if (tooBig) warning.textContent = t('qr_too_large', '⚠ QR слишком большой — надёжно не считается старыми телефонами. Используйте файл .conf');
-    }
-
-    if (typeof QRCode !== 'undefined') {
-      try {
-        new QRCode(container, {
-          text: decodedConfig,
-          width: 250,
-          height: 250,
-          correctLevel: QRCode.CorrectLevel.L,
-        });
-      } catch {
-        container.innerHTML = '';
-        if (warning) {
-          warning.hidden = false;
-          warning.textContent = t('qr_too_large', '⚠ QR слишком большой — надёжно не считается старыми телефонами. Используйте файл .conf');
-        }
-      }
-    }
-  }
-
-  openModal('qrModal');
 };
 
 /**
@@ -238,12 +195,6 @@ const showPostGenRow = ({ buttonId, readyDownloadText, filename, decodedConfig }
     const span = dlBtn.querySelector('.button__text');
     if (span) span.textContent = readyDownloadText;
     dlBtn.onclick = () => downloadFile(decodedConfig, filename);
-  }
-
-  // Кнопка QR
-  const qrBtn = row.querySelector('.post-gen-row__qr');
-  if (qrBtn) {
-    qrBtn.onclick = () => openQrModal(decodedConfig);
   }
 
   // Кнопка просмотра
@@ -891,7 +842,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ── Закрытие модалов по клику на затемнённый оверлей ──
-  ['qrModal', 'configPreviewModal', 'statusModal'].forEach((id) => {
+  ['configPreviewModal', 'statusModal'].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('click', (ev) => { if (ev.target === el) closeModal(id); });
   });
@@ -924,7 +875,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (ev.key !== 'Escape') return;
       const settingsEl = document.getElementById('settingsModal');
       if (settingsEl && settingsEl.style.display === 'flex') { closeSettingsModal(); return; }
-      for (const id of ['qrModal', 'configPreviewModal', 'statusModal']) {
+      for (const id of ['configPreviewModal', 'statusModal']) {
         const el = document.getElementById(id);
         if (el && el.style.display === 'flex') { closeModal(id); return; }
       }
