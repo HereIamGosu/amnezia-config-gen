@@ -1,5 +1,258 @@
 // public/static/script.js
 
+// ─────────────────────────────────────────────────────────────
+// F-03: Локализация (i18n)
+// ─────────────────────────────────────────────────────────────
+
+const _i18n = { locale: 'ru', strings: {} };
+
+/** Возвращает переведённую строку или fallback (если перевод не загружен). */
+const t = (key, fallback) => _i18n.strings[key] !== undefined ? _i18n.strings[key] : (fallback !== undefined ? fallback : key);
+
+/** Обходит все [data-i18n] элементы и проставляет переведённый textContent. */
+const applyTranslations = () => {
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    const key = el.getAttribute('data-i18n');
+    const val = _i18n.strings[key];
+    if (val !== undefined) el.textContent = val;
+  });
+};
+
+/**
+ * Загружает словарь для заданного языка и применяет переводы.
+ * Fallback: если файл недоступен (offline), оставляем HTML-текст нетронутым.
+ */
+const loadLocale = async (lang) => {
+  try {
+    const res = await fetch(`/locales/${lang}.json`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    _i18n.strings = await res.json();
+    _i18n.locale = lang;
+    applyTranslations();
+  } catch {
+    // В офлайн-режиме или при 404 оставляем исходный HTML-текст (русский)
+  }
+  // Обновляем состояние кнопок переключателя
+  document.querySelectorAll('.lang-btn').forEach((btn) => {
+    btn.classList.toggle('lang-btn--active', btn.dataset.lang === _i18n.locale);
+  });
+};
+
+/**
+ * Инициализирует i18n: определяет язык (localStorage → navigator.language → 'ru').
+ * Вызывается один раз при DOMContentLoaded.
+ */
+const initI18n = () => {
+  const saved = localStorage.getItem('lang');
+  const nav = (navigator.language || '').toLowerCase().startsWith('ru') ? 'ru' : 'en';
+  const lang = saved || nav;
+  loadLocale(lang);
+};
+
+/** Переключает язык и сохраняет выбор в localStorage. */
+const switchLang = (lang) => {
+  localStorage.setItem('lang', lang);
+  loadLocale(lang);
+};
+
+// ─────────────────────────────────────────────────────────────
+// F-02 / F-05 / F-07: Модальные окна
+// ─────────────────────────────────────────────────────────────
+
+/** Конфиг считается «слишком большим» для надёжного сканирования выше этого порога (байт UTF-8). */
+const QR_SIZE_WARN_BYTES = 2048;
+
+/** Открывает любое модальное окно по id. */
+const openModal = (id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = 'flex';
+  el.setAttribute('aria-hidden', 'false');
+};
+
+/** Закрывает любое модальное окно по id. */
+const closeModal = (id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = 'none';
+  el.setAttribute('aria-hidden', 'true');
+};
+
+/**
+ * Открывает модальное окно с QR-кодом для указанного конфига.
+ * @param {string} decodedConfig
+ */
+const openQrModal = (decodedConfig) => {
+  const container = document.getElementById('qrCodeModal');
+  const warning   = document.getElementById('qrModalWarning');
+
+  if (container) {
+    container.innerHTML = '';
+
+    const byteLen = new TextEncoder().encode(decodedConfig).length;
+    const tooBig  = byteLen > QR_SIZE_WARN_BYTES;
+
+    if (warning) {
+      warning.hidden = !tooBig;
+      if (tooBig) warning.textContent = t('qr_too_large', '⚠ QR слишком большой — надёжно не считается старыми телефонами. Используйте файл .conf');
+    }
+
+    if (typeof QRCode !== 'undefined') {
+      try {
+        new QRCode(container, {
+          text: decodedConfig,
+          width: 250,
+          height: 250,
+          correctLevel: QRCode.CorrectLevel.L,
+        });
+      } catch {
+        container.innerHTML = '';
+        if (warning) {
+          warning.hidden = false;
+          warning.textContent = t('qr_too_large', '⚠ QR слишком большой — надёжно не считается старыми телефонами. Используйте файл .conf');
+        }
+      }
+    }
+  }
+
+  openModal('qrModal');
+};
+
+/**
+ * Открывает модальное окно предпросмотра конфига.
+ * @param {string} decodedConfig
+ */
+const openPreviewModal = (decodedConfig) => {
+  const textarea = document.getElementById('configPreviewTextModal');
+  if (textarea) textarea.value = decodedConfig;
+  openModal('configPreviewModal');
+};
+
+// ── Статус сервисов ──
+
+const STATUS_SERVICE_LABELS = {
+  warp_api:    { name: 'Cloudflare WARP API', url: 'api.cloudflareclient.com' },
+  cidr_source: { name: 'Источник CIDR (iplist.opencck.org)', url: 'iplist.opencck.org' },
+};
+const STATUS_TEXT = { ok: 'ОК', error: 'ОШИБКА', degraded: 'НЕСТАБИЛЬНО', unknown: 'НЕИЗВЕСТНО' };
+
+const formatMoscowTime = (isoStr) => {
+  const d = new Date(isoStr);
+  if (isNaN(d)) return isoStr;
+  return d.toLocaleString('ru-RU', {
+    timeZone: 'Europe/Moscow',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }) + ' (МСК)';
+};
+
+const renderStatusModal = (data) => {
+  const content     = document.getElementById('statusModalContent');
+  const lastChecked = document.getElementById('statusModalLastChecked');
+  if (!content) return;
+
+  if (!data || !data.services) {
+    content.className = 'status-error-msg';
+    content.textContent = 'Некорректный формат данных.';
+    return;
+  }
+
+  if (data.checked_at === '1970-01-01T00:00:00Z') {
+    content.className = 'status-error-msg';
+    content.innerHTML = 'Данные мониторинга ещё не собраны.<br>Healthcheck запускается каждые 30&nbsp;мин через GitHub Actions.';
+    return;
+  }
+
+  let html = '<div class="status-card-list">';
+  for (const [key, svc] of Object.entries(data.services)) {
+    const label  = STATUS_SERVICE_LABELS[key] || { name: key, url: '' };
+    const status = svc.status || 'unknown';
+    const code   = svc.http_code != null ? `HTTP ${svc.http_code}` : '—';
+    html += `
+      <div class="status-card">
+        <div class="status-indicator status-indicator--${status}"></div>
+        <div class="status-card__info">
+          <div class="status-card__name">${label.name}</div>
+          <div class="status-card__detail">${label.url} &middot; ${code}</div>
+        </div>
+        <span class="status-badge badge--${status}">${STATUS_TEXT[status] || status}</span>
+      </div>`;
+  }
+  html += '</div>';
+
+  content.className = '';
+  content.innerHTML = html;
+
+  if (lastChecked) {
+    lastChecked.hidden = false;
+    lastChecked.innerHTML = `<strong>Последняя проверка:</strong><br>${formatMoscowTime(data.checked_at)}`;
+  }
+};
+
+/** Открывает модал статуса и загружает данные из /status.json. */
+const openStatusModal = () => {
+  const content     = document.getElementById('statusModalContent');
+  const lastChecked = document.getElementById('statusModalLastChecked');
+
+  if (content) { content.className = 'status-loading-msg'; content.textContent = 'Загрузка...'; }
+  if (lastChecked) lastChecked.hidden = true;
+
+  openModal('statusModal');
+
+  fetch('/status.json')
+    .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+    .then(renderStatusModal)
+    .catch(() => {
+      if (content) { content.className = 'status-error-msg'; content.textContent = 'Не удалось загрузить данные статуса.'; }
+    });
+};
+
+// ─────────────────────────────────────────────────────────────
+// F-02 / F-05: Показ тройки кнопок на месте кнопки генерации
+// ─────────────────────────────────────────────────────────────
+
+const POST_GEN_ROW_IDS = {
+  generateButton:     'postGenLegacy',
+  generateButtonAwg2: 'postGenAwg2',
+};
+
+/**
+ * Скрывает кнопку генерации и показывает на её месте тройку кнопок:
+ * Скачать | QR | Просмотр конфига.
+ */
+const showPostGenRow = ({ buttonId, readyDownloadText, filename, decodedConfig }) => {
+  // Скрываем кнопку генерации
+  const genBtn = document.getElementById(buttonId);
+  if (genBtn) genBtn.hidden = true;
+
+  // Показываем post-gen row
+  const rowId = POST_GEN_ROW_IDS[buttonId];
+  if (!rowId) return;
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  row.hidden = false;
+
+  // Кнопка скачать
+  const dlBtn = row.querySelector('.post-gen-row__download');
+  if (dlBtn) {
+    const span = dlBtn.querySelector('.button__text');
+    if (span) span.textContent = readyDownloadText;
+    dlBtn.onclick = () => downloadFile(decodedConfig, filename);
+  }
+
+  // Кнопка QR
+  const qrBtn = row.querySelector('.post-gen-row__qr');
+  if (qrBtn) {
+    qrBtn.onclick = () => openQrModal(decodedConfig);
+  }
+
+  // Кнопка просмотра
+  const prevBtn = row.querySelector('.post-gen-row__preview');
+  if (prevBtn) {
+    prevBtn.onclick = () => openPreviewModal(decodedConfig);
+  }
+};
+
 const API_WARP_TIMEOUT_MS = 120000;
 
 /**
@@ -464,7 +717,6 @@ const generateConfig = async (options) => {
   const { buttonId, mode, filename, readyDownloadText, loadingLabel, boundGenerateClick } = options;
   const button = document.getElementById(buttonId);
   if (!button) return;
-  const buttonText = button.querySelector('.button__text');
   const status = document.getElementById('status');
 
   setAllGenerateButtonsDisabled(true);
@@ -493,27 +745,28 @@ const generateConfig = async (options) => {
     }
 
     if (data.success) {
-      if (!data.content) throw new Error('Отсутствует содержимое конфигурации.');
+      if (!data.content) throw new Error(t('err_no_content', 'Отсутствует содержимое конфигурации.'));
 
       const decodedConfig = atob(data.content);
-      buttonText.textContent = readyDownloadText;
-
-      const downloadHandler = () => downloadFile(decodedConfig, filename);
 
       if (boundGenerateClick) button.removeEventListener('click', boundGenerateClick);
-      button.addEventListener('click', downloadHandler);
 
-      downloadHandler();
+      // F-02 + F-05: заменяем кнопку на тройку (Скачать | QR | Просмотр)
+      showPostGenRow({ buttonId, readyDownloadText, filename, decodedConfig });
+
+      // Автоматически скачиваем файл сразу
+      downloadFile(decodedConfig, filename);
+
       status.textContent = mode === 'awg2'
-        ? 'Конфигурация AmneziaWG 2.0 успешно сгенерирована! Нужен клиент AmneziaVPN 4.8.12.9+ или совместимый AWG 2.0.'
-        : 'Конфигурация Legacy успешно сгенерирована!';
+        ? t('success_awg2', 'Конфигурация AmneziaWG 2.0 успешно сгенерирована! Нужен клиент AmneziaVPN 4.8.12.9+ или совместимый AWG 2.0.')
+        : t('success_legacy', 'Конфигурация Legacy успешно сгенерирована!');
     } else {
       throw new Error(data.message || 'Неизвестная ошибка при генерации конфигурации.');
     }
   } catch (error) {
     console.error('Ошибка при генерации конфигурации:', error);
     const message = error && error.name === 'AbortError'
-      ? 'Превышено время ожидания ответа. Попробуйте ещё раз.'
+      ? t('err_timeout', 'Превышено время ожидания ответа. Попробуйте ещё раз.')
       : error.message;
     status.textContent = `Ошибка: ${message}`;
   } finally {
@@ -607,13 +860,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
   initSettingsPanel();
 
-  const closeButton = document.querySelector('.close-button');
-  const minimizeButton = document.querySelector('.minimize-button');
+  // ── F-03: Локализация ──
+  initI18n();
+  document.querySelectorAll('.lang-btn').forEach((btn) => {
+    btn.addEventListener('click', () => switchLang(btn.dataset.lang));
+  });
 
-  if (closeButton) {
-    closeButton.addEventListener('click', () => window.close());
+  // ── F-05: Копировать конфиг (в модале предпросмотра) ──
+  const copyConfigBtnModal = document.getElementById('copyConfigBtnModal');
+  if (copyConfigBtnModal) {
+    copyConfigBtnModal.addEventListener('click', async () => {
+      const textarea = document.getElementById('configPreviewTextModal');
+      if (!textarea || !textarea.value) return;
+      try {
+        await navigator.clipboard.writeText(textarea.value);
+      } catch {
+        textarea.select();
+        document.execCommand('copy');
+      }
+      const origText = copyConfigBtnModal.textContent;
+      copyConfigBtnModal.textContent = t('btn_copied', 'Скопировано!');
+      setTimeout(() => { copyConfigBtnModal.textContent = origText; }, 2000);
+    });
   }
 
+  // ── F-07: Статус сервисов ──
+  const statusModalBtn = document.getElementById('statusModalBtn');
+  if (statusModalBtn) {
+    statusModalBtn.addEventListener('click', openStatusModal);
+  }
+
+  // ── Закрытие модалов по клику на затемнённый оверлей ──
+  ['qrModal', 'configPreviewModal', 'statusModal'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', (ev) => { if (ev.target === el) closeModal(id); });
+  });
+
+  // ── Стандартные кнопки окна ──
+  const closeButton = document.querySelector('.close-button');
+  const minimizeButton = document.querySelector('.minimize-button');
+  if (closeButton) closeButton.addEventListener('click', () => window.close());
   if (minimizeButton) {
     minimizeButton.addEventListener('click', () => {
       const windowContent = document.querySelector('.window-content');
@@ -622,29 +908,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ── Информационный модал ──
   const infoLink = document.getElementById('infoLink');
-  const modal = document.getElementById('modal');
+  const modal    = document.getElementById('modal');
 
   if (infoLink && modal) {
-    const closeInfoModal = () => {
-      modal.style.display = 'none';
-      modal.setAttribute('aria-hidden', 'true');
-    };
-    const openInfoModal = () => {
-      modal.style.display = 'flex';
-      modal.setAttribute('aria-hidden', 'false');
-    };
+    const closeInfoModal = () => { modal.style.display = 'none'; modal.setAttribute('aria-hidden', 'true'); };
+    const openInfoModal  = () => { modal.style.display = 'flex'; modal.setAttribute('aria-hidden', 'false'); };
 
     infoLink.addEventListener('click', openInfoModal);
-    modal.addEventListener('click', (event) => {
-      if (event.target === modal) closeInfoModal();
-    });
-    document.addEventListener('keydown', (event) => {
-      if (event.key !== 'Escape') return;
+    modal.addEventListener('click', (ev) => { if (ev.target === modal) closeInfoModal(); });
+
+    // ESC закрывает любой открытый модал
+    document.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Escape') return;
       const settingsEl = document.getElementById('settingsModal');
-      if (settingsEl && settingsEl.style.display === 'flex') {
-        closeSettingsModal();
-        return;
+      if (settingsEl && settingsEl.style.display === 'flex') { closeSettingsModal(); return; }
+      for (const id of ['qrModal', 'configPreviewModal', 'statusModal']) {
+        const el = document.getElementById(id);
+        if (el && el.style.display === 'flex') { closeModal(id); return; }
       }
       if (modal.style.display === 'flex') closeInfoModal();
     });

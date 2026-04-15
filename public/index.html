@@ -172,6 +172,10 @@
       crossorigin="anonymous"
       referrerpolicy="no-referrer"
     />
+    <!-- F-02: QR-код — клиентская генерация, без нагрузки на сервер -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
+      integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSr7FORoZPp5E3AXDAlPLv3+LFkLAMGFa7xA=="
+      crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   </head>
   <body>
     <script>
@@ -207,7 +211,13 @@
       <!-- Заголовок окна с кнопками управления -->
       <div class="window-header">
         <!-- Заголовок окна -->
-        <span class="window-title">Генератор конфигураций AmneziaWG</span>
+        <span class="window-title" data-i18n="window_title">Генератор конфигураций AmneziaWG</span>
+
+        <!-- F-03: Переключатель языка -->
+        <div class="lang-switcher" aria-label="Language / Язык">
+          <button class="lang-btn lang-btn--active" data-lang="ru" type="button">RU</button>
+          <button class="lang-btn" data-lang="en" type="button">EN</button>
+        </div>
 
         <!-- Панель управления окном (кнопки закрытия и сворачивания) -->
         <div class="window-controls">
@@ -260,12 +270,43 @@
             <div class="buttons">
               <div class="buttons__row">
                 <div class="buttons__gen-stack">
-                  <button id="generateButton" class="button" type="button">
-                    <span class="button__text">Сгенерировать AWG 1.5</span>
-                  </button>
-                  <button id="generateButtonAwg2" class="button" type="button">
-                    <span class="button__text">Сгенерировать AWG 2.0</span>
-                  </button>
+
+                  <!-- Legacy slot: кнопка генерации → после успеха заменяется на тройку кнопок -->
+                  <div class="gen-slot">
+                    <button id="generateButton" class="button" type="button">
+                      <span class="button__text" data-i18n="btn_gen_legacy">Сгенерировать AWG 1.5</span>
+                    </button>
+                    <div id="postGenLegacy" class="post-gen-row" hidden>
+                      <button type="button" class="button post-gen-row__download">
+                        <span class="button__text">Скачать AmneziaWarp.conf</span>
+                      </button>
+                      <button type="button" class="button button--icon-sq post-gen-row__qr" title="QR-код для импорта">
+                        <i class="fas fa-qrcode"></i>
+                      </button>
+                      <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию">
+                        <i class="fas fa-eye"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- AWG2 slot -->
+                  <div class="gen-slot">
+                    <button id="generateButtonAwg2" class="button" type="button">
+                      <span class="button__text" data-i18n="btn_gen_awg2">Сгенерировать AWG 2.0</span>
+                    </button>
+                    <div id="postGenAwg2" class="post-gen-row" hidden>
+                      <button type="button" class="button post-gen-row__download">
+                        <span class="button__text">Скачать AmneziaWarp-AWG2.conf</span>
+                      </button>
+                      <button type="button" class="button button--icon-sq post-gen-row__qr" title="QR-код для импорта">
+                        <i class="fas fa-qrcode"></i>
+                      </button>
+                      <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию">
+                        <i class="fas fa-eye"></i>
+                      </button>
+                    </div>
+                  </div>
+
                 </div>
                 <button
                   type="button"
@@ -279,7 +320,7 @@
                 </button>
               </div>
 
-              <button type="button" id="infoLink" class="info-link">
+              <button type="button" id="infoLink" class="info-link" data-i18n="btn_info">
                 Дополнительная информация
               </button>
 
@@ -294,24 +335,25 @@
                   id="schedulerButton15"
                   class="button button--scheduler"
                 >
-                  <span class="button__text">Планировщик для 1.5</span>
+                  <span class="button__text" data-i18n="btn_scheduler_15">Планировщик для 1.5</span>
                 </button>
                 <button
                   type="button"
                   id="schedulerButton20"
                   class="button button--scheduler"
                 >
-                  <span class="button__text">Планировщик для 2.0</span>
+                  <span class="button__text" data-i18n="btn_scheduler_20">Планировщик для 2.0</span>
                 </button>
               </div>
             </div>
+
           </main>
 
           <!-- Правый раздел с инструкцией и футером -->
           <div class="right-section">
             <!-- Инструкция по установке и настройке -->
             <aside class="instruction">
-              <h2>Инструкция по установке и настройке</h2>
+              <h2 data-i18n="instruction_title">Инструкция по установке и настройке</h2>
               <ol>
                 <!-- Шаг 1: Скачивание и установка -->
                 <li>
@@ -383,36 +425,49 @@
             <!-- Футер с благодарностью и ссылкой на сервер для вопросов -->
             <footer class="thank-you">
               <div class="thank-you-content">
-                <a
-                  href="https://discord.gg/sZTgtD7SyB"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="discord-link"
-                >
-                  <img
-                    src="static/discord-icon.png"
-                    alt="Discord"
-                    class="discord-icon"
-                    width="32"
-                    height="32"
-                  />
-                  Присоединиться к серверу
-                </a>
-                <a
-                  href="https://valokda.vercel.app/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="web-link"
-                >
-                  <img
-                    src="static/globe-icon.png"
-                    alt="Globe"
-                    class="globe-icon"
-                    width="32"
-                    height="32"
-                  />
-                  Посетить веб-страницу
-                </a>
+                <!-- Ряд: Discord + Web + кнопка Статус сервисов (занимает высоту обоих) -->
+                <div class="footer-links-row">
+                  <div class="footer-links-col">
+                    <a
+                      href="https://discord.gg/sZTgtD7SyB"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="discord-link"
+                    >
+                      <img
+                        src="static/discord-icon.png"
+                        alt="Discord"
+                        class="discord-icon"
+                        width="32"
+                        height="32"
+                      />
+                      Присоединиться к серверу
+                    </a>
+                    <a
+                      href="https://valokda.vercel.app/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="web-link"
+                    >
+                      <img
+                        src="static/globe-icon.png"
+                        alt="Globe"
+                        class="globe-icon"
+                        width="32"
+                        height="32"
+                      />
+                      Посетить веб-страницу
+                    </a>
+                  </div>
+                  <!-- F-07: кнопка статуса открывает модальное окно -->
+                  <button
+                    type="button"
+                    id="statusModalBtn"
+                    class="status-modal-btn"
+                    data-i18n="status_link"
+                  >📡 Статус сервисов</button>
+                </div>
+
                 <div class="donate-section">
                   <div class="donate-container">
                     <iframe
@@ -438,6 +493,42 @@
       </div>
     </div>
 
+    <!-- F-02: Модальное окно QR-кода -->
+    <div id="qrModal" class="modal" role="dialog" aria-modal="true"
+         aria-labelledby="qrModalHeading" aria-hidden="true">
+      <div class="modal-content modal-content--qr">
+        <h2 id="qrModalHeading" class="modal-heading" data-i18n="qr_title">QR-код для импорта</h2>
+        <div id="qrCodeModal" class="qr-canvas-wrapper"></div>
+        <p id="qrModalWarning" class="qr-warning" hidden></p>
+      </div>
+    </div>
+
+    <!-- F-05: Модальное окно предпросмотра конфига -->
+    <div id="configPreviewModal" class="modal" role="dialog" aria-modal="true"
+         aria-labelledby="previewModalHeading" aria-hidden="true">
+      <div class="modal-content modal-content--preview">
+        <h2 id="previewModalHeading" class="modal-heading" data-i18n="config_preview_title">Предпросмотр конфигурации</h2>
+        <textarea
+          id="configPreviewTextModal"
+          class="config-preview-textarea"
+          readonly
+          aria-label="Текст конфигурации"
+        ></textarea>
+        <button type="button" id="copyConfigBtnModal" class="button button--sm" data-i18n="btn_copy">Копировать</button>
+      </div>
+    </div>
+
+    <!-- F-07: Модальное окно статуса сервисов -->
+    <div id="statusModal" class="modal" role="dialog" aria-modal="true"
+         aria-labelledby="statusModalHeading" aria-hidden="true">
+      <div class="modal-content modal-content--status">
+        <h2 id="statusModalHeading" class="modal-heading">📡 Статус сервисов</h2>
+        <div id="statusModalContent" class="status-loading-msg">Загрузка...</div>
+        <div id="statusModalLastChecked" class="status-last-checked" hidden></div>
+      </div>
+    </div>
+
+    <!-- Информационное модальное окно (существующее) -->
     <div
       id="modal"
       class="modal"
