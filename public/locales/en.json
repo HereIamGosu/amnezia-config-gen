@@ -113,5 +113,10 @@
 
   "history_title": "🕐 History",
   "history_no_presets": "no presets",
-  "history_download": "↓"
+  "history_download": "↓",
+  "btn_history": "🕐 History",
+  "history_btn_aria": "Generation history",
+  "history_modal_title": "🕐 Generation History",
+  "history_empty": "No saved generations",
+  "history_clear_all": "Clear history"
 }
