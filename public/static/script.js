@@ -9,12 +9,27 @@ const _i18n = { locale: 'ru', strings: {} };
 /** Возвращает переведённую строку или fallback (если перевод не загружен). */
 const t = (key, fallback) => _i18n.strings[key] !== undefined ? _i18n.strings[key] : (fallback !== undefined ? fallback : key);
 
-/** Обходит все [data-i18n] элементы и проставляет переведённый textContent. */
+/** Обходит все элементы с data-i18n-* и применяет переводы. */
 const applyTranslations = () => {
   document.querySelectorAll('[data-i18n]').forEach((el) => {
     const key = el.getAttribute('data-i18n');
     const val = _i18n.strings[key];
     if (val !== undefined) el.textContent = val;
+  });
+  document.querySelectorAll('[data-i18n-html]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-html');
+    const val = _i18n.strings[key];
+    if (val !== undefined) el.innerHTML = val;
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-title');
+    const val = _i18n.strings[key];
+    if (val !== undefined) el.title = val;
+  });
+  document.querySelectorAll('[data-i18n-aria-label]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-aria-label');
+    const val = _i18n.strings[key];
+    if (val !== undefined) el.setAttribute('aria-label', val);
   });
 };
 
@@ -91,7 +106,12 @@ const STATUS_SERVICE_LABELS = {
   warp_api:    { name: 'Cloudflare WARP API', url: 'api.cloudflareclient.com' },
   cidr_source: { name: 'Источник CIDR (iplist.opencck.org)', url: 'iplist.opencck.org' },
 };
-const STATUS_TEXT = { ok: 'ОК', error: 'ОШИБКА', degraded: 'НЕСТАБИЛЬНО', unknown: 'НЕИЗВЕСТНО' };
+const getStatusText = () => ({
+  ok:      t('status_ok',      'ОК'),
+  error:   t('status_error',   'ОШИБКА'),
+  degraded: t('status_degraded', 'НЕСТАБИЛЬНО'),
+  unknown: t('status_unknown', 'НЕИЗВЕСТНО'),
+});
 
 const formatMoscowTime = (isoStr) => {
   const d = new Date(isoStr);
@@ -100,7 +120,7 @@ const formatMoscowTime = (isoStr) => {
     timeZone: 'Europe/Moscow',
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
-  }) + ' (МСК)';
+  }) + t('status_msk_suffix', ' (МСК)');
 };
 
 const renderStatusModal = (data) => {
@@ -110,19 +130,25 @@ const renderStatusModal = (data) => {
 
   if (!data || !data.services) {
     content.className = 'status-error-msg';
-    content.textContent = 'Некорректный формат данных.';
+    content.textContent = t('status_data_error', 'Некорректный формат данных.');
     return;
   }
 
   if (data.checked_at === '1970-01-01T00:00:00Z') {
     content.className = 'status-error-msg';
-    content.innerHTML = 'Данные мониторинга ещё не собраны.<br>Healthcheck запускается каждые 30&nbsp;мин через GitHub Actions.';
+    content.innerHTML = t('status_not_yet', 'Данные мониторинга ещё не собраны.<br>Healthcheck запускается каждые 30&nbsp;мин через GitHub Actions.');
     return;
   }
 
+  const STATUS_TEXT = getStatusText();
+  const cidrSourceName = t('status_cidr_name', 'Источник CIDR (iplist.opencck.org)');
+  const serviceLabels = {
+    warp_api:    { name: STATUS_SERVICE_LABELS.warp_api.name, url: STATUS_SERVICE_LABELS.warp_api.url },
+    cidr_source: { name: cidrSourceName, url: STATUS_SERVICE_LABELS.cidr_source.url },
+  };
   let html = '<div class="status-card-list">';
   for (const [key, svc] of Object.entries(data.services)) {
-    const label  = STATUS_SERVICE_LABELS[key] || { name: key, url: '' };
+    const label  = serviceLabels[key] || STATUS_SERVICE_LABELS[key] || { name: key, url: '' };
     const status = svc.status || 'unknown';
     const code   = svc.http_code != null ? `HTTP ${svc.http_code}` : '—';
     html += `
@@ -142,7 +168,7 @@ const renderStatusModal = (data) => {
 
   if (lastChecked) {
     lastChecked.hidden = false;
-    lastChecked.innerHTML = `<strong>Последняя проверка:</strong><br>${formatMoscowTime(data.checked_at)}`;
+    lastChecked.innerHTML = `<strong>${t('status_last_checked_label', 'Последняя проверка:')}</strong><br>${formatMoscowTime(data.checked_at)}`;
   }
 };
 
@@ -151,7 +177,7 @@ const openStatusModal = () => {
   const content     = document.getElementById('statusModalContent');
   const lastChecked = document.getElementById('statusModalLastChecked');
 
-  if (content) { content.className = 'status-loading-msg'; content.textContent = 'Загрузка...'; }
+  if (content) { content.className = 'status-loading-msg'; content.textContent = t('status_loading', 'Загрузка...'); }
   if (lastChecked) lastChecked.hidden = true;
 
   openModal('statusModal');
@@ -160,7 +186,7 @@ const openStatusModal = () => {
     .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
     .then(renderStatusModal)
     .catch(() => {
-      if (content) { content.className = 'status-error-msg'; content.textContent = 'Не удалось загрузить данные статуса.'; }
+      if (content) { content.className = 'status-error-msg'; content.textContent = t('status_load_fail', 'Не удалось загрузить данные статуса.'); }
     });
 };
 
@@ -222,7 +248,7 @@ const parseJsonResponse = async (response) => {
   const raw = await response.text();
   const trimmed = (raw || '').trim();
   if (!trimmed) {
-    throw new Error('Пустой ответ сервера.');
+    throw new Error(t('err_empty_response', 'Пустой ответ сервера.'));
   }
   const lower = trimmed.slice(0, 64).toLowerCase();
   if (
@@ -230,14 +256,12 @@ const parseJsonResponse = async (response) => {
     || lower.includes('<!doctype')
     || lower.includes('<html')
   ) {
-    throw new Error(
-      'Сервер вернул HTML вместо JSON (нет API). Запустите vercel dev или откройте задеплоенный сайт.',
-    );
+    throw new Error(t('err_html_response', 'Сервер вернул HTML вместо JSON (нет API). Запустите vercel dev или откройте задеплоенный сайт.'));
   }
   try {
     return JSON.parse(trimmed);
   } catch {
-    throw new Error('Ответ не похож на JSON. Проверьте доступность API.');
+    throw new Error(t('err_not_json', 'Ответ не похож на JSON. Проверьте доступность API.'));
   }
 };
 
@@ -382,10 +406,10 @@ const updateCidrCounter = (count4) => {
   const el = document.getElementById('cidrCounter');
   if (!el) return;
   if (cfgState.ignoreLimit) {
-    el.textContent = `IPv4 маршруты: ${count4} (лимит отключён)`;
+    el.textContent = `${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4} ${t('cidr_limit_disabled', '(лимит отключён)')}`;
     el.classList.remove('cidr-counter--warn', 'cidr-counter--over');
   } else {
-    el.textContent = `IPv4 маршруты: ${count4} / ${MAX_CIDR_LIMIT}`;
+    el.textContent = `${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4} / ${MAX_CIDR_LIMIT}`;
     el.classList.toggle('cidr-counter--warn', count4 >= MAX_CIDR_LIMIT * 0.8 && count4 < MAX_CIDR_LIMIT);
     el.classList.toggle('cidr-counter--over', count4 >= MAX_CIDR_LIMIT);
   }
@@ -418,7 +442,7 @@ const refreshPresetStats = debounce(async () => {
   const selected = getSelectedRouteIds();
   if (!selected.length) {
     cfgState.cidrCount4 = 0;
-    el.textContent = 'Пресеты не выбраны — весь трафик пойдёт через туннель.';
+    el.textContent = t('preset_none_selected', 'Пресеты не выбраны — весь трафик пойдёт через туннель.');
     el.classList.remove('preset-stats--warn');
     updateCidrCounter(0);
     updateTileDisabledState();
@@ -426,7 +450,7 @@ const refreshPresetStats = debounce(async () => {
   }
 
   if (cfgState.iplistSource !== 'api') {
-    el.textContent = 'Пресеты выбраны из локального списка. Оценка CIDR и генерация конфига с AllowedIPs по пресетам нуждаются в API — запустите vercel dev или откройте задеплоенный сайт.';
+    el.textContent = t('preset_offline_warning', 'Пресеты выбраны из локального списка. Оценка CIDR и генерация конфига с AllowedIPs по пресетам нуждаются в API — запустите vercel dev или откройте задеплоенный сайт.');
     el.classList.add('preset-stats--warn');
     return;
   }
@@ -434,7 +458,7 @@ const refreshPresetStats = debounce(async () => {
   if (presetStatsAbort) presetStatsAbort.abort();
   presetStatsAbort = new AbortController();
 
-  el.textContent = 'Загрузка оценки маршрутов…';
+  el.textContent = t('preset_loading', 'Загрузка оценки маршрутов…');
   el.classList.remove('preset-stats--warn');
 
   try {
@@ -455,16 +479,16 @@ const refreshPresetStats = debounce(async () => {
     const overLimit = !cfgState.ignoreLimit && count4 >= MAX_CIDR_LIMIT;
     if (overLimit) {
       el.classList.add('preset-stats--warn');
-      el.textContent = `Достигнут лимит маршрутов (${count4}/${MAX_CIDR_LIMIT} IPv4 CIDR). Некоторые устройства могут работать нестабильно. Рекомендуется отключить часть категорий.`;
+      el.textContent = `${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4}/${MAX_CIDR_LIMIT} IPv4 CIDR. ${t('preset_over_limit_msg', 'Некоторые устройства могут работать нестабильно. Рекомендуется отключить часть категорий.')}`;
     } else {
       el.classList.remove('preset-stats--warn');
       const ipv6Info = cfgState.includeIpv6 && data.count6 ? `, IPv6: +${data.count6}` : '';
-      const limitNote = cfgState.ignoreLimit && count4 >= MAX_CIDR_LIMIT ? ' ⚠ лимит превышен' : '';
-      el.textContent = `IPv4 маршруты: ${count4}${ipv6Info}${limitNote} (${data.sitesQueried} доменов в запросе).`;
+      const limitNote = cfgState.ignoreLimit && count4 >= MAX_CIDR_LIMIT ? t('preset_limit_warn_suffix', ' ⚠ лимит превышен') : '';
+      el.textContent = `${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4}${ipv6Info}${limitNote} (${data.sitesQueried}${t('tile_domains_suffix', ' доменов в запросе')}).`;
     }
   } catch (err) {
     if (err && err.name === 'AbortError') return;
-    el.textContent = `Предпросмотр недоступен: ${err.message || err}`;
+    el.textContent = t('preset_preview_fail_prefix', 'Предпросмотр недоступен: ') + (err.message || err);
     el.classList.add('preset-stats--warn');
   }
 }, 480);
@@ -511,7 +535,7 @@ const renderRouteTiles = (host, presetList) => {
   for (const p of presetList) {
     const label = document.createElement('label');
     label.className = 'cfg-tile cfg-tile--route';
-    label.title = `${p.label} (${p.sitesCount ?? '?'} доменов в запросе)`;
+    label.title = `${p.label} (${p.sitesCount ?? '?'}${t('tile_domains_suffix', ' доменов в запросе')})`;
 
     const input = document.createElement('input');
     input.type = 'checkbox';
@@ -634,7 +658,7 @@ const initSettingsPanel = async () => {
     clearAllRouteTileHosts();
     if (statsEl) {
       statsEl.classList.add('preset-stats--warn');
-      statsEl.textContent = `Не удалось загрузить пресеты: ${e.message || e}`;
+      statsEl.textContent = t('preset_load_fail_prefix', 'Не удалось загрузить пресеты: ') + (e.message || e);
     }
   }
 };
@@ -662,13 +686,20 @@ const setAllGenerateButtonsDisabled = (disabled) => {
 };
 
 /**
- * @param {{ buttonId: string, mode: string, filename: string, readyDownloadText: string, loadingLabel: string, boundGenerateClick: () => void }} options
+ * @param {{ buttonId: string, mode: string, filename: string, boundGenerateClick: () => void }} options
  */
 const generateConfig = async (options) => {
-  const { buttonId, mode, filename, readyDownloadText, loadingLabel, boundGenerateClick } = options;
+  const { buttonId, mode, filename, boundGenerateClick } = options;
   const button = document.getElementById(buttonId);
   if (!button) return;
   const status = document.getElementById('status');
+
+  const loadingLabel = mode === 'awg2'
+    ? t('loading_awg2', 'Генерация конфигурации (AmneziaWG 2.0)...')
+    : t('loading_legacy', 'Генерация конфигурации (Legacy)...');
+  const readyDownloadText = mode === 'awg2'
+    ? t('ready_download_awg2', 'Скачать AmneziaWarp-AWG2.conf')
+    : t('ready_download_legacy', 'Скачать AmneziaWarp.conf');
 
   setAllGenerateButtonsDisabled(true);
   button.classList.add('button--loading');
@@ -712,7 +743,7 @@ const generateConfig = async (options) => {
         ? t('success_awg2', 'Конфигурация AmneziaWG 2.0 успешно сгенерирована! Нужен клиент AmneziaVPN 4.8.12.9+ или совместимый AWG 2.0.')
         : t('success_legacy', 'Конфигурация Legacy успешно сгенерирована!');
     } else {
-      throw new Error(data.message || 'Неизвестная ошибка при генерации конфигурации.');
+      throw new Error(data.message || t('err_unknown_gen', 'Неизвестная ошибка при генерации конфигурации.'));
     }
   } catch (error) {
     console.error('Ошибка при генерации конфигурации:', error);
@@ -731,19 +762,19 @@ const generateConfig = async (options) => {
  * @param {string} downloadName filename for Save dialog
  * @param {string} doneMessage status text on success
  */
-const downloadSchedulerBat = async (staticPath, downloadName, doneMessage) => {
+const downloadSchedulerBat = async (staticPath, downloadName, doneMessageKey, doneMessageFb) => {
   const status = document.getElementById('status');
-  status.textContent = 'Скачивание bat планировщика...';
+  status.textContent = t('scheduler_downloading', 'Скачивание bat планировщика...');
   const url = new URL(staticPath, window.location.href);
   try {
     const response = await fetch(url.href);
-    if (!response.ok) throw new Error(`Ошибка HTTP: ${response.status}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const text = await response.text();
     downloadFile(text, downloadName);
-    status.textContent = doneMessage;
+    status.textContent = t(doneMessageKey, doneMessageFb);
   } catch (error) {
     console.error('Ошибка при скачивании bat:', error);
-    status.textContent = 'Не удалось скачать bat. Нужен запуск сайта через хостинг (не file://) или скопируйте файлы из папки public/static репозитория.';
+    status.textContent = t('scheduler_fail', 'Не удалось скачать bat. Нужен запуск сайта через хостинг (не file://) или скопируйте файлы из папки public/static репозитория.');
   }
 };
 
@@ -757,8 +788,6 @@ document.addEventListener('DOMContentLoaded', () => {
     buttonId: 'generateButton',
     mode: 'legacy',
     filename: 'AmneziaWarp.conf',
-    readyDownloadText: 'Скачать AmneziaWarp.conf',
-    loadingLabel: 'Генерация конфигурации (Legacy)...',
     boundGenerateClick: () => {},
   };
   legacyOptions.boundGenerateClick = () => generateConfig(legacyOptions);
@@ -767,8 +796,6 @@ document.addEventListener('DOMContentLoaded', () => {
     buttonId: 'generateButtonAwg2',
     mode: 'awg2',
     filename: 'AmneziaWarp-AWG2.conf',
-    readyDownloadText: 'Скачать AmneziaWarp-AWG2.conf',
-    loadingLabel: 'Генерация конфигурации (AmneziaWG 2.0)...',
     boundGenerateClick: () => {},
   };
   awg2Options.boundGenerateClick = () => generateConfig(awg2Options);
@@ -790,6 +817,7 @@ document.addEventListener('DOMContentLoaded', () => {
       downloadSchedulerBat(
         'static/SchedulerAmnezia-15.bat',
         'SchedulerAmnezia-15.bat',
+        'scheduler_done_15',
         'Скачан планировщик для 1.5 (AmneziaWarp.conf).',
       ),
     );
@@ -802,6 +830,7 @@ document.addEventListener('DOMContentLoaded', () => {
       downloadSchedulerBat(
         'static/SchedulerAmnezia-20.bat',
         'SchedulerAmnezia-20.bat',
+        'scheduler_done_20',
         'Скачан планировщик для 2.0 (AmneziaWarp-AWG2.conf).',
       ),
     );
