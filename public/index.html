@@ -222,12 +222,14 @@
           <button
             class="window-button close-button"
             aria-label="Закрыть"
+            data-i18n-aria-label="close_btn_aria"
           ></button>
 
           <!-- Кнопка сворачивания окна -->
           <button
             class="window-button minimize-button"
             aria-label="Свернуть"
+            data-i18n-aria-label="minimize_btn_aria"
           ></button>
         </div>
       </div>
@@ -247,13 +249,13 @@
 
             <!-- Сообщение о конфигурации и файле планировщика -->
             <div class="info-message">
-              <p>
+              <p data-i18n-html="info_message_p1">
                 Конфигурацию можно сгенерировать для любых устройств. По
                 умолчанию весь трафик идёт через туннель. Пресеты маршрутов и
                 DNS можно задать в модальном окне по кнопке
                 <strong>⚙</strong> рядом с кнопками генерации.
               </p>
-              <p>
+              <p data-i18n-html="info_message_p2">
                 Для Windows — два отдельных <strong>.bat</strong> под версию
                 клиента: <strong>1.5 (Legacy)</strong> и <strong>2.0</strong>; в
                 каждом указан свой файл конфига в «Загрузках».
@@ -275,9 +277,9 @@
                     </button>
                     <div id="postGenLegacy" class="post-gen-row" hidden>
                       <button type="button" class="button post-gen-row__download">
-                        <span class="button__text">Скачать AmneziaWarp.conf</span>
+                        <span class="button__text" data-i18n="ready_download_legacy">Скачать AmneziaWarp.conf</span>
                       </button>
-                      <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию">
+                      <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию" data-i18n-title="preview_btn_title">
                         <i class="fas fa-eye"></i>
                       </button>
                     </div>
@@ -290,9 +292,9 @@
                     </button>
                     <div id="postGenAwg2" class="post-gen-row" hidden>
                       <button type="button" class="button post-gen-row__download">
-                        <span class="button__text">Скачать AmneziaWarp-AWG2.conf</span>
+                        <span class="button__text" data-i18n="ready_download_awg2">Скачать AmneziaWarp-AWG2.conf</span>
                       </button>
-                      <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию">
+                      <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию" data-i18n-title="preview_btn_title">
                         <i class="fas fa-eye"></i>
                       </button>
                     </div>
@@ -306,6 +308,7 @@
                   aria-expanded="false"
                   aria-controls="settingsModal"
                   title="Настройки конфигурации"
+                  data-i18n-title="settings_toggle_title"
                 >
                   ⚙
                 </button>
@@ -320,6 +323,7 @@
                 class="buttons__scheduler-row"
                 role="group"
                 aria-label="Скачать bat планировщика"
+                data-i18n-aria-label="scheduler_row_aria"
               >
                 <button
                   type="button"
@@ -347,7 +351,7 @@
               <h2 data-i18n="instruction_title">Инструкция по установке и настройке</h2>
               <ol>
                 <!-- Шаг 1: Скачивание и установка -->
-                <li>
+                <li data-i18n-html="instruction_step1">
                   <strong>Скачивание и установка AmneziaWG:</strong><br />
                   Перейдите по
                   <a
@@ -362,7 +366,7 @@
                 </li>
 
                 <!-- Шаг 2: Генерация конфигурационного файла -->
-                <li>
+                <li data-i18n-html="instruction_step2">
                   <strong>Генерация конфигурационного файла:</strong><br />
                   После установки нажмите
                   <strong>«Сгенерировать AWG 1.5»</strong> (Legacy, файл
@@ -374,7 +378,7 @@
                 </li>
 
                 <!-- Шаг 3: Загрузка и запуск файла планировщика -->
-                <li>
+                <li data-i18n-html="instruction_step3">
                   <strong>Загрузка и запуск bat планировщика:</strong><br />
                   Скачайте
                   <strong>«Планировщик для 1.5»</strong> или
@@ -388,7 +392,7 @@
                   <code>.bat</code> (имена задач внутри файлов различаются).
                 </li>
               </ol>
-              <p>
+              <p data-i18n-html="instruction_conclusion">
                 После этого AmneziaWG сможет автоматически подключаться к
                 конфигу из «Загрузок» при входе в систему 🥸 Путь к
                 <code>amneziawg.exe</code> в bat при необходимости поправьте под
@@ -398,7 +402,7 @@
 
             <section class="thank-you" aria-label="Сообщение автора">
               <div class="thank-you-content">
-                <p>
+                <p data-i18n-html="thank_you_text">
                   Чуваки, а особенно сетевики, я очень рад, что моя поделка
                   пользуется спросом. Я часто не понимаю, работает ли это; мир
                   слишком переменчив. Всегда буду рад дружбе с вами, приходите в
@@ -432,7 +436,7 @@
                         width="32"
                         height="32"
                       />
-                      Присоединиться к серверу
+                      <span data-i18n="discord_link_text">Присоединиться к серверу</span>
                     </a>
                     <a
                       href="https://valokda.vercel.app/"
@@ -447,7 +451,7 @@
                         width="32"
                         height="32"
                       />
-                      Посетить веб-страницу
+                      <span data-i18n="web_link_text">Посетить веб-страницу</span>
                     </a>
                   </div>
                   <!-- F-07: кнопка статуса открывает модальное окно -->
@@ -472,7 +476,7 @@
                       class="donate-iframe"
                     >
                     </iframe>
-                    <div class="donate-text">
+                    <div class="donate-text" data-i18n-html="donate_text">
                       Поддержите автора <br />и выразите благодарность
                     </div>
                   </div>
@@ -494,6 +498,7 @@
           class="config-preview-textarea"
           readonly
           aria-label="Текст конфигурации"
+          data-i18n-aria-label="config_preview_textarea_aria"
         ></textarea>
         <button type="button" id="copyConfigBtnModal" class="button button--sm" data-i18n="btn_copy">Копировать</button>
       </div>
@@ -503,8 +508,8 @@
     <div id="statusModal" class="modal" role="dialog" aria-modal="true"
          aria-labelledby="statusModalHeading" aria-hidden="true">
       <div class="modal-content modal-content--status">
-        <h2 id="statusModalHeading" class="modal-heading">📡 Статус сервисов</h2>
-        <div id="statusModalContent" class="status-loading-msg">Загрузка...</div>
+        <h2 id="statusModalHeading" class="modal-heading" data-i18n="status_modal_heading">📡 Статус сервисов</h2>
+        <div id="statusModalContent" class="status-loading-msg" data-i18n="status_loading">Загрузка...</div>
         <div id="statusModalLastChecked" class="status-last-checked" hidden></div>
       </div>
     </div>
@@ -519,14 +524,14 @@
       aria-hidden="true"
     >
       <div class="modal-content modal-content--info">
-        <h2 id="modalHeading" class="modal-heading">
+        <h2 id="modalHeading" class="modal-heading" data-i18n="info_modal_heading">
           Дополнительная информация
         </h2>
 
         <!-- Секция 1: AllowedIPs и маршруты -->
         <div class="info-section">
-          <h3 class="info-section__title">&#x1F310; Маршруты и AllowedIPs</h3>
-          <p>
+          <h3 class="info-section__title" data-i18n="info_s1_title">&#x1F310; Маршруты и AllowedIPs</h3>
+          <p data-i18n-html="info_s1_p1">
             По умолчанию весь трафик идёт через туннель (<strong
               >AllowedIPs = 0.0.0.0/0, ::/0</strong
             >). В настройках (кнопка ⚙) можно выбрать DNS-сервер и пресеты —
@@ -535,7 +540,7 @@
             и может вызывать сбои на роутерах и мобильных клиентах. Безопасный
             лимит — <strong>1000 IPv4 CIDR</strong>.
           </p>
-          <p>
+          <p data-i18n-html="info_s1_p2">
             IP-диапазоны можно заменить вручную. Актуальные списки — на
             <a
               href="https://iplist.opencck.org/ru"
@@ -555,17 +560,17 @@
 
         <!-- Секция 2: AWG 1.5 vs AWG 2.0 -->
         <div class="info-section">
-          <h3 class="info-section__title">&#x2139; AWG 1.5 vs AWG 2.0</h3>
+          <h3 class="info-section__title" data-i18n="info_s2_title">&#x2139; AWG 1.5 vs AWG 2.0</h3>
           <div class="info-compare">
             <div class="info-compare__col">
               <div class="info-compare__label info-compare__label--legacy">
                 AWG 1.5 (Legacy)
               </div>
               <ul class="info-list">
-                <li>Статические параметры обфускации (Jc, S1–S4, H1–H4)</li>
-                <li>Маскирует только начало соединения</li>
-                <li>Работает с Cloudflare WARP без сервера</li>
-                <li>Совместим со старыми клиентами</li>
+                <li data-i18n="info_legacy_li1">Статические параметры обфускации (Jc, S1–S4, H1–H4)</li>
+                <li data-i18n="info_legacy_li2">Маскирует только начало соединения</li>
+                <li data-i18n="info_legacy_li3">Работает с Cloudflare WARP без сервера</li>
+                <li data-i18n="info_legacy_li4">Совместим со старыми клиентами</li>
               </ul>
             </div>
             <div class="info-compare__col">
@@ -573,12 +578,12 @@
                 AWG 2.0
               </div>
               <ul class="info-list">
-                <li>
+                <li data-i18n="info_awg2_li1">
                   Динамические заголовки + случайный padding во всех пакетах
                 </li>
-                <li>Имитирует QUIC/DNS на протяжении всей сессии</li>
-                <li>Сложнее для эвристического DPI-анализа</li>
-                <li>Требует клиент ≥ 4.8.12.9 (Amnezia)</li>
+                <li data-i18n="info_awg2_li2">Имитирует QUIC/DNS на протяжении всей сессии</li>
+                <li data-i18n="info_awg2_li3">Сложнее для эвристического DPI-анализа</li>
+                <li data-i18n="info_awg2_li4">Требует клиент ≥ 4.8.12.9 (Amnezia)</li>
               </ul>
             </div>
           </div>
@@ -586,15 +591,15 @@
 
         <!-- Секция 3: Нужен ли сервер для AWG 2.0 -->
         <div class="info-section">
-          <h3 class="info-section__title">
+          <h3 class="info-section__title" data-i18n="info_s3_title">
             &#x26A0; Нужен ли сервер для AWG 2.0?
           </h3>
-          <p>
+          <p data-i18n-html="info_s3_p1">
             <strong>Для Cloudflare WARP — нет.</strong> Конфиги этого генератора
             работают с публичным сервером Cloudflare без каких-либо настроек на
             стороне сервера.
           </p>
-          <p>
+          <p data-i18n-html="info_s3_p2">
             <strong>Для своего сервера — да.</strong> Самостоятельный AWG 2.0
             требует обновлённого ядра/модуля
             <code>amneziawg-linux-kernel-module</code> на сервере и новых
@@ -621,7 +626,7 @@
     >
       <div class="modal-content settings-modal__dialog">
         <div class="settings-modal__titlebar">
-          <h2 id="settingsModalTitle" class="settings-modal__title">
+          <h2 id="settingsModalTitle" class="settings-modal__title" data-i18n="settings_modal_title">
             Настройки конфигурации
           </h2>
           <button
@@ -629,18 +634,19 @@
             class="settings-modal__close"
             id="settingsModalClose"
             aria-label="Закрыть"
+            data-i18n-aria-label="settings_close_aria"
           >
             ×
           </button>
         </div>
         <div class="settings-modal__body">
           <fieldset class="settings-panel__group">
-            <legend>DNS-сервер</legend>
+            <legend data-i18n="dns_legend">DNS-сервер</legend>
             <div id="dnsTiles" class="cfg-tiles"></div>
           </fieldset>
           <fieldset class="settings-panel__group">
-            <legend>Пресеты маршрутов (AllowedIPs)</legend>
-            <p class="settings-panel__hint">
+            <legend data-i18n="routes_legend">Пресеты маршрутов (AllowedIPs)</legend>
+            <p class="settings-panel__hint" data-i18n-html="routes_hint">
               Отметьте пресеты — их IPv4-подсети добавятся в
               <strong>AllowedIPs</strong>. Если ничего не выбрано, весь трафик
               идёт через туннель (<strong>0.0.0.0/0, ::/0</strong>).
@@ -652,10 +658,11 @@
                 type="button"
                 class="cfg-tiles-action"
                 id="presetRfPopular"
+                data-i18n="preset_btn_popular"
               >
                 Основной набор
               </button>
-              <button type="button" class="cfg-tiles-action" id="presetClear">
+              <button type="button" class="cfg-tiles-action" id="presetClear" data-i18n="preset_btn_clear">
                 Снять всё
               </button>
             </div>
@@ -664,37 +671,39 @@
               <label
                 class="ipv6-toggle"
                 title="IPv6 маршруты увеличивают число записей в 2–3 раза. Включайте только если клиент поддерживает IPv6 и ваш роутер справляется с большим количеством маршрутов."
+                data-i18n-title="ipv6_toggle_title"
               >
                 <input type="checkbox" id="ipv6Toggle" />
-                <span>+ IPv6 маршруты</span>
+                <span data-i18n="ipv6_toggle_label">+ IPv6 маршруты</span>
               </label>
               <label
                 class="ipv6-toggle"
                 title="Снимает блокировку выбора пресетов при превышении лимита. Используйте на свой страх и риск — слишком большое число маршрутов может вызвать сбои на роутерах и мобильных клиентах."
+                data-i18n-title="ignore_limit_title"
               >
                 <input type="checkbox" id="ignoreLimitToggle" />
-                <span>Без лимита</span>
+                <span data-i18n="ignore_limit_label">Без лимита</span>
               </label>
             </div>
             <p id="presetStats" class="preset-stats" aria-live="polite"></p>
-            <h3 class="settings-modal__subsection">
+            <h3 class="settings-modal__subsection" data-i18n="section_social">
               Социальные сети и мессенджеры
             </h3>
             <div
               id="routeTilesSocial"
               class="cfg-tiles cfg-tiles--routes"
             ></div>
-            <h3 class="settings-modal__subsection">Игровые платформы</h3>
+            <h3 class="settings-modal__subsection" data-i18n="section_gaming">Игровые платформы</h3>
             <div
               id="routeTilesGaming"
               class="cfg-tiles cfg-tiles--routes"
             ></div>
-            <h3 class="settings-modal__subsection">Торрент-трекеры</h3>
+            <h3 class="settings-modal__subsection" data-i18n="section_torrent">Торрент-трекеры</h3>
             <div
               id="routeTilesTorrent"
               class="cfg-tiles cfg-tiles--routes"
             ></div>
-            <h3 class="settings-modal__subsection">Дополнительно</h3>
+            <h3 class="settings-modal__subsection" data-i18n="section_more">Дополнительно</h3>
             <div id="routeTilesMore" class="cfg-tiles cfg-tiles--routes"></div>
           </fieldset>
         </div>
