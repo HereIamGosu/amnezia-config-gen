@@ -715,27 +715,57 @@ const formatHistoryTime = (ts) => {
 };
 
 const renderHistoryPanel = () => {
-  const section = document.getElementById('historySection');
+  const btn = document.getElementById('historyModalBtn');
   const list = document.getElementById('historyList');
   const countEl = document.getElementById('historyCount');
+  const emptyMsg = document.getElementById('historyEmptyMsg');
   const arr = loadHistory();
-  if (!section) return;
-  if (!arr.length) { section.hidden = true; return; }
-  section.hidden = false;
-  if (countEl) countEl.textContent = `(${arr.length})`;
+
+  // Show/hide the history button
+  if (btn) btn.hidden = arr.length === 0;
+  if (countEl) countEl.textContent = arr.length > 0 ? String(arr.length) : '';
+
   if (!list) return;
   list.textContent = '';
+
+  if (!arr.length) {
+    if (emptyMsg) emptyMsg.hidden = false;
+    return;
+  }
+  if (emptyMsg) emptyMsg.hidden = true;
+
   arr.forEach((entry) => {
     const item = document.createElement('div');
     item.className = 'history-item';
 
-    const info = document.createElement('span');
+    // Mode badge
+    const badge = document.createElement('span');
+    badge.className = 'history-item__badge ' +
+      (entry.mode === 'awg2' ? 'history-item__badge--awg2' : 'history-item__badge--legacy');
+    badge.textContent = entry.mode === 'awg2' ? 'AWG 2.0' : 'AWG 1.5';
+
+    // Info block
+    const info = document.createElement('div');
     info.className = 'history-item__info';
-    const modeLabel = entry.mode === 'awg2' ? 'AWG 2.0' : 'AWG 1.5';
+
+    const timeEl = document.createElement('div');
+    timeEl.className = 'history-item__time';
+    timeEl.textContent = formatHistoryTime(entry.ts);
+
+    const presetsEl = document.createElement('div');
+    presetsEl.className = 'history-item__presets';
     const presetSummary = entry.presets && entry.presets.length
-      ? entry.presets.slice(0, 3).join(', ') + (entry.presets.length > 3 ? '…' : '')
+      ? entry.presets.slice(0, 4).join(', ') + (entry.presets.length > 4 ? '…' : '')
       : t('history_no_presets', 'без пресетов');
-    info.textContent = `${formatHistoryTime(entry.ts)} · ${modeLabel} · ${presetSummary}`;
+    presetsEl.textContent = presetSummary;
+    presetsEl.title = entry.presets ? entry.presets.join(', ') : '';
+
+    info.appendChild(timeEl);
+    info.appendChild(presetsEl);
+
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'history-item__actions';
 
     const dlBtn = document.createElement('button');
     dlBtn.type = 'button';
@@ -744,8 +774,19 @@ const renderHistoryPanel = () => {
     dlBtn.title = entry.filename;
     dlBtn.addEventListener('click', () => downloadFile(atob(entry.b64), entry.filename));
 
+    const previewBtn = document.createElement('button');
+    previewBtn.type = 'button';
+    previewBtn.className = 'button button--sm history-item__preview';
+    previewBtn.innerHTML = '<i class="fas fa-eye"></i>';
+    previewBtn.title = t('preview_btn_title', 'Просмотреть конфигурацию');
+    previewBtn.addEventListener('click', () => openPreviewModal(atob(entry.b64)));
+
+    actions.appendChild(dlBtn);
+    actions.appendChild(previewBtn);
+
+    item.appendChild(badge);
     item.appendChild(info);
-    item.appendChild(dlBtn);
+    item.appendChild(actions);
     list.appendChild(item);
   });
 };
@@ -928,13 +969,39 @@ document.addEventListener('DOMContentLoaded', () => {
     console.error('Кнопка "schedulerButton20" не найдена.');
   }
 
-  // ── История генераций ──
-  const historyToggle = document.getElementById('historyToggle');
-  const historyPanel  = document.getElementById('historyPanel');
-  if (historyToggle && historyPanel) {
-    historyToggle.addEventListener('click', () => {
-      const open = historyPanel.hidden === false;
-      historyPanel.hidden = open;
+  // ── История генераций (модальное окно) ──
+  const historyModalBtn   = document.getElementById('historyModalBtn');
+  const historyModal      = document.getElementById('historyModal');
+  const historyModalClose = document.getElementById('historyModalClose');
+  const historyClearBtn   = document.getElementById('historyClearBtn');
+
+  const openHistoryModal = () => {
+    renderHistoryPanel();
+    if (historyModal) {
+      historyModal.style.display = 'flex';
+      historyModal.setAttribute('aria-hidden', 'false');
+    }
+  };
+
+  const closeHistoryModal = () => {
+    if (historyModal) {
+      historyModal.style.display = 'none';
+      historyModal.setAttribute('aria-hidden', 'true');
+    }
+  };
+
+  if (historyModalBtn) historyModalBtn.addEventListener('click', openHistoryModal);
+  if (historyModalClose) historyModalClose.addEventListener('click', closeHistoryModal);
+  if (historyModal) {
+    historyModal.addEventListener('click', (e) => {
+      if (e.target === historyModal) closeHistoryModal();
+    });
+  }
+  if (historyClearBtn) {
+    historyClearBtn.addEventListener('click', () => {
+      try { localStorage.removeItem(HISTORY_KEY); } catch { /* */ }
+      renderHistoryPanel();
+      closeHistoryModal();
     });
   }
   renderHistoryPanel();
@@ -1005,6 +1072,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (ev.key !== 'Escape') return;
       const settingsEl = document.getElementById('settingsModal');
       if (settingsEl && settingsEl.style.display === 'flex') { closeSettingsModal(); return; }
+      if (historyModal && historyModal.style.display === 'flex') { closeHistoryModal(); return; }
       for (const id of ['configPreviewModal', 'statusModal']) {
         const el = document.getElementById(id);
         if (el && el.style.display === 'flex') { closeModal(id); return; }

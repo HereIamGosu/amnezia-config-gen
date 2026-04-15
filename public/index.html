@@ -339,17 +339,17 @@
                 >
                   <span class="button__text" data-i18n="btn_scheduler_20">Планировщик для 2.0</span>
                 </button>
-              </div>
-            </div>
-
-            <!-- История генераций -->
-            <div id="historySection" class="history-section" hidden>
-              <button type="button" id="historyToggle" class="history-toggle">
-                <span data-i18n="history_title">🕐 История</span>
-                <span id="historyCount" class="history-count"></span>
-              </button>
-              <div id="historyPanel" class="history-panel" hidden>
-                <div id="historyList" class="history-list"></div>
+                <button
+                  type="button"
+                  id="historyModalBtn"
+                  class="button button--history-open"
+                  aria-label="История генераций"
+                  data-i18n-aria-label="history_btn_aria"
+                  hidden
+                >
+                  <span class="button__text" data-i18n="btn_history">🕐 История</span>
+                  <span id="historyCount" class="history-count-badge"></span>
+                </button>
               </div>
             </div>
 
@@ -522,6 +522,24 @@
         <h2 id="statusModalHeading" class="modal-heading" data-i18n="status_modal_heading">📡 Статус сервисов</h2>
         <div id="statusModalContent" class="status-loading-msg" data-i18n="status_loading">Загрузка...</div>
         <div id="statusModalLastChecked" class="status-last-checked" hidden></div>
+      </div>
+    </div>
+
+    <!-- История генераций: модальное окно -->
+    <div id="historyModal" class="modal history-modal" role="dialog" aria-modal="true"
+         aria-labelledby="historyModalHeading" aria-hidden="true">
+      <div class="modal-content history-modal__dialog">
+        <div class="history-modal__titlebar">
+          <h2 id="historyModalHeading" class="history-modal__title" data-i18n="history_modal_title">🕐 История генераций</h2>
+          <button type="button" class="history-modal__close" id="historyModalClose" aria-label="Закрыть">×</button>
+        </div>
+        <div class="history-modal__body">
+          <div id="historyEmptyMsg" class="history-empty-msg" data-i18n="history_empty">Нет сохранённых генераций</div>
+          <div id="historyList" class="history-list"></div>
+        </div>
+        <div class="history-modal__footer">
+          <button type="button" id="historyClearBtn" class="button button--sm button--danger" data-i18n="history_clear_all">Очистить историю</button>
+        </div>
       </div>
     </div>
 

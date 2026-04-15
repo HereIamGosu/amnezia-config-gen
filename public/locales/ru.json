@@ -113,5 +113,10 @@
 
   "history_title": "🕐 История",
   "history_no_presets": "без пресетов",
-  "history_download": "↓"
+  "history_download": "↓",
+  "btn_history": "🕐 История",
+  "history_btn_aria": "История генераций",
+  "history_modal_title": "🕐 История генераций",
+  "history_empty": "Нет сохранённых генераций",
+  "history_clear_all": "Очистить историю"
 }
