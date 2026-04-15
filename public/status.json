@@ -1,7 +1,13 @@
 {
-  "checked_at": "1970-01-01T00:00:00Z",
+  "checked_at": "2026-04-15T12:39:09Z",
   "services": {
-    "warp_api": { "status": "unknown", "http_code": null },
-    "cidr_source": { "status": "unknown", "http_code": null }
+    "warp_api": {
+      "status": "ok",
+      "http_code": 400
+    },
+    "cidr_source": {
+      "status": "ok",
+      "http_code": 200
+    }
   }
 }
