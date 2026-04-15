@@ -342,6 +342,17 @@
               </div>
             </div>
 
+            <!-- История генераций -->
+            <div id="historySection" class="history-section" hidden>
+              <button type="button" id="historyToggle" class="history-toggle">
+                <span data-i18n="history_title">🕐 История</span>
+                <span id="historyCount" class="history-count"></span>
+              </button>
+              <div id="historyPanel" class="history-panel" hidden>
+                <div id="historyList" class="history-list"></div>
+              </div>
+            </div>
+
           </main>
 
           <!-- Правый раздел с инструкцией и футером -->
@@ -683,6 +694,14 @@
               >
                 <input type="checkbox" id="ignoreLimitToggle" />
                 <span data-i18n="ignore_limit_label">Без лимита</span>
+              </label>
+              <label
+                class="ipv6-toggle"
+                title="Уменьшает параметры junk-трейна (Jc ≤ 2, Jmin/Jmax ≤ 128 байт) для совместимости с роутерами MikroTik, GL.iNet, Keenetic и OpenWrt с ограниченной памятью."
+                data-i18n-title="router_mode_title"
+              >
+                <input type="checkbox" id="routerModeToggle" />
+                <span data-i18n="router_mode_label">Режим роутера</span>
               </label>
             </div>
             <p id="presetStats" class="preset-stats" aria-live="polite"></p>

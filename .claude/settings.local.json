@@ -13,7 +13,9 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:docs.amnezia.org)",
       "WebFetch(domain:warp-generator.github.io)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(npm run *)"
     ]
   }
 }

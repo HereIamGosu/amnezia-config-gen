@@ -103,23 +103,29 @@ const AWG2_JC_MAX = 25;
 const AWG2_JMIN_MIN = 64;
 const AWG2_JMAX_MAX = 1024;
 
-/** S1+56 must not equal S2 (padded init vs response size clash; AmneziaWG 2.0 notes). */
+/**
+ * S1+56 ≠ S2 (init vs response clash), S1+56 ≠ S3 (init vs cookie clash),
+ * S2+92 ≠ S3 (response vs cookie clash) — prevents DPI from deriving packet boundaries
+ * across types via arithmetic relationship. All three constraints validated per competitor analysis.
+ */
 const pickAwg2PaddingDocCompliant = () => {
   let s1 = 0;
   let s2 = 0;
+  let s3 = 0;
   for (let k = 0; k < 128; k += 1) {
     s1 = randomInt(0, AWG2_S123_MAX + 1);
     s2 = randomInt(0, AWG2_S123_MAX + 1);
-    if (s1 + 56 !== s2) break;
+    s3 = randomInt(0, AWG2_S123_MAX + 1);
+    if (s1 + 56 !== s2 && s1 + 56 !== s3 && s2 + 92 !== s3) break;
   }
-  if (s1 + 56 === s2) {
-    s2 = (s2 + 1) % (AWG2_S123_MAX + 1);
-    if (s1 + 56 === s2) s2 = 0;
+  // Deterministic safe fallback if loop exhausted (10+56=66≠20, 66≠30, 20+92=112≠30)
+  if (s1 + 56 === s2 || s1 + 56 === s3 || s2 + 92 === s3) {
+    s1 = 10; s2 = 20; s3 = 30;
   }
   return {
     s1,
     s2,
-    s3: randomInt(0, AWG2_S123_MAX + 1),
+    s3,
     s4: randomInt(0, AWG2_S4_MAX + 1),
   };
 };
@@ -128,9 +134,27 @@ const pickAwg2PaddingDocCompliant = () => {
 const pickAwg2JunkDocCompliant = () => {
   const jc = randomInt(1, AWG2_JC_MAX + 1);
   const jmin = randomInt(AWG2_JMIN_MIN, 801);
-  const jmax = randomInt(Math.max(jmin + 32, AWG2_JMIN_MIN + 1), AWG2_JMAX_MAX + 1);
+  // Gap ≥ 64 (up from 32): wider spread makes junk train harder to fingerprint by size.
+  const jmax = randomInt(Math.max(jmin + 64, AWG2_JMIN_MIN + 1), AWG2_JMAX_MAX + 1);
   return { jc, jmin, jmax };
 };
+
+/**
+ * Router mode: aggressive parameter caps for embedded devices (MikroTik, GL.iNet, Keenetic, OpenWrt).
+ * High Jc / large junk sizes flood low-memory WireGuard stacks and cause silent tunnel failure.
+ */
+const ROUTER_JC_MAX = 2;
+const ROUTER_JMIN_MIN = 40;
+const ROUTER_JMIN_MAX = 128;
+const ROUTER_JMAX_MAX = 128;
+
+/** Apply router mode caps to AWG 2.0 obfuscation params. S/H fields are unchanged. */
+const applyRouterModeCaps = (obf) => ({
+  ...obf,
+  Jc: Math.min(obf.Jc, ROUTER_JC_MAX),
+  Jmin: Math.max(ROUTER_JMIN_MIN, Math.min(obf.Jmin, ROUTER_JMIN_MAX)),
+  Jmax: Math.min(Math.max(obf.Jmax, ROUTER_JMIN_MIN + 1), ROUTER_JMAX_MAX),
+});
 
 /**
  * S4 prepends random bytes to each transport packet (not keepalive). Reduce TUN MTU so IPv4+UDP
@@ -867,8 +891,9 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
   const peerEndpoint = resolvePeerEndpointForConfig(config, warpExtras);
 
   const awg2WarpSafe = Boolean(warpExtras.awg2WarpSafe);
-  const awg2Obf =
+  let awg2Obf =
     mode === 'awg2' ? (awg2WarpSafe ? buildAwg2WarpSafeObfuscation() : buildAwg2Obfuscation()) : null;
+  if (awg2Obf && routeOpts.routerMode) awg2Obf = applyRouterModeCaps(awg2Obf);
   const { cidrs: routeCidrs, routesSource, sitesResolved } = await resolveAllowedIpsFromPresets(presetKeys, routeOpts);
   const dnsLine = getDnsString(dnsKey || DNS_DEFAULT_KEY);
   const i1 = await resolveI1ForGeneration(warpExtras);
@@ -952,7 +977,9 @@ module.exports = async (req, res) => {
 
     const ipv6Param = pickQuery(req, 'ipv6');
     const includeIpv6 = ipv6Param === '1' || ipv6Param === 'true';
-    const { text: conf, meta } = await generateWarpConfig(mode, presetKeys, dnsKey, warpExtras, { includeIpv6 });
+    const routerRaw = body.router ?? pickQuery(req, 'router');
+    const routerMode = routerRaw === true || routerRaw === 1 || String(routerRaw ?? '').toLowerCase() === '1' || String(routerRaw ?? '').toLowerCase() === 'true';
+    const { text: conf, meta } = await generateWarpConfig(mode, presetKeys, dnsKey, warpExtras, { includeIpv6, routerMode });
     const confEncoded = Buffer.from(conf).toString('base64');
     res.status(200).json({
       success: true,

@@ -290,6 +290,8 @@ const cfgState = {
   includeIpv6: false,
   /** When true the CIDR limit is not enforced — tiles are never disabled. */
   ignoreLimit: false,
+  /** When true, router-safe caps are applied (Jc≤2, Jmin/Jmax≤128). */
+  routerMode: false,
 };
 
 const getPresetsFallbackUrl = () => {
@@ -398,6 +400,7 @@ const buildWarpQueryString = (mode) => {
   const dns = getSelectedDnsKey();
   if (dns) params.set('dns', dns);
   if (cfgState.includeIpv6) params.set('ipv6', '1');
+  if (cfgState.routerMode) params.set('router', '1');
   return params.toString();
 };
 
@@ -617,6 +620,14 @@ const initSettingsPanel = async () => {
       });
     }
 
+    const routerModeToggle = document.getElementById('routerModeToggle');
+    if (routerModeToggle) {
+      routerModeToggle.checked = cfgState.routerMode;
+      routerModeToggle.addEventListener('change', () => {
+        cfgState.routerMode = routerModeToggle.checked;
+      });
+    }
+
     if (btnRf) {
       btnRf.addEventListener('click', () => {
         const want = new Set(cfgState.groupRfPopular);
@@ -661,6 +672,82 @@ const initSettingsPanel = async () => {
       statsEl.textContent = t('preset_load_fail_prefix', 'Не удалось загрузить пресеты: ') + (e.message || e);
     }
   }
+};
+
+// ─────────────────────────────────────────────────────────────
+// История генераций (localStorage)
+// ─────────────────────────────────────────────────────────────
+
+const HISTORY_KEY = 'awg_history';
+const HISTORY_MAX = 20;
+
+const loadHistory = () => {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+};
+
+const saveToHistory = (mode, decodedConfig, filename) => {
+  const entry = {
+    ts: Date.now(),
+    mode,
+    presets: getSelectedRouteIds(),
+    dns: getSelectedDnsKey(),
+    b64: btoa(decodedConfig),
+    filename,
+  };
+  try {
+    const arr = loadHistory();
+    arr.unshift(entry);
+    if (arr.length > HISTORY_MAX) arr.length = HISTORY_MAX;
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(arr));
+  } catch { /* quota exceeded or private mode */ }
+  renderHistoryPanel();
+};
+
+const formatHistoryTime = (ts) => {
+  const d = new Date(ts);
+  return d.toLocaleString(_i18n.locale === 'en' ? 'en-GB' : 'ru-RU', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+};
+
+const renderHistoryPanel = () => {
+  const section = document.getElementById('historySection');
+  const list = document.getElementById('historyList');
+  const countEl = document.getElementById('historyCount');
+  const arr = loadHistory();
+  if (!section) return;
+  if (!arr.length) { section.hidden = true; return; }
+  section.hidden = false;
+  if (countEl) countEl.textContent = `(${arr.length})`;
+  if (!list) return;
+  list.textContent = '';
+  arr.forEach((entry) => {
+    const item = document.createElement('div');
+    item.className = 'history-item';
+
+    const info = document.createElement('span');
+    info.className = 'history-item__info';
+    const modeLabel = entry.mode === 'awg2' ? 'AWG 2.0' : 'AWG 1.5';
+    const presetSummary = entry.presets && entry.presets.length
+      ? entry.presets.slice(0, 3).join(', ') + (entry.presets.length > 3 ? '…' : '')
+      : t('history_no_presets', 'без пресетов');
+    info.textContent = `${formatHistoryTime(entry.ts)} · ${modeLabel} · ${presetSummary}`;
+
+    const dlBtn = document.createElement('button');
+    dlBtn.type = 'button';
+    dlBtn.className = 'button button--sm history-item__dl';
+    dlBtn.textContent = t('history_download', '↓');
+    dlBtn.title = entry.filename;
+    dlBtn.addEventListener('click', () => downloadFile(atob(entry.b64), entry.filename));
+
+    item.appendChild(info);
+    item.appendChild(dlBtn);
+    list.appendChild(item);
+  });
 };
 
 const downloadFile = (content, filename) => {
@@ -738,6 +825,9 @@ const generateConfig = async (options) => {
 
       // Автоматически скачиваем файл сразу
       downloadFile(decodedConfig, filename);
+
+      // Сохраняем в историю
+      saveToHistory(mode, decodedConfig, filename);
 
       status.textContent = mode === 'awg2'
         ? t('success_awg2', 'Конфигурация AmneziaWG 2.0 успешно сгенерирована! Нужен клиент AmneziaVPN 4.8.12.9+ или совместимый AWG 2.0.')
@@ -837,6 +927,17 @@ document.addEventListener('DOMContentLoaded', () => {
   } else {
     console.error('Кнопка "schedulerButton20" не найдена.');
   }
+
+  // ── История генераций ──
+  const historyToggle = document.getElementById('historyToggle');
+  const historyPanel  = document.getElementById('historyPanel');
+  if (historyToggle && historyPanel) {
+    historyToggle.addEventListener('click', () => {
+      const open = historyPanel.hidden === false;
+      historyPanel.hidden = open;
+    });
+  }
+  renderHistoryPanel();
 
   initSettingsPanel();
 

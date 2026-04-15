@@ -106,5 +106,12 @@
   "scheduler_downloading": "Скачивание bat планировщика...",
   "scheduler_done_15": "Скачан планировщик для 1.5 (AmneziaWarp.conf).",
   "scheduler_done_20": "Скачан планировщик для 2.0 (AmneziaWarp-AWG2.conf).",
-  "scheduler_fail": "Не удалось скачать bat. Нужен запуск сайта через хостинг (не file://) или скопируйте файлы из папки public/static репозитория."
+  "scheduler_fail": "Не удалось скачать bat. Нужен запуск сайта через хостинг (не file://) или скопируйте файлы из папки public/static репозитория.",
+
+  "router_mode_label": "Режим роутера",
+  "router_mode_title": "Уменьшает параметры junk-трейна (Jc ≤ 2, Jmin/Jmax ≤ 128 байт) для совместимости с роутерами MikroTik, GL.iNet, Keenetic и OpenWrt с ограниченной памятью.",
+
+  "history_title": "🕐 История",
+  "history_no_presets": "без пресетов",
+  "history_download": "↓"
 }

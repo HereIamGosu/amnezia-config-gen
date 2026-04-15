@@ -106,5 +106,12 @@
   "scheduler_downloading": "Downloading scheduler bat...",
   "scheduler_done_15": "Downloaded scheduler for 1.5 (AmneziaWarp.conf).",
   "scheduler_done_20": "Downloaded scheduler for 2.0 (AmneziaWarp-AWG2.conf).",
-  "scheduler_fail": "Failed to download bat. The site must be served over HTTP (not file://) — or copy files from the public/static folder in the repository."
+  "scheduler_fail": "Failed to download bat. The site must be served over HTTP (not file://) — or copy files from the public/static folder in the repository.",
+
+  "router_mode_label": "Router mode",
+  "router_mode_title": "Reduces junk-train parameters (Jc ≤ 2, Jmin/Jmax ≤ 128 bytes) for compatibility with MikroTik, GL.iNet, Keenetic and OpenWrt routers with limited memory.",
+
+  "history_title": "🕐 History",
+  "history_no_presets": "no presets",
+  "history_download": "↓"
 }
