@@ -1249,6 +1249,77 @@ button.info-link {
 
 .status-last-checked strong { color: #000080; }
 
+/* ─────────────────────────────────────────────────────────────
+   История генераций
+   ───────────────────────────────────────────────────────────── */
+
+.history-section {
+  margin-top: 10px;
+}
+
+.history-toggle {
+  background: none;
+  border: 1px solid #444;
+  color: #aaa;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  padding: 6px 10px;
+  cursor: pointer;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 0.2s, color 0.2s;
+}
+.history-toggle:hover { border-color: #0c9fc4; color: #fff; }
+
+.history-count {
+  color: #0c9fc4;
+}
+
+.history-panel {
+  margin-top: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid #333;
+  border-radius: 2px;
+  background: rgba(0,0,0,0.3);
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  border-bottom: 1px solid #2a2a2a;
+  gap: 8px;
+}
+.history-item:last-child { border-bottom: none; }
+
+.history-item__info {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  color: #bbb;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-item__dl {
+  flex-shrink: 0;
+  min-width: 32px !important;
+  padding: 4px 8px !important;
+  font-size: 9px !important;
+}
+
 /* Адаптивные стили для экранов различных размеров */
 
 /* Для очень больших экранов */

@@ -106,3 +106,4 @@ struc.py
 CLAUDE.md
 PRD.md
 Рабочие_конфиги/
+.claude/settings.local.json
