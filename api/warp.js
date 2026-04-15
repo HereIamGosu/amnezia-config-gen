@@ -98,8 +98,8 @@ const generateAwg2MagicHeaderRanges = () => {
 /** AmneziaWG 2.0 spec: S1–S3 are 0..64 bytes, S4 is 0..32 bytes. */
 const AWG2_S123_MAX = 64;
 const AWG2_S4_MAX = 32;
-/** AmneziaWG 2.0 spec: Jc is 0..10, Jmin/Jmax are 64..1024 bytes. */
-const AWG2_JC_MAX = 10;
+/** AmneziaWG 2.0 spec: Jmin/Jmax are 64..1024 bytes. Jc upper bound raised to 25 per user feedback (optimal range 15–25). */
+const AWG2_JC_MAX = 25;
 const AWG2_JMIN_MIN = 64;
 const AWG2_JMAX_MAX = 1024;
 
@@ -124,7 +124,7 @@ const pickAwg2PaddingDocCompliant = () => {
   };
 };
 
-/** Junk train parameters within documented AWG 2.0 bounds (Jc 1..10 so generated configs send junk). */
+/** Junk train parameters within AWG 2.0 bounds (Jc 1..25; range 15–25 per user feedback). */
 const pickAwg2JunkDocCompliant = () => {
   const jc = randomInt(1, AWG2_JC_MAX + 1);
   const jmin = randomInt(AWG2_JMIN_MIN, 801);
