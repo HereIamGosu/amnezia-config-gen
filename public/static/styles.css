@@ -945,6 +945,410 @@ button.info-link {
   cursor: not-allowed;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Gen-slot: обёртка кнопки генерации + post-gen-row (F-02 / F-05)
+   ───────────────────────────────────────────────────────────── */
+
+.gen-slot {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* Ряд кнопок после генерации: [Скачать (flex-grow)] [QR] [👁] */
+.post-gen-row {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  align-items: stretch;
+}
+
+/* Браузерный атрибут hidden выставляет display:none, но явный display:flex его перебивает.
+   Этот selector восстанавливает приоритет hidden. */
+.post-gen-row[hidden] {
+  display: none;
+}
+
+.post-gen-row__download {
+  flex: 1 1 0%;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+/* Маленькие квадратные кнопки-иконки */
+.button.button--icon-sq {
+  flex: 0 0 44px;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Кнопка QR — нейтральный тёмно-синий акцент */
+.post-gen-row__qr {
+  background-color: #1a56a8;
+  color: #fff;
+}
+.post-gen-row__qr:hover { background-color: #144588; }
+
+/* Кнопка просмотра конфига — серый */
+.post-gen-row__preview {
+  background-color: #555;
+  color: #fff;
+}
+.post-gen-row__preview:hover { background-color: #333; }
+
+/* ─────────────────────────────────────────────────────────────
+   Футер: ряд ссылок + кнопка статуса
+   ───────────────────────────────────────────────────────────── */
+
+/* Строка: [discord + web (колонка)] [кнопка статуса (растянута)] */
+.footer-links-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  width: 100%;
+}
+
+.footer-links-col {
+  flex: 1 1 0%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Кнопка «Статус сервисов» — высотой как две кнопки слева */
+.status-modal-btn {
+  flex: 0 0 auto;
+  width: 110px;
+  align-self: stretch;
+  padding: 8px 10px;
+  font-size: 10px;
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  line-height: 1.55;
+  text-align: center;
+  color: #fff;
+  background-color: #7c85f5; /* в тон discord-кнопки #5865f2, чуть светлее */
+  border: 2px outset #fff;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color 0.1s ease, transform 0.05s ease;
+  overflow-wrap: anywhere;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.status-modal-btn:hover  { background-color: #5865f2; }
+.status-modal-btn:active { transform: translateY(2px); border: 2px inset #fff; }
+
+/* ─────────────────────────────────────────────────────────────
+   F-03: Language switcher
+   ───────────────────────────────────────────────────────────── */
+
+.lang-switcher {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.lang-btn {
+  padding: 2px 6px;
+  font-size: 8px;
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  color: #fff;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 2px;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: background 0.1s ease;
+}
+
+.lang-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.lang-btn--active {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: #fff;
+  font-weight: bold;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   F-02: QR-код
+   ───────────────────────────────────────────────────────────── */
+
+.post-gen-section {
+  width: 100%;
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.qr-section {
+  background-color: #c0c0c0;
+  border: 2px solid #000080;
+  box-shadow: inset 0 0 0 1px #808080;
+  border-radius: 4px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.qr-section__title {
+  font-size: 9px;
+  font-weight: bold;
+  color: #000080;
+  margin: 0;
+  text-align: center;
+}
+
+.qr-canvas-wrapper {
+  /* qrcodejs вставляет canvas + img внутрь; центрируем */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #fff;
+  border: 2px inset #808080;
+  padding: 6px;
+}
+
+/* Нейтрализуем глобальный img { margin-bottom: 20px } для QR-картинки */
+.qr-canvas-wrapper img {
+  margin-bottom: 0;
+  image-rendering: auto;
+}
+
+.qr-warning {
+  font-size: 8px;
+  color: #8b4513;
+  font-weight: bold;
+  text-align: center;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.qr-section__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   F-05: Предпросмотр конфига
+   ───────────────────────────────────────────────────────────── */
+
+.config-preview-section {
+  background-color: #c0c0c0;
+  border: 2px solid #000080;
+  box-shadow: inset 0 0 0 1px #808080;
+  border-radius: 4px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.config-preview-section__title {
+  font-size: 9px;
+  font-weight: bold;
+  color: #000080;
+  margin: 0;
+}
+
+.config-preview-textarea {
+  width: 100%;
+  height: 200px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  resize: vertical;
+  background: #fff;
+  border: 2px inset #808080;
+  padding: 6px 8px;
+  color: #000;
+  box-sizing: border-box;
+}
+
+/* Компактные вторичные кнопки (QR-действия, копировать) */
+.button.button--sm {
+  width: auto;
+  min-width: 120px;
+  padding: 8px 12px;
+  font-size: 8px;
+  margin-bottom: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   F-07: Ссылка «Статус сервисов» в футере
+   ───────────────────────────────────────────────────────────── */
+
+.status-page-link {
+  display: inline-block;
+  font-size: 8px;
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  color: #000080;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.status-page-link:hover {
+  color: #ff0000;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Модальное окно QR-кода
+   ───────────────────────────────────────────────────────────── */
+
+.modal-content--qr {
+  max-width: 340px;
+  width: min(92vw, 340px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.modal-content--qr .qr-canvas-wrapper {
+  /* canvas/img от qrcodejs центрирован */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #fff;
+  border: 2px inset #808080;
+  padding: 8px;
+}
+
+.modal-content--qr .qr-canvas-wrapper img {
+  margin-bottom: 0;
+  image-rendering: auto;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Модальное окно предпросмотра конфига
+   ───────────────────────────────────────────────────────────── */
+
+.modal-content--preview {
+  max-width: 600px;
+  width: min(94vw, 600px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Модальное окно статуса сервисов
+   ───────────────────────────────────────────────────────────── */
+
+.modal-content--status {
+  max-width: 520px;
+  width: min(94vw, 520px);
+}
+
+.status-loading-msg {
+  font-size: 8px;
+  color: #555;
+  text-align: center;
+  padding: 16px 0;
+  line-height: 1.6;
+}
+
+.status-error-msg {
+  font-size: 8px;
+  color: #c00;
+  text-align: center;
+  padding: 16px 0;
+  line-height: 1.6;
+}
+
+.status-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.status-card {
+  background: #fff;
+  border: 2px solid #000080;
+  border-radius: 3px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-indicator {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 2px solid rgba(0,0,0,0.2);
+}
+
+.status-indicator--ok       { background: #2ecc71; }
+.status-indicator--error    { background: #e74c3c; }
+.status-indicator--degraded { background: #f39c12; }
+.status-indicator--unknown  { background: #aaa; }
+
+.status-card__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.status-card__name {
+  font-size: 8px;
+  font-weight: bold;
+  color: #000080;
+  margin-bottom: 3px;
+  overflow-wrap: anywhere;
+}
+
+.status-card__detail {
+  font-size: 7px;
+  color: #555;
+  line-height: 1.5;
+}
+
+.status-badge {
+  font-size: 7px;
+  font-weight: bold;
+  padding: 3px 7px;
+  border-radius: 2px;
+  border: 2px outset #fff;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.badge--ok       { background: #2ecc71; color: #fff; }
+.badge--error    { background: #e74c3c; color: #fff; }
+.badge--degraded { background: #f39c12; color: #fff; }
+.badge--unknown  { background: #aaa;    color: #fff; }
+
+.status-last-checked {
+  font-size: 7px;
+  color: #555;
+  text-align: center;
+  border-top: 2px groove #c0c0c0;
+  padding-top: 10px;
+  line-height: 1.7;
+}
+
+.status-last-checked strong { color: #000080; }
+
 /* Адаптивные стили для экранов различных размеров */
 
 /* Для очень больших экранов */

@@ -1,0 +1,87 @@
+name: Healthcheck
+
+on:
+  schedule:
+    # Every 30 minutes
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check Cloudflare WARP API
+        id: warp
+        run: |
+          # POST to the registration endpoint — any HTTP response means the API is reachable.
+          # We expect 4xx (bad request without payload), which is fine.
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 15 \
+            -X POST "https://api.cloudflareclient.com/v0i1909051800/reg" \
+            -H "Content-Type: application/json" \
+            -d '{}' 2>/dev/null || echo "0")
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Check CIDR source (iplist.opencck.org)
+        id: cidr
+        run: |
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 15 \
+            "https://iplist.opencck.org/" 2>/dev/null || echo "0")
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Write public/status.json
+        run: |
+          WARP_CODE="${{ steps.warp.outputs.code }}"
+          CIDR_CODE="${{ steps.cidr.outputs.code }}"
+
+          # WARP API: any 1xx–4xx response = reachable (ok); 5xx or 0 = error
+          if   [ "$WARP_CODE" -ge 100 ] && [ "$WARP_CODE" -lt 500 ] 2>/dev/null; then
+            WARP_STATUS="ok"
+          elif [ "$WARP_CODE" -ge 500 ] && [ "$WARP_CODE" -lt 600 ] 2>/dev/null; then
+            WARP_STATUS="error"
+          else
+            WARP_STATUS="error"
+          fi
+
+          # CIDR source: 2xx = ok; 3xx/4xx = degraded; 5xx or 0 = error
+          if   [ "$CIDR_CODE" -ge 200 ] && [ "$CIDR_CODE" -lt 300 ] 2>/dev/null; then
+            CIDR_STATUS="ok"
+          elif [ "$CIDR_CODE" -ge 300 ] && [ "$CIDR_CODE" -lt 500 ] 2>/dev/null; then
+            CIDR_STATUS="degraded"
+          else
+            CIDR_STATUS="error"
+          fi
+
+          NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          cat > public/status.json <<EOF
+          {
+            "checked_at": "$NOW",
+            "services": {
+              "warp_api":    { "status": "$WARP_STATUS",  "http_code": $WARP_CODE },
+              "cidr_source": { "status": "$CIDR_STATUS",  "http_code": $CIDR_CODE }
+            }
+          }
+          EOF
+
+          # Normalise: remove leading spaces added by heredoc indentation
+          python3 -c "import json,sys; d=json.load(open('public/status.json')); json.dump(d, open('public/status.json','w'), indent=2)"
+
+      - name: Commit and push status.json
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/status.json
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: healthcheck update [skip ci]"
+            git push
+          fi
