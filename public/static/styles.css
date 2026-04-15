@@ -244,19 +244,24 @@ button.button:disabled {
   background: linear-gradient(90deg, #27ae60, #0097a7);
 }
 
-/* Ряд кнопок планировщика Windows (1.5 / 2.0) */
+/* Ряд кнопок планировщика Windows (1.5 / 2.0 / История) */
 .buttons__scheduler-row {
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
-  gap: 12px;
+  flex-wrap: nowrap;
+  gap: 8px;
   width: 100%;
   margin-top: 8px;
 }
 
+/* Все кнопки внутри ряда — flex-children, ширина через flex, не через width:100% */
+.buttons__scheduler-row > .button {
+  width: auto;
+}
+
 .buttons__scheduler-row .button--scheduler {
-  flex: 1 1 calc(50% - 6px);
-  min-width: min(100%, 200px);
+  flex: 1 1 0%;
+  min-width: 0;
   background-color: #f15874;
   box-shadow: 0 4px 8px rgba(241, 88, 116, 0.2);
 }
@@ -1255,7 +1260,8 @@ button.info-link {
 
 .button--history-open {
   flex: 0 0 auto;
-  min-width: 110px;
+  width: auto !important;
+  white-space: nowrap;
   background-color: #1a6b8a;
   color: #fff;
   box-shadow: 0 4px 8px rgba(12, 159, 196, 0.25);
@@ -1627,6 +1633,18 @@ button.info-link {
 
   .buttons {
     gap: 14px;
+  }
+
+  .buttons__scheduler-row {
+    flex-wrap: wrap;
+  }
+
+  .buttons__scheduler-row .button--scheduler {
+    flex: 1 1 calc(50% - 4px);
+  }
+
+  .button--history-open {
+    flex: 1 1 100%;
   }
 
   .modal-heading {
