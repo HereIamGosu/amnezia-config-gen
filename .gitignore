@@ -103,7 +103,5 @@ bower_components/
 # ============================================================
 DEV_CHECKLIST.md
 struc.py
-CLAUDE.md
 PRD.md
 Рабочие_конфиги/
-.claude/settings.local.json
