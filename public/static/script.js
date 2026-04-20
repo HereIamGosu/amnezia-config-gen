@@ -508,10 +508,14 @@ const refreshPresetStats = debounce(async () => {
       applyZeroCidrMarks();
     }
 
+    const isAntifilter = data.cidrSource === 'antifilter';
     const overLimit = !cfgState.ignoreLimit && count4 >= MAX_CIDR_LIMIT;
     if (overLimit) {
       el.classList.add('preset-stats--warn');
       el.textContent = `${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4}/${MAX_CIDR_LIMIT} IPv4 CIDR. ${t('preset_over_limit_msg', 'Некоторые устройства могут работать нестабильно. Рекомендуется отключить часть категорий.')}`;
+    } else if (isAntifilter) {
+      el.classList.add('preset-stats--warn');
+      el.textContent = `⚠ iplist.opencck.org недоступен — использован резервный источник antifilter.download (${count4} общих подсетей РФ). Маршруты могут быть неточными.`;
     } else {
       el.classList.remove('preset-stats--warn');
       const ipv6Info = cfgState.includeIpv6 && data.count6 ? `, IPv6: +${data.count6}` : '';

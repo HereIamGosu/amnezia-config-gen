@@ -9,6 +9,54 @@ const RETRY_MAX = 5;
 const RETRY_BASE_MS = 400;
 const RETRY_MAX_MS = 10000;
 
+// ── Antifilter fallback ───────────────────────────────────────────────────────
+const ANTIFILTER_HOST = 'antifilter.download';
+const ANTIFILTER_PATH = '/list/subnet.lst';
+const ANTIFILTER_TIMEOUT_MS = 10000;
+const ANTIFILTER_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min (matches their update cadence)
+/** @type {{ cidrs: string[], ts: number } | null} */
+let antifilterCache = null;
+
+const fetchAntifilterOnce = () =>
+  new Promise((resolve, reject) => {
+    let settled = false;
+    const done = (err, val) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (err) reject(err);
+      else resolve(val);
+    };
+    const timer = setTimeout(() => { req.destroy(); done(new Error('antifilter timeout')); }, ANTIFILTER_TIMEOUT_MS);
+    const req = https.request(
+      { hostname: ANTIFILTER_HOST, port: 443, path: ANTIFILTER_PATH, method: 'GET', agent: false,
+        headers: { 'User-Agent': 'amnezia-config-gen/1.0' } },
+      (res) => {
+        let buf = '';
+        res.on('data', (c) => { buf += c; });
+        res.on('end', () => {
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            done(new Error(`antifilter HTTP ${res.statusCode}`));
+            return;
+          }
+          const cidrs = buf.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
+          done(null, cidrs);
+        });
+      },
+    );
+    req.on('error', (e) => done(e));
+    req.end();
+  });
+
+const getAntifilterCidrs = async () => {
+  if (antifilterCache && Date.now() - antifilterCache.ts < ANTIFILTER_CACHE_TTL_MS) {
+    return antifilterCache.cidrs;
+  }
+  const cidrs = await fetchAntifilterOnce();
+  antifilterCache = { cidrs, ts: Date.now() };
+  return cidrs;
+};
+
 /** In-memory CIDR cache: keyed by sorted comma-joined hostnames + ip version flag, TTL 10 min. */
 const CIDR_CACHE_TTL_MS = 10 * 60 * 1000;
 const CIDR_CACHE_MAX_ENTRIES = 200;
@@ -162,37 +210,52 @@ const fetchWithRetry = async (path) => {
 
 /**
  * Fetch CIDRs for hostnames (with in-memory cache, TTL 10 min).
+ * Falls back to antifilter.download/list/subnet.lst when opencck is unavailable or returns 0 CIDRs.
  * By default only IPv4 CIDRs are returned. Pass { includeIpv6: true } to also include IPv6.
- * IPv4-only is the safe default: fewer routes, better compatibility with routers and mobile clients.
  * @param {string[]} sites unique hostnames
  * @param {{ includeIpv6?: boolean }} [opts]
- * @returns {Promise<string[]>}
+ * @returns {Promise<{ cidrs: string[], source: 'opencck' | 'antifilter' }>}
  */
 const fetchCidrsForDomains = async (sites, { includeIpv6 = false } = {}) => {
-  if (!sites.length) {
-    return [];
-  }
+  if (!sites.length) return { cidrs: [], source: 'opencck' };
+
   const cacheKey = cidrCacheKey(sites, includeIpv6);
   const cached = cidrCacheGet(cacheKey);
-  if (cached) return cached;
+  if (cached) return { cidrs: cached, source: cached._source || 'opencck' };
 
-  const path4 = buildIpListPath(sites, 'cidr4');
-  const data4 = await fetchWithRetry(path4);
-  const merged = flattenCidrMap(data4);
+  let merged = new Set();
+  let source = 'opencck';
 
-  if (includeIpv6) {
-    try {
-      const path6 = buildIpListPath(sites, 'cidr6');
-      const data6 = await fetchWithRetry(path6);
-      for (const c of flattenCidrMap(data6)) merged.add(c);
-    } catch {
-      /* IPv6 optional — many configs work with IPv4-only AllowedIPs */
+  try {
+    const path4 = buildIpListPath(sites, 'cidr4');
+    const data4 = await fetchWithRetry(path4);
+    merged = flattenCidrMap(data4);
+
+    if (includeIpv6) {
+      try {
+        const path6 = buildIpListPath(sites, 'cidr6');
+        const data6 = await fetchWithRetry(path6);
+        for (const c of flattenCidrMap(data6)) merged.add(c);
+      } catch { /* IPv6 optional */ }
     }
+  } catch {
+    // opencck unavailable — fall through to antifilter
+    merged = new Set();
+  }
+
+  // Fallback: if opencck returned nothing, use antifilter aggregate list (IPv4 only)
+  if (merged.size === 0) {
+    try {
+      const afCidrs = await getAntifilterCidrs();
+      for (const c of afCidrs) if (isIpv4Cidr(c)) merged.add(c);
+      source = 'antifilter';
+    } catch { /* antifilter also failed — return empty */ }
   }
 
   const result = Array.from(merged).sort();
+  result._source = source;
   cidrCacheSet(cacheKey, result);
-  return result;
+  return { cidrs: result, source };
 };
 
 module.exports = {

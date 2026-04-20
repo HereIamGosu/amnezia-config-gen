@@ -832,7 +832,7 @@ const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false } 
     throw err;
   }
   // IPv4-only by default: fewer routes, better compatibility with routers and mobile clients.
-  const cidrs = await fetchCidrsForDomains(sites, { includeIpv6 });
+  const { cidrs } = await fetchCidrsForDomains(sites, { includeIpv6 });
   if (!cidrs.length) {
     const err = new Error(
       'Сервис списков IP вернул пустой ответ. Попробуйте другой набор пресетов или повторите позже.',
