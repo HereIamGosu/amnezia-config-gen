@@ -118,5 +118,14 @@
   "history_btn_aria": "Generation history",
   "history_modal_title": "🕐 Generation History",
   "history_empty": "No saved generations",
-  "history_clear_all": "Clear history"
+  "history_clear_all": "Clear history",
+  "cps_label": "CPS:",
+  "cps_auto": "Auto",
+  "cps_static": "Static",
+  "cps_auto_title": "Random protocol on each generation",
+  "cps_quic_title": "QUIC Initial packet (RFC 9001)",
+  "cps_dns_title": "DNS query with random Transaction ID",
+  "cps_stun_title": "STUN Binding Request with CRC32 fingerprint",
+  "cps_tls_title": "TLS 1.3 ClientHello",
+  "cps_sip_title": "SIP INVITE (random Call-ID)"
 }
