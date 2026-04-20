@@ -669,90 +669,124 @@
           </button>
         </div>
         <div class="settings-modal__body">
-          <fieldset class="settings-panel__group">
-            <legend data-i18n="dns_legend">DNS-сервер</legend>
-            <div id="dnsTiles" class="cfg-tiles"></div>
-          </fieldset>
-          <fieldset class="settings-panel__group">
-            <legend data-i18n="routes_legend">Пресеты маршрутов (AllowedIPs)</legend>
-            <p class="settings-panel__hint" data-i18n-html="routes_hint">
-              Отметьте пресеты — их IPv4-подсети добавятся в
-              <strong>AllowedIPs</strong>. Если ничего не выбрано, весь трафик
-              идёт через туннель (<strong>0.0.0.0/0, ::/0</strong>).
-              Лимит <strong>1000 IPv4 CIDR</strong> защищает роутеры и мобильные
-              устройства от переполнения таблицы маршрутов.
-            </p>
-            <div class="cfg-tiles-actions">
-              <button
-                type="button"
-                class="cfg-tiles-action"
-                id="presetRfPopular"
-                data-i18n="preset_btn_popular"
-              >
-                Основной набор
-              </button>
-              <button type="button" class="cfg-tiles-action" id="presetClear" data-i18n="preset_btn_clear">
-                Снять всё
-              </button>
+
+          <!-- Win95 Tabs -->
+          <div class="tabs-win95">
+
+            <!-- Hidden radio inputs controlling active tab -->
+            <input type="radio" name="settingsTab" id="tab-routes" class="tabs-win95__input" checked />
+            <input type="radio" name="settingsTab" id="tab-dnscps" class="tabs-win95__input" />
+            <input type="radio" name="settingsTab" id="tab-extra"  class="tabs-win95__input" />
+
+            <!-- Tab bar -->
+            <div class="tabs-win95__bar" role="tablist">
+              <label for="tab-routes" class="tabs-win95__tab" role="tab" data-i18n="tab_routes">📋 Маршруты</label>
+              <label for="tab-dnscps" class="tabs-win95__tab" role="tab" data-i18n="tab_dnscps">🔒 DNS &amp; CPS</label>
+              <label for="tab-extra"  class="tabs-win95__tab" role="tab" data-i18n="tab_extra">⚙ Дополнительно</label>
             </div>
-            <div class="cidr-limit-row">
-              <span class="cps-label" data-i18n="cps_label">CPS:</span>
-              <label class="ipv6-toggle" title="Случайный протокол при каждой генерации" data-i18n-title="cps_auto_title"><input type="radio" name="cpsProtocol" value="auto" checked /><span data-i18n="cps_auto">Auto</span></label>
-              <label class="ipv6-toggle" title="QUIC Initial пакет (RFC 9001)" data-i18n-title="cps_quic_title"><input type="radio" name="cpsProtocol" value="quic" /><span>QUIC</span></label>
-              <label class="ipv6-toggle" title="DNS query с случайным Transaction ID" data-i18n-title="cps_dns_title"><input type="radio" name="cpsProtocol" value="dns" /><span>DNS</span></label>
-              <label class="ipv6-toggle" title="STUN Binding Request с CRC32" data-i18n-title="cps_stun_title"><input type="radio" name="cpsProtocol" value="stun" /><span>STUN</span></label>
-              <label class="ipv6-toggle" title="TLS 1.3 ClientHello" data-i18n-title="cps_tls_title"><input type="radio" name="cpsProtocol" value="tls" /><span>TLS</span></label>
-              <label class="ipv6-toggle" title="SIP INVITE (случайный Call-ID)" data-i18n-title="cps_sip_title"><input type="radio" name="cpsProtocol" value="sip" /><span>SIP</span></label>
-              <label class="ipv6-toggle" title="Статичные бинарные пэйлоады (3 варианта)" data-i18n-title="cps_static_title"><input type="radio" name="cpsProtocol" value="static" /><span data-i18n="cps_static">Static</span></label>
-            </div>
-            <div class="cidr-limit-row">
-              <div id="cidrCounter" class="cidr-counter">IPv4 маршруты: 0 / 1000</div>
-              <label
-                class="ipv6-toggle"
-                title="IPv6 маршруты увеличивают число записей в 2–3 раза. Включайте только если клиент поддерживает IPv6 и ваш роутер справляется с большим количеством маршрутов."
-                data-i18n-title="ipv6_toggle_title"
-              >
-                <input type="checkbox" id="ipv6Toggle" />
-                <span data-i18n="ipv6_toggle_label">+ IPv6 маршруты</span>
-              </label>
-              <label
-                class="ipv6-toggle"
-                title="Снимает блокировку выбора пресетов при превышении лимита. Используйте на свой страх и риск — слишком большое число маршрутов может вызвать сбои на роутерах и мобильных клиентах."
-                data-i18n-title="ignore_limit_title"
-              >
-                <input type="checkbox" id="ignoreLimitToggle" />
-                <span data-i18n="ignore_limit_label">Без лимита</span>
-              </label>
-              <label
-                class="ipv6-toggle"
-                title="Уменьшает параметры junk-трейна (Jc ≤ 2, Jmin/Jmax ≤ 128 байт) для совместимости с роутерами MikroTik, GL.iNet, Keenetic и OpenWrt с ограниченной памятью."
-                data-i18n-title="router_mode_title"
-              >
-                <input type="checkbox" id="routerModeToggle" />
-                <span data-i18n="router_mode_label">Режим роутера</span>
-              </label>
-            </div>
-            <p id="presetStats" class="preset-stats" aria-live="polite"></p>
-            <h3 class="settings-modal__subsection" data-i18n="section_social">
-              Социальные сети и мессенджеры
-            </h3>
-            <div
-              id="routeTilesSocial"
-              class="cfg-tiles cfg-tiles--routes"
-            ></div>
-            <h3 class="settings-modal__subsection" data-i18n="section_gaming">Игровые платформы</h3>
-            <div
-              id="routeTilesGaming"
-              class="cfg-tiles cfg-tiles--routes"
-            ></div>
-            <h3 class="settings-modal__subsection" data-i18n="section_torrent">Торрент-трекеры</h3>
-            <div
-              id="routeTilesTorrent"
-              class="cfg-tiles cfg-tiles--routes"
-            ></div>
-            <h3 class="settings-modal__subsection" data-i18n="section_more">Дополнительно</h3>
-            <div id="routeTilesMore" class="cfg-tiles cfg-tiles--routes"></div>
-          </fieldset>
+
+            <!-- Tab content wrapper -->
+            <div class="tabs-win95__content">
+
+              <!-- ── Tab 1: Маршруты ── -->
+              <div class="tab-panel" id="panel-routes" role="tabpanel">
+                <div class="cfg-tiles-actions">
+                  <button type="button" class="cfg-tiles-action" id="presetRfPopular" data-i18n="preset_btn_popular">Основной набор</button>
+                  <button type="button" class="cfg-tiles-action" id="presetClear" data-i18n="preset_btn_clear">Снять всё</button>
+                </div>
+                <p id="presetStats" class="preset-stats" aria-live="polite"></p>
+                <h3 class="settings-modal__subsection" data-i18n="section_social">Социальные сети и мессенджеры</h3>
+                <div id="routeTilesSocial" class="cfg-tiles cfg-tiles--routes"></div>
+                <h3 class="settings-modal__subsection" data-i18n="section_gaming">Игровые платформы</h3>
+                <div id="routeTilesGaming" class="cfg-tiles cfg-tiles--routes"></div>
+                <h3 class="settings-modal__subsection" data-i18n="section_torrent">Торрент-трекеры</h3>
+                <div id="routeTilesTorrent" class="cfg-tiles cfg-tiles--routes"></div>
+                <h3 class="settings-modal__subsection" data-i18n="section_more">Дополнительно</h3>
+                <div id="routeTilesMore" class="cfg-tiles cfg-tiles--routes"></div>
+              </div>
+
+              <!-- ── Tab 2: DNS & CPS ── -->
+              <div class="tab-panel" id="panel-dnscps" role="tabpanel">
+                <h3 class="settings-modal__subsection" style="margin-top:0" data-i18n="dns_legend">DNS-сервер</h3>
+                <div id="dnsTiles" class="cfg-tiles"></div>
+
+                <h3 class="settings-modal__subsection" data-i18n="cps_section_title">CPS-протокол (I1)</h3>
+                <p class="settings-panel__hint" data-i18n="cps_section_hint">Тип трафика, которым маскируется начало соединения. Auto — случайный при каждой генерации.</p>
+                <div class="cps-radio-group">
+                  <label class="cps-radio-tile" title="Случайный протокол при каждой генерации" data-i18n-title="cps_auto_title">
+                    <input type="radio" name="cpsProtocol" value="auto" checked />
+                    <span class="cps-radio-tile__name" data-i18n="cps_auto">Auto</span>
+                  </label>
+                  <label class="cps-radio-tile" title="QUIC Initial пакет (RFC 9001)" data-i18n-title="cps_quic_title">
+                    <input type="radio" name="cpsProtocol" value="quic" />
+                    <span class="cps-radio-tile__name">QUIC</span>
+                  </label>
+                  <label class="cps-radio-tile" title="DNS query с случайным Transaction ID" data-i18n-title="cps_dns_title">
+                    <input type="radio" name="cpsProtocol" value="dns" />
+                    <span class="cps-radio-tile__name">DNS</span>
+                  </label>
+                  <label class="cps-radio-tile" title="STUN Binding Request с CRC32" data-i18n-title="cps_stun_title">
+                    <input type="radio" name="cpsProtocol" value="stun" />
+                    <span class="cps-radio-tile__name">STUN</span>
+                  </label>
+                  <label class="cps-radio-tile" title="TLS 1.3 ClientHello" data-i18n-title="cps_tls_title">
+                    <input type="radio" name="cpsProtocol" value="tls" />
+                    <span class="cps-radio-tile__name">TLS</span>
+                  </label>
+                  <label class="cps-radio-tile" title="SIP INVITE (случайный Call-ID)" data-i18n-title="cps_sip_title">
+                    <input type="radio" name="cpsProtocol" value="sip" />
+                    <span class="cps-radio-tile__name">SIP</span>
+                  </label>
+                  <label class="cps-radio-tile" title="Статичные бинарные пэйлоады (3 варианта)" data-i18n-title="cps_static_title">
+                    <input type="radio" name="cpsProtocol" value="static" />
+                    <span class="cps-radio-tile__name" data-i18n="cps_static">Static</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- ── Tab 3: Дополнительно ── -->
+              <div class="tab-panel" id="panel-extra" role="tabpanel">
+                <div class="extra-options">
+                  <div id="cidrCounter" class="cidr-counter">IPv4 маршруты: 0 / 1000</div>
+                  <label
+                    class="extra-option-row"
+                    title="IPv6 маршруты увеличивают число записей в 2–3 раза. Включайте только если клиент поддерживает IPv6 и ваш роутер справляется с большим количеством маршрутов."
+                    data-i18n-title="ipv6_toggle_title"
+                  >
+                    <input type="checkbox" id="ipv6Toggle" />
+                    <div class="extra-option-row__text">
+                      <span class="extra-option-row__label" data-i18n="ipv6_toggle_label">+ IPv6 маршруты</span>
+                      <span class="extra-option-row__hint" data-i18n="ipv6_toggle_hint">Включает IPv6 CIDR — увеличивает число маршрутов в 2–3 раза</span>
+                    </div>
+                  </label>
+                  <label
+                    class="extra-option-row"
+                    title="Снимает блокировку выбора пресетов при превышении лимита. Используйте на свой страх и риск — слишком большое число маршрутов может вызвать сбои на роутерах и мобильных клиентах."
+                    data-i18n-title="ignore_limit_title"
+                  >
+                    <input type="checkbox" id="ignoreLimitToggle" />
+                    <div class="extra-option-row__text">
+                      <span class="extra-option-row__label" data-i18n="ignore_limit_label">Без лимита</span>
+                      <span class="extra-option-row__hint" data-i18n="ignore_limit_hint">Снимает ограничение в 1000 CIDR — используйте осторожно</span>
+                    </div>
+                  </label>
+                  <label
+                    class="extra-option-row"
+                    title="Уменьшает параметры junk-трейна (Jc ≤ 2, Jmin/Jmax ≤ 128 байт) для совместимости с роутерами MikroTik, GL.iNet, Keenetic и OpenWrt с ограниченной памятью."
+                    data-i18n-title="router_mode_title"
+                  >
+                    <input type="checkbox" id="routerModeToggle" />
+                    <div class="extra-option-row__text">
+                      <span class="extra-option-row__label" data-i18n="router_mode_label">Режим роутера</span>
+                      <span class="extra-option-row__hint" data-i18n="router_mode_hint">Малые Jc/Jmin/Jmax для MikroTik, GL.iNet, Keenetic, OpenWrt</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+            </div><!-- /tabs-win95__content -->
+          </div><!-- /tabs-win95 -->
+
         </div>
       </div>
     </div>
