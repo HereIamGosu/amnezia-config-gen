@@ -129,6 +129,15 @@ const flattenCidrMap = (obj) => {
   return out;
 };
 
+/** Returns true if any domain key in the opencck response has an empty CIDR array. */
+const hasEmptyDomains = (obj, sites) => {
+  if (!obj || typeof obj !== 'object') return true;
+  return sites.some((s) => {
+    const arr = obj[s];
+    return !Array.isArray(arr) || arr.length === 0;
+  });
+};
+
 const httpsJsonOnce = (path) =>
   new Promise((resolve, reject) => {
     let settled = false;
@@ -214,7 +223,7 @@ const fetchWithRetry = async (path) => {
  * By default only IPv4 CIDRs are returned. Pass { includeIpv6: true } to also include IPv6.
  * @param {string[]} sites unique hostnames
  * @param {{ includeIpv6?: boolean }} [opts]
- * @returns {Promise<{ cidrs: string[], source: 'opencck' | 'antifilter' }>}
+ * @returns {Promise<{ cidrs: string[], source: 'opencck' | 'antifilter' | 'mixed' }>}
  */
 const fetchCidrsForDomains = async (sites, { includeIpv6 = false } = {}) => {
   if (!sites.length) return { cidrs: [], source: 'opencck' };
@@ -225,11 +234,15 @@ const fetchCidrsForDomains = async (sites, { includeIpv6 = false } = {}) => {
 
   let merged = new Set();
   let source = 'opencck';
+  let needsAntifilter = false;
 
   try {
     const path4 = buildIpListPath(sites, 'cidr4');
     const data4 = await fetchWithRetry(path4);
     merged = flattenCidrMap(data4);
+
+    // If any requested domain returned no CIDRs, supplement with antifilter
+    if (hasEmptyDomains(data4, sites)) needsAntifilter = true;
 
     if (includeIpv6) {
       try {
@@ -239,17 +252,18 @@ const fetchCidrsForDomains = async (sites, { includeIpv6 = false } = {}) => {
       } catch { /* IPv6 optional */ }
     }
   } catch {
-    // opencck unavailable — fall through to antifilter
+    // opencck unavailable — fall through to antifilter entirely
     merged = new Set();
+    needsAntifilter = true;
   }
 
-  // Fallback: if opencck returned nothing, use antifilter aggregate list (IPv4 only)
-  if (merged.size === 0) {
+  // Supplement with antifilter when opencck is down or any domain had no data
+  if (needsAntifilter) {
     try {
       const afCidrs = await getAntifilterCidrs();
       for (const c of afCidrs) if (isIpv4Cidr(c)) merged.add(c);
-      source = 'antifilter';
-    } catch { /* antifilter also failed — return empty */ }
+      source = merged.size > 0 && source === 'opencck' ? 'mixed' : 'antifilter';
+    } catch { /* antifilter also failed */ }
   }
 
   const result = Array.from(merged).sort();
