@@ -118,5 +118,14 @@
   "history_btn_aria": "История генераций",
   "history_modal_title": "🕐 История генераций",
   "history_empty": "Нет сохранённых генераций",
-  "history_clear_all": "Очистить историю"
+  "history_clear_all": "Очистить историю",
+  "cps_label": "CPS:",
+  "cps_auto": "Auto",
+  "cps_static": "Static",
+  "cps_auto_title": "Случайный протокол при каждой генерации",
+  "cps_quic_title": "QUIC Initial пакет (RFC 9001)",
+  "cps_dns_title": "DNS query с случайным Transaction ID",
+  "cps_stun_title": "STUN Binding Request с CRC32 fingerprint",
+  "cps_tls_title": "TLS 1.3 ClientHello",
+  "cps_sip_title": "SIP INVITE (случайный Call-ID)"
 }
