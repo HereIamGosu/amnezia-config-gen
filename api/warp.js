@@ -12,6 +12,7 @@ const { createRateLimiter } = require('./_rateLimit');
 const warpLimiter = createRateLimiter({ windowMs: 60_000, maxHits: 10 });
 
 const { pickRandomCpsPayload } = require('./warpCpsPayloads');
+const { generateCpsPayload } = require('./cpsGenerator');
 
 const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0', '::/0'];
 
@@ -659,16 +660,13 @@ const resolvePeerEndpointForConfig = (config, extras) => {
   return `${host}:${port}`;
 };
 
-const resolveI1ForGeneration = async (extras) => {
+const resolveI1ForGeneration = async (extras, cpsProtocol = 'auto') => {
   if (extras.i1Raw != null && String(extras.i1Raw).trim() !== '') {
     return normalizeI1Payload(extras.i1Raw);
   }
   if (extras.i1Ref) return normalizeI1Payload(await loadI1FromRef(extras.i1Ref));
   if (extras.useEmbeddedAmneziaI1) {
-    // Pick a verified CPS payload from the pool. Random bytes are NOT valid replacements —
-    // Cloudflare WARP requires a structured CPS binary header (0xCx 00 00 00 01...).
-    // Rotating across the pool provides DPI variety without breaking the handshake.
-    return normalizeI1Payload(pickRandomCpsPayload());
+    return normalizeI1Payload(await generateCpsPayload(cpsProtocol));
   }
   return '';
 };
@@ -896,7 +894,7 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
   if (awg2Obf && routeOpts.routerMode) awg2Obf = applyRouterModeCaps(awg2Obf);
   const { cidrs: routeCidrs, routesSource, sitesResolved } = await resolveAllowedIpsFromPresets(presetKeys, routeOpts);
   const dnsLine = getDnsString(dnsKey || DNS_DEFAULT_KEY);
-  const i1 = await resolveI1ForGeneration(warpExtras);
+  const i1 = await resolveI1ForGeneration(warpExtras, routeOpts.cpsProtocol);
 
   return {
     text: buildFullConfig(
@@ -979,7 +977,8 @@ module.exports = async (req, res) => {
     const includeIpv6 = ipv6Param === '1' || ipv6Param === 'true';
     const routerRaw = body.router ?? pickQuery(req, 'router');
     const routerMode = routerRaw === true || routerRaw === 1 || String(routerRaw ?? '').toLowerCase() === '1' || String(routerRaw ?? '').toLowerCase() === 'true';
-    const { text: conf, meta } = await generateWarpConfig(mode, presetKeys, dnsKey, warpExtras, { includeIpv6, routerMode });
+    const cpsProtocol = String(body.cps ?? pickQuery(req, 'cps') ?? 'auto').toLowerCase().trim();
+    const { text: conf, meta } = await generateWarpConfig(mode, presetKeys, dnsKey, warpExtras, { includeIpv6, routerMode, cpsProtocol });
     const confEncoded = Buffer.from(conf).toString('base64');
     res.status(200).json({
       success: true,
