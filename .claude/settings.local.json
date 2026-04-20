@@ -15,7 +15,18 @@
       "WebFetch(domain:warp-generator.github.io)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:api.github.com)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(gh repo *)",
+      "Bash(node -e \"const { generateCpsPayload } = require\\('./api/cpsGenerator'\\); Promise.all\\(['auto','quic','dns','stun','tls','sip','static','bogus'].map\\(async p => { const r = await generateCpsPayload\\(p\\); console.log\\(p, r.slice\\(0,30\\) + '...'\\); }\\)\\).catch\\(console.error\\);\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(node -e \"require\\('./api/warp.js'\\)\")",
+      "Bash(node -e \"require\\('./public/locales/ru.json'\\); require\\('./public/locales/en.json'\\); console.log\\('OK'\\)\")",
+      "Bash(git commit *)",
+      "Bash(git rm *)",
+      "Bash(git push *)",
+      "Bash(git pull *)",
+      "Bash(git stash *)"
     ]
   }
 }
