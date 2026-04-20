@@ -1690,6 +1690,61 @@ button.info-link {
   border: 2px inset #808080;
 }
 
+/* Mini CIDR counter on Routes tab */
+.cidr-counter-mini {
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  font-size: 7px;
+  color: #444;
+  padding: 3px 6px;
+  background: #d4d0c8;
+  border: 1px inset #808080;
+  display: inline-block;
+  margin-bottom: 6px;
+}
+
+.cidr-counter-mini--warn {
+  color: #8b4513;
+  font-weight: bold;
+}
+
+.cidr-counter-mini--over {
+  color: #c00;
+  font-weight: bold;
+}
+
+/* Reset button in settings titlebar */
+.settings-modal__reset {
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  font-size: 7px;
+  padding: 3px 8px;
+  background: #c0c0c0;
+  border: 2px outset #fff;
+  color: #000;
+  cursor: pointer;
+  white-space: nowrap;
+  margin-right: 6px;
+}
+
+.settings-modal__reset:hover {
+  background: #d4d0c8;
+}
+
+.settings-modal__reset:active {
+  border-style: inset;
+}
+
+/* CPS recommended badge */
+.cps-radio-tile__badge {
+  font-size: 8px;
+  color: #ffd700;
+  margin-left: 2px;
+  line-height: 1;
+}
+
+.cps-radio-tile--recommended:has(input:checked) .cps-radio-tile__badge {
+  color: #ffd700;
+}
+
 /* hint paragraph in settings panel */
 .settings-panel__hint {
   font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;

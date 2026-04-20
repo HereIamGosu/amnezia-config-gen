@@ -660,6 +660,14 @@
           </h2>
           <button
             type="button"
+            class="settings-modal__reset"
+            id="settingsModalReset"
+            data-i18n="settings_reset_btn"
+            title="Сбросить все настройки к значениям по умолчанию"
+            data-i18n-title="settings_reset_title"
+          >↺ Сброс</button>
+          <button
+            type="button"
             class="settings-modal__close"
             id="settingsModalClose"
             aria-label="Закрыть"
@@ -694,6 +702,7 @@
                   <button type="button" class="cfg-tiles-action" id="presetRfPopular" data-i18n="preset_btn_popular">Основной набор</button>
                   <button type="button" class="cfg-tiles-action" id="presetClear" data-i18n="preset_btn_clear">Снять всё</button>
                 </div>
+                <div id="cidrCounterMini" class="cidr-counter-mini" aria-live="polite"></div>
                 <p id="presetStats" class="preset-stats" aria-live="polite"></p>
                 <h3 class="settings-modal__subsection" data-i18n="section_social">Социальные сети и мессенджеры</h3>
                 <div id="routeTilesSocial" class="cfg-tiles cfg-tiles--routes"></div>
@@ -713,9 +722,10 @@
                 <h3 class="settings-modal__subsection" data-i18n="cps_section_title">CPS-протокол (I1)</h3>
                 <p class="settings-panel__hint" data-i18n="cps_section_hint">Тип трафика, которым маскируется начало соединения. Auto — случайный при каждой генерации.</p>
                 <div class="cps-radio-group">
-                  <label class="cps-radio-tile" title="Случайный протокол при каждой генерации" data-i18n-title="cps_auto_title">
+                  <label class="cps-radio-tile cps-radio-tile--recommended" title="Случайный протокол при каждой генерации" data-i18n-title="cps_auto_title">
                     <input type="radio" name="cpsProtocol" value="auto" checked />
                     <span class="cps-radio-tile__name" data-i18n="cps_auto">Auto</span>
+                    <span class="cps-radio-tile__badge">★</span>
                   </label>
                   <label class="cps-radio-tile" title="QUIC Initial пакет (RFC 9001)" data-i18n-title="cps_quic_title">
                     <input type="radio" name="cpsProtocol" value="quic" />

@@ -130,6 +130,8 @@
   "cps_sip_title": "SIP INVITE (случайный Call-ID)",
   "cps_static_title": "Статичные бинарные пэйлоады (3 варианта)",
 
+  "settings_reset_btn": "↺ Сброс",
+  "settings_reset_title": "Сбросить все настройки к значениям по умолчанию",
   "tab_routes": "📋 Маршруты",
   "tab_dnscps": "🔒 DNS & CPS",
   "tab_extra": "⚙ Дополнительно",
