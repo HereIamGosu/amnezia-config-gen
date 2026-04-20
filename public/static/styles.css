@@ -710,13 +710,13 @@ button.info-link {
 }
 
 .settings-modal__dialog {
-  max-width: min(92vw, 720px);
+  max-width: min(92vw, 800px);
   width: 100%;
   padding: 0;
   display: flex;
   flex-direction: column;
-  max-height: min(90vh, 900px);
-  max-height: min(90dvh, 900px);
+  max-height: min(95vh, 980px);
+  max-height: min(95dvh, 980px);
 }
 
 .settings-modal__titlebar {
