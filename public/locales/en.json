@@ -130,6 +130,8 @@
   "cps_sip_title": "SIP INVITE (random Call-ID)",
   "cps_static_title": "Static binary payloads (3 variants)",
 
+  "settings_reset_btn": "↺ Reset",
+  "settings_reset_title": "Reset all settings to defaults",
   "tab_routes": "📋 Routes",
   "tab_dnscps": "🔒 DNS & CPS",
   "tab_extra": "⚙ Advanced",

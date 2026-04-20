@@ -407,24 +407,33 @@ const buildWarpQueryString = (mode) => {
   return params.toString();
 };
 
-/** Update the CIDR counter element (#cidrCounter) with the current count. */
+/** Update the CIDR counter element (#cidrCounter) and mini counter (#cidrCounterMini). */
 const updateCidrCounter = (count4) => {
   const el = document.getElementById('cidrCounter');
-  if (!el) return;
+  const mini = document.getElementById('cidrCounterMini');
   if (cfgState.ignoreLimit) {
-    el.classList.remove('cidr-counter--warn', 'cidr-counter--over');
-    el.innerHTML = `<span class="cidr-counter__label">${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4} ${t('cidr_limit_disabled', '(лимит отключён)')}</span>`;
+    if (el) {
+      el.classList.remove('cidr-counter--warn', 'cidr-counter--over');
+      el.innerHTML = `<span class="cidr-counter__label">${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4} ${t('cidr_limit_disabled', '(лимит отключён)')}</span>`;
+    }
+    if (mini) { mini.textContent = `IPv4: ${count4}`; mini.className = 'cidr-counter-mini'; }
   } else {
     const pct = Math.min(count4 / MAX_CIDR_LIMIT, 1);
     const warn = count4 >= MAX_CIDR_LIMIT * 0.8 && count4 < MAX_CIDR_LIMIT;
     const over = count4 >= MAX_CIDR_LIMIT;
-    el.classList.toggle('cidr-counter--warn', warn);
-    el.classList.toggle('cidr-counter--over', over);
-    el.innerHTML = `
-      <span class="cidr-counter__label">${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4} / ${MAX_CIDR_LIMIT}</span>
-      <div class="cidr-counter__bar-track">
-        <div class="cidr-counter__bar-fill" style="width:${(pct * 100).toFixed(1)}%"></div>
-      </div>`;
+    if (el) {
+      el.classList.toggle('cidr-counter--warn', warn);
+      el.classList.toggle('cidr-counter--over', over);
+      el.innerHTML = `
+        <span class="cidr-counter__label">${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4} / ${MAX_CIDR_LIMIT}</span>
+        <div class="cidr-counter__bar-track">
+          <div class="cidr-counter__bar-fill" style="width:${(pct * 100).toFixed(1)}%"></div>
+        </div>`;
+    }
+    if (mini) {
+      mini.textContent = `IPv4: ${count4} / ${MAX_CIDR_LIMIT}`;
+      mini.className = 'cidr-counter-mini' + (over ? ' cidr-counter-mini--over' : warn ? ' cidr-counter-mini--warn' : '');
+    }
   }
 };
 
@@ -643,6 +652,34 @@ const initSettingsPanel = async () => {
         cfgState.cpsProtocol = e.target.value;
       });
     });
+
+    const settingsResetBtn = document.getElementById('settingsModalReset');
+    if (settingsResetBtn) {
+      settingsResetBtn.addEventListener('click', () => {
+        // Reset toggles
+        cfgState.includeIpv6 = false;
+        cfgState.ignoreLimit = false;
+        cfgState.routerMode = false;
+        cfgState.cpsProtocol = 'auto';
+        if (ipv6Toggle) ipv6Toggle.checked = false;
+        if (ignoreLimitToggle) ignoreLimitToggle.checked = false;
+        if (routerModeToggle) routerModeToggle.checked = false;
+        const autoRadio = document.querySelector('[name="cpsProtocol"][value="auto"]');
+        if (autoRadio) autoRadio.checked = true;
+        // Clear route presets
+        forEachRouteTile((tile) => {
+          const cb = tile.querySelector('input[type="checkbox"]');
+          if (cb) { cb.checked = false; cb.disabled = false; tile.classList.remove('cfg-tile--disabled'); updateTileActiveClass(tile); }
+        });
+        // Reset DNS to default
+        const firstDns = document.querySelector('[name="dns-preset"]');
+        if (firstDns) { firstDns.checked = true; cfgState.selectedDns = firstDns.value; document.querySelectorAll('.cfg-tile').forEach((tile) => updateTileActiveClass(tile)); }
+        cfgState.cidrCount4 = 0;
+        updateCidrCounter(0);
+        updateTileDisabledState();
+        refreshPresetStats();
+      });
+    }
 
     if (btnRf) {
       btnRf.addEventListener('click', () => {
