@@ -412,12 +412,19 @@ const updateCidrCounter = (count4) => {
   const el = document.getElementById('cidrCounter');
   if (!el) return;
   if (cfgState.ignoreLimit) {
-    el.textContent = `${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4} ${t('cidr_limit_disabled', '(лимит отключён)')}`;
     el.classList.remove('cidr-counter--warn', 'cidr-counter--over');
+    el.innerHTML = `<span class="cidr-counter__label">${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4} ${t('cidr_limit_disabled', '(лимит отключён)')}</span>`;
   } else {
-    el.textContent = `${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4} / ${MAX_CIDR_LIMIT}`;
-    el.classList.toggle('cidr-counter--warn', count4 >= MAX_CIDR_LIMIT * 0.8 && count4 < MAX_CIDR_LIMIT);
-    el.classList.toggle('cidr-counter--over', count4 >= MAX_CIDR_LIMIT);
+    const pct = Math.min(count4 / MAX_CIDR_LIMIT, 1);
+    const warn = count4 >= MAX_CIDR_LIMIT * 0.8 && count4 < MAX_CIDR_LIMIT;
+    const over = count4 >= MAX_CIDR_LIMIT;
+    el.classList.toggle('cidr-counter--warn', warn);
+    el.classList.toggle('cidr-counter--over', over);
+    el.innerHTML = `
+      <span class="cidr-counter__label">${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4} / ${MAX_CIDR_LIMIT}</span>
+      <div class="cidr-counter__bar-track">
+        <div class="cidr-counter__bar-fill" style="width:${(pct * 100).toFixed(1)}%"></div>
+      </div>`;
   }
 };
 

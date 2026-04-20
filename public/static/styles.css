@@ -907,19 +907,49 @@ button.info-link {
 }
 
 .cidr-counter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cidr-counter__label {
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
   font-size: 8px;
-  color: #555;
+  color: #333;
   white-space: nowrap;
 }
 
-.cidr-counter--warn {
+.cidr-counter--warn .cidr-counter__label {
   color: #8b4513;
   font-weight: bold;
 }
 
-.cidr-counter--over {
+.cidr-counter--over .cidr-counter__label {
   color: #c00;
   font-weight: bold;
+}
+
+.cidr-counter__bar-track {
+  height: 12px;
+  background: #a0a0a0;
+  border: 2px inset #808080;
+  position: relative;
+  overflow: hidden;
+}
+
+.cidr-counter__bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #000080;
+  transition: width 0.25s ease;
+}
+
+.cidr-counter--warn .cidr-counter__bar-fill {
+  background: #b8720a;
+}
+
+.cidr-counter--over .cidr-counter__bar-fill {
+  background: #c00;
 }
 
 /* IPv6 toggle label */
@@ -1655,12 +1685,9 @@ button.info-link {
 
 /* CIDR counter in extra tab */
 .extra-options .cidr-counter {
-  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
-  font-size: 7px;
-  padding: 6px 10px;
+  padding: 8px 10px;
   background: #d4d0c8;
   border: 2px inset #808080;
-  color: #000;
 }
 
 /* hint paragraph in settings panel */
