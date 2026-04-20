@@ -294,6 +294,8 @@ const cfgState = {
   routerMode: false,
   /** CPS protocol for I1 field: auto | quic | dns | stun | tls | sip | static */
   cpsProtocol: 'auto',
+  /** Set of preset IDs confirmed to return 0 IPv4 CIDRs from opencck. */
+  zeroCidrPresets: new Set(),
 };
 
 const getPresetsFallbackUrl = () => {
@@ -498,6 +500,14 @@ const refreshPresetStats = debounce(async () => {
     updateCidrCounter(count4);
     updateTileDisabledState();
 
+    // Track presets that return 0 CIDRs when selected alone
+    if (selected.length === 1) {
+      const pid = selected[0];
+      if (count4 === 0) cfgState.zeroCidrPresets.add(pid);
+      else cfgState.zeroCidrPresets.delete(pid);
+      applyZeroCidrMarks();
+    }
+
     const overLimit = !cfgState.ignoreLimit && count4 >= MAX_CIDR_LIMIT;
     if (overLimit) {
       el.classList.add('preset-stats--warn');
@@ -519,6 +529,26 @@ const updateTileActiveClass = (label) => {
   const input = label.querySelector('input');
   if (!input) return;
   label.classList.toggle('cfg-tile--active', input.checked);
+};
+
+/** Mark/unmark route tiles that are known to return 0 CIDRs. */
+const applyZeroCidrMarks = () => {
+  forEachRouteTile((tile) => {
+    const cb = tile.querySelector('input[type="checkbox"]');
+    if (!cb) return;
+    const isZero = cfgState.zeroCidrPresets.has(cb.value);
+    tile.classList.toggle('cfg-tile--zero-cidr', isZero);
+    let warn = tile.querySelector('.cfg-tile__zero-warn');
+    if (isZero && !warn) {
+      warn = document.createElement('span');
+      warn.className = 'cfg-tile__zero-warn';
+      warn.textContent = '⚠ 0 IP';
+      warn.title = 'Нет данных в iplist.opencck.org — маршруты не будут добавлены';
+      tile.appendChild(warn);
+    } else if (!isZero && warn) {
+      warn.remove();
+    }
+  });
 };
 
 const renderDnsTiles = (host) => {
@@ -616,6 +646,7 @@ const initSettingsPanel = async () => {
       const list = cfgState.presets.filter((p) => p.category === cat);
       renderRouteTiles(host, list);
     });
+    applyZeroCidrMarks();
 
     const btnRf = document.getElementById('presetRfPopular');
     const btnClear = document.getElementById('presetClear');
