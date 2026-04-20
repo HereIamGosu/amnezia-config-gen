@@ -53,16 +53,18 @@ module.exports = async (req, res) => {
     const includeIpv6 = ipv6Param === '1' || ipv6Param === 'true';
 
     // Always fetch IPv4-only CIDRs for the counter (fast, fewer routes)
-    const cidrs4 = await fetchCidrsForDomains(sites, { includeIpv6: false });
+    const result4 = await fetchCidrsForDomains(sites, { includeIpv6: false });
+    const cidrs4 = result4.cidrs;
     const count4 = cidrs4.length;
+    const cidrSource = result4.source;
 
     let cidrs = cidrs4;
     let count6 = 0;
 
     if (includeIpv6) {
-      const cidrsAll = await fetchCidrsForDomains(sites, { includeIpv6: true });
-      count6 = cidrsAll.length - count4;
-      cidrs = cidrsAll;
+      const resultAll = await fetchCidrsForDomains(sites, { includeIpv6: true });
+      count6 = resultAll.cidrs.length - count4;
+      cidrs = resultAll.cidrs;
     }
 
     res.status(200).json({
@@ -74,6 +76,7 @@ module.exports = async (req, res) => {
       count4,
       count6,
       cidrs,
+      cidrSource,
     });
   } catch (e) {
     console.error('iplist API:', e);
