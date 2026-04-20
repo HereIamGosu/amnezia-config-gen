@@ -1501,10 +1501,10 @@ button.info-link {
 /* Individual tab label */
 .tabs-win95__tab {
   font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
-  font-size: 7px;
+  font-size: 9px;
   line-height: 1.4;
-  padding: 5px 10px 6px;
-  background: #c0c0c0;
+  padding: 8px 14px 9px;
+  background: #b0b0b0;
   border: 2px solid;
   border-color: #fff #808080 #808080 #fff;
   border-bottom: none;
@@ -1512,13 +1512,14 @@ button.info-link {
   position: relative;
   bottom: -2px;
   white-space: nowrap;
-  color: #000;
+  color: #333;
   user-select: none;
   transition: background-color 0.05s;
 }
 
 .tabs-win95__tab:hover {
-  background: #d4d0c8;
+  background: #c8c8c8;
+  color: #000;
 }
 
 /* Active tab: raised above the bar, no bottom border, merges with content */
@@ -1527,10 +1528,11 @@ button.info-link {
 #tab-extra:checked  ~ .tabs-win95__bar label[for="tab-extra"] {
   background: #c0c0c0;
   border-color: #fff #808080 #c0c0c0 #fff;
-  padding-bottom: 8px;
+  padding-bottom: 11px;
   z-index: 1;
   font-weight: bold;
   color: #000080;
+  font-size: 10px;
 }
 
 /* Content area */
