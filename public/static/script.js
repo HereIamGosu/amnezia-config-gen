@@ -292,6 +292,8 @@ const cfgState = {
   ignoreLimit: false,
   /** When true, router-safe caps are applied (Jc≤2, Jmin/Jmax≤128). */
   routerMode: false,
+  /** CPS protocol for I1 field: auto | quic | dns | stun | tls | sip | static */
+  cpsProtocol: 'auto',
 };
 
 const getPresetsFallbackUrl = () => {
@@ -401,6 +403,7 @@ const buildWarpQueryString = (mode) => {
   if (dns) params.set('dns', dns);
   if (cfgState.includeIpv6) params.set('ipv6', '1');
   if (cfgState.routerMode) params.set('router', '1');
+  params.set('cps', cfgState.cpsProtocol);
   return params.toString();
 };
 
@@ -627,6 +630,12 @@ const initSettingsPanel = async () => {
         cfgState.routerMode = routerModeToggle.checked;
       });
     }
+
+    document.querySelectorAll('[name="cpsProtocol"]').forEach((radio) => {
+      radio.addEventListener('change', (e) => {
+        cfgState.cpsProtocol = e.target.value;
+      });
+    });
 
     if (btnRf) {
       btnRf.addEventListener('click', () => {
