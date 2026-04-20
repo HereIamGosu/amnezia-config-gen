@@ -1690,6 +1690,27 @@ button.info-link {
   border: 2px inset #808080;
 }
 
+/* Zero-CIDR tile warning */
+.cfg-tile--zero-cidr {
+  opacity: 0.7;
+  border-color: #c0392b #800000 #800000 #c0392b !important;
+}
+
+.cfg-tile__zero-warn {
+  display: block;
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  font-size: 5px;
+  color: #c0392b;
+  margin-top: 3px;
+  line-height: 1.4;
+  text-align: center;
+  cursor: help;
+}
+
+.cfg-tile--zero-cidr.cfg-tile--active .cfg-tile__zero-warn {
+  color: #ff8080;
+}
+
 /* Mini CIDR counter on Routes tab */
 .cidr-counter-mini {
   font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
