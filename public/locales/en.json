@@ -127,5 +127,15 @@
   "cps_dns_title": "DNS query with random Transaction ID",
   "cps_stun_title": "STUN Binding Request with CRC32 fingerprint",
   "cps_tls_title": "TLS 1.3 ClientHello",
-  "cps_sip_title": "SIP INVITE (random Call-ID)"
+  "cps_sip_title": "SIP INVITE (random Call-ID)",
+  "cps_static_title": "Static binary payloads (3 variants)",
+
+  "tab_routes": "📋 Routes",
+  "tab_dnscps": "🔒 DNS & CPS",
+  "tab_extra": "⚙ Advanced",
+  "cps_section_title": "CPS Protocol (I1)",
+  "cps_section_hint": "Traffic type used to disguise the connection start. Auto picks a random protocol each time.",
+  "ipv6_toggle_hint": "Adds IPv6 CIDRs — increases route count by 2–3×",
+  "ignore_limit_hint": "Removes the 1000 CIDR limit — use with caution",
+  "router_mode_hint": "Small Jc/Jmin/Jmax for MikroTik, GL.iNet, Keenetic, OpenWrt"
 }
