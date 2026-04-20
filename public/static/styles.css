@@ -1469,6 +1469,207 @@ button.info-link {
   background-color: #333 !important;
 }
 
+/* ── Win95 Tabs ─────────────────────────────────────────────────────────── */
+
+/* Hide the radio inputs completely */
+.tabs-win95__input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  height: 0;
+}
+
+/* Tab container fills the modal body */
+.tabs-win95 {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Tab bar — Win95 style row of tabs */
+.tabs-win95__bar {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 6px 8px 0;
+  background: #c0c0c0;
+  border-bottom: 2px solid #808080;
+}
+
+/* Individual tab label */
+.tabs-win95__tab {
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  font-size: 7px;
+  line-height: 1.4;
+  padding: 5px 10px 6px;
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #fff #808080 #808080 #fff;
+  border-bottom: none;
+  cursor: pointer;
+  position: relative;
+  bottom: -2px;
+  white-space: nowrap;
+  color: #000;
+  user-select: none;
+  transition: background-color 0.05s;
+}
+
+.tabs-win95__tab:hover {
+  background: #d4d0c8;
+}
+
+/* Active tab: raised above the bar, no bottom border, merges with content */
+#tab-routes:checked ~ .tabs-win95__bar label[for="tab-routes"],
+#tab-dnscps:checked ~ .tabs-win95__bar label[for="tab-dnscps"],
+#tab-extra:checked  ~ .tabs-win95__bar label[for="tab-extra"] {
+  background: #c0c0c0;
+  border-color: #fff #808080 #c0c0c0 #fff;
+  padding-bottom: 8px;
+  z-index: 1;
+  font-weight: bold;
+  color: #000080;
+}
+
+/* Content area */
+.tabs-win95__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: #c0c0c0;
+  border: 2px inset #808080;
+  padding: 14px 16px;
+}
+
+/* All panels hidden by default */
+.tab-panel {
+  display: none;
+}
+
+/* Show the active panel */
+#tab-routes:checked ~ .tabs-win95__content #panel-routes,
+#tab-dnscps:checked ~ .tabs-win95__content #panel-dnscps,
+#tab-extra:checked  ~ .tabs-win95__content #panel-extra {
+  display: block;
+}
+
+/* ── CPS radio tiles ────────────────────────────────────────────────────── */
+
+.cps-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.cps-radio-tile {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: #d4d0c8;
+  border: 2px outset #fff;
+  cursor: pointer;
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  font-size: 7px;
+  white-space: nowrap;
+  user-select: none;
+  transition: background-color 0.05s;
+}
+
+.cps-radio-tile:hover {
+  background: #b8d4f0;
+}
+
+.cps-radio-tile input[type="radio"] {
+  accent-color: #000080;
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.cps-radio-tile:has(input:checked) {
+  background: #000080;
+  color: #fff;
+  border-style: inset;
+}
+
+/* ── Extra options (Tab 3) ──────────────────────────────────────────────── */
+
+.extra-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.extra-option-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #d4d0c8;
+  border: 2px inset #808080;
+  cursor: pointer;
+  user-select: none;
+}
+
+.extra-option-row input[type="checkbox"] {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  accent-color: #000080;
+  cursor: pointer;
+}
+
+.extra-option-row__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.extra-option-row__label {
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  font-size: 8px;
+  color: #000;
+  line-height: 1.4;
+}
+
+.extra-option-row__hint {
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  font-size: 6px;
+  color: #555;
+  line-height: 1.6;
+}
+
+.extra-option-row:has(input:checked) {
+  background: #c0d8f0;
+  border-style: inset;
+}
+
+/* CIDR counter in extra tab */
+.extra-options .cidr-counter {
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  font-size: 7px;
+  padding: 6px 10px;
+  background: #d4d0c8;
+  border: 2px inset #808080;
+  color: #000;
+}
+
+/* hint paragraph in settings panel */
+.settings-panel__hint {
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  font-size: 6px;
+  color: #444;
+  line-height: 1.8;
+  margin: 0 0 8px;
+}
+
 /* Danger button variant */
 .button.button--danger {
   background-color: #c0392b;
