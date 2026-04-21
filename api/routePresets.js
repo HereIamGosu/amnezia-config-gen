@@ -313,14 +313,19 @@ const ROUTE_PRESETS = {
   control4: {
     label: 'Control4 (умный дом)',
     category: 'more',
-    sites: [
-      'control4.com',
-      'my.control4.com',
-      'customer.control4.com',
-      'api.control4.com',
-      'snapav.com',
-      'snapone.com',
-      'ovrc.com',
+    // Домены не индексированы opencck → используем статические CIDR по DNS-резолву.
+    // AWS Global Accelerator anycast: 75.2.70.75, 99.83.190.102 (control4.com, snapone.com, ovrc.com)
+    // AWS us-east-2: 13.59.205.187 (api.control4.com)
+    // Cloudflare: 104.18.14.48, 104.18.15.48 (my/customer.control4.com, snapav.com)
+    sites: [],
+    cidrs: [
+      '75.2.70.75/32',
+      '99.83.190.102/32',
+      '13.59.205.187/32',
+      '104.18.14.48/32',
+      '104.18.15.48/32',
+      '104.18.30.8/32',
+      '104.18.31.8/32',
     ],
   },
 };
@@ -340,6 +345,7 @@ const normalizePresetKey = (raw) =>
 
 const expandPresetsToSites = (presetKeys) => {
   const seenSites = new Set();
+  const seenCidrs = new Set();
   const unknown = [];
   for (const key of presetKeys) {
     const k = normalizePresetKey(key);
@@ -349,11 +355,14 @@ const expandPresetsToSites = (presetKeys) => {
       unknown.push(k);
       continue;
     }
-    for (const s of def.sites) {
+    for (const s of (def.sites || [])) {
       seenSites.add(s.trim().toLowerCase());
     }
+    for (const c of (def.cidrs || [])) {
+      seenCidrs.add(c.trim());
+    }
   }
-  return { sites: Array.from(seenSites).sort(), unknown };
+  return { sites: Array.from(seenSites).sort(), staticCidrs: Array.from(seenCidrs), unknown };
 };
 
 const listPresetsForApi = () => {
@@ -364,7 +373,7 @@ const listPresetsForApi = () => {
       out.push({
         id,
         label: v.label,
-        sitesCount: v.sites.length,
+        sitesCount: (v.sites || []).length,
         category,
       });
     }

@@ -41,7 +41,14 @@
       "Bash(git -C \"e:\\\\Coding\\\\HTML, JS \\(WEB\\)\\\\AmneziaWG Config Generator\\\\amnezia-config-gen\" log --oneline -10)",
       "WebFetch(domain:www.c4forums.com)",
       "WebFetch(domain:docs.control4.com)",
-      "WebFetch(domain:my.control4.com)"
+      "WebFetch(domain:my.control4.com)",
+      "WebFetch(domain:ipinfo.io)",
+      "Bash(curl -s \"https://ipinfo.io/75.2.70.75\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d.get\\('org',''\\), d.get\\('country',''\\)\\)\")",
+      "Bash(curl -s \"https://ipinfo.io/99.83.190.102\")",
+      "Bash(curl -s \"https://ipinfo.io/13.59.205.187\")",
+      "Bash(curl -s \"https://ipinfo.io/104.18.14.48\")",
+      "Bash(node -e ' *)"
     ]
   }
 }

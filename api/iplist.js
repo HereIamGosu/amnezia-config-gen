@@ -35,7 +35,7 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const { sites, unknown } = expandPresetsToSites(presetKeys);
+    const { sites, staticCidrs, unknown } = expandPresetsToSites(presetKeys);
     if (unknown.length) {
       res.status(400).json({
         success: false,
@@ -44,7 +44,7 @@ module.exports = async (req, res) => {
       });
       return;
     }
-    if (!sites.length) {
+    if (!sites.length && !staticCidrs.length) {
       res.status(400).json({ success: false, message: 'Не выбрано ни одного домена для запроса.' });
       return;
     }
@@ -52,20 +52,40 @@ module.exports = async (req, res) => {
     const ipv6Param = pickQuery(req, 'ipv6');
     const includeIpv6 = ipv6Param === '1' || ipv6Param === 'true';
 
-    // Always fetch IPv4-only CIDRs for the counter (fast, fewer routes)
-    const result4 = await fetchCidrsForDomains(sites, { includeIpv6: false });
-    const cidrs4 = result4.cidrs;
-    const count4 = cidrs4.length;
-    const cidrSource = result4.source;
+    const { isIpv4Cidr } = require('./ipListFetch');
 
-    let cidrs = cidrs4;
+    let cidrs4 = [];
+    let cidrSource = 'opencck';
+
+    if (sites.length) {
+      // Always fetch IPv4-only CIDRs for the counter (fast, fewer routes)
+      const result4 = await fetchCidrsForDomains(sites, { includeIpv6: false });
+      cidrs4 = result4.cidrs;
+      cidrSource = result4.source;
+    }
+
+    // Merge static CIDRs (IPv4 only for the count4 counter)
+    const staticV4 = staticCidrs.filter(isIpv4Cidr);
+    const merged4 = Array.from(new Set([...cidrs4, ...staticV4])).sort();
+    const count4 = merged4.length;
+
+    let cidrs = merged4;
     let count6 = 0;
 
-    if (includeIpv6) {
+    if (includeIpv6 && sites.length) {
       const resultAll = await fetchCidrsForDomains(sites, { includeIpv6: true });
-      count6 = resultAll.cidrs.length - count4;
-      cidrs = resultAll.cidrs;
+      const staticV6 = staticCidrs.filter((c) => !isIpv4Cidr(c));
+      cidrs = Array.from(new Set([...resultAll.cidrs, ...staticV6])).sort();
+      count6 = cidrs.length - count4;
+    } else if (includeIpv6) {
+      const staticV6 = staticCidrs.filter((c) => !isIpv4Cidr(c));
+      if (staticV6.length) {
+        cidrs = Array.from(new Set([...merged4, ...staticV6])).sort();
+        count6 = staticV6.length;
+      }
     }
+
+    if (!sites.length) cidrSource = 'static';
 
     res.status(200).json({
       success: true,

@@ -820,27 +820,39 @@ const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false } 
   if (!presetKeys.length) {
     return { cidrs: null, routesSource: 'default' };
   }
-  const { sites, unknown } = expandPresetsToSites(presetKeys);
+  const { sites, staticCidrs, unknown } = expandPresetsToSites(presetKeys);
   if (unknown.length) {
     const err = new Error(`Неизвестные пресеты маршрутов: ${unknown.join(', ')}`);
     err.statusCode = 400;
     throw err;
   }
-  if (!sites.length) {
+  if (!sites.length && !staticCidrs.length) {
     const err = new Error('Не заданы домены для выбранных пресетов.');
     err.statusCode = 400;
     throw err;
   }
-  // IPv4-only by default: fewer routes, better compatibility with routers and mobile clients.
-  const { cidrs } = await fetchCidrsForDomains(sites, { includeIpv6 });
-  if (!cidrs.length) {
+
+  const { isIpv4Cidr } = require('./ipListFetch');
+
+  let resolvedCidrs = [];
+  if (sites.length) {
+    // IPv4-only by default: fewer routes, better compatibility with routers and mobile clients.
+    const { cidrs } = await fetchCidrsForDomains(sites, { includeIpv6 });
+    resolvedCidrs = cidrs;
+  }
+
+  // Merge static CIDRs; for IPv4-only mode filter out IPv6 statics
+  const staticFiltered = includeIpv6 ? staticCidrs : staticCidrs.filter(isIpv4Cidr);
+  const merged = Array.from(new Set([...resolvedCidrs, ...staticFiltered])).sort();
+
+  if (!merged.length) {
     const err = new Error(
       'Сервис списков IP вернул пустой ответ. Попробуйте другой набор пресетов или повторите позже.',
     );
     err.statusCode = 502;
     throw err;
   }
-  return { cidrs, routesSource: 'presets', sitesResolved: sites.length };
+  return { cidrs: merged, routesSource: 'presets', sitesResolved: sites.length };
 };
 
 /**
