@@ -2007,3 +2007,36 @@ button.info-link {
     max-width: 100%; /* Делаем текст занимать всю ширину родительского контейнера */
   }
 }
+
+/* ── Healthcheck indicator ── */
+.health-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  margin: 4px 0 8px;
+  opacity: 0.85;
+}
+.health-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #888;
+}
+.health-status--loading .health-status__dot { background: #888; }
+.health-status--ok .health-status__dot      { background: #4caf50; }
+.health-status--fail .health-status__dot    { background: #f44336; }
+
+/* ── Endpoint port select in settings modal ── */
+.endpoint-select {
+  background: #000;
+  color: #0ff;
+  border: 2px solid #0ff;
+  padding: 4px 8px;
+  font-family: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.endpoint-select:focus { outline: 2px solid #fff; }
