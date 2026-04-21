@@ -515,8 +515,10 @@ const parsePersistentKeepalive = (v) => {
 
 const parsePeerEndpointOverride = (v) => {
   const s = String(v ?? '').trim();
-  if (!s || !s.includes(':')) return null;
-  return s;
+  if (!s) return null;
+  if (/^(\d{1,3}\.){3}\d{1,3}:\d{1,5}$/.test(s)) return s;
+  if (/^\[[\da-fA-F:]+\]:\d{1,5}$/.test(s)) return s;
+  return null;
 };
 
 /**

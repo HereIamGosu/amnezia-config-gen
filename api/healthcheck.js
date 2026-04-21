@@ -41,12 +41,17 @@ module.exports = async (req, res) => {
   }
 
   if (!pendingProbe) {
-    pendingProbe = probe().then(({ ok, latencyMs }) => {
-      const checkedAt = new Date().toISOString();
-      cache = { ok, latencyMs, checkedAt, expiresAt: Date.now() + CACHE_TTL_MS };
-      pendingProbe = null;
-      return cache;
-    });
+    pendingProbe = probe()
+      .then(({ ok, latencyMs }) => {
+        const checkedAt = new Date().toISOString();
+        cache = { ok, latencyMs, checkedAt, expiresAt: Date.now() + CACHE_TTL_MS };
+        pendingProbe = null;
+        return cache;
+      })
+      .catch((err) => {
+        pendingProbe = null;
+        throw err;
+      });
   }
 
   const result = await pendingProbe;
