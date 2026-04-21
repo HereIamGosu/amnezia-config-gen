@@ -48,7 +48,12 @@
       "Bash(curl -s \"https://ipinfo.io/99.83.190.102\")",
       "Bash(curl -s \"https://ipinfo.io/13.59.205.187\")",
       "Bash(curl -s \"https://ipinfo.io/104.18.14.48\")",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(curl -s \"https://iplist.opencck.org/?format=json&data=cidr4&site=telegram.org&site=t.me&site=web.telegram.org&site=core.telegram.org&site=telegra.ph\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(k, len\\(v\\), 'CIDRs'\\) for k,v in d.items\\(\\)]\")",
+      "Bash(node -e \"let d=''; process.stdin.on\\('data',c=>d+=c\\); process.stdin.on\\('end',\\(\\)=>{ const o=JSON.parse\\(d\\); for\\(const [k,v] of Object.entries\\(o\\)\\) console.log\\(k, v.length, 'CIDRs', v.slice\\(0,3\\).join\\(', '\\)\\); }\\);\")",
+      "Bash(curl -s \"https://iplist.opencck.org/?format=json&data=cidr4&site=t.me\")",
+      "Bash(node -e \"let d=''; process.stdin.on\\('data',c=>d+=c\\); process.stdin.on\\('end',\\(\\)=>{ const o=JSON.parse\\(d\\); console.log\\(JSON.stringify\\(o\\)\\); }\\);\")"
     ]
   }
 }
