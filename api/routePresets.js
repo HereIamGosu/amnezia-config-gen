@@ -310,6 +310,19 @@ const ROUTE_PRESETS = {
     category: 'more',
     sites: ['proton.me', 'protonmail.com', 'pm.me'],
   },
+  control4: {
+    label: 'Control4 (умный дом)',
+    category: 'more',
+    sites: [
+      'control4.com',
+      'my.control4.com',
+      'customer.control4.com',
+      'api.control4.com',
+      'snapav.com',
+      'snapone.com',
+      'ovrc.com',
+    ],
+  },
 };
 
 const PRESET_CATEGORY_ORDER = ['social', 'gaming', 'torrent', 'more'];
