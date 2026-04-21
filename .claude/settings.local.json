@@ -26,7 +26,22 @@
       "Bash(git rm *)",
       "Bash(git push *)",
       "Bash(git pull *)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(curl -s \"https://iplist.opencck.org/?format=json&data=cidr4&site=youtube.com\")",
+      "Bash(curl -s \"https://antifilter.download/list/domains.lst\")",
+      "Bash(curl -sI \"https://antifilter.download/\")",
+      "Bash(curl -sI \"https://antifilter.download/list/subnet.lst\")",
+      "Bash(curl -s \"https://antifilter.download/list/subnet.lst\")",
+      "Bash(curl -s \"https://api.github.com/search/repositories?q=iplist+opencck&sort=stars\")",
+      "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\); [print\\(r['full_name'], r['html_url'], r.get\\('description',''\\)\\) for r in data.get\\('items',[]\\)]\")",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const j=JSON.parse\\(d\\); j.items.forEach\\(r=>console.log\\(r.full_name, r.html_url\\)\\)\")",
+      "Bash(curl -s \"https://antifilter.download/\")",
+      "WebFetch(domain:antifilter.download)",
+      "WebFetch(domain:iplist.opencck.org)",
+      "Bash(git -C \"e:\\\\Coding\\\\HTML, JS \\(WEB\\)\\\\AmneziaWG Config Generator\\\\amnezia-config-gen\" log --oneline -10)",
+      "WebFetch(domain:www.c4forums.com)",
+      "WebFetch(domain:docs.control4.com)",
+      "WebFetch(domain:my.control4.com)"
     ]
   }
 }
