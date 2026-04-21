@@ -7,6 +7,7 @@ const PROBE_TIMEOUT_MS = 5000;
 const CACHE_TTL_MS = 30_000;
 
 let cache = null; // { ok, latencyMs, checkedAt, expiresAt }
+let pendingProbe = null;
 
 const probe = () =>
   new Promise((resolve) => {
@@ -39,8 +40,15 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { ok, latencyMs } = await probe();
-  const checkedAt = new Date().toISOString();
-  cache = { ok, latencyMs, checkedAt, expiresAt: now + CACHE_TTL_MS };
-  res.status(200).json({ ok, latencyMs, checkedAt });
+  if (!pendingProbe) {
+    pendingProbe = probe().then(({ ok, latencyMs }) => {
+      const checkedAt = new Date().toISOString();
+      cache = { ok, latencyMs, checkedAt, expiresAt: Date.now() + CACHE_TTL_MS };
+      pendingProbe = null;
+      return cache;
+    });
+  }
+
+  const result = await pendingProbe;
+  res.status(200).json({ ok: result.ok, latencyMs: result.latencyMs, checkedAt: result.checkedAt });
 };
