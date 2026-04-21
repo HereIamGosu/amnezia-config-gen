@@ -40,10 +40,20 @@ const ROUTE_PRESETS = {
     category: 'social',
     sites: [
       'telegram.org',
-      't.me',
-      'web.telegram.org',
-      'core.telegram.org',
-      'telegra.ph',
+    ],
+    // Official Telegram IP ranges from https://core.telegram.org/resources/cidr.txt
+    // t.me, core.telegram.org, telegra.ph, web.telegram.org all resolve to these ranges
+    // but opencck does not return CIDRs for those subdomains
+    cidrs: [
+      '91.108.4.0/22',
+      '91.108.8.0/22',
+      '91.108.12.0/22',
+      '91.108.16.0/22',
+      '91.108.20.0/22',
+      '91.108.56.0/22',
+      '91.105.192.0/23',
+      '149.154.160.0/20',
+      '185.76.151.0/24',
     ],
   },
   twitter: {
