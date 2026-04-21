@@ -797,6 +797,36 @@
                       <span class="extra-option-row__hint" data-i18n="router_mode_hint">Малые Jc/Jmin/Jmax для MikroTik, GL.iNet, Keenetic, OpenWrt</span>
                     </div>
                   </label>
+
+                  <!-- Endpoint port selector -->
+                  <div class="extra-option-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+                    <div class="extra-option-row__text">
+                      <span class="extra-option-row__label">UDP-порт WARP</span>
+                      <span class="extra-option-row__hint">Если туннель не поднимается — попробуйте другой порт</span>
+                    </div>
+                    <select id="warpPortSelect" class="endpoint-select" aria-label="UDP-порт WARP">
+                      <option value="4500">4500 (по умолчанию)</option>
+                      <option value="2408">2408 (wgcf)</option>
+                      <option value="500">500 (IKE)</option>
+                      <option value="1701">1701 (L2TP)</option>
+                      <option value="8080">8080</option>
+                      <option value="8443">8443</option>
+                      <option value="880">880</option>
+                    </select>
+                  </div>
+
+                  <!-- Endpoint mode toggle -->
+                  <label
+                    class="extra-option-row"
+                    title="Использует прямой IP-адрес Cloudflare вместо hostname engage.cloudflareclient.com. Помогает если hostname заблокирован на уровне DNS."
+                  >
+                    <input type="checkbox" id="endpointIpToggle" />
+                    <div class="extra-option-row__text">
+                      <span class="extra-option-row__label">Endpoint: IP вместо hostname</span>
+                      <span class="extra-option-row__hint">Обходит DNS-блокировку engage.cloudflareclient.com</span>
+                    </div>
+                  </label>
+
                 </div>
               </div>
 
