@@ -296,6 +296,8 @@ const cfgState = {
   cpsProtocol: 'auto',
   /** Set of preset IDs confirmed to return 0 IPv4 CIDRs from opencck. */
   zeroCidrPresets: new Set(),
+  warpPort: 4500,
+  endpointIp: false,
 };
 
 const getPresetsFallbackUrl = () => {
@@ -394,6 +396,8 @@ const closeSettingsModal = () => {
 
 const getSelectedDnsKey = () => cfgState.selectedDns || '';
 
+const WARP_FALLBACK_IPS = ['162.159.192.1', '188.114.97.66'];
+
 const buildWarpQueryString = (mode) => {
   const params = new URLSearchParams();
   params.set('mode', mode);
@@ -406,6 +410,11 @@ const buildWarpQueryString = (mode) => {
   if (cfgState.includeIpv6) params.set('ipv6', '1');
   if (cfgState.routerMode) params.set('router', '1');
   params.set('cps', cfgState.cpsProtocol);
+  params.set('warpPort', String(cfgState.warpPort));
+  if (cfgState.endpointIp) {
+    const ip = WARP_FALLBACK_IPS[Math.floor(Math.random() * WARP_FALLBACK_IPS.length)];
+    params.set('peerEndpoint', `${ip}:${cfgState.warpPort}`);
+  }
   return params.toString();
 };
 
@@ -685,6 +694,23 @@ const initSettingsPanel = async () => {
       });
     }
 
+    const warpPortSelect = document.getElementById('warpPortSelect');
+    if (warpPortSelect) {
+      warpPortSelect.value = String(cfgState.warpPort);
+      warpPortSelect.addEventListener('change', () => {
+        const n = Number.parseInt(warpPortSelect.value, 10);
+        if (n > 0) cfgState.warpPort = n;
+      });
+    }
+
+    const endpointIpToggle = document.getElementById('endpointIpToggle');
+    if (endpointIpToggle) {
+      endpointIpToggle.checked = cfgState.endpointIp;
+      endpointIpToggle.addEventListener('change', () => {
+        cfgState.endpointIp = endpointIpToggle.checked;
+      });
+    }
+
     document.querySelectorAll('[name="cpsProtocol"]').forEach((radio) => {
       radio.addEventListener('change', (e) => {
         cfgState.cpsProtocol = e.target.value;
@@ -699,11 +725,15 @@ const initSettingsPanel = async () => {
         cfgState.ignoreLimit = false;
         cfgState.routerMode = false;
         cfgState.cpsProtocol = 'auto';
+        cfgState.warpPort = 4500;
+        cfgState.endpointIp = false;
         if (ipv6Toggle) ipv6Toggle.checked = false;
         if (ignoreLimitToggle) ignoreLimitToggle.checked = false;
         if (routerModeToggle) routerModeToggle.checked = false;
         const autoRadio = document.querySelector('[name="cpsProtocol"][value="auto"]');
         if (autoRadio) autoRadio.checked = true;
+        if (warpPortSelect) warpPortSelect.value = '4500';
+        if (endpointIpToggle) endpointIpToggle.checked = false;
         // Clear route presets
         forEachRouteTile((tile) => {
           const cb = tile.querySelector('input[type="checkbox"]');
