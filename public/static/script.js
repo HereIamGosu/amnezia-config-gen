@@ -53,6 +53,24 @@ const loadLocale = async (lang) => {
   });
 };
 
+const fetchHealthStatus = async () => {
+  const el = document.getElementById('healthStatus');
+  const txt = el ? el.querySelector('.health-status__text') : null;
+  try {
+    const res = await fetch('/api/healthcheck');
+    const data = await res.json();
+    if (el) {
+      el.className = `health-status health-status--${data.ok ? 'ok' : 'fail'}`;
+    }
+    if (txt) {
+      txt.textContent = data.ok ? 'Сервер доступен' : 'Сервер недоступен — попробуйте позже';
+    }
+  } catch {
+    if (el) el.className = 'health-status health-status--fail';
+    if (txt) txt.textContent = 'Сервер недоступен — попробуйте позже';
+  }
+};
+
 /**
  * Инициализирует i18n: определяет язык (localStorage → navigator.language → 'ru').
  * Вызывается один раз при DOMContentLoaded.
@@ -1131,6 +1149,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── F-03: Локализация ──
   initI18n();
+  fetchHealthStatus();
   document.querySelectorAll('.lang-btn').forEach((btn) => {
     btn.addEventListener('click', () => switchLang(btn.dataset.lang));
   });
