@@ -19,15 +19,19 @@ const probeOne = (host, port) =>
     let settled = false;
 
     const finish = (ok) => {
+      clearTimeout(timer);
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
       socket.destroy();
       resolve({ ok, latencyMs: ok ? Date.now() - start : null });
     };
 
     const timer = setTimeout(() => finish(false), PROBE_TIMEOUT_MS);
-    socket.connect(port, host, () => finish(true));
+    try {
+      socket.connect(port, host, () => finish(true));
+    } catch {
+      finish(false);
+    }
     socket.on('error', () => finish(false));
   });
 
@@ -65,6 +69,10 @@ module.exports = async (req, res) => {
       });
   }
 
-  const result = await pendingProbe;
-  res.status(200).json({ services: result.services, checkedAt: result.checkedAt });
+  try {
+    const result = await pendingProbe;
+    res.status(200).json({ services: result.services, checkedAt: result.checkedAt });
+  } catch {
+    res.status(500).json({ error: 'Probe failed' });
+  }
 };
