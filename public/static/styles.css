@@ -461,7 +461,6 @@ button.button--loading {
   border: 2px solid #000080;
   box-shadow: inset 0 0 0 1px #808080;
   padding: 10px;
-  margin-bottom: 15px;
   margin-top: 15px;
   text-align: center;
   font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
@@ -2032,6 +2031,23 @@ button.info-link {
 .health-status--loading .health-status__dot { background: #888; }
 .health-status--ok .health-status__dot      { background: #4caf50; }
 .health-status--fail .health-status__dot    { background: #f44336; }
+.health-status-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.health-status__label {
+  font-size: 0.7rem;
+  opacity: 0.55;
+  font-weight: 600;
+  min-width: 6rem;
+}
+.health-warn {
+  font-size: 0.72rem;
+  color: #f5a623;
+  margin: 0 0 6px;
+  padding: 0;
+}
 
 /* ── Endpoint port select in settings modal ── */
 .endpoint-select {
