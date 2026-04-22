@@ -265,12 +265,21 @@
             <!-- Раздел для статуса, обновляемый в реальном времени -->
             <section id="status" aria-live="polite"></section>
 
-            <!-- Healthcheck индикатор -->
-            <div id="healthStatus" class="health-status health-status--loading" aria-live="polite">
-              <span class="health-status__dot"></span>
-              <span class="health-status__text">Проверка сервера…</span>
+            <!-- Healthcheck индикаторы -->
+            <div class="health-status-group">
+              <div id="healthStatus-api" class="health-status health-status--loading" aria-live="polite">
+                <span class="health-status__dot"></span>
+                <span class="health-status__label">Cloudflare API</span>
+                <span class="health-status__text">…</span>
+              </div>
+              <div id="healthStatus-engage" class="health-status health-status--loading" aria-live="polite">
+                <span class="health-status__dot"></span>
+                <span class="health-status__label">WARP Endpoint</span>
+                <span class="health-status__text">…</span>
+              </div>
             </div>
 
+            <p id="healthWarn" class="health-warn" hidden></p>
             <!-- Кнопки для взаимодействия с пользователем -->
             <div class="buttons">
               <div class="buttons__row">
