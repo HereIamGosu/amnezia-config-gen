@@ -2033,8 +2033,8 @@ button.info-link {
 .health-status--fail .health-status__dot    { background: #f44336; }
 .health-status-group {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  gap: 12px;
 }
 .health-status__label {
   font-size: 0.7rem;
