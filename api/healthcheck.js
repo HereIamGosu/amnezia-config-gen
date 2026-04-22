@@ -1,15 +1,18 @@
 // api/healthcheck.js
 const net = require('net');
 
-const PROBE_HOST = 'api.cloudflareclient.com';
-const PROBE_PORT = 443;
 const PROBE_TIMEOUT_MS = 5000;
 const CACHE_TTL_MS = 30_000;
 
-let cache = null; // { ok, latencyMs, checkedAt, expiresAt }
+const TARGETS = {
+  api:    { host: 'api.cloudflareclient.com',    port: 443 },
+  engage: { host: 'engage.cloudflareclient.com', port: 443 },
+};
+
+let cache = null; // { services, checkedAt, expiresAt }
 let pendingProbe = null;
 
-const probe = () =>
+const probeOne = (host, port) =>
   new Promise((resolve) => {
     const start = Date.now();
     const socket = new net.Socket();
@@ -24,9 +27,17 @@ const probe = () =>
     };
 
     const timer = setTimeout(() => finish(false), PROBE_TIMEOUT_MS);
-    socket.connect(PROBE_PORT, PROBE_HOST, () => finish(true));
+    socket.connect(port, host, () => finish(true));
     socket.on('error', () => finish(false));
   });
+
+const probeAll = async () => {
+  const [api, engage] = await Promise.all([
+    probeOne(TARGETS.api.host, TARGETS.api.port),
+    probeOne(TARGETS.engage.host, TARGETS.engage.port),
+  ]);
+  return { api, engage };
+};
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') {
@@ -36,15 +47,15 @@ module.exports = async (req, res) => {
 
   const now = Date.now();
   if (cache && cache.expiresAt > now) {
-    res.status(200).json({ ok: cache.ok, latencyMs: cache.latencyMs, checkedAt: cache.checkedAt });
+    res.status(200).json({ services: cache.services, checkedAt: cache.checkedAt });
     return;
   }
 
   if (!pendingProbe) {
-    pendingProbe = probe()
-      .then(({ ok, latencyMs }) => {
+    pendingProbe = probeAll()
+      .then((services) => {
         const checkedAt = new Date().toISOString();
-        cache = { ok, latencyMs, checkedAt, expiresAt: Date.now() + CACHE_TTL_MS };
+        cache = { services, checkedAt, expiresAt: Date.now() + CACHE_TTL_MS };
         pendingProbe = null;
         return cache;
       })
@@ -55,5 +66,5 @@ module.exports = async (req, res) => {
   }
 
   const result = await pendingProbe;
-  res.status(200).json({ ok: result.ok, latencyMs: result.latencyMs, checkedAt: result.checkedAt });
+  res.status(200).json({ services: result.services, checkedAt: result.checkedAt });
 };
