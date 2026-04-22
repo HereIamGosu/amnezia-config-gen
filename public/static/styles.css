@@ -1176,6 +1176,11 @@ button.info-link {
    Модальное окно предпросмотра конфига
    ───────────────────────────────────────────────────────────── */
 
+/* Preview modal must sit above history modal (1002) */
+#configPreviewModal {
+  z-index: 1003;
+}
+
 .modal-content--preview {
   max-width: 600px;
   width: min(94vw, 600px);
