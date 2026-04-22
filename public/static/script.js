@@ -53,21 +53,41 @@ const loadLocale = async (lang) => {
   });
 };
 
+const applyServiceStatus = (id, result) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const txt = el.querySelector('.health-status__text');
+  el.className = `health-status health-status--${result.ok ? 'ok' : 'fail'}`;
+  if (txt) {
+    txt.textContent = result.ok
+      ? (result.latencyMs != null ? result.latencyMs + ' ms' : 'доступен')
+      : 'недоступен';
+  }
+};
+
 const fetchHealthStatus = async () => {
-  const el = document.getElementById('healthStatus');
-  const txt = el ? el.querySelector('.health-status__text') : null;
+  const warnEl = document.getElementById('healthWarn');
   try {
     const res = await fetch('/api/healthcheck');
     const data = await res.json();
-    if (el) {
-      el.className = `health-status health-status--${data.ok ? 'ok' : 'fail'}`;
-    }
-    if (txt) {
-      txt.textContent = data.ok ? 'Сервер доступен' : 'Сервер недоступен — попробуйте позже';
+    const { api, engage } = data.services ?? {};
+    applyServiceStatus('healthStatus-api',    api    ?? { ok: false, latencyMs: null });
+    applyServiceStatus('healthStatus-engage', engage ?? { ok: false, latencyMs: null });
+    if (warnEl) {
+      if (api && !api.ok) {
+        warnEl.textContent = 'Cloudflare API недоступен — генерация может не сработать';
+        warnEl.hidden = false;
+      } else {
+        warnEl.hidden = true;
+      }
     }
   } catch {
-    if (el) el.className = 'health-status health-status--fail';
-    if (txt) txt.textContent = 'Сервер недоступен — попробуйте позже';
+    applyServiceStatus('healthStatus-api',    { ok: false, latencyMs: null });
+    applyServiceStatus('healthStatus-engage', { ok: false, latencyMs: null });
+    if (warnEl) {
+      warnEl.textContent = 'Сервер недоступен — попробуйте позже';
+      warnEl.hidden = false;
+    }
   }
 };
 
@@ -1150,6 +1170,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── F-03: Локализация ──
   initI18n();
   fetchHealthStatus();
+  setInterval(fetchHealthStatus, 60_000);
   document.querySelectorAll('.lang-btn').forEach((btn) => {
     btn.addEventListener('click', () => switchLang(btn.dataset.lang));
   });
