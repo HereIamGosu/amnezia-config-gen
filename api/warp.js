@@ -11,7 +11,6 @@ const { createRateLimiter } = require('./_rateLimit');
 /** 10 generations per minute per IP — prevents Cloudflare WARP registration abuse. */
 const warpLimiter = createRateLimiter({ windowMs: 60_000, maxHits: 10 });
 
-const { pickRandomCpsPayload } = require('./warpCpsPayloads');
 const { generateCpsPayload } = require('./cpsGenerator');
 
 const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0', '::/0'];
