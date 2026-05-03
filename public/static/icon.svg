@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">AmneziaWG Config Generator</title>
+  <desc id="desc">Pixel-style AWG config icon</desc>
+  <rect width="512" height="512" fill="#0077ff"/>
+  <rect x="48" y="64" width="416" height="384" rx="16" fill="#ffffff"/>
+  <rect x="80" y="104" width="352" height="48" fill="#000080"/>
+  <rect x="112" y="192" width="224" height="28" fill="#111111"/>
+  <rect x="112" y="248" width="288" height="28" fill="#111111"/>
+  <rect x="112" y="304" width="176" height="28" fill="#111111"/>
+  <rect x="112" y="360" width="240" height="28" fill="#111111"/>
+  <text x="256" y="139" fill="#ffffff" font-family="Arial, sans-serif" font-size="32" font-weight="700" text-anchor="middle">AWG</text>
+</svg>

@@ -932,6 +932,8 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
 };
 
 module.exports = async (req, res) => {
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+
   if (req.method !== 'GET' && req.method !== 'POST') {
     res.status(405).json({ success: false, message: 'Метод не поддерживается.' });
     return;

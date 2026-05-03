@@ -17,6 +17,8 @@ const pickQuery = (req, key) => {
 };
 
 module.exports = async (req, res) => {
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+
   if (req.method !== 'GET') {
     res.status(405).json({ success: false, message: 'Метод не поддерживается.' });
     return;
