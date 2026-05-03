@@ -661,6 +661,24 @@ button.info-link {
   margin: 0 auto; /* Центрируем текст */
 }
 
+.donate-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 50px;
+  padding: 10px 14px;
+  color: #000;
+  background-color: #c0c0c0;
+  border: 2px outset #ffffff;
+  font-size: 10px;
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.donate-link:active {
+  border: 2px inset #ffffff;
+}
+
 /* Buttons row: gen buttons + gear toggle */
 .buttons__row {
   display: flex;
