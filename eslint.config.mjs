@@ -4,6 +4,13 @@ import pluginJs from '@eslint/js';
 /** @type {import('eslint').Linter.Config[]} */
 export default [
   {
+    ignores: [
+      '.claude/**',
+      '.cursor/**',
+      'node_modules/**',
+    ],
+  },
+  {
     languageOptions: {
       globals: {
         ...globals.browser,
