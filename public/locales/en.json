@@ -1,13 +1,5 @@
 {
   "window_title": "AmneziaWG Config Generator",
-  "hero_title": "AmneziaWG Config Generator for Cloudflare WARP",
-  "hero_subtitle": "Creates a ready-to-import .conf for AWG 1.5 and AWG 2.0: WARP keys, AllowedIPs, DNS, CPS and endpoint settings.",
-  "hero_get_title": "What you get",
-  "hero_get_text": ".conf file, WARP keys, DNS, routes, AWG 1.5 or AWG 2.0 mode and endpoint port.",
-  "hero_use_title": "When to use",
-  "hero_use_text": "Windows, Android, iOS, routers and split routing through AllowedIPs presets.",
-  "hero_limits_title": "Limits",
-  "hero_limits_text": "Operation depends on Cloudflare API availability, the user's network and AmneziaWG client support.",
   "btn_gen_legacy": "Generate AWG 1.5",
   "btn_gen_awg2": "Generate AWG 2.0",
   "btn_info": "Additional Info",

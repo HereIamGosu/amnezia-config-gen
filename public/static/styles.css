@@ -203,47 +203,6 @@ img {
   image-rendering: pixelated; /* Пиксельная графика */
 }
 
-header h1 {
-  margin: 0 0 12px;
-  font-size: 18px;
-  line-height: 1.45;
-  color: #000080;
-}
-
-.hero-subtitle {
-  margin: 0 0 18px;
-  font-size: 10px;
-  line-height: 1.7;
-}
-
-.hero-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  width: 100%;
-  margin: 0 0 16px;
-  text-align: left;
-}
-
-.hero-summary__item {
-  background-color: #ffffff;
-  border: 2px inset #ffffff;
-  padding: 10px;
-}
-
-.hero-summary__item h2 {
-  margin: 0 0 8px;
-  font-size: 9px;
-  line-height: 1.4;
-  color: #000080;
-}
-
-.hero-summary__item p {
-  margin: 0;
-  font-size: 8px;
-  line-height: 1.6;
-}
-
 /* Кнопки */
 button.button {
   width: 100%;
@@ -1888,14 +1847,6 @@ button.info-link {
 
   img {
     margin-bottom: 15px;
-  }
-
-  header h1 {
-    font-size: 14px;
-  }
-
-  .hero-summary {
-    grid-template-columns: 1fr;
   }
 
   button.button {
