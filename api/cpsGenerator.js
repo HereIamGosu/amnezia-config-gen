@@ -456,7 +456,11 @@ const generateStaticPayload = () => {
 
 // ── Dispatcher ────────────────────────────────────────────────
 
-const AUTO_PROTOCOLS = ['quic', 'dns', 'stun', 'tls', 'dtls', 'sip'];
+// `tls` is intentionally excluded: TLS-shaped UDP at port 4500 is anomalous
+// (TLS lives on TCP; DTLS is the UDP variant) and gets dropped by DPI on some
+// ISPs, killing the WireGuard handshake that follows in the same UDP flow.
+// Explicit `cps=tls` still works via the dispatcher branch below.
+const AUTO_PROTOCOLS = ['quic', 'dns', 'stun', 'dtls', 'sip'];
 
 const toHex = (buf) => `<b 0x${buf.toString('hex')}>`;
 
