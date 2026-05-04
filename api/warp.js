@@ -12,6 +12,7 @@ const { createRateLimiter } = require('./_rateLimit');
 const warpLimiter = createRateLimiter({ windowMs: 60_000, maxHits: 10 });
 
 const { generateCpsPayload } = require('./cpsGenerator');
+const { generateI2I5 } = require('./cpsExtraPackets');
 
 const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0', '::/0'];
 
@@ -249,10 +250,17 @@ const resolveModeFromInput = (raw) => {
  * @param {string} i1Optional full value after `I1 = ` (e.g. `<b 0x...>`), or empty to omit
  * @param {boolean} plainAddress if true, omit /32 and /128 (some exports use bare IPs)
  */
-const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6, dnsLine, i1Optional = '', plainAddress = false) => {
-  const addrLine = plainAddress
-    ? `Address = ${clientIPv4}, ${clientIPv6}`
-    : `Address = ${clientIPv4}/32, ${clientIPv6}/128`;
+const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6, dnsLine, i1Optional = '', plainAddress = false, mobileJunk = null) => {
+  const addrLine = clientIPv6
+    ? (plainAddress
+      ? `Address = ${clientIPv4}, ${clientIPv6}`
+      : `Address = ${clientIPv4}/32, ${clientIPv6}/128`)
+    : (plainAddress
+      ? `Address = ${clientIPv4}`
+      : `Address = ${clientIPv4}/32`);
+  const jc = mobileJunk ? mobileJunk.Jc : 120;
+  const jmin = mobileJunk ? mobileJunk.Jmin : 23;
+  const jmax = mobileJunk ? mobileJunk.Jmax : 911;
   const lines = [
     '[Interface]',
     `PrivateKey = ${privKey}`,
@@ -261,9 +269,9 @@ const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6, dnsLine, i1Option
     'MTU = 1280',
     'S1 = 0',
     'S2 = 0',
-    'Jc = 120',
-    'Jmin = 23',
-    'Jmax = 911',
+    `Jc = ${jc}`,
+    `Jmin = ${jmin}`,
+    `Jmax = ${jmax}`,
     'H1 = 1',
     'H2 = 2',
     'H3 = 3',
@@ -276,10 +284,14 @@ const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6, dnsLine, i1Option
 /**
  * @param {boolean} plainAddress if true, omit /32 and /128 (Amnezia WARP exports often use bare IPs)
  */
-const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress = false, i1Optional = '') => {
-  const addrLine = plainAddress
-    ? `Address = ${clientIPv4}, ${clientIPv6}`
-    : `Address = ${clientIPv4}/32, ${clientIPv6}/128`;
+const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress = false, i1Optional = '', extraCps = null) => {
+  const addrLine = clientIPv6
+    ? (plainAddress
+      ? `Address = ${clientIPv4}, ${clientIPv6}`
+      : `Address = ${clientIPv4}/32, ${clientIPv6}/128`)
+    : (plainAddress
+      ? `Address = ${clientIPv4}`
+      : `Address = ${clientIPv4}/32`);
   const mtu = computeAwg2InterfaceMtu(obf.S4);
   const lines = [
     '[Interface]',
@@ -299,7 +311,15 @@ const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plain
     `H3 = ${obf.H3}`,
     `H4 = ${obf.H4}`,
   ];
-  if (i1Optional) lines.push(`I1 = ${i1Optional}`);
+  if (i1Optional) {
+    lines.push(`I1 = ${i1Optional}`);
+    if (extraCps) {
+      lines.push(`I2 = ${extraCps.I2}`);
+      lines.push(`I3 = ${extraCps.I3}`);
+      lines.push(`I4 = ${extraCps.I4}`);
+      lines.push(`I5 = ${extraCps.I5}`);
+    }
+  }
   return lines.join('\n');
 };
 
@@ -307,10 +327,14 @@ const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plain
  * AWG 2.0 [Interface] layout per Amnezia docs (Address, keys, DNS, junk, S1–S4, H1–H4, CPS line `i1`).
  * WARP preset: H1–H4 = 1..4; S1–S4 = 0 (stock peer); MTU 1280 like legacy WARP.
  */
-const buildInterfaceAwg2WarpSafe = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress, i1Optional = '') => {
-  const addrLine = plainAddress
-    ? `Address = ${clientIPv4}, ${clientIPv6}`
-    : `Address = ${clientIPv4}/32, ${clientIPv6}/128`;
+const buildInterfaceAwg2WarpSafe = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress, i1Optional = '', extraCps = null) => {
+  const addrLine = clientIPv6
+    ? (plainAddress
+      ? `Address = ${clientIPv4}, ${clientIPv6}`
+      : `Address = ${clientIPv4}/32, ${clientIPv6}/128`)
+    : (plainAddress
+      ? `Address = ${clientIPv4}`
+      : `Address = ${clientIPv4}/32`);
   const mtu = computeAwg2InterfaceMtu(obf.S4, { stockWireGuardPeer: true });
   const lines = [
     '[Interface]',
@@ -330,7 +354,15 @@ const buildInterfaceAwg2WarpSafe = (privKey, clientIPv4, clientIPv6, obf, dnsLin
     `H3 = ${obf.H3}`,
     `H4 = ${obf.H4}`,
   ];
-  if (i1Optional) lines.push(`I1 = ${i1Optional}`);
+  if (i1Optional) {
+    lines.push(`I1 = ${i1Optional}`);
+    if (extraCps) {
+      lines.push(`I2 = ${extraCps.I2}`);
+      lines.push(`I3 = ${extraCps.I3}`);
+      lines.push(`I4 = ${extraCps.I4}`);
+      lines.push(`I5 = ${extraCps.I5}`);
+    }
+  }
   return lines.join('\n');
 };
 
@@ -340,12 +372,14 @@ const buildInterfaceAwg2WarpSafe = (privKey, clientIPv4, clientIPv6, obf, dnsLin
 const buildFullConfig = (mode, privKey, peerPub, clientIPv4, clientIPv6, peerEndpoint, awg2Obf, allowedIpList, dnsLine, ifaceExtras = {}) => {
   const i1 = ifaceExtras.i1 || '';
   const plainAddress = Boolean(ifaceExtras.plainAddress);
+  const extraCps = ifaceExtras.extraCps || null;
+  const mobileJunk = ifaceExtras.mobileJunk || null;
   const iface =
     mode === 'awg2'
       ? ifaceExtras.awg2WarpSafe
-        ? buildInterfaceAwg2WarpSafe(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1)
-        : buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1)
-      : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine, i1, plainAddress);
+        ? buildInterfaceAwg2WarpSafe(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1, extraCps)
+        : buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1, extraCps)
+      : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine, i1, plainAddress, mobileJunk);
   const allowed = (allowedIpList && allowedIpList.length ? allowedIpList : DEFAULT_ALLOWED_IPS).join(', ');
   let peerBlock = `[Peer]
 PublicKey = ${peerPub}
@@ -909,6 +943,10 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
   const dnsLine = getDnsString(dnsKey || DNS_DEFAULT_KEY);
   const i1 = await resolveI1ForGeneration(warpExtras, routeOpts.cpsProtocol);
 
+  const wantExtraCps = Boolean(routeOpts.extraCps);
+  const canApplyExtraCps = wantExtraCps && mode === 'awg2' && Boolean(i1);
+  const extraCps = canApplyExtraCps ? generateI2I5() : null;
+
   return {
     text: buildFullConfig(
       mode,
@@ -925,9 +963,15 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
         persistentKeepalive: warpExtras.persistentKeepalive,
         plainAddress: warpExtras.plainAddress,
         awg2WarpSafe: warpExtras.awg2WarpSafe,
+        extraCps,
       },
     ),
-    meta: { routesSource, sitesResolved: sitesResolved ?? 0, presetsUsed: presetKeys.length },
+    meta: {
+      routesSource,
+      sitesResolved: sitesResolved ?? 0,
+      presetsUsed: presetKeys.length,
+      appliedExtras: { cps5: canApplyExtraCps },
+    },
   };
 };
 
@@ -993,7 +1037,9 @@ module.exports = async (req, res) => {
     const routerRaw = body.router ?? pickQuery(req, 'router');
     const routerMode = routerRaw === true || routerRaw === 1 || String(routerRaw ?? '').toLowerCase() === '1' || String(routerRaw ?? '').toLowerCase() === 'true';
     const cpsProtocol = String(body.cps ?? pickQuery(req, 'cps') ?? 'auto').toLowerCase().trim();
-    const { text: conf, meta } = await generateWarpConfig(mode, presetKeys, dnsKey, warpExtras, { includeIpv6, routerMode, cpsProtocol });
+    const cps5Raw = body.cps5 ?? pickQuery(req, 'cps5');
+    const extraCps = cps5Raw === true || cps5Raw === 1 || String(cps5Raw ?? '').toLowerCase() === '1' || String(cps5Raw ?? '').toLowerCase() === 'true';
+    const { text: conf, meta } = await generateWarpConfig(mode, presetKeys, dnsKey, warpExtras, { includeIpv6, routerMode, cpsProtocol, extraCps });
     const confEncoded = Buffer.from(conf).toString('base64');
     res.status(200).json({
       success: true,
@@ -1002,6 +1048,7 @@ module.exports = async (req, res) => {
       routesSource: meta.routesSource,
       routesPresets: presetKeys.length ? presetKeys : undefined,
       presetSitesCount: meta.sitesResolved || undefined,
+      appliedExtras: meta.appliedExtras,
     });
   } catch (error) {
     console.error('Ошибка генерации конфигурации:', error);
