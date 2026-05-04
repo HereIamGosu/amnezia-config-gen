@@ -158,6 +158,24 @@ const applyRouterModeCaps = (obf) => ({
 });
 
 /**
+ * Mobile preset: low Jc / narrow Jmin/Jmax for cellular networks (4G/5G with carrier DPI).
+ * All values stay within AWG 2.0 spec bounds (Jc 1..25, Jmin/Jmax 64..1024) per
+ * AWG2_JC_MAX / AWG2_JMIN_MIN / AWG2_JMAX_MAX. Reduces battery drain and silent resets
+ * on iOS where routing-table is constrained. IPv4-only is enforced separately in handler.
+ */
+const MOBILE_JC = 3;
+const MOBILE_JMIN = 64;
+const MOBILE_JMAX = 128;
+
+/** Apply mobile preset to AWG 2.0 obfuscation params. S/H fields are unchanged. */
+const applyMobileModeOverrides = (obf) => obf ? ({
+  ...obf,
+  Jc: MOBILE_JC,
+  Jmin: MOBILE_JMIN,
+  Jmax: MOBILE_JMAX,
+}) : obf;
+
+/**
  * S4 prepends random bytes to each transport packet (not keepalive). Reduce TUN MTU so IPv4+UDP
  * payloads stay under path MTU (see amneziawg-go RoutineSequentialSender + user docs).
  * Peers that send stock WireGuard (no S4 prefix) require S4=0 in config; see buildAwg2WarpSafeObfuscation.
@@ -380,7 +398,10 @@ const buildFullConfig = (mode, privKey, peerPub, clientIPv4, clientIPv6, peerEnd
         ? buildInterfaceAwg2WarpSafe(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1, extraCps)
         : buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1, extraCps)
       : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine, i1, plainAddress, mobileJunk);
-  const allowed = (allowedIpList && allowedIpList.length ? allowedIpList : DEFAULT_ALLOWED_IPS).join(', ');
+  const defaultAllowed = ifaceExtras.mobileJunk
+    ? DEFAULT_ALLOWED_IPS.filter((c) => !c.includes(':'))
+    : DEFAULT_ALLOWED_IPS;
+  const allowed = (allowedIpList && allowedIpList.length ? allowedIpList : defaultAllowed).join(', ');
   let peerBlock = `[Peer]
 PublicKey = ${peerPub}
 AllowedIPs = ${allowed}
@@ -939,7 +960,12 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
   let awg2Obf =
     mode === 'awg2' ? (awg2WarpSafe ? buildAwg2WarpSafeObfuscation() : buildAwg2Obfuscation()) : null;
   if (awg2Obf && routeOpts.routerMode) awg2Obf = applyRouterModeCaps(awg2Obf);
+  if (awg2Obf && routeOpts.mobileMode) awg2Obf = applyMobileModeOverrides(awg2Obf);
   const { cidrs: routeCidrs, routesSource, sitesResolved } = await resolveAllowedIpsFromPresets(presetKeys, routeOpts);
+  const effectiveClientIPv6 = routeOpts.mobileMode ? null : clientIPv6;
+  const effectiveRouteCidrs = routeOpts.mobileMode && routeCidrs
+    ? routeCidrs.filter((c) => !c.includes(':'))
+    : routeCidrs;
   const dnsLine = getDnsString(dnsKey || DNS_DEFAULT_KEY);
   const i1 = await resolveI1ForGeneration(warpExtras, routeOpts.cpsProtocol);
 
@@ -953,10 +979,10 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
       privKey,
       peerPub,
       clientIPv4,
-      clientIPv6,
+      effectiveClientIPv6,
       peerEndpoint,
       awg2Obf,
-      routeCidrs,
+      effectiveRouteCidrs,
       dnsLine,
       {
         i1,
@@ -964,13 +990,14 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
         plainAddress: warpExtras.plainAddress,
         awg2WarpSafe: warpExtras.awg2WarpSafe,
         extraCps,
+        mobileJunk: routeOpts.mobileMode ? { Jc: MOBILE_JC, Jmin: MOBILE_JMIN, Jmax: MOBILE_JMAX } : null,
       },
     ),
     meta: {
       routesSource,
       sitesResolved: sitesResolved ?? 0,
       presetsUsed: presetKeys.length,
-      appliedExtras: { cps5: canApplyExtraCps },
+      appliedExtras: { cps5: canApplyExtraCps, mobile: Boolean(routeOpts.mobileMode) },
     },
   };
 };
@@ -1033,13 +1060,16 @@ module.exports = async (req, res) => {
     delete warpExtras.forceLegacy;
 
     const ipv6Param = pickQuery(req, 'ipv6');
-    const includeIpv6 = ipv6Param === '1' || ipv6Param === 'true';
+    const requestedIpv6 = ipv6Param === '1' || ipv6Param === 'true';
     const routerRaw = body.router ?? pickQuery(req, 'router');
     const routerMode = routerRaw === true || routerRaw === 1 || String(routerRaw ?? '').toLowerCase() === '1' || String(routerRaw ?? '').toLowerCase() === 'true';
     const cpsProtocol = String(body.cps ?? pickQuery(req, 'cps') ?? 'auto').toLowerCase().trim();
     const cps5Raw = body.cps5 ?? pickQuery(req, 'cps5');
     const extraCps = cps5Raw === true || cps5Raw === 1 || String(cps5Raw ?? '').toLowerCase() === '1' || String(cps5Raw ?? '').toLowerCase() === 'true';
-    const { text: conf, meta } = await generateWarpConfig(mode, presetKeys, dnsKey, warpExtras, { includeIpv6, routerMode, cpsProtocol, extraCps });
+    const mobileRaw = body.mobile ?? pickQuery(req, 'mobile');
+    const mobileMode = mobileRaw === true || mobileRaw === 1 || String(mobileRaw ?? '').toLowerCase() === '1' || String(mobileRaw ?? '').toLowerCase() === 'true';
+    const includeIpv6 = mobileMode ? false : requestedIpv6;
+    const { text: conf, meta } = await generateWarpConfig(mode, presetKeys, dnsKey, warpExtras, { includeIpv6, routerMode, cpsProtocol, extraCps, mobileMode });
     const confEncoded = Buffer.from(conf).toString('base64');
     res.status(200).json({
       success: true,
