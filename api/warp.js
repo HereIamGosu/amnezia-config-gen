@@ -959,8 +959,10 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
   const awg2WarpSafe = Boolean(warpExtras.awg2WarpSafe);
   let awg2Obf =
     mode === 'awg2' ? (awg2WarpSafe ? buildAwg2WarpSafeObfuscation() : buildAwg2Obfuscation()) : null;
-  if (awg2Obf && routeOpts.routerMode) awg2Obf = applyRouterModeCaps(awg2Obf);
+  // Mobile-first, router-second: router caps clamp Jc/Jmin/Jmax via Math.min/max,
+  // so applying router caps after mobile ensures router-mode values win on overlap.
   if (awg2Obf && routeOpts.mobileMode) awg2Obf = applyMobileModeOverrides(awg2Obf);
+  if (awg2Obf && routeOpts.routerMode) awg2Obf = applyRouterModeCaps(awg2Obf);
   const { cidrs: routeCidrs, routesSource, sitesResolved } = await resolveAllowedIpsFromPresets(presetKeys, routeOpts);
   const effectiveClientIPv6 = routeOpts.mobileMode ? null : clientIPv6;
   const effectiveRouteCidrs = routeOpts.mobileMode && routeCidrs
