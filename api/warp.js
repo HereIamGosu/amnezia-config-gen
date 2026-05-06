@@ -13,6 +13,7 @@ const warpLimiter = createRateLimiter({ windowMs: 60_000, maxHits: 10 });
 
 const { generateCpsPayload } = require('./cpsGenerator');
 const { generateI2I5 } = require('./cpsExtraPackets');
+const { buildVpnLink } = require('./vpnLinkBuilder');
 
 const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0', '::/0'];
 
@@ -1070,9 +1071,24 @@ module.exports = async (req, res) => {
     const extraCps = cps5Raw === true || cps5Raw === 1 || String(cps5Raw ?? '').toLowerCase() === '1' || String(cps5Raw ?? '').toLowerCase() === 'true';
     const mobileRaw = body.mobile ?? pickQuery(req, 'mobile');
     const mobileMode = mobileRaw === true || mobileRaw === 1 || String(mobileRaw ?? '').toLowerCase() === '1' || String(mobileRaw ?? '').toLowerCase() === 'true';
+    const linkRaw = body.link ?? pickQuery(req, 'link');
+    const wantLink = linkRaw === true || linkRaw === 1 || String(linkRaw ?? '').toLowerCase() === '1' || String(linkRaw ?? '').toLowerCase() === 'true';
     const includeIpv6 = mobileMode ? false : requestedIpv6;
     const { text: conf, meta } = await generateWarpConfig(mode, presetKeys, dnsKey, warpExtras, { includeIpv6, routerMode, cpsProtocol, extraCps, mobileMode });
     const confEncoded = Buffer.from(conf).toString('base64');
+    let vpnLink;
+    if (wantLink) {
+      const dnsParts = String(getDnsString(dnsKey || DNS_DEFAULT_KEY)).split(',').map((s) => s.trim()).filter(Boolean);
+      const endpointHost = warpExtras.peerEndpoint
+        ? warpExtras.peerEndpoint.replace(/:\d+$/, '').replace(/^\[(.+)\]$/, '$1')
+        : (warpExtras.engageHost || 'engage.cloudflareclient.com');
+      vpnLink = buildVpnLink(conf, {
+        hostName: endpointHost,
+        dns1: dnsParts[0],
+        dns2: dnsParts[1],
+        mode,
+      });
+    }
     res.status(200).json({
       success: true,
       content: confEncoded,
@@ -1081,6 +1097,7 @@ module.exports = async (req, res) => {
       routesPresets: presetKeys.length ? presetKeys : undefined,
       presetSitesCount: meta.sitesResolved || undefined,
       appliedExtras: meta.appliedExtras,
+      vpnLink,
     });
   } catch (error) {
     console.error('Ошибка генерации конфигурации:', error);
