@@ -72,6 +72,8 @@
 
   "discord_link_text": "Join the server",
   "web_link_text": "Telegram channel",
+  "donate_button": "Support the project",
+  "donate_aria": "Support the project via CloudTips",
   "donate_text": "Support the author <br/>and show appreciation",
   "thank_you_text": "Guys, and especially network engineers, I'm really glad my little tool is getting some use. I often don't know if it still works; the world changes too fast. Always happy to make friends — come visit: <a href=\"https://t.me/amnezia_config\" target=\"_blank\" rel=\"noopener noreferrer\">Telegram channel</a>.",
 

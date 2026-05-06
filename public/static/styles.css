@@ -641,7 +641,7 @@ button.info-link {
 
 /* Стили для секции доната */
 .donate-section {
-  padding: 10px;
+  padding: 12px 10px 10px;
   text-align: center; /* Центрируем содержимое */
 }
 
@@ -649,16 +649,69 @@ button.info-link {
   display: flex;
   align-items: center;
   justify-content: center; /* Центрируем элементы по горизонтали */
-  gap: 40px; /* Добавляем отступ между элементами */
-  flex-wrap: wrap; /* Разрешаем перенос элементов на новую строку при необходимости */
+  gap: 18px; /* Добавляем отступ между элементами */
+  flex-wrap: nowrap;
+}
+
+.donate-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex: 3 1 0;
+  min-height: 46px;
+  padding: 8px 18px;
+  color: #000;
+  background: linear-gradient(180deg, #ffe66d 0%, #ffcf33 100%);
+  border: 2px outset #ffffff;
+  border-radius: 2px;
+  box-shadow: 0 0 0 2px #000080, 0 6px 0 #7f6b00;
+  font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
+  font-size: 11px;
+  line-height: 1.35;
+  text-decoration: none;
+  transition: background-color 0.1s ease, box-shadow 0.05s ease, transform 0.05s ease;
+}
+
+.donate-link:hover {
+  background: linear-gradient(180deg, #fff08f 0%, #ffd84a 100%);
+}
+
+.donate-link:active {
+  transform: translateY(3px);
+  border: 2px inset #ffffff;
+  box-shadow: 0 0 0 2px #000080, 0 3px 0 #7f6b00;
+}
+
+.donate-link:focus-visible {
+  outline: 2px solid #ff0000;
+  outline-offset: 4px;
+}
+
+.donate-link__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #fff;
+  background-color: #008000;
+  border: 2px inset #ffffff;
+  border-radius: 50%;
+  font-family: "MS Sans Serif", sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .donate-text {
+  flex: 2 1 0;
   color: #000;
   font-size: 10px;
   line-height: 1.5; /* Уменьшаем интервал между строками */
-  max-width: 300px;
-  margin: 0 auto; /* Центрируем текст */
+  max-width: none;
+  margin: 0; /* Центрируем текст */
+  white-space: normal;
 }
 
 /* Buttons row: gen buttons + gear toggle */
