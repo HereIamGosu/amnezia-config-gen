@@ -1083,6 +1083,26 @@ button.info-link {
 }
 .post-gen-row__preview:hover { background-color: #333; }
 
+.post-gen-row__copy-vpn-link {
+  font-size: 13px;
+  padding: 6px 12px;
+  white-space: nowrap;
+  background: var(--accent-secondary, #2d8b6a);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.post-gen-row__copy-vpn-link:hover {
+  background: var(--accent-secondary-hover, #1f6b50);
+}
+
+.post-gen-row__copy-vpn-link[hidden] {
+  display: none;
+}
+
 /* ─────────────────────────────────────────────────────────────
    Футер: ряд ссылок + кнопка статуса
    ───────────────────────────────────────────────────────────── */

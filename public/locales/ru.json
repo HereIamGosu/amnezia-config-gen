@@ -141,5 +141,15 @@
   "cps_section_hint": "Тип трафика, которым маскируется начало соединения. Auto — случайный при каждой генерации.",
   "ipv6_toggle_hint": "Включает IPv6 CIDR — увеличивает число маршрутов в 2–3 раза",
   "ignore_limit_hint": "Снимает ограничение в 1000 CIDR — используйте осторожно",
-  "router_mode_hint": "Малые Jc/Jmin/Jmax для MikroTik, GL.iNet, Keenetic, OpenWrt"
+  "router_mode_hint": "Малые Jc/Jmin/Jmax для MikroTik, GL.iNet, Keenetic, OpenWrt",
+  "cps5_label": "Усиленная маскировка (I2-I5)",
+  "cps5_hint": "Только для AWG 2.0. 4 случайных пакета перед handshake.",
+  "cps5_title": "Только для AmneziaWG 2.0. Добавляет 4 случайных пакета мимикрии (I2-I5) перед handshake — усиливает обход DPI.",
+  "mobile_mode_label": "📱 Мобильный профиль",
+  "mobile_mode_hint": "Низкие Jc/Jmax, MTU 1280, только IPv4 — для смартфонов",
+  "mobile_mode_title": "Профиль для смартфонов и нестабильных сетей: низкие Jc/Jmax, MTU 1280, только IPv4. Помогает на 4G/5G с DPI операторов и снижает нагрузку на iOS routing-table.",
+  "copy_vpn_link": "📋 Скопировать vpn://",
+  "copy_vpn_link_title": "Скопировать vpn://-ссылку для AmneziaVPN",
+  "vpn_link_copied": "Ссылка скопирована, откройте AmneziaVPN на телефоне.",
+  "vpn_link_copy_failed": "Не удалось скопировать. Скопируйте вручную из консоли (F12)."
 }

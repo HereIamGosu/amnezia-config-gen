@@ -141,5 +141,15 @@
   "cps_section_hint": "Traffic type used to disguise the connection start. Auto picks a random protocol each time.",
   "ipv6_toggle_hint": "Adds IPv6 CIDRs — increases route count by 2–3×",
   "ignore_limit_hint": "Removes the 1000 CIDR limit — use with caution",
-  "router_mode_hint": "Small Jc/Jmin/Jmax for MikroTik, GL.iNet, Keenetic, OpenWrt"
+  "router_mode_hint": "Small Jc/Jmin/Jmax for MikroTik, GL.iNet, Keenetic, OpenWrt",
+  "cps5_label": "Enhanced mimicry (I2-I5)",
+  "cps5_hint": "AWG 2.0 only. 4 random packets before handshake.",
+  "cps5_title": "AmneziaWG 2.0 only. Adds 4 random mimicry packets (I2-I5) before handshake — strengthens DPI evasion.",
+  "mobile_mode_label": "📱 Mobile profile",
+  "mobile_mode_hint": "Low Jc/Jmax, MTU 1280, IPv4-only — for smartphones",
+  "mobile_mode_title": "Profile for smartphones and unstable networks: low Jc/Jmax, MTU 1280, IPv4-only. Helps on 4G/5G with carrier DPI and reduces iOS routing-table load.",
+  "copy_vpn_link": "📋 Copy vpn:// link",
+  "copy_vpn_link_title": "Copy vpn:// link for AmneziaVPN",
+  "vpn_link_copied": "Link copied, open AmneziaVPN on your phone.",
+  "vpn_link_copy_failed": "Copy failed. Copy manually from console (F12)."
 }

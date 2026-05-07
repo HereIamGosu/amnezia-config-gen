@@ -241,7 +241,7 @@ const POST_GEN_ROW_IDS = {
  * Скрывает кнопку генерации и показывает на её месте тройку кнопок:
  * Скачать | QR | Просмотр конфига.
  */
-const showPostGenRow = ({ buttonId, readyDownloadText, filename, decodedConfig }) => {
+const showPostGenRow = ({ buttonId, readyDownloadText, filename, decodedConfig, vpnLink }) => {
   // Скрываем кнопку генерации
   const genBtn = document.getElementById(buttonId);
   if (genBtn) genBtn.hidden = true;
@@ -265,6 +265,28 @@ const showPostGenRow = ({ buttonId, readyDownloadText, filename, decodedConfig }
   const prevBtn = row.querySelector('.post-gen-row__preview');
   if (prevBtn) {
     prevBtn.onclick = () => openPreviewModal(decodedConfig);
+  }
+
+  // Кнопка copy vpn:// — показываем только если link есть в ответе
+  const copyBtn = row.querySelector('.post-gen-row__copy-vpn-link');
+  if (copyBtn) {
+    if (vpnLink) {
+      copyBtn.hidden = false;
+      copyBtn.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(vpnLink);
+          const status = document.getElementById('status');
+          if (status) status.textContent = t('vpn_link_copied', 'Ссылка скопирована, откройте AmneziaVPN на телефоне.');
+        } catch (e) {
+          console.error('Clipboard write failed:', e);
+          const status = document.getElementById('status');
+          if (status) status.textContent = t('vpn_link_copy_failed', 'Не удалось скопировать. Скопируйте вручную из консоли (F12).');
+          console.log('vpn://', vpnLink);
+        }
+      };
+    } else {
+      copyBtn.hidden = true;
+    }
   }
 };
 
@@ -336,6 +358,10 @@ const cfgState = {
   zeroCidrPresets: new Set(),
   warpPort: 4500,
   endpointIp: false,
+  /** When true, server appends I2-I5 to AWG 2.0 [Interface]. */
+  extraCps: false,
+  /** When true, mobile preset (low Jc/Jmax, IPv4-only). */
+  mobileMode: false,
 };
 
 const getPresetsFallbackUrl = () => {
@@ -432,6 +458,25 @@ const closeSettingsModal = () => {
   if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
 };
 
+/**
+ * When mobile mode toggles, IPv6 routes must be off (server forces this anyway,
+ * but the UI should reflect it). Disable the IPv6 checkbox while mobile is on,
+ * and uncheck it. Restore interactivity when mobile is off.
+ */
+const applyMobileModeCascade = () => {
+  const ipv6Toggle = document.getElementById('ipv6Toggle');
+  if (!ipv6Toggle) return;
+  if (cfgState.mobileMode) {
+    if (cfgState.includeIpv6) {
+      cfgState.includeIpv6 = false;
+      ipv6Toggle.checked = false;
+    }
+    ipv6Toggle.disabled = true;
+  } else {
+    ipv6Toggle.disabled = false;
+  }
+};
+
 const getSelectedDnsKey = () => cfgState.selectedDns || '';
 
 const WARP_FALLBACK_IPS = ['162.159.192.1', '188.114.97.66'];
@@ -447,6 +492,9 @@ const buildWarpQueryString = (mode) => {
   if (dns) params.set('dns', dns);
   if (cfgState.includeIpv6) params.set('ipv6', '1');
   if (cfgState.routerMode) params.set('router', '1');
+  if (cfgState.extraCps) params.set('cps5', '1');
+  if (cfgState.mobileMode) params.set('mobile', '1');
+  params.set('link', '1');
   params.set('cps', cfgState.cpsProtocol);
   params.set('warpPort', String(cfgState.warpPort));
   if (cfgState.endpointIp) {
@@ -732,6 +780,23 @@ const initSettingsPanel = async () => {
       });
     }
 
+    const cps5Toggle = document.getElementById('cps5Toggle');
+    if (cps5Toggle) {
+      cps5Toggle.checked = cfgState.extraCps;
+      cps5Toggle.addEventListener('change', () => {
+        cfgState.extraCps = cps5Toggle.checked;
+      });
+    }
+
+    const mobileModeToggle = document.getElementById('mobileModeToggle');
+    if (mobileModeToggle) {
+      mobileModeToggle.checked = cfgState.mobileMode;
+      mobileModeToggle.addEventListener('change', () => {
+        cfgState.mobileMode = mobileModeToggle.checked;
+        applyMobileModeCascade();
+      });
+    }
+
     const warpPortSelect = document.getElementById('warpPortSelect');
     if (warpPortSelect) {
       warpPortSelect.value = String(cfgState.warpPort);
@@ -765,6 +830,8 @@ const initSettingsPanel = async () => {
         cfgState.cpsProtocol = 'auto';
         cfgState.warpPort = 4500;
         cfgState.endpointIp = false;
+        cfgState.extraCps = false;
+        cfgState.mobileMode = false;
         if (ipv6Toggle) ipv6Toggle.checked = false;
         if (ignoreLimitToggle) ignoreLimitToggle.checked = false;
         if (routerModeToggle) routerModeToggle.checked = false;
@@ -772,6 +839,11 @@ const initSettingsPanel = async () => {
         if (autoRadio) autoRadio.checked = true;
         if (warpPortSelect) warpPortSelect.value = '4500';
         if (endpointIpToggle) endpointIpToggle.checked = false;
+        const cps5ToggleReset = document.getElementById('cps5Toggle');
+        if (cps5ToggleReset) cps5ToggleReset.checked = false;
+        const mobileToggleReset = document.getElementById('mobileModeToggle');
+        if (mobileToggleReset) mobileToggleReset.checked = false;
+        applyMobileModeCascade();
         // Clear route presets
         forEachRouteTile((tile) => {
           const cb = tile.querySelector('input[type="checkbox"]');
@@ -1021,7 +1093,7 @@ const generateConfig = async (options) => {
       if (boundGenerateClick) button.removeEventListener('click', boundGenerateClick);
 
       // F-02 + F-05: заменяем кнопку на тройку (Скачать | QR | Просмотр)
-      showPostGenRow({ buttonId, readyDownloadText, filename, decodedConfig });
+      showPostGenRow({ buttonId, readyDownloadText, filename, decodedConfig, vpnLink: data.vpnLink });
 
       // Автоматически скачиваем файл сразу
       downloadFile(decodedConfig, filename);

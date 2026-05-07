@@ -303,6 +303,9 @@
                       <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию" data-i18n-title="preview_btn_title">
                         <i class="fas fa-eye"></i>
                       </button>
+                      <button type="button" class="button button--secondary post-gen-row__copy-vpn-link" title="Скопировать vpn://-ссылку для AmneziaVPN" data-i18n-title="copy_vpn_link_title" hidden>
+                        <span class="button__text" data-i18n="copy_vpn_link">📋 Скопировать vpn://</span>
+                      </button>
                     </div>
                   </div>
 
@@ -317,6 +320,9 @@
                       </button>
                       <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию" data-i18n-title="preview_btn_title">
                         <i class="fas fa-eye"></i>
+                      </button>
+                      <button type="button" class="button button--secondary post-gen-row__copy-vpn-link" title="Скопировать vpn://-ссылку для AmneziaVPN" data-i18n-title="copy_vpn_link_title" hidden>
+                        <span class="button__text" data-i18n="copy_vpn_link">📋 Скопировать vpn://</span>
                       </button>
                     </div>
                   </div>
@@ -810,6 +816,28 @@
                     <div class="extra-option-row__text">
                       <span class="extra-option-row__label" data-i18n="router_mode_label">Режим роутера</span>
                       <span class="extra-option-row__hint" data-i18n="router_mode_hint">Малые Jc/Jmin/Jmax для MikroTik, GL.iNet, Keenetic, OpenWrt</span>
+                    </div>
+                  </label>
+                  <label
+                    class="extra-option-row"
+                    title="Только для AmneziaWG 2.0. Добавляет 4 случайных пакета мимикрии (I2-I5) перед handshake — усиливает обход DPI."
+                    data-i18n-title="cps5_title"
+                  >
+                    <input type="checkbox" id="cps5Toggle" />
+                    <div class="extra-option-row__text">
+                      <span class="extra-option-row__label" data-i18n="cps5_label">Усиленная маскировка (I2-I5)</span>
+                      <span class="extra-option-row__hint" data-i18n="cps5_hint">Только для AWG 2.0. 4 случайных пакета перед handshake.</span>
+                    </div>
+                  </label>
+                  <label
+                    class="extra-option-row"
+                    title="Профиль для смартфонов и нестабильных сетей: низкие Jc/Jmax, MTU 1280, только IPv4. Помогает на 4G/5G с DPI операторов и снижает нагрузку на iOS routing-table."
+                    data-i18n-title="mobile_mode_title"
+                  >
+                    <input type="checkbox" id="mobileModeToggle" />
+                    <div class="extra-option-row__text">
+                      <span class="extra-option-row__label" data-i18n="mobile_mode_label">📱 Мобильный профиль</span>
+                      <span class="extra-option-row__hint" data-i18n="mobile_mode_hint">Низкие Jc/Jmax, MTU 1280, только IPv4 — для смартфонов</span>
                     </div>
                   </label>
 
