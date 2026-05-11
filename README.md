@@ -76,6 +76,11 @@ npm start
 | `i1` | Сырая строка для CPS / obfuscation (AWG 2.0) |
 | `i1Ref` | Имя файла из `api/cps-presets/` |
 | `plainAddress` | `1` / `true` — в `Address` без `/32` и `/128` |
+| `cps5` | `1` — добавить случайные `I2`..`I5` в `[Interface]` (только для `mode=awg2`, требует непустой `I1`). По умолчанию выключено. |
+| `mobile` | `1` — мобильный профиль: `Jc=3, Jmin=64, Jmax=128`, MTU 1280, только IPv4. Перекрывает `ipv6=1`, убирает IPv6 из `Address` и `AllowedIPs`. |
+| `link` | `1` — добавить в JSON-ответ поле `vpnLink: "vpn://..."` для импорта в AmneziaVPN на iOS/Android одним тапом. |
+
+При `link=1` ответ дополнительно содержит `vpnLink` — `vpn://`-ссылку для импорта в AmneziaVPN одним тапом на смартфоне.
 
 Ошибки: JSON с `success: false`, `message`; коды 4xx/5xx по ситуации.
 
