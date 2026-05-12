@@ -1042,9 +1042,11 @@ button.info-link {
   width: 100%;
 }
 
-/* Ряд кнопок после генерации: [Скачать (flex-grow)] [QR] [👁] */
+/* Ряд кнопок после генерации: [Скачать (flex-grow)] [👁] [📋 vpn://]
+   flex-wrap: на узких экранах copy-vpn-link уезжает на свою строку (см. media 768). */
 .post-gen-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   width: 100%;
   align-items: stretch;
@@ -1093,6 +1095,9 @@ button.info-link {
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.15s ease;
+  margin-bottom: 0;
+  min-width: 0;
+  flex: 0 1 auto;
 }
 
 .post-gen-row__copy-vpn-link:hover {
@@ -1982,6 +1987,14 @@ button.info-link {
   .info-compare {
     flex-direction: column;
     gap: 8px;
+  }
+
+  /* Post-gen row на узких экранах: Download растягивается на всю ширину
+     первой строки рядом с 👁; копи-vpn-кнопка уезжает на свою строку под ними,
+     занимая всю ширину. Иначе nowrap-текст переполняет flex-ряд. */
+  .post-gen-row__copy-vpn-link {
+    flex: 1 0 100%;
+    text-align: center;
   }
 }
 
