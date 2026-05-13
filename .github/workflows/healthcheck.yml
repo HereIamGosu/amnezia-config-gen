@@ -74,14 +74,33 @@ jobs:
           # Normalise: remove leading spaces added by heredoc indentation
           python3 -c "import json,sys; d=json.load(open('public/status.json')); json.dump(d, open('public/status.json','w'), indent=2)"
 
-      - name: Commit and push status.json
+      - name: Push snapshot to orphan branch
         run: |
+          set -euo pipefail
+          # Snapshot status.json onto an isolated orphan branch so main stays clean.
+          # Force-push because this branch is purely a "latest snapshot" channel
+          # — historical snapshots are not useful and would bloat refs over time.
+          STATUS_FILE="$(mktemp)"
+          cp public/status.json "$STATUS_FILE"
+
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/status.json
-          if git diff --staged --quiet; then
-            echo "No changes to commit."
-          else
-            git commit -m "chore: healthcheck update [skip ci]"
-            git push
-          fi
+
+          # Build a one-commit orphan branch in a temporary worktree to avoid touching main.
+          rm -rf /tmp/healthcheck-snap
+          git worktree add --orphan -b healthcheck-snapshots-tmp /tmp/healthcheck-snap
+          (
+            cd /tmp/healthcheck-snap
+            git rm -rf . >/dev/null 2>&1 || true
+            mkdir -p public
+            cp "$STATUS_FILE" public/status.json
+            git add public/status.json
+            git commit -m "snapshot $(date -u +%FT%TZ)"
+            git push --force origin HEAD:healthcheck-snapshots
+          )
+
+          # Cleanup
+          git worktree remove --force /tmp/healthcheck-snap
+          git branch -D healthcheck-snapshots-tmp >/dev/null 2>&1 || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

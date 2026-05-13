@@ -1005,7 +1005,7 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
   };
 };
 
-module.exports = async (req, res) => {
+const handler = async (req, res) => {
   res.setHeader('X-Robots-Tag', 'noindex, nofollow');
 
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -1106,4 +1106,35 @@ module.exports = async (req, res) => {
       typeof sc === 'number' && sc >= 400 && sc < 600 ? sc : 500;
     res.status(code).json({ success: false, message: error.message });
   }
+};
+
+module.exports = handler;
+module.exports.__internals = {
+  buildInterfaceLegacy,
+  buildInterfaceAwg2,
+  buildInterfaceAwg2WarpSafe,
+  buildFullConfig,
+  buildAwg2WarpSafeObfuscation,
+  buildAwg2Obfuscation,
+  applyMobileModeOverrides,
+  applyRouterModeCaps,
+  computeAwg2InterfaceMtu,
+  generateAwg2MagicHeaderRanges,
+  pickAwg2PaddingDocCompliant,
+  pickAwg2JunkDocCompliant,
+  resolveTemplateOptions,
+  parsePresetKeysFromBody,
+  parseWarpPort,
+  parsePersistentKeepalive,
+  parsePeerEndpointOverride,
+  isValidIPv4,
+  isValidIPv6,
+  MOBILE_JC,
+  MOBILE_JMIN,
+  MOBILE_JMAX,
+  ROUTER_JC_MAX,
+  ROUTER_JMIN_MIN,
+  ROUTER_JMIN_MAX,
+  ROUTER_JMAX_MAX,
+  AWG2_MTU_STOCK_PEER,
 };

@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Coverage (informational)
+        run: |
+          {
+            echo '## Coverage report'
+            echo
+            echo '```'
+            npm run test:coverage 2>&1 | tail -n 60
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: presets-fallback drift check
+        run: |
+          cp public/static/presets-fallback.json /tmp/presets-fallback-before.json
+          npm run presets:fallback
+          if ! diff -u /tmp/presets-fallback-before.json public/static/presets-fallback.json > /tmp/presets-diff.txt; then
+            echo '::error::public/static/presets-fallback.json is out of date.'
+            echo 'Run `npm run presets:fallback` and commit the result.'
+            echo
+            cat /tmp/presets-diff.txt
+            exit 1
+          fi
+          echo 'presets-fallback.json is up-to-date.'

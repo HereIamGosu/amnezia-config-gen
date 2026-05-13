@@ -234,7 +234,7 @@
         lastChecked.innerHTML = `<strong>Последняя проверка:</strong><br>${formatMoscowTime(data.checked_at)}`;
       };
 
-      fetch('/status.json')
+      fetch('https://raw.githubusercontent.com/HereIamGosu/amnezia-config-gen/healthcheck-snapshots/public/status.json', { cache: 'no-store' })
         .then((r) => r.json())
         .then(renderStatus)
         .catch(() => {
