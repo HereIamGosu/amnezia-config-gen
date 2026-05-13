@@ -1,13 +1,39 @@
 {
   "name": "amnezia-config-generator",
   "version": "2.1.0",
-  "description": "Генератор конфигураций для AmneziaWG",
+  "description": "Web UI and HTTP API for generating AmneziaWG (.conf) configs, primarily for Cloudflare WARP.",
   "main": "api/warp.js",
+  "license": "AGPL-3.0-only",
+  "author": "HereIamGosu",
+  "homepage": "https://valokda-amnezia.vercel.app/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HereIamGosu/amnezia-config-gen.git"
+  },
+  "bugs": {
+    "url": "https://github.com/HereIamGosu/amnezia-config-gen/issues"
+  },
+  "keywords": [
+    "amneziawg",
+    "wireguard",
+    "vpn",
+    "warp",
+    "cloudflare",
+    "config-generator",
+    "obfuscation",
+    "dpi-bypass",
+    "vercel"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "vercel dev",
     "build": "echo \"No build step required\"",
     "presets:fallback": "node scripts/dump-presets-fallback.js",
-    "lint": "eslint ."
+    "lint": "eslint . --max-warnings 0",
+    "test": "node --test \"__tests__/**/*.test.js\"",
+    "test:coverage": "node --test --experimental-test-coverage \"__tests__/**/*.test.js\""
   },
   "dependencies": {
     "@vercel/analytics": "^1.4.1",
@@ -17,8 +43,5 @@
     "@eslint/js": "^9.17.0",
     "eslint": "^8.57.1",
     "globals": "^15.14.0"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  }
 }

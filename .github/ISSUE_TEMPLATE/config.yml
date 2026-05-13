@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discord support chat
+    url: https://discord.gg/XGNtYyGbmM
+    about: Quick questions and configuration help (Russian / English)
+  - name: AmneziaWG client issues
+    url: https://github.com/amnezia-vpn/amneziawg-tools/issues
+    about: Bugs in the AmneziaWG client itself, not this generator

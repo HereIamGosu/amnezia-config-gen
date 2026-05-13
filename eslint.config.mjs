@@ -37,7 +37,24 @@ export default [
   {
     files: ['api/**/*.js'],
     rules: {
-      'no-console': 'off', // Разрешаем console в серверных файлах
+      'no-console': 'off', // console allowed in serverless functions
+    },
+  },
+  {
+    files: ['public/static/**/*.js'],
+    rules: {
+      'no-console': 'off', // browser console allowed in frontend
+    },
+  },
+  {
+    files: ['__tests__/**/*.js', '__tests__/**/*.test.js'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+    rules: {
+      'no-console': 'off',
     },
   },
 ];

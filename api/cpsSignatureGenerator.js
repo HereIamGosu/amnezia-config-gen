@@ -33,7 +33,7 @@ const tagRd = (n) => {
 };
 
 /**
- * Build CPS signature packet descriptions i2–i5 for AmneziaWG 2.0 (i1 comes from warpAmneziaCpsPayload.js or user).
+ * Build CPS signature packet descriptions i2–i5 for AmneziaWG 2.0 (i1 comes from warpCpsPayloads.js via pickRandomCpsPayload() or from user-supplied i1/i1Ref).
  * @returns {{ i2: string, i3: string, i4: string, i5: string }}
  */
 const generateI2toI5Packets = () => {

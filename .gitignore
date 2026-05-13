@@ -99,11 +99,22 @@ bower_components/
 .claude/
 
 # ============================================================
-# Project-specific
+# AI assistant context (private)
 # ============================================================
-DEV_CHECKLIST.md
-struc.py
+CLAUDE.md
+
+# ============================================================
+# Project-specific (private docs and local artefacts)
+# ============================================================
 PRD.md
-Рабочие_конфиги/
+DEV_CHECKLIST.md
 docs/
-CHANGELOG.md
+
+# Empty/suspicious filename previously seen in tree
+p.key
+
+# Local working VPN configs with real keys — NEVER commit
+Рабочие_конфиги/
+
+# struc.py — legacy local helper script
+struc.py
