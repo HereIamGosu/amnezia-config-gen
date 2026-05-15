@@ -10,22 +10,33 @@
     />
     <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large" />
     <meta name="theme-color" content="#1a1a1a" />
+    <meta name="author" content="HereIamGosu" />
+    <meta name="keywords" content="AmneziaWG, Cloudflare WARP, конфигуратор, config generator, AllowedIPs, AWG 2.0, route presets, DNS, endpoint, mobile profile, vpn://, wireguard config" />
     <link rel="canonical" href="https://hereiamgosu.github.io/amnezia-config-gen/" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="apple-touch-icon" href="./favicon.svg" />
     <link rel="stylesheet" href="./styles.css" />
 
+    <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="ru_RU" />
     <meta property="og:site_name" content="AmneziaWG Config Generator" />
-    <meta property="og:title" content="AmneziaWG Config Generator" />
-    <meta
-      property="og:description"
-      content="Бесплатный генератор .conf для AmneziaWG / Cloudflare WARP с route presets, DNS, endpoint, mobile profile и vpn://."
-    />
+    <meta property="og:title" content="AmneziaWG Config Generator — конфиги WARP, маршруты, DNS и диагностика" />
+    <meta property="og:description" content="Бесплатный генератор .conf для AmneziaWG / Cloudflare WARP с route presets, DNS, endpoint, mobile profile и vpn://." />
     <meta property="og:url" content="https://hereiamgosu.github.io/amnezia-config-gen/" />
     <meta property="og:image" content="https://valokda-amnezia.vercel.app/static/og-amneziawg-config-generator.png" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="AmneziaWG Config Generator — интерфейс генератора конфигов для Cloudflare WARP" />
 
+    <!-- Twitter / X Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="AmneziaWG Config Generator — конфиги WARP, маршруты, DNS и диагностика" />
+    <meta name="twitter:description" content="Бесплатный генератор .conf для AmneziaWG / Cloudflare WARP с route presets, DNS, endpoint, mobile profile и vpn://." />
+    <meta name="twitter:image" content="https://valokda-amnezia.vercel.app/static/og-amneziawg-config-generator.png" />
+    <meta name="twitter:image:alt" content="AmneziaWG Config Generator — интерфейс генератора конфигов для Cloudflare WARP" />
+
+    <!-- JSON-LD: WebApplication -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -34,8 +45,31 @@
         "url": "https://valokda-amnezia.vercel.app/",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Windows, Android, iOS, Linux, router firmware",
+        "inLanguage": "ru",
         "isAccessibleForFree": true,
         "description": "Бесплатный веб-инструмент для генерации .conf-файлов AmneziaWG / Cloudflare WARP с поддержкой маршрутов, DNS, endpoint-настроек, mobile profile и vpn:// для мобильного импорта.",
+        "featureList": [
+          "Legacy и AWG 2.0 конфиги",
+          "Route presets через AllowedIPs",
+          "DNS presets",
+          "Выбор endpoint и WARP-порта",
+          "CPS / I1 и цепочка I2–I5",
+          "Mobile profile",
+          "vpn:// для мобильного импорта",
+          "Windows Scheduler .bat",
+          "Healthcheck",
+          "CIDR-счётчик"
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "RUB"
+        },
+        "creator": {
+          "@type": "Person",
+          "name": "HereIamGosu",
+          "url": "https://github.com/HereIamGosu"
+        },
         "sameAs": [
           "https://github.com/HereIamGosu/amnezia-config-gen",
           "https://t.me/amnezia_config"
