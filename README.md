@@ -4,7 +4,12 @@
 
 Web UI and HTTP API for building `.conf` files for the **AmneziaWG** client (WireGuard with Amnezia obfuscation extensions). Primary use case: **Cloudflare WARP** profiles — registers a fresh WARP device via Cloudflare's official API, returns the keys and tunnel parameters, optionally narrows `AllowedIPs` to selected domain presets.
 
-Public instance: <https://valokda-amnezia.vercel.app/>.
+| | |
+| --- | --- |
+| **Generator** | <https://valokda-amnezia.vercel.app/> |
+| **Project info page** | <https://hereiamgosu.github.io/amnezia-config-gen/> |
+| **Telegram channel** | <https://t.me/amnezia_config> |
+| **Source code** | <https://github.com/HereIamGosu/amnezia-config-gen> |
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![Node.js ≥20](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
