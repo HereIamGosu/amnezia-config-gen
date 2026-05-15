@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AmneziaWG Config Generator — конфиги WARP, маршруты, DNS и диагностика</title>
+    <meta
+      name="description"
+      content="Информационная страница AmneziaWG Config Generator: бесплатный генератор .conf для Cloudflare WARP, AWG 2.0, route presets, DNS, endpoint, mobile profile и vpn://."
+    />
+    <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large" />
+    <meta name="theme-color" content="#1a1a1a" />
+    <link rel="canonical" href="https://hereiamgosu.github.io/amnezia-config-gen/" />
+    <link rel="stylesheet" href="./styles.css" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="ru_RU" />
+    <meta property="og:site_name" content="AmneziaWG Config Generator" />
+    <meta property="og:title" content="AmneziaWG Config Generator" />
+    <meta
+      property="og:description"
+      content="Бесплатный генератор .conf для AmneziaWG / Cloudflare WARP с route presets, DNS, endpoint, mobile profile и vpn://."
+    />
+    <meta property="og:url" content="https://hereiamgosu.github.io/amnezia-config-gen/" />
+    <meta property="og:image" content="https://valokda-amnezia.vercel.app/static/og-amneziawg-config-generator.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "AmneziaWG Config Generator",
+        "url": "https://valokda-amnezia.vercel.app/",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Windows, Android, iOS, Linux, router firmware",
+        "isAccessibleForFree": true,
+        "description": "Бесплатный веб-инструмент для генерации .conf-файлов AmneziaWG / Cloudflare WARP с поддержкой маршрутов, DNS, endpoint-настроек, mobile profile и vpn:// для мобильного импорта.",
+        "sameAs": [
+          "https://github.com/HereIamGosu/amnezia-config-gen",
+          "https://t.me/amnezia_config"
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <header class="hero">
+      <nav class="nav" aria-label="Основная навигация">
+        <a class="nav__brand" href="https://valokda-amnezia.vercel.app/">AmneziaWG Config Generator</a>
+        <div class="nav__links">
+          <a href="#how-it-works">Как работает</a>
+          <a href="#diagnostics">Диагностика</a>
+          <a href="https://t.me/amnezia_config" target="_blank" rel="noopener noreferrer">Telegram-канал</a>
+          <a href="https://github.com/HereIamGosu/amnezia-config-gen" target="_blank" rel="noopener noreferrer">GitHub</a>
+        </div>
+      </nav>
+
+      <section class="hero__content">
+        <p class="eyebrow">Бесплатный генератор конфигов AmneziaWG / Cloudflare WARP</p>
+        <h1>Собрать .conf без ручной правки и быстрее понять, где ломается подключение</h1>
+        <p class="hero__lead">
+          Генератор помогает подготовить конфиг для AmneziaWG, выбрать формат Legacy или AWG 2.0,
+          настроить маршруты через AllowedIPs, DNS, endpoint, WARP-порт, mobile profile и vpn:// для
+          мобильного импорта. Результат зависит от клиента, сети, endpoint, UDP-фильтрации, DNS и устройства —
+          поэтому проект делает акцент не на обещаниях, а на прозрачной настройке и диагностике.
+        </p>
+        <div class="hero__actions">
+          <a class="button button--primary" href="https://valokda-amnezia.vercel.app/">Открыть генератор</a>
+          <a class="button button--secondary" href="https://t.me/amnezia_config" target="_blank" rel="noopener noreferrer">Подписаться на канал</a>
+        </div>
+      </section>
+    </header>
+
+    <main>
+      <section class="section section--grid" aria-labelledby="value-title">
+        <div>
+          <p class="section__label">Что делает проект</p>
+          <h2 id="value-title">Не чёрный ящик, а управляемая сборка конфига</h2>
+          <p>
+            Вместо копирования случайных строк пользователь видит управляемые параметры: формат конфига,
+            набор маршрутов, DNS-профиль, endpoint, порт, IPv6, CPS-настройки и мобильный режим. Такой подход
+            снижает риск ручной ошибки и делает результат проверяемым: понятно, что именно изменилось и какую
+            гипотезу можно проверить следующей.
+          </p>
+        </div>
+        <div class="cards cards--two">
+          <article class="card">
+            <h3>Для пользователей</h3>
+            <p>Собрать конфиг, импортировать его в клиент, попробовать route presets и не редактировать .conf вручную.</p>
+          </article>
+          <article class="card">
+            <h3>Для технической диагностики</h3>
+            <p>Отделить проблемы клиента, endpoint, DNS, UDP, маршрутизации и ограничений конкретного устройства.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="features-title">
+        <p class="section__label">Возможности</p>
+        <h2 id="features-title">Что уже есть в генераторе</h2>
+        <div class="feature-list">
+          <div class="feature"><span>01</span><p>Генерация .conf для Legacy и AWG 2.0.</p></div>
+          <div class="feature"><span>02</span><p>Route presets через AllowedIPs и счётчик CIDR.</p></div>
+          <div class="feature"><span>03</span><p>DNS presets, выбор WARP-порта, hostname или прямой IP endpoint.</p></div>
+          <div class="feature"><span>04</span><p>CPS / I1, расширенная цепочка I2–I5 для AWG 2.0.</p></div>
+          <div class="feature"><span>05</span><p>Mobile profile: консервативный профиль для телефонов и нестабильных сетей.</p></div>
+          <div class="feature"><span>06</span><p>vpn:// для one-tap импорта в мобильный AmneziaVPN.</p></div>
+          <div class="feature"><span>07</span><p>Healthcheck доступности API и endpoint-сценариев.</p></div>
+          <div class="feature"><span>08</span><p>Windows Scheduler .bat для автозапуска конфига при старте системы.</p></div>
+        </div>
+      </section>
+
+      <section id="how-it-works" class="section section--grid" aria-labelledby="how-title">
+        <div>
+          <p class="section__label">Механика</p>
+          <h2 id="how-title">AllowedIPs — это маршрутизация, а не список «разрешённых сайтов»</h2>
+          <p>
+            Route presets подставляют CIDR-диапазоны в AllowedIPs. Так через туннель может идти только выбранная
+            часть трафика, а не весь IPv4 и IPv6 поток. Full tunnel остаётся доступным, но для некоторых сценариев
+            точечная маршрутизация удобнее: меньше маршрутов, понятнее диагностика, проще заметить влияние конкретного preset.
+          </p>
+        </div>
+        <div class="terminal" aria-label="Пример AllowedIPs">
+          <div class="terminal__bar"><span></span><span></span><span></span></div>
+          <pre><code>[Peer]
+Endpoint = engage.cloudflareclient.com:4500
+AllowedIPs = 0.0.0.0/0
+PersistentKeepalive = 25</code></pre>
+        </div>
+      </section>
+
+      <section id="diagnostics" class="section" aria-labelledby="diagnostics-title">
+        <p class="section__label">Диагностика</p>
+        <h2 id="diagnostics-title">Типовые симптомы, которые разбираются в канале</h2>
+        <div class="cards cards--three">
+          <article class="card">
+            <h3>Работает через LTE, но не работает через Wi‑Fi</h3>
+            <p>Обычно первым подозреваемым становится не файл, а сеть: UDP-фильтрация, порт, NAT, captive portal или локальный firewall.</p>
+          </article>
+          <article class="card">
+            <h3>IP работает, а hostname — нет</h3>
+            <p>Разница часто появляется до подключения: клиенту нужно зарезолвить домен, а локальный DNS может вернуть неверный ответ или не ответить.</p>
+          </article>
+          <article class="card">
+            <h3>Вчера работало, сегодня нет</h3>
+            <p>У .conf нет встроенного срока действия. Часто меняется маршрут до anycast endpoint, доступность порта или поведение сети.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section section--accent" aria-labelledby="channel-title">
+        <div>
+          <p class="section__label">Amnezia Config</p>
+          <h2 id="channel-title">Telegram-канал — публичный журнал разборов и обновлений</h2>
+          <p>
+            В канале публикуются объяснения по AmneziaWG, AllowedIPs, endpoint, DNS, UDP, mobile profile,
+            vpn:// и новым функциям генератора. Формат канала — инженерные заметки по реальным симптомам,
+            без обещания одинакового результата в любой сети.
+          </p>
+        </div>
+        <a class="button button--primary" href="https://t.me/amnezia_config" target="_blank" rel="noopener noreferrer">Открыть Telegram-канал</a>
+      </section>
+
+      <section class="section section--grid" aria-labelledby="open-title">
+        <div>
+          <p class="section__label">Open source</p>
+          <h2 id="open-title">Код открыт, логика проверяема</h2>
+          <p>
+            Репозиторий содержит frontend, API генерации, route presets, CPS-payload-логику, vpn:// builder,
+            rate limiter и инвариантные тесты для критичных правил AWG 2.0. Ошибки и предложения лучше заводить
+            в GitHub Issues, а разборы обновлений читать в Telegram-канале.
+          </p>
+        </div>
+        <div class="link-panel">
+          <a href="https://github.com/HereIamGosu/amnezia-config-gen" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+          <a href="https://valokda-amnezia.vercel.app/" target="_blank" rel="noopener noreferrer">Public generator</a>
+          <a href="https://pay.cloudtips.ru/p/24080824" target="_blank" rel="noopener noreferrer">Поддержать проект</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>AmneziaWG Config Generator — бесплатный инструмент для сборки конфигов и практической диагностики.</p>
+      <p>
+        <a href="https://valokda-amnezia.vercel.app/">Генератор</a>
+        <span>·</span>
+        <a href="https://t.me/amnezia_config" target="_blank" rel="noopener noreferrer">Telegram-канал</a>
+        <span>·</span>
+        <a href="https://github.com/HereIamGosu/amnezia-config-gen" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </p>
+    </footer>
+  </body>
+</html>

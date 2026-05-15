@@ -108,7 +108,10 @@ CLAUDE.md
 # ============================================================
 PRD.md
 DEV_CHECKLIST.md
-docs/
+# docs/ intentionally tracked — GitHub Pages landing
+docs/SEO_KEYWORD_MAP.md
+docs/srs/
+docs/superpowers/
 
 # Empty/suspicious filename previously seen in tree
 p.key
