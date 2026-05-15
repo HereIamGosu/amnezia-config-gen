@@ -1936,7 +1936,7 @@ button.info-link {
   }
 
   .window-header {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .content-wrapper {
@@ -1993,11 +1993,11 @@ button.info-link {
   }
 
   .instruction ol {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .instruction p {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .thank-you {
@@ -2007,7 +2007,7 @@ button.info-link {
   }
 
   .donate-text {
-    font-size: 10px;
+    font-size: 12px;
     max-width: 100%; /* Делаем текст занимать всю ширину родительского контейнера */
   }
 
@@ -2034,7 +2034,7 @@ button.info-link {
   }
 
   .window-header {
-    font-size: 9px;
+    font-size: 12px;
   }
 
   .container,
@@ -2043,14 +2043,14 @@ button.info-link {
   }
 
   button.button {
-    font-size: 10px;
+    font-size: 12px;
     padding: 10px 10px;
     min-height: 44px;
   }
 
   .discord-link,
   .web-link {
-    font-size: 10px;
+    font-size: 12px;
     padding: 10px 10px;
     min-height: 44px;
   }
@@ -2077,7 +2077,7 @@ button.info-link {
 
   .modal-content {
     padding: 16px;
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .modal-content--info {
@@ -2095,11 +2095,11 @@ button.info-link {
   }
 
   .info-section__title {
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .info-list {
-    font-size: 8px;
+    font-size: 12px;
   }
 
   .instruction h2 {
@@ -2107,11 +2107,11 @@ button.info-link {
   }
 
   .instruction ol {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .instruction p {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .thank-you {
@@ -2121,7 +2121,7 @@ button.info-link {
   }
 
   .donate-text {
-    font-size: 9px;
+    font-size: 12px;
     max-width: 100%; /* Делаем текст занимать всю ширину родительского контейнера */
   }
 }

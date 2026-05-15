@@ -16,6 +16,7 @@
       name="googlebot"
       content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1"
     />
+    <meta name="yandex" content="index,follow" />
     <meta name="theme-color" content="#0077FF" />
     <meta name="author" content="HereIamGosu" />
     <meta name="copyright" content="HereIamGosu" />
@@ -123,7 +124,26 @@
         "@context": "https://schema.org",
         "@graph": [
           {
+            "@type": "WebSite",
+            "@id": "https://valokda-amnezia.vercel.app/#website",
+            "url": "https://valokda-amnezia.vercel.app/",
+            "name": "AmneziaWG Config Generator",
+            "inLanguage": "ru-RU",
+            "publisher": { "@id": "https://github.com/HereIamGosu#person" }
+          },
+          {
+            "@type": "WebPage",
+            "@id": "https://valokda-amnezia.vercel.app/#webpage",
+            "url": "https://valokda-amnezia.vercel.app/",
+            "name": "Генератор AmneziaWG config для Cloudflare WARP — AWG 1.5 и AWG 2.0",
+            "isPartOf": { "@id": "https://valokda-amnezia.vercel.app/#website" },
+            "about": { "@id": "https://valokda-amnezia.vercel.app/#app" },
+            "inLanguage": "ru-RU",
+            "description": "Бесплатный веб-инструмент для генерации .conf-файлов AmneziaWG для Cloudflare WARP."
+          },
+          {
             "@type": "WebApplication",
+            "@id": "https://valokda-amnezia.vercel.app/#app",
             "name": "AmneziaWG Config Generator",
             "alternateName": [
               "Генератор конфигов AmneziaWG",
@@ -132,17 +152,15 @@
             "url": "https://valokda-amnezia.vercel.app/",
             "applicationCategory": "DeveloperApplication",
             "operatingSystem": "Windows, Android, iOS, Linux, Router firmware",
-            "inLanguage": ["ru", "en"],
+            "inLanguage": "ru-RU",
+            "isAccessibleForFree": true,
             "description": "Веб-инструмент для генерации готовых .conf-файлов AmneziaWG для Cloudflare WARP с поддержкой AWG 1.5, AWG 2.0, DNS, AllowedIPs, CPS и endpoint-настроек.",
             "offers": {
               "@type": "Offer",
               "price": "0",
               "priceCurrency": "USD"
             },
-            "creator": {
-              "@type": "Person",
-              "name": "Valokda"
-            },
+            "creator": { "@id": "https://github.com/HereIamGosu#person" },
             "featureList": [
               "Генерация AmneziaWG .conf",
               "Cloudflare WARP registration",
@@ -152,21 +170,21 @@
               "DNS presets",
               "CPS payload selection",
               "WARP endpoint port selection"
+            ],
+            "sameAs": [
+              "https://github.com/HereIamGosu/amnezia-config-gen",
+              "https://t.me/amnezia_config"
             ]
           },
           {
-            "@type": "SoftwareApplication",
-            "name": "AmneziaWG Config Generator",
-            "alternateName": "Генератор конфигов AmneziaWG",
-            "applicationCategory": "DeveloperApplication",
-            "operatingSystem": "Windows, Android, iOS, Linux, Router firmware",
-            "url": "https://valokda-amnezia.vercel.app/",
-            "description": "Веб-инструмент для генерации готовых .conf-файлов AmneziaWG для Cloudflare WARP с поддержкой AWG 1.5, AWG 2.0, DNS, AllowedIPs, CPS и endpoint-настроек.",
-            "offers": {
-              "@type": "Offer",
-              "price": "0",
-              "priceCurrency": "USD"
-            }
+            "@type": "Person",
+            "@id": "https://github.com/HereIamGosu#person",
+            "name": "HereIamGosu",
+            "url": "https://github.com/HereIamGosu",
+            "sameAs": [
+              "https://github.com/HereIamGosu",
+              "https://t.me/amnezia_config"
+            ]
           }
         ]
       }
@@ -181,6 +199,9 @@
 
   </head>
   <body>
+    <noscript>
+      <p>AmneziaWG Config Generator — бесплатный веб-инструмент для генерации .conf-файлов AmneziaWG и Cloudflare WARP. Поддерживает AWG 1.5 (Legacy) и AWG 2.0, AllowedIPs route presets, DNS presets, CPS, mobile profile и vpn:// для импорта в мобильный AmneziaVPN. Для работы генератора необходим JavaScript.</p>
+    </noscript>
     <script>
       window.va =
         window.va ||
