@@ -70,6 +70,9 @@
   "instruction_step3": "<strong>Download and run the scheduler bat:</strong><br />Download <strong>\"Scheduler for 1.5\"</strong> or <strong>\"Scheduler for 2.0\"</strong> — the one matching your config. Run the chosen <code>.bat</code> <strong>as administrator</strong> once: it creates a Windows Task Scheduler task that runs at login. When switching client versions, remove the old task in <em>Task Scheduler</em> or use a different <code>.bat</code> (task names inside the files differ).",
   "instruction_conclusion": "After that, AmneziaWG will automatically connect to the config from Downloads at login 🥸 Adjust the path to <code>amneziawg.exe</code> in the bat if needed for your installation.",
 
+  "tg_cta_text": "If you want to understand why the same .conf may behave differently on LTE, Wi-Fi, a phone, Windows, or a router — the <strong>Amnezia Config</strong> Telegram channel publishes breakdowns on AmneziaWG, AllowedIPs, endpoint, DNS, UDP, mobile profile, and generator updates.",
+  "tg_cta_btn": "Subscribe to the channel",
+
   "discord_link_text": "Join the server",
   "web_link_text": "Telegram channel",
   "donate_button": "Support the project",

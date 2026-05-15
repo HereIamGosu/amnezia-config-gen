@@ -380,6 +380,20 @@
               </div>
             </div>
 
+            <!-- CTA: Telegram-канал — появляется после первой генерации -->
+            <div id="tgChannelCta" class="tg-channel-cta" hidden>
+              <p class="tg-channel-cta__text" data-i18n-html="tg_cta_text">
+                Если хотите понимать, почему один и тот же .conf может работать по-разному в LTE, Wi-Fi, на телефоне, Windows или роутере, — в Telegram-канале <strong>Amnezia Config</strong> выходят разборы по AmneziaWG, AllowedIPs, endpoint, DNS, UDP, mobile profile и обновлениям генератора.
+              </p>
+              <a
+                href="#"
+                class="button tg-channel-cta__btn"
+                target="_blank"
+                rel="noopener noreferrer"
+                data-i18n="tg_cta_btn"
+              >Подписаться на канал</a>
+            </div>
+
           </main>
 
           <!-- Правый раздел с инструкцией и футером -->
@@ -478,6 +492,7 @@
                     </a>
                     <a
                       href="https://t.me/amnezia_config"
+                      data-tg-channel
                       target="_blank"
                       rel="noopener noreferrer"
                       class="web-link"

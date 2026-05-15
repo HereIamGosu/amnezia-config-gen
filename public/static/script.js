@@ -241,6 +241,19 @@ const POST_GEN_ROW_IDS = {
  * Скрывает кнопку генерации и показывает на её месте тройку кнопок:
  * Скачать | QR | Просмотр конфига.
  */
+const showTgChannelCta = () => {
+  const cta = document.getElementById('tgChannelCta');
+  if (!cta || !cta.hidden) return;
+  cta.hidden = false;
+  const btn = cta.querySelector('.tg-channel-cta__btn');
+  if (btn) {
+    btn.href = TG_CHANNEL_URL;
+    btn.addEventListener('click', () => {
+      if (typeof ym === 'function') ym(99328227, 'reachGoal', 'telegram_channel_cta_click');
+    }, { once: true });
+  }
+};
+
 const showPostGenRow = ({ buttonId, readyDownloadText, filename, decodedConfig, vpnLink }) => {
   // Скрываем кнопку генерации
   const genBtn = document.getElementById(buttonId);
@@ -252,6 +265,7 @@ const showPostGenRow = ({ buttonId, readyDownloadText, filename, decodedConfig, 
   const row = document.getElementById(rowId);
   if (!row) return;
   row.hidden = false;
+  showTgChannelCta();
 
   // Кнопка скачать
   const dlBtn = row.querySelector('.post-gen-row__download');
@@ -299,6 +313,8 @@ const API_WARP_TIMEOUT_MS = 120000;
  * on all tested platforms. Users are warned at 80 % and blocked at 100 %.
  */
 const MAX_CIDR_LIMIT = 1000;
+
+const TG_CHANNEL_URL = 'https://t.me/amnezia_config';
 
 /**
  * @param {Response} response
@@ -1141,6 +1157,13 @@ const downloadSchedulerBat = async (staticPath, downloadName, doneMessageKey, do
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-tg-channel]').forEach((el) => {
+    el.href = TG_CHANNEL_URL;
+    el.addEventListener('click', () => {
+      if (typeof ym === 'function') ym(99328227, 'reachGoal', 'telegram_channel_footer_click');
+    });
+  });
+
   const generateButton = document.getElementById('generateButton');
   const generateButtonAwg2 = document.getElementById('generateButtonAwg2');
   const schedulerButton15 = document.getElementById('schedulerButton15');

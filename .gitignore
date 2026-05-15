@@ -118,3 +118,6 @@ p.key
 
 # struc.py — legacy local helper script
 struc.py
+
+# Spurious shell artifact (brace expansion gone wrong)
+{,

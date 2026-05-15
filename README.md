@@ -24,6 +24,12 @@ Public instance: <https://valokda-amnezia.vercel.app/>.
 - `cps5`, `mobile`, `link` opt-in extras (see [Optional Extras](#optional-extras)).
 - Cloudflare WARP API requests retry on network errors and 429 / 502 / 503 / 504 responses.
 
+## Telegram channel
+
+The **[Amnezia Config](https://t.me/amnezia_config)** Telegram channel publishes breakdowns of generator updates, diagnostics for endpoint, DNS, UDP, AllowedIPs, mobile profile, and config import issues.
+
+The channel does not promise universal connectivity in any network. The materials explain how the settings work and where to look if the tunnel behaves differently across devices or networks.
+
 ## Requirements
 
 - **Node.js ≥ 20** (LTS).

@@ -42,6 +42,11 @@ export default [
   },
   {
     files: ['public/static/**/*.js'],
+    languageOptions: {
+      globals: {
+        ym: 'readonly', // Yandex Metrika global
+      },
+    },
     rules: {
       'no-console': 'off', // browser console allowed in frontend
     },
