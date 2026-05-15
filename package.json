@@ -1,6 +1,6 @@
 {
   "name": "amnezia-config-generator",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Web UI and HTTP API for generating AmneziaWG (.conf) configs, primarily for Cloudflare WARP.",
   "main": "api/warp.js",
   "license": "AGPL-3.0-only",
