@@ -1,0 +1,13 @@
+# Default: normalise line endings to LF in the repo
+* text=auto eol=lf
+
+# Explicitly LF — generated/checked-in JSON snapshots must stay LF
+# so `diff -u` in CI (Linux) never sees a spurious CRLF diff.
+public/static/presets-fallback.json text eol=lf
+public/status.json                   text eol=lf
+
+# Binary assets — no line-ending conversion
+docs/favicon.svg  binary
+*.png             binary
+*.ico             binary
+*.woff2           binary
