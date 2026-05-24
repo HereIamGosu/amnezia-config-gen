@@ -373,7 +373,7 @@ const cfgState = {
   /** Set of preset IDs confirmed to return 0 IPv4 CIDRs from opencck. */
   zeroCidrPresets: new Set(),
   warpPort: 4500,
-  endpointIp: false,
+  warpEndpoint: 'hostname',
   /** When true, server appends I2-I5 to AWG 2.0 [Interface]. */
   extraCps: false,
   /** When true, mobile preset (low Jc/Jmax, IPv4-only). */
@@ -495,8 +495,6 @@ const applyMobileModeCascade = () => {
 
 const getSelectedDnsKey = () => cfgState.selectedDns || '';
 
-const WARP_FALLBACK_IPS = ['162.159.192.1', '188.114.97.66'];
-
 const buildWarpQueryString = (mode) => {
   const params = new URLSearchParams();
   params.set('mode', mode);
@@ -513,9 +511,8 @@ const buildWarpQueryString = (mode) => {
   params.set('link', '1');
   params.set('cps', cfgState.cpsProtocol);
   params.set('warpPort', String(cfgState.warpPort));
-  if (cfgState.endpointIp) {
-    const ip = WARP_FALLBACK_IPS[Math.floor(Math.random() * WARP_FALLBACK_IPS.length)];
-    params.set('peerEndpoint', `${ip}:${cfgState.warpPort}`);
+  if (cfgState.warpEndpoint !== 'hostname') {
+    params.set('peerEndpoint', `${cfgState.warpEndpoint}:${cfgState.warpPort}`);
   }
   return params.toString();
 };
@@ -822,11 +819,11 @@ const initSettingsPanel = async () => {
       });
     }
 
-    const endpointIpToggle = document.getElementById('endpointIpToggle');
-    if (endpointIpToggle) {
-      endpointIpToggle.checked = cfgState.endpointIp;
-      endpointIpToggle.addEventListener('change', () => {
-        cfgState.endpointIp = endpointIpToggle.checked;
+    const warpEndpointSelect = document.getElementById('warpEndpointSelect');
+    if (warpEndpointSelect) {
+      warpEndpointSelect.value = cfgState.warpEndpoint;
+      warpEndpointSelect.addEventListener('change', () => {
+        cfgState.warpEndpoint = warpEndpointSelect.value;
       });
     }
 
@@ -845,7 +842,7 @@ const initSettingsPanel = async () => {
         cfgState.routerMode = false;
         cfgState.cpsProtocol = 'auto';
         cfgState.warpPort = 4500;
-        cfgState.endpointIp = false;
+        cfgState.warpEndpoint = 'hostname';
         cfgState.extraCps = false;
         cfgState.mobileMode = false;
         if (ipv6Toggle) ipv6Toggle.checked = false;
@@ -854,7 +851,7 @@ const initSettingsPanel = async () => {
         const autoRadio = document.querySelector('[name="cpsProtocol"][value="auto"]');
         if (autoRadio) autoRadio.checked = true;
         if (warpPortSelect) warpPortSelect.value = '4500';
-        if (endpointIpToggle) endpointIpToggle.checked = false;
+        if (warpEndpointSelect) warpEndpointSelect.value = 'hostname';
         const cps5ToggleReset = document.getElementById('cps5Toggle');
         if (cps5ToggleReset) cps5ToggleReset.checked = false;
         const mobileToggleReset = document.getElementById('mobileModeToggle');
