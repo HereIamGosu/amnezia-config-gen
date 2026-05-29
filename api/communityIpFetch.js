@@ -24,7 +24,11 @@ const ALLOWED_LISTS = new Set([
   'ovh',
 ]);
 
-/** @param {string} cidr */
+/**
+ * @param {string} cidr
+ * Intentionally duplicated from ipListFetch.js (not imported): ipListFetch requires
+ * THIS module, so importing back would create a circular dependency. Keep in sync.
+ */
 const isIpv4Cidr = (cidr) => /^\d{1,3}(\.\d{1,3}){3}\/\d+$/.test(cidr);
 
 /** Per-list in-memory cache: name -> { cidrs, ts }. */
@@ -55,6 +59,11 @@ const fetchListOnce = (name) =>
         headers: { 'User-Agent': 'amnezia-config-gen/1.0', Accept: 'text/plain' },
       },
       (res) => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          req.destroy();
+          done(new Error(`community list ${name} HTTP ${res.statusCode}`));
+          return;
+        }
         let buf = '';
         let n = 0;
         res.on('data', (c) => {
@@ -67,10 +76,6 @@ const fetchListOnce = (name) =>
           buf += c;
         });
         res.on('end', () => {
-          if (res.statusCode < 200 || res.statusCode >= 300) {
-            done(new Error(`community list ${name} HTTP ${res.statusCode}`));
-            return;
-          }
           const cidrs = buf
             .split('\n')
             .map((l) => l.trim())
