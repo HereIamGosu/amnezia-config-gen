@@ -94,17 +94,69 @@ jspm_packages/
 bower_components/
 
 # ============================================================
-# Claude Code / AI assistant (local state, private context)
+# AI assistants & agents — local state, context, config
 # ============================================================
+
+# Claude / Anthropic
 .claude/
-.codegraph/
-.mcp.json
 CLAUDE.md
+.mcp.json
+
+# Cursor
+.cursor/
+.cursorignore
+.cursorules
+
+# GitHub Copilot
+.github/copilot-instructions.md
+
+# Codex / OpenAI
 AGENTS.md
+.codex/
+codex.md
+
+# Gemini / Google
 GEMINI.md
-.cursor/rules
+.gemini/
+
+# Aider
 .aider*
+.aider.conf.yml
+.aider.model.settings.yml
+.aider.model.metadata.json
+
+# Continue.dev
 .continue/
+
+# Cline / RooCode / Windsurf
+.cline/
+.roo/
+.windsurfignore
+.windsurfrules
+
+# Supermaven / Tabnine / Codeium
+.supermaven/
+.tabnine*
+.codeium/
+
+# Devin / SWE-agent / OpenHands
+.devin/
+.openhands/
+
+# CodeGraph (local index)
+.codegraph/
+
+# OMX / ruv-swarm / claude-flow
+.omx/
+.ruv-swarm/
+.claude-flow/
+memory/
+swarm-state/
+
+# Generic AI config files
+*.cursorrules
+.ai-context*
+ai-instructions*
 
 # ============================================================
 # AI agent runtime data (databases, caches, streams)
