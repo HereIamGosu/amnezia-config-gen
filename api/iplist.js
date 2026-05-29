@@ -37,7 +37,7 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const { sites, staticCidrs, unknown } = expandPresetsToSites(presetKeys);
+    const { sites, staticCidrs, communityLists, unknown } = expandPresetsToSites(presetKeys);
     if (unknown.length) {
       res.status(400).json({
         success: false,
@@ -55,13 +55,18 @@ module.exports = async (req, res) => {
     const includeIpv6 = ipv6Param === '1' || ipv6Param === 'true';
 
     const { isIpv4Cidr } = require('./ipListFetch');
+    const hasStaticV4 = staticCidrs.some(isIpv4Cidr);
 
     let cidrs4 = [];
     let cidrSource = 'opencck';
 
     if (sites.length) {
       // Always fetch IPv4-only CIDRs for the counter (fast, fewer routes)
-      const result4 = await fetchCidrsForDomains(sites, { includeIpv6: false });
+      const result4 = await fetchCidrsForDomains(sites, {
+        includeIpv6: false,
+        communityLists,
+        hasStaticFallback: hasStaticV4,
+      });
       cidrs4 = result4.cidrs;
       cidrSource = result4.source;
     }
@@ -75,7 +80,11 @@ module.exports = async (req, res) => {
     let count6 = 0;
 
     if (includeIpv6 && sites.length) {
-      const resultAll = await fetchCidrsForDomains(sites, { includeIpv6: true });
+      const resultAll = await fetchCidrsForDomains(sites, {
+        includeIpv6: true,
+        communityLists,
+        hasStaticFallback: hasStaticV4,
+      });
       const staticV6 = staticCidrs.filter((c) => !isIpv4Cidr(c));
       cidrs = Array.from(new Set([...resultAll.cidrs, ...staticV6])).sort();
       count6 = cidrs.length - count4;

@@ -877,7 +877,7 @@ const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false } 
   if (!presetKeys.length) {
     return { cidrs: null, routesSource: 'default' };
   }
-  const { sites, staticCidrs, unknown } = expandPresetsToSites(presetKeys);
+  const { sites, staticCidrs, communityLists, unknown } = expandPresetsToSites(presetKeys);
   if (unknown.length) {
     const err = new Error(`Неизвестные пресеты маршрутов: ${unknown.join(', ')}`);
     err.statusCode = 400;
@@ -891,15 +891,20 @@ const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false } 
 
   const { isIpv4Cidr } = require('./ipListFetch');
 
+  // Merge static CIDRs; for IPv4-only mode filter out IPv6 statics
+  const staticFiltered = includeIpv6 ? staticCidrs : staticCidrs.filter(isIpv4Cidr);
+
   let resolvedCidrs = [];
   if (sites.length) {
     // IPv4-only by default: fewer routes, better compatibility with routers and mobile clients.
-    const { cidrs } = await fetchCidrsForDomains(sites, { includeIpv6 });
+    const { cidrs } = await fetchCidrsForDomains(sites, {
+      includeIpv6,
+      communityLists,
+      hasStaticFallback: staticFiltered.length > 0,
+    });
     resolvedCidrs = cidrs;
   }
 
-  // Merge static CIDRs; for IPv4-only mode filter out IPv6 statics
-  const staticFiltered = includeIpv6 ? staticCidrs : staticCidrs.filter(isIpv4Cidr);
   const merged = Array.from(new Set([...resolvedCidrs, ...staticFiltered])).sort();
 
   if (!merged.length) {
