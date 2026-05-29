@@ -227,6 +227,8 @@ const fetchWithRetry = async (path) => {
  *   3. antifilter generic blocklist — last resort ONLY when the result is otherwise empty
  *      and the caller has no static CIDR fallback to merge.
  * By default only IPv4 CIDRs are returned. Pass { includeIpv6: true } to also include IPv6.
+ * Note: includeIpv6 affects only the opencck stage; the community and antifilter
+ * supplements are always IPv4-only (route-table size constraints).
  * @param {string[]} sites unique hostnames
  * @param {{ includeIpv6?: boolean, communityLists?: string[], hasStaticFallback?: boolean }} [opts]
  * @returns {Promise<{ cidrs: string[], source: 'opencck' | 'community' | 'mixed' | 'antifilter' }>}
