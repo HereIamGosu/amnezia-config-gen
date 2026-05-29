@@ -1,6 +1,7 @@
 const https = require('https');
 const { randomInt } = require('crypto');
 const { URLSearchParams } = require('url');
+const { fetchCommunityCidrs } = require('./communityIpFetch');
 
 const IP_LIST_HOST = 'iplist.opencck.org';
 const IP_LIST_TIMEOUT_MS = 25000;
@@ -63,8 +64,10 @@ const CIDR_CACHE_MAX_ENTRIES = 200;
 /** @type {Map<string, { cidrs: string[], ts: number }>} */
 const cidrCache = new Map();
 
-const cidrCacheKey = (sites, includeIpv6) =>
-  `${sites.slice().sort().join(',')}_${includeIpv6 ? '46' : '4'}`;
+const cidrCacheKey = (sites, includeIpv6, communityLists, hasStaticFallback) =>
+  `${sites.slice().sort().join(',')}_${includeIpv6 ? '46' : '4'}` +
+  `_c:${(communityLists || []).slice().sort().join('|')}` +
+  `_s:${hasStaticFallback ? '1' : '0'}`;
 
 const cidrCacheGet = (key) => {
   const entry = cidrCache.get(key);
@@ -218,23 +221,30 @@ const fetchWithRetry = async (path) => {
 };
 
 /**
- * Fetch CIDRs for hostnames (with in-memory cache, TTL 10 min).
- * Falls back to antifilter.download/list/subnet.lst when opencck is unavailable or returns 0 CIDRs.
+ * Resolve CIDRs for hostnames with a targeted cascade (in-memory cache, TTL 10 min):
+ *   1. opencck (primary, per-domain)
+ *   2. itdoginfo community lists — only when domains have gaps and the preset is mapped
+ *   3. antifilter generic blocklist — last resort ONLY when the result is otherwise empty
+ *      and the caller has no static CIDR fallback to merge.
  * By default only IPv4 CIDRs are returned. Pass { includeIpv6: true } to also include IPv6.
  * @param {string[]} sites unique hostnames
- * @param {{ includeIpv6?: boolean }} [opts]
- * @returns {Promise<{ cidrs: string[], source: 'opencck' | 'antifilter' | 'mixed' }>}
+ * @param {{ includeIpv6?: boolean, communityLists?: string[], hasStaticFallback?: boolean }} [opts]
+ * @returns {Promise<{ cidrs: string[], source: 'opencck' | 'community' | 'mixed' | 'antifilter' }>}
  */
-const fetchCidrsForDomains = async (sites, { includeIpv6 = false } = {}) => {
+const fetchCidrsForDomains = async (
+  sites,
+  { includeIpv6 = false, communityLists = [], hasStaticFallback = false } = {},
+) => {
   if (!sites.length) return { cidrs: [], source: 'opencck' };
 
-  const cacheKey = cidrCacheKey(sites, includeIpv6);
+  const cacheKey = cidrCacheKey(sites, includeIpv6, communityLists, hasStaticFallback);
   const cached = cidrCacheGet(cacheKey);
   if (cached) return { cidrs: cached, source: cached._source || 'opencck' };
 
   let merged = new Set();
   let source = 'opencck';
-  let needsAntifilter = false;
+  let opencckFailed = false;
+  let hasGaps = false;
 
   try {
     const path4 = buildIpListPath(sites, 'cidr4');
@@ -248,25 +258,38 @@ const fetchCidrsForDomains = async (sites, { includeIpv6 = false } = {}) => {
     }
     const data4 = res4.value;
     merged = flattenCidrMap(data4);
-
-    // If any requested domain returned no CIDRs, supplement with antifilter
-    if (hasEmptyDomains(data4, sites)) needsAntifilter = true;
+    hasGaps = hasEmptyDomains(data4, sites);
 
     if (includeIpv6 && res6 && res6.status === 'fulfilled') {
       for (const c of flattenCidrMap(res6.value)) merged.add(c);
     }
   } catch {
-    // opencck unavailable — fall through to antifilter entirely
+    // opencck unavailable
     merged = new Set();
-    needsAntifilter = true;
+    opencckFailed = true;
+    hasGaps = true;
   }
 
-  // Supplement with antifilter when opencck is down or any domain had no data
-  if (needsAntifilter) {
+  const opencckCount = merged.size;
+
+  // Targeted supplement: itdoginfo community lists, only when there are gaps and a mapping exists.
+  if ((hasGaps || opencckFailed) && communityLists.length) {
+    try {
+      const ccCidrs = await fetchCommunityCidrs(communityLists);
+      for (const c of ccCidrs) merged.add(c);
+      if (merged.size > opencckCount) {
+        source = opencckCount > 0 ? 'mixed' : 'community';
+      }
+    } catch { /* community source failed — ignore */ }
+  }
+
+  // Last resort: generic antifilter ONLY when the result is still empty and the
+  // caller has no static CIDRs to merge in afterwards.
+  if (merged.size === 0 && !hasStaticFallback) {
     try {
       const afCidrs = await getAntifilterCidrs();
       for (const c of afCidrs) if (isIpv4Cidr(c)) merged.add(c);
-      source = merged.size > 0 && source === 'opencck' ? 'mixed' : 'antifilter';
+      if (merged.size > 0) source = 'antifilter';
     } catch { /* antifilter also failed */ }
   }
 
