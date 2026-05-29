@@ -17,6 +17,7 @@ const ROUTE_PRESETS = {
   discord: {
     label: 'Discord',
     category: 'social',
+    communityLists: ['Discord'],
     sites: [
       'discord.com',
       'discord.gg',
@@ -28,6 +29,7 @@ const ROUTE_PRESETS = {
   whatsapp: {
     label: 'WhatsApp',
     category: 'social',
+    communityLists: ['Meta'],
     sites: [
       'whatsapp.com',
       'web.whatsapp.com',
@@ -59,16 +61,19 @@ const ROUTE_PRESETS = {
   twitter: {
     label: 'X (Twitter)',
     category: 'social',
+    communityLists: ['Twitter'],
     sites: ['twitter.com', 'x.com', 'twimg.com', 't.co', 'pbs.twimg.com'],
   },
   instagram: {
     label: 'Instagram',
     category: 'social',
+    communityLists: ['Meta'],
     sites: ['instagram.com', 'cdninstagram.com', 'fbcdn.net'],
   },
   facebook: {
     label: 'Facebook',
     category: 'social',
+    communityLists: ['Meta'],
     sites: ['facebook.com', 'fb.com', 'fbsbx.com'],
   },
   viber: {
@@ -160,6 +165,7 @@ const ROUTE_PRESETS = {
   roblox: {
     label: 'Roblox',
     category: 'more',
+    communityLists: ['roblox'],
     sites: ['roblox.com'],
   },
   hdrezka: {
@@ -356,6 +362,7 @@ const normalizePresetKey = (raw) =>
 const expandPresetsToSites = (presetKeys) => {
   const seenSites = new Set();
   const seenCidrs = new Set();
+  const seenCommunity = new Set();
   const unknown = [];
   for (const key of presetKeys) {
     const k = normalizePresetKey(key);
@@ -371,8 +378,16 @@ const expandPresetsToSites = (presetKeys) => {
     for (const c of (def.cidrs || [])) {
       seenCidrs.add(c.trim());
     }
+    for (const l of (def.communityLists || [])) {
+      seenCommunity.add(String(l).trim());
+    }
   }
-  return { sites: Array.from(seenSites).sort(), staticCidrs: Array.from(seenCidrs), unknown };
+  return {
+    sites: Array.from(seenSites).sort(),
+    staticCidrs: Array.from(seenCidrs),
+    communityLists: Array.from(seenCommunity),
+    unknown,
+  };
 };
 
 const listPresetsForApi = () => {
