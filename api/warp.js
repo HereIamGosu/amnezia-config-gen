@@ -42,9 +42,9 @@ const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const API_PREFIX = '/v0i1909051800';
 const CLOUDFLARE_API_HOST = 'api.cloudflareclient.com';
 
-const RETRY_MAX_ATTEMPTS = 6;
+const RETRY_MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 450;
-const RETRY_MAX_DELAY_MS = 12000;
+const RETRY_MAX_DELAY_MS = 4000;
 
 /**
  * AmneziaWG 2.0 H1–H4: amneziawg-go parses decimal uint32 (device/magic-header.go) and
@@ -930,6 +930,9 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
     locale: 'en_US',
   };
 
+  // Start CIDR resolution concurrently with WARP registration — they are independent.
+  const resolvePresetsPromise = resolveAllowedIpsFromPresets(presetKeys, routeOpts);
+
   const regResponse = await handleApiRequest('POST', 'reg', regBody);
   const { id, token } = regResponse.result ?? {};
 
@@ -964,7 +967,7 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
   // so applying router caps after mobile ensures router-mode values win on overlap.
   if (awg2Obf && routeOpts.mobileMode) awg2Obf = applyMobileModeOverrides(awg2Obf);
   if (awg2Obf && routeOpts.routerMode) awg2Obf = applyRouterModeCaps(awg2Obf);
-  const { cidrs: routeCidrs, routesSource, sitesResolved } = await resolveAllowedIpsFromPresets(presetKeys, routeOpts);
+  const { cidrs: routeCidrs, routesSource, sitesResolved } = await resolvePresetsPromise;
   const effectiveClientIPv6 = routeOpts.mobileMode ? null : clientIPv6;
   const effectiveRouteCidrs = routeOpts.mobileMode && routeCidrs
     ? routeCidrs.filter((c) => !c.includes(':'))

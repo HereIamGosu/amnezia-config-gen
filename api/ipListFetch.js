@@ -238,18 +238,22 @@ const fetchCidrsForDomains = async (sites, { includeIpv6 = false } = {}) => {
 
   try {
     const path4 = buildIpListPath(sites, 'cidr4');
-    const data4 = await fetchWithRetry(path4);
+    const fetches = [fetchWithRetry(path4)];
+    if (includeIpv6) fetches.push(fetchWithRetry(buildIpListPath(sites, 'cidr6')));
+
+    const [res4, res6] = await Promise.allSettled(fetches);
+
+    if (res4.status === 'rejected') {
+      throw res4.reason;
+    }
+    const data4 = res4.value;
     merged = flattenCidrMap(data4);
 
     // If any requested domain returned no CIDRs, supplement with antifilter
     if (hasEmptyDomains(data4, sites)) needsAntifilter = true;
 
-    if (includeIpv6) {
-      try {
-        const path6 = buildIpListPath(sites, 'cidr6');
-        const data6 = await fetchWithRetry(path6);
-        for (const c of flattenCidrMap(data6)) merged.add(c);
-      } catch { /* IPv6 optional */ }
+    if (includeIpv6 && res6 && res6.status === 'fulfilled') {
+      for (const c of flattenCidrMap(res6.value)) merged.add(c);
     }
   } catch {
     // opencck unavailable — fall through to antifilter entirely
