@@ -69,9 +69,9 @@ $RECYCLE.BIN/
 # IDE / Editor
 # ============================================================
 .idea/
+.vscode/
 *.sublime-workspace
 *.sublime-project
-.cursor/
 
 # ============================================================
 # Temporary & misc
@@ -94,15 +94,25 @@ jspm_packages/
 bower_components/
 
 # ============================================================
-# Claude Code (local AI assistant state)
+# Claude Code / AI assistant (local state, private context)
 # ============================================================
 .claude/
+.codegraph/
+.mcp.json
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.cursor/rules
+.aider*
+.continue/
 
 # ============================================================
-# AI assistant context (private)
+# AI agent runtime data (databases, caches, streams)
 # ============================================================
-CLAUDE.md
-.codegraph/
+data/
+*.db
+*.db-shm
+*.db-wal
 
 # ============================================================
 # Project-specific (private docs and local artefacts)
