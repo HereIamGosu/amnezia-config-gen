@@ -102,6 +102,7 @@ bower_components/
 # AI assistant context (private)
 # ============================================================
 CLAUDE.md
+.codegraph/
 
 # ============================================================
 # Project-specific (private docs and local artefacts)
