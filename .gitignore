@@ -153,6 +153,9 @@ GEMINI.md
 memory/
 swarm-state/
 
+# Superpowers plugin runtime data
+.superpowers/
+
 # Generic AI config files
 *.cursorrules
 .ai-context*
