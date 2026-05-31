@@ -1021,7 +1021,7 @@ const renderHistoryPanel = () => {
     const previewBtn = document.createElement('button');
     previewBtn.type = 'button';
     previewBtn.className = 'button button--sm history-item__preview';
-    previewBtn.innerHTML = '<i class="fas fa-eye"></i>';
+    previewBtn.innerHTML = '<span aria-hidden="true">&#128065;</span>';
     previewBtn.title = t('preview_btn_title', 'Просмотреть конфигурацию');
     previewBtn.addEventListener('click', () => openPreviewModal(atob(entry.b64)));
 

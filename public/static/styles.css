@@ -99,6 +99,9 @@ star {
 
 /* Название окна */
 .window-title {
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
   font-weight: bold;
   flex: 1;
   min-width: 0;
@@ -201,6 +204,12 @@ img {
   height: auto;
   margin-bottom: 20px;
   image-rendering: pixelated; /* Пиксельная графика */
+}
+
+.hero-logo {
+  aspect-ratio: 498 / 410;
+  display: block;
+  width: min(100%, 498px);
 }
 
 /* Кнопки */

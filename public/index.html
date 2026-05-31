@@ -29,9 +29,9 @@
       href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
     />
     <!-- Подключение CSS -->
-    <link rel="stylesheet" href="static/styles.css" />
+    <link rel="stylesheet" href="static/styles.css?v=2.3.0" />
     <!-- Подключение JavaScript -->
-    <script defer src="static/script.js"></script>
+    <script defer src="static/script.js?v=2.3.0"></script>
     <!-- Yandex.Metrika counter -->
     <script type="text/javascript">
       (function (m, e, t, r, i, k, a) {
@@ -189,14 +189,6 @@
         ]
       }
     </script>
-    <!-- Подключение Font Awesome (если необходимо) -->
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
-      crossorigin="anonymous"
-      referrerpolicy="no-referrer"
-    />
-
   </head>
   <body>
     <noscript>
@@ -235,7 +227,7 @@
       <!-- Заголовок окна с кнопками управления -->
       <div class="window-header">
         <!-- Заголовок окна -->
-        <span class="window-title" data-i18n="window_title">Генератор конфигураций AmneziaWG</span>
+        <h1 class="window-title" data-i18n="window_title">Генератор конфигураций AmneziaWG</h1>
 
         <!-- F-03: Переключатель языка -->
         <div class="lang-switcher" aria-label="Language / Язык">
@@ -269,8 +261,12 @@
             <!-- Заголовок страницы с логотипом -->
             <header>
               <img
+                class="hero-logo"
                 src="static/among-us-imposter.gif"
                 alt="Генератор конфигов AmneziaWG — логотип"
+                width="498"
+                height="410"
+                fetchpriority="high"
               />
             </header>
 
@@ -322,7 +318,7 @@
                         <span class="button__text" data-i18n="ready_download_legacy">Скачать AmneziaWarp.conf</span>
                       </button>
                       <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию" data-i18n-title="preview_btn_title">
-                        <i class="fas fa-eye"></i>
+                        <span aria-hidden="true">&#128065;</span>
                       </button>
                       <button type="button" class="button button--secondary post-gen-row__copy-vpn-link" title="Скопировать vpn://-ссылку для AmneziaVPN" data-i18n-title="copy_vpn_link_title" hidden>
                         <span class="button__text" data-i18n="copy_vpn_link">📋 Скопировать vpn://</span>
@@ -340,7 +336,7 @@
                         <span class="button__text" data-i18n="ready_download_awg2">Скачать AmneziaWarp-AWG2.conf</span>
                       </button>
                       <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию" data-i18n-title="preview_btn_title">
-                        <i class="fas fa-eye"></i>
+                        <span aria-hidden="true">&#128065;</span>
                       </button>
                       <button type="button" class="button button--secondary post-gen-row__copy-vpn-link" title="Скопировать vpn://-ссылку для AmneziaVPN" data-i18n-title="copy_vpn_link_title" hidden>
                         <span class="button__text" data-i18n="copy_vpn_link">📋 Скопировать vpn://</span>
