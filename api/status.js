@@ -1,7 +1,7 @@
 // api/status.js
 // Public status endpoint — no auth, no IP leakage.
 
-const { getTopEndpoints, getFallbackEndpoints } = require('./endpointCache');
+const { getTopEndpoints, getFallbackEndpoints } = require('../src/server/endpointCache');
 const { PORT_ALLOWLIST } = require('./warp').__internals;
 
 const handler = async (req, res) => {

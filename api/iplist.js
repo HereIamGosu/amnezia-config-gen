@@ -5,8 +5,8 @@ const {
   parsePresetKeysFromRequest,
   listDnsPresetsForApi,
   DNS_DEFAULT_KEY,
-} = require('./routePresets');
-const { fetchCidrsForDomains } = require('./ipListFetch');
+} = require('../src/server/routePresets');
+const { fetchCidrsForDomains } = require('../src/server/ipListFetch');
 
 const pickQuery = (req, key) => {
   if (req.query && typeof req.query === 'object' && req.query[key] != null) {
@@ -54,7 +54,7 @@ module.exports = async (req, res) => {
     const ipv6Param = pickQuery(req, 'ipv6');
     const includeIpv6 = ipv6Param === '1' || ipv6Param === 'true';
 
-    const { isIpv4Cidr } = require('./ipListFetch');
+    const { isIpv4Cidr } = require('../src/server/ipListFetch');
     const hasStaticV4 = staticCidrs.some(isIpv4Cidr);
 
     let cidrs4 = [];

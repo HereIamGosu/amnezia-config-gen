@@ -1,146 +1,170 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "builds": [
-    {
-      "src": "api/**/*.js",
-      "use": "@vercel/node"
+  "trailingSlash": false,
+  "functions": {
+    "api/warp.js": {
+      "maxDuration": 60,
+      "memory": 1024
     },
-    {
-      "src": "public/**/*",
-      "use": "@vercel/static"
+    "api/iplist.js": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "api/healthcheck.js": {
+      "maxDuration": 10,
+      "memory": 1024
+    },
+    "api/status.js": {
+      "maxDuration": 10,
+      "memory": 1024
     }
-  ],
-  "routes": [
+  },
+  "headers": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/$1.js",
-      "headers": {
-        "Cache-Control": "public, max-age=0, must-revalidate",
-        "X-Content-Type-Options": "nosniff",
-        "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Permissions-Policy": "camera=(), microphone=(), geolocation=()"
-      }
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://mc.yandex.ru https://*.vercel-insights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://mc.yandex.ru https://mc.yandex.com data:; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.com https://raw.githubusercontent.com https://*.vercel-insights.com; frame-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+        }
+      ]
     },
     {
-      "src": "/robots.txt",
-      "dest": "/public/robots.txt",
-      "headers": {
-        "Cache-Control": "public, max-age=0, must-revalidate",
-        "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "SAMEORIGIN",
-        "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://mc.yandex.ru https://*.vercel-insights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://mc.yandex.ru https://mc.yandex.com data:; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.com https://*.vercel-insights.com; frame-src https://yoomoney.ru; base-uri 'self'; form-action 'self'"
-      }
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
     },
     {
-      "src": "/sitemap.xml",
-      "dest": "/public/sitemap.xml",
-      "headers": {
-        "Cache-Control": "public, max-age=0, must-revalidate",
-        "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "SAMEORIGIN",
-        "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://mc.yandex.ru https://*.vercel-insights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://mc.yandex.ru https://mc.yandex.com data:; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.com https://*.vercel-insights.com; frame-src https://yoomoney.ru; base-uri 'self'; form-action 'self'"
-      }
+      "source": "/status.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
     },
     {
-      "src": "/site.webmanifest",
-      "dest": "/public/site.webmanifest",
-      "headers": {
-        "Cache-Control": "public, max-age=0, must-revalidate",
-        "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "SAMEORIGIN",
-        "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://mc.yandex.ru https://*.vercel-insights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://mc.yandex.ru https://mc.yandex.com data:; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.com https://*.vercel-insights.com; frame-src https://yoomoney.ru; base-uri 'self'; form-action 'self'"
-      }
+      "source": "/status.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
     },
     {
-      "src": "/status.json",
-      "dest": "/public/status.json",
-      "headers": {
-        "Cache-Control": "public, max-age=0, must-revalidate",
-        "X-Robots-Tag": "noindex, nofollow",
-        "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "SAMEORIGIN",
-        "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://mc.yandex.ru https://*.vercel-insights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://mc.yandex.ru https://mc.yandex.com data:; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.com https://*.vercel-insights.com; frame-src https://yoomoney.ru; base-uri 'self'; form-action 'self'"
-      }
+      "source": "/robots.txt",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     },
     {
-      "src": "/status.html",
-      "dest": "/public/status.html",
-      "headers": {
-        "Cache-Control": "public, max-age=0, must-revalidate",
-        "X-Robots-Tag": "noindex, nofollow",
-        "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "SAMEORIGIN",
-        "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://mc.yandex.ru https://*.vercel-insights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://mc.yandex.ru https://mc.yandex.com data:; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.com https://*.vercel-insights.com; frame-src https://yoomoney.ru; base-uri 'self'; form-action 'self'"
-      }
+      "source": "/sitemap.xml",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     },
     {
-      "src": "/static/(presets-fallback\\.json|SchedulerAmnezia-15\\.bat|SchedulerAmnezia-20\\.bat)",
-      "dest": "/public/static/$1",
-      "headers": {
-        "Cache-Control": "public, max-age=0, must-revalidate",
-        "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "SAMEORIGIN",
-        "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://mc.yandex.ru https://*.vercel-insights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://mc.yandex.ru https://mc.yandex.com data:; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.com https://*.vercel-insights.com; frame-src https://yoomoney.ru; base-uri 'self'; form-action 'self'"
-      }
+      "source": "/site.webmanifest",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     },
     {
-      "src": "/static/(.*)",
-      "dest": "/public/static/$1",
-      "headers": {
-        "Cache-Control": "public, max-age=31536000, immutable",
-        "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "SAMEORIGIN",
-        "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://mc.yandex.ru https://*.vercel-insights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://mc.yandex.ru https://mc.yandex.com data:; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.com https://*.vercel-insights.com; frame-src https://yoomoney.ru; base-uri 'self'; form-action 'self'"
-      }
+      "source": "/static/presets-fallback.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     },
     {
-      "src": "/",
-      "dest": "/public/index.html",
-      "headers": {
-        "Cache-Control": "public, max-age=0, must-revalidate",
-        "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "SAMEORIGIN",
-        "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://mc.yandex.ru https://*.vercel-insights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://mc.yandex.ru https://mc.yandex.com data:; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.com https://*.vercel-insights.com; frame-src https://yoomoney.ru; base-uri 'self'; form-action 'self'"
-      }
+      "source": "/static/SchedulerAmnezia-15.bat",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     },
     {
-      "src": "/index.html",
-      "dest": "/public/index.html",
-      "headers": {
-        "Cache-Control": "public, max-age=0, must-revalidate",
-        "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "SAMEORIGIN",
-        "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://mc.yandex.ru https://*.vercel-insights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://mc.yandex.ru https://mc.yandex.com data:; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.com https://*.vercel-insights.com; frame-src https://yoomoney.ru; base-uri 'self'; form-action 'self'"
-      }
+      "source": "/static/SchedulerAmnezia-20.bat",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     },
     {
-      "src": "/(.*)",
-      "dest": "/public/$1",
-      "headers": {
-        "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "SAMEORIGIN",
-        "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://mc.yandex.ru https://*.vercel-insights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://mc.yandex.ru https://mc.yandex.com data:; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.com https://*.vercel-insights.com; frame-src https://yoomoney.ru; base-uri 'self'; form-action 'self'"
-      }
+      "source": "/static/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     }
   ]
 }

@@ -7,6 +7,7 @@ export default [
     ignores: [
       '.claude/**',
       '.cursor/**',
+      '.vercel/**',
       'node_modules/**',
     ],
   },
@@ -35,7 +36,7 @@ export default [
     },
   },
   {
-    files: ['api/**/*.js'],
+    files: ['api/**/*.js', 'src/server/**/*.js'],
     rules: {
       'no-console': 'off', // console allowed in serverless functions
     },

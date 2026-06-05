@@ -104,8 +104,8 @@ function makeRes() {
 // ──────────────────────────────────────────────────────────────
 function clearWarpCache() {
   delete require.cache[require.resolve('../api/warp')];
-  delete require.cache[require.resolve('../api/endpointCache')];
-  delete require.cache[require.resolve('../api/endpointHealth')];
+  delete require.cache[require.resolve('../src/server/endpointCache')];
+  delete require.cache[require.resolve('../src/server/endpointHealth')];
 }
 
 // ──────────────────────────────────────────────────────────────

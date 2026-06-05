@@ -4,18 +4,18 @@ const { randomInt } = require('crypto');
 const https = require('https');
 const fs = require('fs').promises;
 const path = require('path');
-const { expandPresetsToSites, parsePresetKeysFromRequest, getDnsString, parseDnsKeyFromRequest, DNS_DEFAULT_KEY } = require('./routePresets');
-const { fetchCidrsForDomains } = require('./ipListFetch');
-const { createRateLimiter } = require('./_rateLimit');
+const { expandPresetsToSites, parsePresetKeysFromRequest, getDnsString, parseDnsKeyFromRequest, DNS_DEFAULT_KEY } = require('../src/server/routePresets');
+const { fetchCidrsForDomains } = require('../src/server/ipListFetch');
+const { createRateLimiter } = require('../src/server/_rateLimit');
 
 /** 10 generations per minute per IP — prevents Cloudflare WARP registration abuse. */
 const warpLimiter = createRateLimiter({ windowMs: 60_000, maxHits: 10 });
 
-const { generateCpsPayload } = require('./cpsGenerator');
-const { generateI2I5 } = require('./cpsExtraPackets');
-const { buildVpnLink } = require('./vpnLinkBuilder');
-const { getTopEndpoints, updateEndpointHealth } = require('./endpointCache');
-const { checkTcpLatency, pickBestEndpoint } = require('./endpointHealth');
+const { generateCpsPayload } = require('../src/server/cpsGenerator');
+const { generateI2I5 } = require('../src/server/cpsExtraPackets');
+const { buildVpnLink } = require('../src/server/vpnLinkBuilder');
+const { getTopEndpoints, updateEndpointHealth } = require('../src/server/endpointCache');
+const { checkTcpLatency, pickBestEndpoint } = require('../src/server/endpointHealth');
 
 const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0', '::/0'];
 
@@ -916,7 +916,7 @@ const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false } 
     throw err;
   }
 
-  const { isIpv4Cidr } = require('./ipListFetch');
+  const { isIpv4Cidr } = require('../src/server/ipListFetch');
 
   // Merge static CIDRs; for IPv4-only mode filter out IPv6 statics
   const staticFiltered = includeIpv6 ? staticCidrs : staticCidrs.filter(isIpv4Cidr);

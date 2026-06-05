@@ -2,7 +2,7 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const { inflateSync } = require('zlib');
 const { Buffer } = require('buffer');
-const { buildVpnLink } = require('../api/vpnLinkBuilder');
+const { buildVpnLink } = require('../src/server/vpnLinkBuilder');
 
 const fromBase64Url = (s) => {
   const norm = s.replace(/-/g, '+').replace(/_/g, '/');

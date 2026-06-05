@@ -1,5 +1,5 @@
 /**
- * Writes public/static/presets-fallback.json from api/routePresets.js.
+ * Writes public/static/presets-fallback.json from src/server/routePresets.js.
  * Run after changing presets: npm run presets:fallback
  */
 const fs = require('fs');
@@ -9,7 +9,7 @@ const {
   PRESET_GROUP_RF_POPULAR,
   listDnsPresetsForApi,
   DNS_DEFAULT_KEY,
-} = require('../api/routePresets');
+} = require('../src/server/routePresets');
 
 const out = {
   presets: listPresetsForApi(),

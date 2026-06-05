@@ -1,6 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { isIpv4Cidr, fetchCidrsForDomains } = require('../api/ipListFetch');
+const { isIpv4Cidr, fetchCidrsForDomains } = require('../src/server/ipListFetch');
 
 describe('Invariant I6: IPv4-only by default', () => {
   test('isIpv4Cidr correctly identifies IPv4 vs IPv6 CIDRs', () => {

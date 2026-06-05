@@ -1,6 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { generateI2I5, generateExtraCpsPacket } = require('../api/cpsExtraPackets');
+const { generateI2I5, generateExtraCpsPacket } = require('../src/server/cpsExtraPackets');
 const { buildAwg2WarpConf, buildLegacyConf } = require('./helpers/build-config');
 
 const HEX_RE = /^<b 0x([0-9a-f]+)>$/;
