@@ -14,6 +14,8 @@ const warpLimiter = createRateLimiter({ windowMs: 60_000, maxHits: 10 });
 const { generateCpsPayload } = require('./cpsGenerator');
 const { generateI2I5 } = require('./cpsExtraPackets');
 const { buildVpnLink } = require('./vpnLinkBuilder');
+const { getTopEndpoints, updateEndpointHealth } = require('./endpointCache');
+const { checkTcpLatency, pickBestEndpoint } = require('./endpointHealth');
 
 const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0', '::/0'];
 
@@ -25,15 +27,38 @@ const KNOWN_WARP_PEER_PUBLIC_KEY = 'bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
  */
 const ENGAGE_CLOUDFLARE_HOST = 'engage.cloudflareclient.com';
 /**
- * Fixed UDP port for `engage.cloudflareclient.com` in this generator (no rotation).
- * Aligns with typical working Amnezia 1.5 WARP exports. Standard wgcf profiles often use **2408**;
- * override with query/body `warpPort` if your network requires it.
+ * Fixed UDP port for `engage.cloudflareclient.com`.
+ * Standard wgcf default; use `port` or `warpPort` query param to override.
  * @see https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/deployment/firewall/
  */
 const WARP_DEFAULT_ENGAGE_UDP_PORT = 4500;
 
-/** Tried when Cloudflare omits endpoint in JSON (best-effort anycast fallbacks). */
-const FALLBACK_ENDPOINT_HOSTS = ['188.114.97.66', '162.159.192.1'];
+/**
+ * Allowlisted ports for the `port` query parameter.
+ * These are the only UDP ports Cloudflare WARP reliably accepts.
+ */
+const PORT_ALLOWLIST = [2408, 500, 4500, 1701, 880, 8854];
+
+/**
+ * Curated WARP endpoint IPs across 5 Cloudflare /24 subnets.
+ * Used when KV cache is unavailable or returns no active candidates.
+ * Format: `{ ip, cidr24 }` — port is applied separately per request.
+ */
+const FALLBACK_ENDPOINTS = [
+  { ip: '162.159.192.1',  cidr24: '162.159.192.0/24' },
+  { ip: '162.159.192.8',  cidr24: '162.159.192.0/24' },
+  { ip: '162.159.193.1',  cidr24: '162.159.193.0/24' },
+  { ip: '162.159.193.8',  cidr24: '162.159.193.0/24' },
+  { ip: '162.159.195.1',  cidr24: '162.159.195.0/24' },
+  { ip: '162.159.195.8',  cidr24: '162.159.195.0/24' },
+  { ip: '188.114.96.1',   cidr24: '188.114.96.0/24'  },
+  { ip: '188.114.96.8',   cidr24: '188.114.96.0/24'  },
+  { ip: '188.114.97.1',   cidr24: '188.114.97.0/24'  },
+  { ip: '188.114.97.66',  cidr24: '188.114.97.0/24'  },
+  { ip: '188.114.99.1',   cidr24: '188.114.99.0/24'  },
+];
+/** Flat IP list for backward-compat helpers that only need the host. */
+const FALLBACK_ENDPOINT_HOSTS = FALLBACK_ENDPOINTS.map((e) => e.ip);
 /** Max length of I1 CPS payload (AmneziaWG); avoids huge query/body abuse. */
 const MAX_I1_LEN = 512 * 1024;
 const I1_REF_SAFE = /^[a-zA-Z0-9._-]+$/;
@@ -412,49 +437,53 @@ Endpoint = ${peerEndpoint}`;
   return `${iface}\n\n${peerBlock}`;
 };
 
+
+
+
+const TCP_PRECHECK_TIMEOUT_MS = 800;
+
 /**
- * Extract WireGuard endpoint host from Cloudflare peer.endpoint (same registration as keys).
- * @param {object} peer config.peers[0]
- * @returns {string|null} host IP or IPv6 literal (no brackets)
+ * Pick best endpoint via TCP latency pre-check against KV candidates.
+ * Returns { ip, cidr24 } for the winner, or falls back to random from FALLBACK_ENDPOINTS.
+ * Updates KV health records as a side-effect (non-blocking, errors suppressed).
+ * @param {number} port
+ * @param {string[]} [excludeCidrs] avoid these /24 subnets (used for count>1 diversity)
+ * @returns {Promise<{ ip: string, cidr24: string, endpointSource: 'tcp_check'|'fallback' }>}
  */
-const extractEndpointHostFromPeer = (peer) => {
-  const endpoint = peer?.endpoint;
-  if (!endpoint) return null;
-
-  if (endpoint.v4) {
-    const host = String(endpoint.v4).split(':')[0];
-    return host || null;
+const selectBestEndpointIp = async (port, excludeCidrs = []) => {
+  let candidates;
+  try {
+    candidates = await getTopEndpoints({ port, limit: 5, excludeCidrs });
+  } catch {
+    candidates = [];
   }
 
-  if (endpoint.host) {
-    const raw = String(endpoint.host).trim();
-    if (raw.startsWith('[')) {
-      const end = raw.indexOf(']');
-      if (end > 1) return raw.slice(1, end);
-    }
-    const lastColon = raw.lastIndexOf(':');
-    if (lastColon > 0 && /^\d{1,3}(\.\d{1,3}){3}$/.test(raw.slice(0, lastColon))) {
-      return raw.slice(0, lastColon);
-    }
-    if (lastColon > 0 && raw.slice(lastColon + 1).length > 0 && /^\d+$/.test(raw.slice(lastColon + 1))) {
-      return raw.slice(0, lastColon);
-    }
-    return raw;
+  if (!candidates.length) {
+    const fallback = FALLBACK_ENDPOINTS.filter((e) => !excludeCidrs.includes(e.cidr24));
+    const pick = fallback[randomInt(0, Math.max(1, fallback.length))];
+    return { ip: pick ? pick.ip : FALLBACK_ENDPOINT_HOSTS[0], cidr24: pick ? pick.cidr24 : 'unknown', endpointSource: 'fallback' };
   }
 
-  return null;
-};
+  // Parallel TCP pre-check with 800 ms wall-clock timeout
+  const checks = await Promise.all(
+    candidates.map(async (ep) => {
+      const result = await checkTcpLatency(ep.ip, port, TCP_PRECHECK_TIMEOUT_MS - 50);
+      return { ...result, endpoint: ep };
+    }),
+  );
 
-const pickEndpointHost = (config) => {
-  const peer = config?.peers?.[0];
-  return extractEndpointHostFromPeer(peer);
-};
+  // Fire-and-forget KV health updates (non-blocking, errors don't fail the request)
+  Promise.all(checks.map((r) =>
+    updateEndpointHealth(r.endpoint.id, { latency_ms: r.latency_ms, success: r.success }).catch(() => {}),
+  )).catch(() => {});
 
-const resolveEndpointHostWithFallback = (config) => {
-  const fromPeer = pickEndpointHost(config);
-  if (fromPeer) return fromPeer;
-  const idx = randomInt(0, FALLBACK_ENDPOINT_HOSTS.length);
-  return FALLBACK_ENDPOINT_HOSTS[idx];
+  const best = pickBestEndpoint(checks);
+  if (best) return { ip: best.ip, cidr24: best.cidr24, endpointSource: 'tcp_check' };
+
+  // All TCP checks failed — return a random fallback IP
+  const fallback = FALLBACK_ENDPOINTS.filter((e) => !excludeCidrs.includes(e.cidr24));
+  const pick = fallback[randomInt(0, Math.max(1, fallback.length))];
+  return { ip: pick ? pick.ip : FALLBACK_ENDPOINT_HOSTS[0], cidr24: pick ? pick.cidr24 : 'unknown', endpointSource: 'fallback' };
 };
 
 /**
@@ -561,6 +590,19 @@ const parseWarpPort = (v) => {
   return n;
 };
 
+/**
+ * Parse and validate the `port` query param against PORT_ALLOWLIST.
+ * Returns `{ port: number }` on success or `{ error: string, allowedPorts: number[] }` on failure.
+ */
+const parseAllowlistedPort = (v) => {
+  if (v == null || v === '') return { port: WARP_DEFAULT_ENGAGE_UDP_PORT };
+  const n = Number.parseInt(String(v), 10);
+  if (!Number.isFinite(n) || !PORT_ALLOWLIST.includes(n)) {
+    return { error: `Port ${v} is not allowed. Use one of: ${PORT_ALLOWLIST.join(', ')}`, allowedPorts: PORT_ALLOWLIST };
+  }
+  return { port: n };
+};
+
 const parsePersistentKeepalive = (v) => {
   if (v == null || v === '') return null;
   const n = Number.parseInt(String(v), 10);
@@ -586,7 +628,7 @@ const collectWarpGenExtras = (req, body) => {
   const peerEndpoint = parsePeerEndpointOverride(
     b.peerEndpoint ?? b.endpoint ?? pickQuery(req, 'peerEndpoint') ?? pickQuery(req, 'endpoint'),
   );
-  const warpPort = parseWarpPort(b.warpPort ?? pickQuery(req, 'warpPort'));
+  const warpPort = parseWarpPort(b.warpPort ?? b.port ?? pickQuery(req, 'warpPort') ?? pickQuery(req, 'port'));
   const persistentKeepalive = parsePersistentKeepalive(
     b.persistentKeepalive ?? b.keepalive ?? pickQuery(req, 'persistentKeepalive') ?? pickQuery(req, 'keepalive'),
   );
@@ -701,21 +743,6 @@ const mergeTemplateIntoExtras = (extras, tmpl) => {
   return out;
 };
 
-const resolvePeerEndpointForConfig = (config, extras) => {
-  if (extras.peerEndpoint) return extras.peerEndpoint;
-  if (extras.engageHost) {
-    const port =
-      extras.warpPort != null
-        ? extras.warpPort
-        : extras.defaultEngagePort != null
-          ? extras.defaultEngagePort
-          : WARP_DEFAULT_ENGAGE_UDP_PORT;
-    return `${extras.engageHost}:${port}`;
-  }
-  const host = resolveEndpointHostWithFallback(config);
-  const port = extras.warpPort != null ? extras.warpPort : WARP_DEFAULT_ENGAGE_UDP_PORT;
-  return `${host}:${port}`;
-};
 
 const resolveI1ForGeneration = async (extras, cpsProtocol = 'auto') => {
   if (extras.i1Raw != null && String(extras.i1Raw).trim() !== '') {
@@ -963,7 +990,23 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
     throw new Error(`Cloudflare вернул некорректный IPv6 адрес: ${clientIPv6 || '(пусто)'}`);
   }
 
-  const peerEndpoint = resolvePeerEndpointForConfig(config, warpExtras);
+  // If template overrides engageHost — use hostname directly (no TCP pre-check needed).
+  // Otherwise run TCP pre-check against KV candidates to pick the best IP endpoint.
+  let peerEndpoint;
+  let endpointSource = 'hostname';
+  if (warpExtras.peerEndpoint) {
+    peerEndpoint = warpExtras.peerEndpoint;
+  } else if (warpExtras.engageHost) {
+    const port = warpExtras.warpPort != null ? warpExtras.warpPort : WARP_DEFAULT_ENGAGE_UDP_PORT;
+    peerEndpoint = `${warpExtras.engageHost}:${port}`;
+  } else {
+    const port = warpExtras.warpPort != null ? warpExtras.warpPort : WARP_DEFAULT_ENGAGE_UDP_PORT;
+    const { ip, cidr24, endpointSource: src } = await selectBestEndpointIp(port, routeOpts.excludeCidrs || []);
+    endpointSource = src;
+    peerEndpoint = `${ip}:${port}`;
+    // Pass chosen cidr24 back so count>1 can exclude this subnet for diversity
+    if (routeOpts.onEndpointChosen) routeOpts.onEndpointChosen(cidr24);
+  }
 
   const awg2WarpSafe = Boolean(warpExtras.awg2WarpSafe);
   let awg2Obf =
@@ -1009,8 +1052,40 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
       sitesResolved: sitesResolved ?? 0,
       presetsUsed: presetKeys.length,
       appliedExtras: { cps5: canApplyExtraCps, mobile: Boolean(routeOpts.mobileMode) },
+      endpointSource,
     },
   };
+};
+
+/**
+ * Generate 1–3 configs, each from a different /24 subnet (when possible).
+ * Returns `{ configs: Array<{text,meta}>, warning?: string }`.
+ */
+const generateMultipleWarpConfigs = async (count, mode, presetKeys, dnsKey, warpExtras, routeOpts) => {
+  const n = Math.min(3, Math.max(1, Number.parseInt(String(count), 10) || 1));
+  const usedCidrs = [];
+  const results = [];
+
+  for (let i = 0; i < n; i += 1) {
+    const opts = {
+      ...routeOpts,
+      excludeCidrs: [...usedCidrs],
+      onEndpointChosen: (cidr24) => { if (cidr24 && cidr24 !== 'unknown') usedCidrs.push(cidr24); },
+    };
+    try {
+      const result = await generateWarpConfig(mode, presetKeys, dnsKey, warpExtras, opts);
+      results.push(result);
+    } catch (err) {
+      // If we already have at least one, treat remaining failures as warning
+      if (results.length > 0) break;
+      throw err;
+    }
+  }
+
+  const warning = results.length < n
+    ? `Удалось сгенерировать только ${results.length} из ${n} запрошенных конфигураций.`
+    : undefined;
+  return { configs: results, warning };
 };
 
 const handler = async (req, res) => {
@@ -1070,6 +1145,16 @@ const handler = async (req, res) => {
     if (warpExtras.forceLegacy) mode = 'legacy';
     delete warpExtras.forceLegacy;
 
+    // Validate `port` param against allowlist (if explicitly provided)
+    const portParamRaw = body.port ?? pickQuery(req, 'port');
+    if (portParamRaw != null && portParamRaw !== '') {
+      const portCheck = parseAllowlistedPort(portParamRaw);
+      if (portCheck.error) {
+        res.status(400).json({ success: false, error: portCheck.error, allowedPorts: portCheck.allowedPorts });
+        return;
+      }
+    }
+
     const ipv6Param = pickQuery(req, 'ipv6');
     const requestedIpv6 = ipv6Param === '1' || ipv6Param === 'true';
     const routerRaw = body.router ?? pickQuery(req, 'router');
@@ -1081,31 +1166,48 @@ const handler = async (req, res) => {
     const mobileMode = mobileRaw === true || mobileRaw === 1 || String(mobileRaw ?? '').toLowerCase() === '1' || String(mobileRaw ?? '').toLowerCase() === 'true';
     const linkRaw = body.link ?? pickQuery(req, 'link');
     const wantLink = linkRaw === true || linkRaw === 1 || String(linkRaw ?? '').toLowerCase() === '1' || String(linkRaw ?? '').toLowerCase() === 'true';
+    const countRaw = body.count ?? pickQuery(req, 'count');
+    const count = Math.min(3, Math.max(1, Number.parseInt(String(countRaw ?? '1'), 10) || 1));
     const includeIpv6 = mobileMode ? false : requestedIpv6;
-    const { text: conf, meta } = await generateWarpConfig(mode, presetKeys, dnsKey, warpExtras, { includeIpv6, routerMode, cpsProtocol, extraCps, mobileMode });
-    const confEncoded = Buffer.from(conf).toString('base64');
-    let vpnLink;
-    if (wantLink) {
-      const dnsParts = String(getDnsString(dnsKey || DNS_DEFAULT_KEY)).split(',').map((s) => s.trim()).filter(Boolean);
-      const endpointHost = warpExtras.peerEndpoint
-        ? warpExtras.peerEndpoint.replace(/:\d+$/, '').replace(/^\[(.+)\]$/, '$1')
-        : (warpExtras.engageHost || 'engage.cloudflareclient.com');
-      vpnLink = buildVpnLink(conf, {
-        hostName: endpointHost,
-        dns1: dnsParts[0],
-        dns2: dnsParts[1],
-        mode,
-      });
-    }
+    const routeOpts = { includeIpv6, routerMode, cpsProtocol, extraCps, mobileMode };
+
+    const { configs, warning } = await generateMultipleWarpConfigs(count, mode, presetKeys, dnsKey, warpExtras, routeOpts);
+
+    const dnsParts = String(getDnsString(dnsKey || DNS_DEFAULT_KEY)).split(',').map((s) => s.trim()).filter(Boolean);
+    const endpointHost = warpExtras.peerEndpoint
+      ? warpExtras.peerEndpoint.replace(/:\d+$/, '').replace(/^\[(.+)\]$/, '$1')
+      : (warpExtras.engageHost || 'engage.cloudflareclient.com');
+
+    const configsOut = configs.map(({ text, meta }, idx) => {
+      const encoded = Buffer.from(text).toString('base64');
+      let vpnLink;
+      if (wantLink) {
+        vpnLink = buildVpnLink(text, { hostName: endpointHost, dns1: dnsParts[0], dns2: dnsParts[1], mode });
+      }
+      return {
+        index: idx + 1,
+        content: encoded,
+        appliedExtras: meta.appliedExtras,
+        endpointSource: meta.endpointSource,
+        vpnLink,
+      };
+    });
+
+    const firstMeta = configs[0]?.meta ?? {};
     res.status(200).json({
       success: true,
-      content: confEncoded,
+      // Backward-compat single-config fields (first config)
+      content: configsOut[0]?.content,
+      vpnLink: configsOut[0]?.vpnLink,
+      appliedExtras: firstMeta.appliedExtras,
+      // New: array of all configs
+      configs: configsOut,
+      count: configsOut.length,
       mode,
-      routesSource: meta.routesSource,
+      routesSource: firstMeta.routesSource,
       routesPresets: presetKeys.length ? presetKeys : undefined,
-      presetSitesCount: meta.sitesResolved || undefined,
-      appliedExtras: meta.appliedExtras,
-      vpnLink,
+      presetSitesCount: firstMeta.sitesResolved || undefined,
+      ...(warning ? { warning } : {}),
     });
   } catch (error) {
     console.error('Ошибка генерации конфигурации:', error);
@@ -1137,6 +1239,10 @@ module.exports.__internals = {
   parsePeerEndpointOverride,
   isValidIPv4,
   isValidIPv6,
+  PORT_ALLOWLIST,
+  FALLBACK_ENDPOINTS,
+  parseAllowlistedPort,
+  WARP_DEFAULT_ENGAGE_UDP_PORT,
   MOBILE_JC,
   MOBILE_JMIN,
   MOBILE_JMAX,

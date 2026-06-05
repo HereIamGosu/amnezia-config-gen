@@ -91,6 +91,25 @@ const fetchHealthStatus = async () => {
   }
 };
 
+/** Fetch /api/status and show degraded/down banner when needed. */
+const fetchServiceStatus = async () => {
+  const bannerEl = document.getElementById('statusBanner');
+  if (!bannerEl) return;
+  try {
+    const res = await fetch('/api/status');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.status === 'degraded' || data.status === 'down') {
+      bannerEl.textContent = data.message || 'Сервис работает в ограниченном режиме — некоторые конфиги могут не генерироваться';
+      bannerEl.hidden = false;
+    } else {
+      bannerEl.hidden = true;
+    }
+  } catch {
+    // Silent — don't show banner on network error
+  }
+};
+
 /**
  * Инициализирует i18n: определяет язык (localStorage → navigator.language → 'ru').
  * Вызывается один раз при DOMContentLoaded.
@@ -373,11 +392,15 @@ const cfgState = {
   /** Set of preset IDs confirmed to return 0 IPv4 CIDRs from opencck. */
   zeroCidrPresets: new Set(),
   warpPort: 4500,
+  /** Allowlisted UDP port for WARP endpoint (mirrors cfgState.warpPort; kept in sync). */
+  port: 4500,
   warpEndpoint: 'hostname',
   /** When true, server appends I2-I5 to AWG 2.0 [Interface]. */
   extraCps: false,
   /** When true, mobile preset (low Jc/Jmax, IPv4-only). */
   mobileMode: false,
+  /** Number of configs to generate (1–3). */
+  configCount: 1,
 };
 
 const getPresetsFallbackUrl = () => {
@@ -510,9 +533,10 @@ const buildWarpQueryString = (mode) => {
   if (cfgState.mobileMode) params.set('mobile', '1');
   params.set('link', '1');
   params.set('cps', cfgState.cpsProtocol);
-  params.set('warpPort', String(cfgState.warpPort));
+  params.set('port', String(cfgState.port));
+  if (cfgState.configCount > 1) params.set('count', String(cfgState.configCount));
   if (cfgState.warpEndpoint !== 'hostname') {
-    params.set('peerEndpoint', `${cfgState.warpEndpoint}:${cfgState.warpPort}`);
+    params.set('peerEndpoint', `${cfgState.warpEndpoint}:${cfgState.port}`);
   }
   return params.toString();
 };
@@ -812,10 +836,10 @@ const initSettingsPanel = async () => {
 
     const warpPortSelect = document.getElementById('warpPortSelect');
     if (warpPortSelect) {
-      warpPortSelect.value = String(cfgState.warpPort);
+      warpPortSelect.value = String(cfgState.port);
       warpPortSelect.addEventListener('change', () => {
         const n = Number.parseInt(warpPortSelect.value, 10);
-        if (n > 0) cfgState.warpPort = n;
+        if (n > 0) { cfgState.warpPort = n; cfgState.port = n; }
       });
     }
 
@@ -833,6 +857,12 @@ const initSettingsPanel = async () => {
       });
     });
 
+    document.querySelectorAll('[name="configCount"]').forEach((radio) => {
+      radio.addEventListener('change', (e) => {
+        cfgState.configCount = Number.parseInt(e.target.value, 10) || 1;
+      });
+    });
+
     const settingsResetBtn = document.getElementById('settingsModalReset');
     if (settingsResetBtn) {
       settingsResetBtn.addEventListener('click', () => {
@@ -842,9 +872,13 @@ const initSettingsPanel = async () => {
         cfgState.routerMode = false;
         cfgState.cpsProtocol = 'auto';
         cfgState.warpPort = 4500;
+        cfgState.port = 4500;
         cfgState.warpEndpoint = 'hostname';
         cfgState.extraCps = false;
         cfgState.mobileMode = false;
+        cfgState.configCount = 1;
+        const countRadio1 = document.querySelector('[name="configCount"][value="1"]');
+        if (countRadio1) countRadio1.checked = true;
         if (ipv6Toggle) ipv6Toggle.checked = false;
         if (ignoreLimitToggle) ignoreLimitToggle.checked = false;
         if (routerModeToggle) routerModeToggle.checked = false;
@@ -1101,22 +1135,34 @@ const generateConfig = async (options) => {
     if (data.success) {
       if (!data.content) throw new Error(t('err_no_content', 'Отсутствует содержимое конфигурации.'));
 
-      const decodedConfig = atob(data.content);
-
       if (boundGenerateClick) button.removeEventListener('click', boundGenerateClick);
 
-      // F-02 + F-05: заменяем кнопку на тройку (Скачать | QR | Просмотр)
-      showPostGenRow({ buttonId, readyDownloadText, filename, decodedConfig, vpnLink: data.vpnLink });
+      const allConfigs = (data.configs && data.configs.length > 1) ? data.configs : null;
+      if (allConfigs) {
+        // Multiple configs: show each as a separate variant block
+        allConfigs.forEach((cfg, idx) => {
+          const variantFilename = filename.replace(/\.conf$/, `_variant${idx + 1}.conf`);
+          const decoded = atob(cfg.content);
+          const variantBtn = idx === 0 ? buttonId : `${buttonId}_v${idx + 1}`;
+          // For first variant reuse the main post-gen row; additional variants rendered below it
+          showPostGenRow({ buttonId: variantBtn, readyDownloadText: `Вариант ${idx + 1}`, filename: variantFilename, decodedConfig: decoded, vpnLink: cfg.vpnLink });
+          downloadFile(decoded, variantFilename);
+          if (idx === 0) saveToHistory(mode, decoded, variantFilename);
+        });
+      } else {
+        const decodedConfig = atob(data.content);
+        showPostGenRow({ buttonId, readyDownloadText, filename, decodedConfig, vpnLink: data.vpnLink });
+        downloadFile(decodedConfig, filename);
+        saveToHistory(mode, decodedConfig, filename);
+      }
 
-      // Автоматически скачиваем файл сразу
-      downloadFile(decodedConfig, filename);
-
-      // Сохраняем в историю
-      saveToHistory(mode, decodedConfig, filename);
-
-      status.textContent = mode === 'awg2'
-        ? t('success_awg2', 'Конфигурация AmneziaWG 2.0 успешно сгенерирована! Нужен клиент AmneziaVPN 4.8.12.9+ или совместимый AWG 2.0.')
-        : t('success_legacy', 'Конфигурация Legacy успешно сгенерирована!');
+      if (data.warning) {
+        status.textContent = `⚠ ${data.warning}`;
+      } else {
+        status.textContent = mode === 'awg2'
+          ? t('success_awg2', 'Конфигурация AmneziaWG 2.0 успешно сгенерирована! Нужен клиент AmneziaVPN 4.8.12.9+ или совместимый AWG 2.0.')
+          : t('success_legacy', 'Конфигурация Legacy успешно сгенерирована!');
+      }
     } else {
       throw new Error(data.message || t('err_unknown_gen', 'Неизвестная ошибка при генерации конфигурации.'));
     }
@@ -1263,6 +1309,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initI18n();
   fetchHealthStatus();
   setInterval(fetchHealthStatus, 60_000);
+  fetchServiceStatus();
   document.querySelectorAll('.lang-btn').forEach((btn) => {
     btn.addEventListener('click', () => switchLang(btn.dataset.lang));
   });
