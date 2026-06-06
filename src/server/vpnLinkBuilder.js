@@ -14,12 +14,16 @@ const { Buffer } = require('buffer');
  * JSON shape:
  *   {
  *     containers: [{
- *       container: "awg",                    // NOT "amnezia-awg"
+ *       container: "amnezia-awg",
  *       awg: {
- *         last_config: "{\"config\":\"<INI>\",\"mtu\":\"1280\",\"port\":\"4500\"}"
+ *         last_config: "{\"config\":\"<INI>\",\"mtu\":\"1280\",\"port\":\"4500\"}",
+ *         isThirdPartyConfig: true,
+ *         port: "4500",
+ *         protocol_version: "2",
+ *         transport_proto: "udp"
  *       }
  *     }],
- *     defaultContainer: "awg",
+ *     defaultContainer: "amnezia-awg",
  *     description: "...",
  *     dns1: "...",
  *     dns2: "...",
@@ -69,12 +73,16 @@ const buildVpnLink = (confText, meta = {}) => {
 
   const outer = {
     containers: [{
-      container: 'awg',
+      container: 'amnezia-awg',
       awg: {
         last_config: innerConfig,
+        isThirdPartyConfig: true,
+        port: extractPort(confText),
+        protocol_version: meta.mode === 'awg2' ? '2' : '1.5',
+        transport_proto: 'udp',
       },
     }],
-    defaultContainer: 'awg',
+    defaultContainer: 'amnezia-awg',
     description: `WARP (${meta.mode || 'awg'}) via amnezia-config-gen`,
     dns1: meta.dns1 || '1.1.1.1',
     dns2: meta.dns2 || '1.0.0.1',

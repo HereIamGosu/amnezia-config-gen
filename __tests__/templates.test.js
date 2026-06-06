@@ -308,7 +308,7 @@ test('handler: count=3 returns configs[] with up to 3 entries', async () => {
   }
 });
 
-test('handler: vpn:// link format is valid base64url deflate', async () => {
+test('handler: vpn:// link format is valid base64url qCompress payload', async () => {
   clearWarpCache();
   setupHttpsMock();
   net.createConnection = mockNetConnect;

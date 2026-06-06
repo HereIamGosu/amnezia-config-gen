@@ -41,8 +41,12 @@ describe('Invariant I10: vpn:// link round-trip', () => {
     assert.equal(inflated.length, declaredLen, 'inflated length must match declared length prefix');
 
     const obj = JSON.parse(inflated.toString('utf8'));
-    assert.equal(obj.defaultContainer, 'awg');
-    assert.equal(obj.containers[0].container, 'awg');
+    assert.equal(obj.defaultContainer, 'amnezia-awg');
+    assert.equal(obj.containers[0].container, 'amnezia-awg');
+    assert.equal(obj.containers[0].awg.isThirdPartyConfig, true);
+    assert.equal(obj.containers[0].awg.port, '4500');
+    assert.equal(obj.containers[0].awg.protocol_version, '2');
+    assert.equal(obj.containers[0].awg.transport_proto, 'udp');
     const innerJson = JSON.parse(obj.containers[0].awg.last_config);
     assert.equal(innerJson.config, sampleConf, 'inner config must equal original .conf text');
     assert.equal(innerJson.mtu, '1280');
@@ -56,6 +60,7 @@ describe('Invariant I10: vpn:// link round-trip', () => {
     const inflated = inflateSync(buf.slice(4));
     const obj = JSON.parse(inflated.toString('utf8'));
     const innerJson = JSON.parse(obj.containers[0].awg.last_config);
+    assert.equal(obj.containers[0].awg.protocol_version, '1.5');
     assert.equal(innerJson.mtu, '1280', 'MTU defaults to 1280 when no MTU= line');
     assert.equal(innerJson.port, '4500', 'port defaults to 4500 when no Endpoint=host:port line');
   });
