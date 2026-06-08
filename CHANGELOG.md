@@ -29,6 +29,17 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 ### Security
 - Repository git history rewritten with `git filter-repo` to remove private documentation paths. All pre-rewrite commit SHAs are invalid; existing clones must re-clone or `git reset --hard origin/main`. See [SECURITY.md](./SECURITY.md).
 
+## [2.4.1] - 2026-06-08
+
+### Added
+- Explicit regression coverage for invariants I1–I10, including IPv4-only default routes, mobile `AllowedIPs`, empty-`I1` CPS handling, and `vpn://` third-party profile round-trip.
+- Fallback smoke tests for missing Vercel KV, partial endpoint failure, CIDR source fallback, `/api/status` registry source, and `/api/iplist` route source.
+- Manual iOS `vpn://` verification checklist at `docs/manual-checks/vpn-link-ios.md`.
+
+### Fixed
+- Default full-tunnel routes are IPv4-only unless IPv6 is explicitly enabled.
+- `/api/iplist` reports `cidrSource: "static"` when the response is built only from bundled static CIDRs.
+
 ## [2.1.0] - 2026-05
 
 Pre-canonization snapshot. Notable features added in this line:

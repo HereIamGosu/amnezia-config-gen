@@ -75,6 +75,7 @@ module.exports = async (req, res) => {
     const staticV4 = staticCidrs.filter(isIpv4Cidr);
     const merged4 = Array.from(new Set([...cidrs4, ...staticV4])).sort();
     const count4 = merged4.length;
+    if (cidrs4.length === 0 && staticV4.length > 0) cidrSource = 'static';
 
     let cidrs = merged4;
     let count6 = 0;

@@ -23,7 +23,7 @@
 ## Возможности
 
 - Два формата конфига: **Legacy** (`mode=legacy`) и **AmneziaWG 2.0** (`mode=awg2`).
-- Пресеты маршрутов: тайл-выбор по категориям доменов → агрегированные IPv4 (или IPv4+IPv6) CIDR в `AllowedIPs`. Без выбора — `0.0.0.0/0`, `::/0`.
+- Пресеты маршрутов: тайл-выбор по категориям доменов → агрегированные IPv4 (или IPv4+IPv6) CIDR в `AllowedIPs`. Без выбора по умолчанию используется `0.0.0.0/0`; `::/0` добавляется только при явном включении IPv6.
 - Несколько пресетов DNS для строки `DNS` в конфиге.
 - Скачивание `.conf` и два шаблона планировщика Windows: `public/static/SchedulerAmnezia-15.bat` (Legacy 1.5 → `AmneziaWarp.conf`) и `SchedulerAmnezia-20.bat` (AWG 2.0 → `AmneziaWarp-AWG2.conf`); путь к `amneziawg.exe` при необходимости правьте в bat.
 - Опциональные расширения `cps5`, `mobile`, `link` (см. [Опциональные расширения](#опциональные-расширения)).
@@ -88,6 +88,8 @@ npm start    # vercel dev → http://localhost:3000
 | **I6** | `AllowedIPs` по умолчанию **только IPv4**; IPv6 включается по тумблеру в Настройках (`?ipv6=1`). | Роутеры (GL.iNet, Keenetic, MikroTik) и мобильные клиенты имеют ограниченную ёмкость таблицы маршрутов; удвоение списка через IPv6 приводит к молчаливым отказам. |
 | **I7** | `mobile=1` форсит: `Jc=3, Jmin=64, Jmax=128, MTU=1280`, только IPv4 (перекрывает `ipv6=1`, убирает IPv6 из `Address` и `AllowedIPs`). | Мобильный профиль в пределах спецификации AWG 2.0; снижает расход батареи и молчаливые reset'ы на iOS. |
 | **I8** | Если одновременно `mobile=1` и `router=1`, сначала применяется `mobile`, потом `router` через `Math.min`/`Math.max`. На пересечении побеждает `router` (например, итог `Jc = 2`). | Правило композиции реализовано в `applyRouterModeCaps` после `applyMobileModeOverrides`. |
+| **I9** | `cps5=1` добавляет `I2`–`I5` только для AWG 2.0 при непустом `I1`. | Legacy и AWG 2.0 без `I1` не должны выдавать неполную CPS-цепочку. |
+| **I10** | `vpn://` проходит Qt `qCompress` round-trip и помечает payload как готовый сторонний AWG-профиль. | AmneziaVPN не должна переводить импорт готового конфига в сценарий установки протокола. |
 
 ## API
 
@@ -121,7 +123,7 @@ npm start    # vercel dev → http://localhost:3000
 
 Без `?presets=...`: возвращает каталог пресетов целиком (`presets`, категории, `dnsPresets`, `dnsDefault` и т.д.).
 
-С `?presets=key1,key2`: разрешение доменов в CIDR. Ответ: `{ count, count4, count6, cidrs, sites, sitesQueried }`. Неизвестные ключи → 400 со списком отсутствующих.
+С `?presets=key1,key2`: разрешение доменов в CIDR. Ответ: `{ count, count4, count6, cidrs, sites, sitesQueried, cidrSource }`. `cidrSource` сообщает фактический источник маршрутов (`opencck`, `community`, `mixed`, `antifilter` или `static`). Неизвестные ключи → 400 со списком отсутствующих.
 
 ## Шаблоны
 
@@ -157,6 +159,10 @@ npm start    # vercel dev → http://localhost:3000
 | `npm run build` | Заглушка (сборка не нужна) |
 
 Запустить один файл тестов: `node --test __tests__/invariant-i1-uppercase.test.js`.
+
+Fallback smoke-покрытие релиза 2.4.1 находится в `__tests__/fallback-smoke.test.js`: генерация без KV, частичная недоступность endpoint-кандидатов, fallback CIDR-источника, источник реестра в `/api/status` и источник маршрутов в `/api/iplist`.
+
+Ручная проверка импорта `vpn://` на iOS: [docs/manual-checks/vpn-link-ios.md](docs/manual-checks/vpn-link-ios.md).
 
 ## Участие
 

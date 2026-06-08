@@ -191,4 +191,4 @@ struc.py
 # Spurious shell artifact (brace expansion gone wrong)
 {,
 .vercel
-.understand-anything/*
+.understand-anything/

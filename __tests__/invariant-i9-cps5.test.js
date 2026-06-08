@@ -42,4 +42,10 @@ describe('Invariant I9: cps5 generates well-formed I2..I5', () => {
     assert.doesNotMatch(conf, /^I4 = /m);
     assert.doesNotMatch(conf, /^I5 = /m);
   });
+
+  test('AWG 2.0 config with empty I1 never emits I2..I5', () => {
+    const conf = buildAwg2WarpConf({ i1: '', extraCps: generateI2I5() });
+    assert.doesNotMatch(conf, /^I1 = /m);
+    assert.doesNotMatch(conf, /^I[2-5] = /m);
+  });
 });

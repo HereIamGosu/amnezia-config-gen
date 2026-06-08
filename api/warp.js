@@ -17,7 +17,8 @@ const { buildVpnLink } = require('../src/server/vpnLinkBuilder');
 const { getTopEndpoints, updateEndpointHealth } = require('../src/server/endpointCache');
 const { checkTcpLatency, pickBestEndpoint } = require('../src/server/endpointHealth');
 
-const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0', '::/0'];
+const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0'];
+const DEFAULT_ALLOWED_IPS_WITH_IPV6 = ['0.0.0.0/0', '::/0'];
 
 /** WARP server peer public key (Cloudflare); used if registration JSON omits it. */
 const KNOWN_WARP_PEER_PUBLIC_KEY = 'bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=';
@@ -425,8 +426,10 @@ const buildFullConfig = (mode, privKey, peerPub, clientIPv4, clientIPv6, peerEnd
         : buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1, extraCps)
       : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine, i1, plainAddress, mobileJunk);
   const defaultAllowed = ifaceExtras.mobileJunk
-    ? DEFAULT_ALLOWED_IPS.filter((c) => !c.includes(':'))
-    : DEFAULT_ALLOWED_IPS;
+    ? DEFAULT_ALLOWED_IPS
+    : ifaceExtras.includeIpv6
+      ? DEFAULT_ALLOWED_IPS_WITH_IPV6
+      : DEFAULT_ALLOWED_IPS;
   const allowed = (allowedIpList && allowedIpList.length ? allowedIpList : defaultAllowed).join(', ');
   let peerBlock = `[Peer]
 PublicKey = ${peerPub}
@@ -1045,6 +1048,7 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
         awg2WarpSafe: warpExtras.awg2WarpSafe,
         extraCps,
         mobileJunk: routeOpts.mobileMode ? { Jc: MOBILE_JC, Jmin: MOBILE_JMIN, Jmax: MOBILE_JMAX } : null,
+        includeIpv6: routeOpts.includeIpv6,
       },
     ),
     meta: {

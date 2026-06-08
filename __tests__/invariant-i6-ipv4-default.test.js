@@ -1,6 +1,7 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const { isIpv4Cidr, fetchCidrsForDomains } = require('../src/server/ipListFetch');
+const { buildAwg2WarpConf } = require('./helpers/build-config');
 
 describe('Invariant I6: IPv4-only by default', () => {
   test('isIpv4Cidr correctly identifies IPv4 vs IPv6 CIDRs', () => {
@@ -22,5 +23,16 @@ describe('Invariant I6: IPv4-only by default', () => {
     assert.equal(typeof fetchCidrsForDomains, 'function');
     // .length is the count of params before defaults; 1 means second param has a default {}
     assert.equal(fetchCidrsForDomains.length, 1);
+  });
+
+  test('generated config defaults AllowedIPs to IPv4-only', () => {
+    const conf = buildAwg2WarpConf();
+    assert.match(conf, /^AllowedIPs = 0\.0\.0\.0\/0$/m);
+    assert.doesNotMatch(conf, /^AllowedIPs = .*::\/0/m);
+  });
+
+  test('generated config includes IPv6 default route only with explicit opt-in', () => {
+    const conf = buildAwg2WarpConf({ includeIpv6: true });
+    assert.match(conf, /^AllowedIPs = 0\.0\.0\.0\/0, ::\/0$/m);
   });
 });

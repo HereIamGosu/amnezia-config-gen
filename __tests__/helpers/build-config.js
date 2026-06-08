@@ -9,7 +9,7 @@ const FAKE_ENDPOINT = 'engage.cloudflareclient.com:4500';
 
 const SAMPLE_I1 = '<b 0xce000000010897a297ecc34cd6dd>';
 
-const buildAwg2WarpConf = ({ i1 = SAMPLE_I1, extraCps = null, mobileJunk = null } = {}) => {
+const buildAwg2WarpConf = ({ i1 = SAMPLE_I1, extraCps = null, mobileJunk = null, includeIpv6 = false } = {}) => {
   const obf = __internals.buildAwg2WarpSafeObfuscation();
   return __internals.buildFullConfig(
     'awg2',
@@ -21,11 +21,11 @@ const buildAwg2WarpConf = ({ i1 = SAMPLE_I1, extraCps = null, mobileJunk = null 
     obf,
     null,
     FAKE_DNS,
-    { i1, awg2WarpSafe: true, plainAddress: true, extraCps, mobileJunk },
+    { i1, awg2WarpSafe: true, plainAddress: true, extraCps, mobileJunk, includeIpv6 },
   );
 };
 
-const buildLegacyConf = ({ i1 = SAMPLE_I1, mobileJunk = null, extraCps = null } = {}) =>
+const buildLegacyConf = ({ i1 = SAMPLE_I1, mobileJunk = null, extraCps = null, includeIpv6 = false } = {}) =>
   __internals.buildFullConfig(
     'legacy',
     FAKE_PRIV,
@@ -37,7 +37,7 @@ const buildLegacyConf = ({ i1 = SAMPLE_I1, mobileJunk = null, extraCps = null } 
     null,
     null,
     FAKE_DNS,
-    { i1, plainAddress: true, mobileJunk, extraCps },
+    { i1, plainAddress: true, mobileJunk, extraCps, includeIpv6 },
   );
 
 const buildAwg2SelfHostedConf = ({ i1 = '', extraCps = null } = {}) => {
