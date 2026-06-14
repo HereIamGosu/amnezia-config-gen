@@ -1,0 +1,13 @@
+{
+  "checked_at": "2026-06-14T03:38:59Z",
+  "services": {
+    "warp_api": {
+      "status": "ok",
+      "http_code": 400
+    },
+    "cidr_source": {
+      "status": "ok",
+      "http_code": 200
+    }
+  }
+}
