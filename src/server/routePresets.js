@@ -473,6 +473,15 @@ const DNS_PRESETS = {
     label: 'Quad9',
     dns: '9.9.9.9, 2620:fe::fe, 149.112.112.112, 2620:fe::9',
   },
+  comss_one: {
+    label: 'Comss.one',
+    // IPv6 не публикуются провайдером. Источник: comss.ru/page.php?id=7315
+    dns: '83.220.169.155, 212.109.195.93',
+  },
+  malw_link: {
+    label: 'malw.link',
+    dns: '80.253.249.40, 193.23.209.189, 2a12:bec4:1460:5b7::2, 2a01:ecc0:680:120::2',
+  },
 };
 
 const DNS_DEFAULT_KEY = 'cloudflare';

@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-06-16
+
 ### Added
+- DNS presets: Comss.one (`83.220.169.155, 212.109.195.93`) и malw.link (`80.253.249.40, 193.23.209.189` + IPv6). Closes [#2](https://github.com/HereIamGosu/amnezia-config-gen/issues/2).
 - LICENSE file (AGPL-3.0-only, © 2026 HereIamGosu).
 - Community-standards files: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `.editorconfig`.
 - GitHub issue and pull-request templates under `.github/`.
