@@ -118,6 +118,7 @@ test('fallback smoke: generation succeeds without Vercel KV', async () => {
     assert.equal(res.getStatus(), 200);
     assert.equal(res.getBody().success, true);
     assert.ok(res.getBody().content);
+    assert.equal(res.getBody().routesTelemetrySource, 'static');
   } finally {
     httpsMock.mock.restore();
     net.createConnection = realNetCreateConnection;

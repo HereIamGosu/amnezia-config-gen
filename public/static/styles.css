@@ -1117,6 +1117,120 @@ button.info-link {
   display: none;
 }
 
+.result-explanation {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  margin: 10px 0 14px;
+}
+
+.result-explanation[hidden] {
+  display: none;
+}
+
+.result-summary-card,
+.diagnostics-card {
+  padding: 12px;
+  border: 1px solid #7f8c99;
+  border-radius: 6px;
+  background: #f6f8fa;
+  color: #1f2933;
+}
+
+.result-summary-card__title,
+.diagnostics-card__title {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.result-summary-card__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+  margin: 0;
+}
+
+.result-summary-card__field {
+  min-width: 0;
+}
+
+.result-summary-card__field dt {
+  color: #52606d;
+  font-size: 11px;
+}
+
+.result-summary-card__field dd {
+  margin: 1px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.result-risk-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.result-risk-list__empty {
+  margin: 0;
+  color: #287a3d;
+  font-size: 12px;
+}
+
+.risk-label {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  padding: 7px 9px;
+  border-left: 4px solid;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.risk-label strong {
+  flex: 0 0 auto;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+.risk-label--info {
+  border-color: #2f6f9f;
+  background: #eaf4fb;
+}
+
+.risk-label--warning {
+  border-color: #b7791f;
+  background: #fff7df;
+}
+
+.risk-label--blocking {
+  border-color: #b42318;
+  background: #fdecec;
+}
+
+.diagnostics-card__list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.diagnostics-card__link {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+@media (max-width: 560px) {
+  .result-summary-card__fields {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────
    CTA: Telegram-канал (после генерации)
    ───────────────────────────────────────────────────────────── */

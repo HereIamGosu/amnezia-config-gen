@@ -5,6 +5,42 @@
 // ─────────────────────────────────────────────────────────────
 
 const _i18n = { locale: 'ru', strings: {} };
+const resultExplanation = window.ResultExplanation || null;
+let lastResultSummary = null;
+const telemetry = window.ProductTelemetry || {
+  classifyGenerationError: () => 'unknown',
+  durationMs: () => 0,
+  trackEvent: () => false,
+};
+
+const telemetryNow = () =>
+  window.performance && typeof window.performance.now === 'function'
+    ? window.performance.now()
+    : Date.now();
+
+const getTelemetryContext = (mode, extra = {}) => {
+  const endpointMode = cfgState.warpEndpoint === 'hostname' ? 'hostname' : 'ip';
+  return {
+    mode,
+    count_requested: cfgState.configCount,
+    endpoint_mode: endpointMode,
+    endpoint_source: endpointMode === 'ip' ? 'manual' : 'unknown',
+    route_mode: getSelectedRouteIds().length ? 'split' : 'full',
+    mobile_profile: cfgState.mobileMode,
+    router_profile: cfgState.routerMode,
+    cps_mode: cfgState.cpsProtocol,
+    ...extra,
+  };
+};
+
+const getEndpointTelemetrySource = (data, endpointMode) => {
+  if (endpointMode === 'ip') return 'manual';
+  const source = data && data.configs && data.configs[0] && data.configs[0].endpointSource;
+  return source === 'tcp_check' ? 'kv' : source || 'unknown';
+};
+
+const getWarningCount = (warning) =>
+  Array.isArray(warning) ? warning.length : warning ? 1 : 0;
 
 /** Возвращает переведённую строку или fallback (если перевод не загружен). */
 const t = (key, fallback) => _i18n.strings[key] !== undefined ? _i18n.strings[key] : (fallback !== undefined ? fallback : key);
@@ -44,6 +80,7 @@ const loadLocale = async (lang) => {
     _i18n.strings = await res.json();
     _i18n.locale = lang;
     applyTranslations();
+    if (lastResultSummary) renderResultExplanation(lastResultSummary);
   } catch {
     // В офлайн-режиме или при 404 оставляем исходный HTML-текст (русский)
   }
@@ -238,6 +275,7 @@ const openStatusModal = () => {
   if (lastChecked) lastChecked.hidden = true;
 
   openModal('statusModal');
+  telemetry.trackEvent('status_modal_opened');
 
   fetch('/status.json')
     .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
@@ -273,16 +311,35 @@ const showTgChannelCta = () => {
   }
 };
 
-const showPostGenRow = ({ buttonId, readyDownloadText, filename, decodedConfig, vpnLink }) => {
+const showPostGenRow = ({
+  buttonId,
+  readyDownloadText,
+  filename,
+  decodedConfig,
+  vpnLink,
+  telemetryContext,
+}) => {
   // Скрываем кнопку генерации
   const genBtn = document.getElementById(buttonId);
   if (genBtn) genBtn.hidden = true;
 
   // Показываем post-gen row
-  const rowId = POST_GEN_ROW_IDS[buttonId];
-  if (!rowId) return;
-  const row = document.getElementById(rowId);
+  const baseButtonId = buttonId.replace(/_v\d+$/, '');
+  const baseRowId = POST_GEN_ROW_IDS[baseButtonId];
+  if (!baseRowId) return;
+  let row = document.getElementById(baseRowId);
   if (!row) return;
+  if (buttonId !== baseButtonId) {
+    const variantRowId = `${baseRowId}_${buttonId.slice(baseButtonId.length + 1)}`;
+    let variantRow = document.getElementById(variantRowId);
+    if (!variantRow) {
+      variantRow = row.cloneNode(true);
+      variantRow.id = variantRowId;
+      variantRow.querySelector('.post-gen-row__download .button__text')?.removeAttribute('data-i18n');
+      row.parentElement.appendChild(variantRow);
+    }
+    row = variantRow;
+  }
   row.hidden = false;
   showTgChannelCta();
 
@@ -291,13 +348,19 @@ const showPostGenRow = ({ buttonId, readyDownloadText, filename, decodedConfig, 
   if (dlBtn) {
     const span = dlBtn.querySelector('.button__text');
     if (span) span.textContent = readyDownloadText;
-    dlBtn.onclick = () => downloadFile(decodedConfig, filename);
+    dlBtn.onclick = () => {
+      downloadFile(decodedConfig, filename);
+      telemetry.trackEvent('config_downloaded', telemetryContext);
+    };
   }
 
   // Кнопка просмотра
   const prevBtn = row.querySelector('.post-gen-row__preview');
   if (prevBtn) {
-    prevBtn.onclick = () => openPreviewModal(decodedConfig);
+    prevBtn.onclick = () => {
+      openPreviewModal(decodedConfig);
+      telemetry.trackEvent('config_preview_opened', telemetryContext);
+    };
   }
 
   // Кнопка copy vpn:// — показываем только если link есть в ответе
@@ -308,13 +371,13 @@ const showPostGenRow = ({ buttonId, readyDownloadText, filename, decodedConfig, 
       copyBtn.onclick = async () => {
         try {
           await navigator.clipboard.writeText(vpnLink);
+          telemetry.trackEvent('vpn_link_copied', telemetryContext);
           const status = document.getElementById('status');
           if (status) status.textContent = t('vpn_link_copied', 'Ссылка скопирована, откройте AmneziaVPN на телефоне.');
         } catch (e) {
           console.error('Clipboard write failed:', e);
           const status = document.getElementById('status');
           if (status) status.textContent = t('vpn_link_copy_failed', 'Не удалось скопировать. Скопируйте вручную из консоли (F12).');
-          console.log('vpn://', vpnLink);
         }
       };
     } else {
@@ -322,6 +385,152 @@ const showPostGenRow = ({ buttonId, readyDownloadText, filename, decodedConfig, 
     }
   }
 };
+
+const summaryValue = (key, value) => {
+  const values = {
+    format: {
+      legacy: 'AWG 1.5',
+      awg2: 'AWG 2.0',
+      unknown: t('result_summary_no_data', 'нет данных'),
+    },
+    endpointMode: {
+      hostname: t('result_summary_endpoint_hostname', 'hostname'),
+      auto: t('result_summary_endpoint_auto', 'auto'),
+      manual: t('result_summary_endpoint_manual', 'manual'),
+      unknown: t('result_summary_no_data', 'нет данных'),
+    },
+    endpointSource: {
+      hostname: t('result_summary_endpoint_hostname', 'hostname'),
+      manual: t('result_summary_endpoint_manual', 'manual'),
+      kv: 'KV',
+      fallback: t('result_summary_endpoint_fallback', 'fallback'),
+      unknown: t('result_summary_no_data', 'нет данных'),
+    },
+    routesSource: {
+      opencck: 'OpenCCK',
+      community: t('result_summary_routes_community', 'community lists'),
+      antifilter: 'antifilter',
+      staticFallback: t('result_summary_routes_static_fallback', 'static fallback'),
+      notApplicable: t('result_summary_not_applicable', 'не применяется'),
+      unknown: t('result_summary_no_data', 'нет данных'),
+    },
+    routeMode: {
+      full: t('result_summary_route_full', 'full route'),
+      split: t('result_summary_route_split', 'выборочная'),
+    },
+    profile: {
+      mobile: 'mobile',
+      router: 'router',
+      mobileRouter: 'mobile + router',
+      standard: t('result_summary_profile_standard', 'standard'),
+      unknown: t('result_summary_no_data', 'нет данных'),
+    },
+    ipv6: {
+      enabled: t('result_summary_ipv6_enabled', 'включён'),
+      disabled: t('result_summary_ipv6_disabled', 'отключён'),
+      disabledByMobile: t('result_summary_ipv6_disabled_mobile', 'отключён mobile-профилем'),
+      unknown: t('result_summary_no_data', 'нет данных'),
+    },
+    vpnImport: {
+      available: t('result_summary_import_available', 'vpn:// доступен'),
+      notRequested: t('result_summary_import_not_requested', 'не запрошен'),
+      unknown: t('result_summary_no_data', 'нет данных'),
+    },
+  };
+  return values[key]?.[value] ?? t('result_summary_no_data', 'нет данных');
+};
+
+const warningText = (warning) => {
+  const byCode = {
+    partial_generation: t('risk_partial_generation', 'Создано меньше вариантов, чем запрошено.'),
+    no_configs: t('risk_no_configs', 'Генерация не вернула ни одного конфига.'),
+    endpoint_fallback: t('risk_endpoint_fallback', 'Использован fallback-источник endpoint.'),
+    endpoint_unknown: t('risk_endpoint_unknown', 'Источник endpoint не указан.'),
+    allowed_ips_limit_disabled: t('risk_limit_disabled', 'Лимит AllowedIPs отключён.'),
+    routes_fallback: t('risk_routes_fallback', 'Использован резервный источник маршрутов.'),
+    routes_unknown: t('risk_routes_unknown', 'Источник маршрутов не указан.'),
+  };
+  return byCode[warning.code] || warning.message || t('result_summary_no_data', 'нет данных');
+};
+
+const appendSummaryField = (container, label, value) => {
+  const row = document.createElement('div');
+  row.className = 'result-summary-card__field';
+  const term = document.createElement('dt');
+  term.textContent = label;
+  const description = document.createElement('dd');
+  description.textContent = value;
+  row.append(term, description);
+  container.appendChild(row);
+};
+
+const renderResultExplanation = (summary) => {
+  const section = document.getElementById('resultExplanation');
+  const fields = document.getElementById('resultSummaryFields');
+  const risks = document.getElementById('resultRiskLabels');
+  if (!section || !fields || !risks || !summary) return;
+
+  fields.textContent = '';
+  risks.textContent = '';
+  const endpointMode = summaryValue('endpointMode', summary.endpoint.mode);
+  const endpointSource = summaryValue('endpointSource', summary.endpoint.source);
+  const endpoint = endpointMode === endpointSource ? endpointMode : `${endpointMode} / ${endpointSource}`;
+  const presetNames = summary.presets.length
+    ? ` (${summary.presets.slice(0, 4).join(', ')}${summary.presets.length > 4 ? ', …' : ''})`
+    : '';
+
+  appendSummaryField(fields, t('result_summary_format', 'Формат'), summaryValue('format', summary.format));
+  appendSummaryField(fields, t('result_summary_variants', 'Вариантов'), String(summary.variants));
+  appendSummaryField(fields, t('result_summary_endpoint', 'Endpoint'), endpoint);
+  appendSummaryField(
+    fields,
+    t('result_summary_port', 'Порт'),
+    summary.port == null ? t('result_summary_no_data', 'нет данных') : String(summary.port),
+  );
+  appendSummaryField(fields, t('result_summary_routes_source', 'Маршруты'), summaryValue('routesSource', summary.routesSource));
+  appendSummaryField(fields, t('result_summary_route_mode', 'Режим маршрутов'), summaryValue('routeMode', summary.routeMode));
+  appendSummaryField(
+    fields,
+    t('result_summary_presets', 'Presets'),
+    `${summary.presets.length}${presetNames}`,
+  );
+  appendSummaryField(fields, t('result_summary_profile', 'Профиль'), summaryValue('profile', summary.profile));
+  appendSummaryField(fields, t('result_summary_ipv6', 'IPv6'), summaryValue('ipv6', summary.ipv6));
+  appendSummaryField(fields, t('result_summary_import', 'Импорт'), summaryValue('vpnImport', summary.vpnImport));
+  appendSummaryField(fields, t('result_summary_warnings', 'Предупреждения'), String(summary.warnings.length));
+
+  if (!summary.warnings.length) {
+    const calm = document.createElement('p');
+    calm.className = 'result-risk-list__empty';
+    calm.textContent = t('risk_no_critical_warnings', 'Критичных предупреждений нет.');
+    risks.appendChild(calm);
+  } else {
+    summary.warnings.forEach((warning) => {
+      const label = document.createElement('div');
+      label.className = `risk-label risk-label--${warning.level}`;
+      const level = document.createElement('strong');
+      level.textContent = t(`risk_${warning.level}`, warning.level);
+      const message = document.createElement('span');
+      message.textContent = warningText(warning);
+      label.append(level, message);
+      risks.appendChild(label);
+    });
+  }
+
+  section.hidden = false;
+};
+
+const getResultStateSnapshot = () => ({
+  configCount: cfgState.configCount,
+  warpEndpoint: cfgState.warpEndpoint,
+  port: cfgState.port,
+  routePresets: getSelectedRouteIds(),
+  mobileMode: cfgState.mobileMode,
+  routerMode: cfgState.routerMode,
+  includeIpv6: cfgState.includeIpv6,
+  ignoreLimit: cfgState.ignoreLimit,
+  vpnLinkRequested: true,
+});
 
 const API_WARP_TIMEOUT_MS = 120000;
 
@@ -1050,14 +1259,26 @@ const renderHistoryPanel = () => {
     dlBtn.className = 'button button--sm history-item__dl';
     dlBtn.textContent = t('history_download', '↓');
     dlBtn.title = entry.filename;
-    dlBtn.addEventListener('click', () => downloadFile(atob(entry.b64), entry.filename));
+    dlBtn.addEventListener('click', () => {
+      downloadFile(atob(entry.b64), entry.filename);
+      telemetry.trackEvent('history_item_downloaded', {
+        mode: entry.mode,
+        route_mode: entry.presets && entry.presets.length ? 'split' : 'full',
+      });
+    });
 
     const previewBtn = document.createElement('button');
     previewBtn.type = 'button';
     previewBtn.className = 'button button--sm history-item__preview';
     previewBtn.innerHTML = '<span aria-hidden="true">&#128065;</span>';
     previewBtn.title = t('preview_btn_title', 'Просмотреть конфигурацию');
-    previewBtn.addEventListener('click', () => openPreviewModal(atob(entry.b64)));
+    previewBtn.addEventListener('click', () => {
+      openPreviewModal(atob(entry.b64));
+      telemetry.trackEvent('history_item_previewed', {
+        mode: entry.mode,
+        route_mode: entry.presets && entry.presets.length ? 'split' : 'full',
+      });
+    });
 
     actions.appendChild(dlBtn);
     actions.appendChild(previewBtn);
@@ -1099,6 +1320,10 @@ const generateConfig = async (options) => {
   const button = document.getElementById(buttonId);
   if (!button) return;
   const status = document.getElementById('status');
+  const startedAt = telemetryNow();
+  const startedContext = getTelemetryContext(mode);
+  const resultState = getResultStateSnapshot();
+  let response;
 
   const loadingLabel = mode === 'awg2'
     ? t('loading_awg2', 'Генерация конфигурации (AmneziaWG 2.0)...')
@@ -1110,11 +1335,11 @@ const generateConfig = async (options) => {
   setAllGenerateButtonsDisabled(true);
   button.classList.add('button--loading');
   status.textContent = loadingLabel;
+  telemetry.trackEvent('generation_started', startedContext);
 
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_WARP_TIMEOUT_MS);
-    let response;
     try {
       const warpQs = buildWarpQueryString(mode);
       response = await fetch(`/api/warp?${warpQs}`, {
@@ -1138,6 +1363,31 @@ const generateConfig = async (options) => {
       if (boundGenerateClick) button.removeEventListener('click', boundGenerateClick);
 
       const allConfigs = (data.configs && data.configs.length > 1) ? data.configs : null;
+      const countProduced = Number.isInteger(data.count)
+        ? data.count
+        : data.configs && data.configs.length
+          ? data.configs.length
+          : 1;
+      const warningCount = getWarningCount(data.warning);
+      const completedContext = {
+        ...startedContext,
+        count_produced: countProduced,
+        endpoint_source: getEndpointTelemetrySource(data, startedContext.endpoint_mode),
+        routes_source: data.routesTelemetrySource || 'unknown',
+        has_warning: warningCount > 0,
+        warning_count: warningCount,
+        duration_ms: telemetry.durationMs(startedAt, telemetryNow()),
+      };
+      telemetry.trackEvent(
+        countProduced < startedContext.count_requested
+          ? 'generation_partially_succeeded'
+          : 'generation_succeeded',
+        completedContext,
+      );
+      if (resultExplanation) {
+        lastResultSummary = resultExplanation.buildResultSummary(data, resultState);
+        renderResultExplanation(lastResultSummary);
+      }
       if (allConfigs) {
         // Multiple configs: show each as a separate variant block
         allConfigs.forEach((cfg, idx) => {
@@ -1145,19 +1395,38 @@ const generateConfig = async (options) => {
           const decoded = atob(cfg.content);
           const variantBtn = idx === 0 ? buttonId : `${buttonId}_v${idx + 1}`;
           // For first variant reuse the main post-gen row; additional variants rendered below it
-          showPostGenRow({ buttonId: variantBtn, readyDownloadText: `Вариант ${idx + 1}`, filename: variantFilename, decodedConfig: decoded, vpnLink: cfg.vpnLink });
+          showPostGenRow({
+            buttonId: variantBtn,
+            readyDownloadText: `Вариант ${idx + 1}`,
+            filename: variantFilename,
+            decodedConfig: decoded,
+            vpnLink: cfg.vpnLink,
+            telemetryContext: completedContext,
+          });
           downloadFile(decoded, variantFilename);
+          telemetry.trackEvent('config_downloaded', completedContext);
           if (idx === 0) saveToHistory(mode, decoded, variantFilename);
         });
       } else {
         const decodedConfig = atob(data.content);
-        showPostGenRow({ buttonId, readyDownloadText, filename, decodedConfig, vpnLink: data.vpnLink });
+        showPostGenRow({
+          buttonId,
+          readyDownloadText,
+          filename,
+          decodedConfig,
+          vpnLink: data.vpnLink,
+          telemetryContext: completedContext,
+        });
         downloadFile(decodedConfig, filename);
+        telemetry.trackEvent('config_downloaded', completedContext);
         saveToHistory(mode, decodedConfig, filename);
       }
 
       if (data.warning) {
-        status.textContent = `⚠ ${data.warning}`;
+        status.textContent = t(
+          'generation_completed_with_warnings',
+          'Конфигурация создана с предупреждениями. Подробности указаны в карточке результата.',
+        );
       } else {
         status.textContent = mode === 'awg2'
           ? t('success_awg2', 'Конфигурация AmneziaWG 2.0 успешно сгенерирована! Нужен клиент AmneziaVPN 4.8.12.9+ или совместимый AWG 2.0.')
@@ -1167,6 +1436,11 @@ const generateConfig = async (options) => {
       throw new Error(data.message || t('err_unknown_gen', 'Неизвестная ошибка при генерации конфигурации.'));
     }
   } catch (error) {
+    telemetry.trackEvent('generation_failed', {
+      ...startedContext,
+      count_produced: 0,
+      error_code: telemetry.classifyGenerationError(error, response && response.status),
+    });
     console.error('Ошибка при генерации конфигурации:', error);
     const message = error && error.name === 'AbortError'
       ? t('err_timeout', 'Превышено время ожидания ответа. Попробуйте ещё раз.')
@@ -1307,6 +1581,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── F-03: Локализация ──
   initI18n();
+  telemetry.trackEvent('healthcheck_opened');
   fetchHealthStatus();
   setInterval(fetchHealthStatus, 60_000);
   fetchServiceStatus();

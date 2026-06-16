@@ -29,6 +29,17 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 ### Security
 - Repository git history rewritten with `git filter-repo` to remove private documentation paths. All pre-rewrite commit SHAs are invalid; existing clones must re-clone or `git reset --hard origin/main`. See [SECURITY.md](./SECURITY.md).
 
+## [2.5.0] - 2026-06-09
+
+### Added
+- Post-generation result summary for AWG format, produced variants, endpoint and route sources, route mode and presets, device profiles, IPv6 state, and `vpn://` availability.
+- Normalized `info`, `warning`, and `blocking` risk labels for legacy string, object, array, null, and undefined warning shapes.
+- Concise RU/EN diagnostic next steps for connection, DNS/AllowedIPs, mobile-network, and import problems.
+
+### Security
+- Result explanations use response metadata and form state only; `.conf` contents, private keys, WARP tokens, full endpoints, and full CIDR lists are not copied into the summary model or logs.
+- Endpoint health/status information is presented as risk reduction, not a guarantee that UDP works from the user's network.
+
 ## [2.4.1] - 2026-06-08
 
 ### Added

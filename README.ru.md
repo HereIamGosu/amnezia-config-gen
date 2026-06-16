@@ -26,6 +26,7 @@
 - Пресеты маршрутов: тайл-выбор по категориям доменов → агрегированные IPv4 (или IPv4+IPv6) CIDR в `AllowedIPs`. Без выбора по умолчанию используется `0.0.0.0/0`; `::/0` добавляется только при явном включении IPv6.
 - Несколько пресетов DNS для строки `DNS` в конфиге.
 - Скачивание `.conf` и два шаблона планировщика Windows: `public/static/SchedulerAmnezia-15.bat` (Legacy 1.5 → `AmneziaWarp.conf`) и `SchedulerAmnezia-20.bat` (AWG 2.0 → `AmneziaWarp-AWG2.conf`); путь к `amneziawg.exe` при необходимости правьте в bat.
+- После генерации карточка результата объясняет формат AWG, число вариантов, источники endpoint и маршрутов, профили, IPv6, наличие `vpn://`, уровни риска и первые шаги диагностики.
 - Опциональные расширения `cps5`, `mobile`, `link` (см. [Опциональные расширения](#опциональные-расширения)).
 - Запросы к Cloudflare WARP API с повторными попытками при сетевых ошибках и ответах 429 / 502 / 503 / 504.
 
@@ -54,6 +55,14 @@ npm start    # vercel dev → http://localhost:3000
 ## Деплой
 
 Проект рассчитан на **Vercel**. Подключите репозиторий в панели Vercel или выполните `vercel` / `vercel --prod` из каталога проекта.
+
+## Privacy-safe telemetry
+
+Продуктовые события отправляются через существующую Yandex.Metrika с помощью no-op-safe adapter `public/static/analytics.js`. Если аналитика недоступна или заблокирована, генерация и остальные действия продолжают работать без ошибок.
+
+События: `generation_started`, `generation_succeeded`, `generation_partially_succeeded`, `generation_failed`, `config_downloaded`, `config_preview_opened`, `vpn_link_copied`, `history_item_previewed`, `history_item_downloaded`, `healthcheck_opened`, `status_modal_opened`.
+
+Разрешены только ограниченные продуктовые метаданные: режим, запрошенное/полученное количество конфигов, категории источников endpoint/маршрутов, количество предупреждений, режим маршрутизации full/split, флаги mobile/router, CPS-режим, неотрицательная длительность генерации и укрупнённая категория ошибки. Adapter **не собирает** содержимое `.conf`, `PrivateKey`, `PresharedKey`, WARP-токены, полные endpoint-строки, `AllowedIPs`, custom CIDR, исходные сообщения ошибок и полный user agent со стороны приложения.
 
 ## Структура репозитория
 
@@ -95,7 +104,7 @@ npm start    # vercel dev → http://localhost:3000
 
 ### `GET` / `POST` `/api/warp`
 
-Возвращает JSON: `success`, при успехе `content` (тело `.conf` в **base64**), `mode` (`legacy` | `awg2`), опционально `routesSource`, `routesPresets`, `presetSitesCount`, `appliedExtras`, `vpnLink`.
+Возвращает JSON: `success`, при успехе `content` (тело `.conf` в **base64**), `mode` (`legacy` | `awg2`), опционально `routesSource`, privacy-safe `routesTelemetrySource` (`opencck` | `itdoginfo` | `antifilter` | `static` | `fallback` | `unknown`), `routesPresets`, `presetSitesCount`, `appliedExtras`, `vpnLink`.
 
 Параметры через query (`GET`) или поля JSON-тела (`POST`). Имена в теле совпадают с query (удобно для длинного `i1`).
 

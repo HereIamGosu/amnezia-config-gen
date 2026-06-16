@@ -29,9 +29,11 @@
       href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
     />
     <!-- Подключение CSS -->
-    <link rel="stylesheet" href="static/styles.css?v=2.4.0" />
+    <link rel="stylesheet" href="static/styles.css?v=2.5.0" />
     <!-- Подключение JavaScript -->
-    <script defer src="static/script.js?v=2.4.0"></script>
+    <script defer src="static/analytics.js?v=2.5.0"></script>
+    <script defer src="static/result-explanation.js?v=2.5.0"></script>
+    <script defer src="static/script.js?v=2.5.0"></script>
     <!-- Yandex.Metrika counter -->
     <script type="text/javascript">
       (function (m, e, t, r, i, k, a) {
@@ -63,7 +65,7 @@
         clickmap: true,
         trackLinks: true,
         accurateTrackBounce: true,
-        webvisor: true,
+        webvisor: false,
       });
       ym(99328227, "reachGoal", "infoLink");
     </script>
@@ -358,6 +360,43 @@
                   ⚙
                 </button>
               </div>
+
+              <section id="resultExplanation" class="result-explanation" hidden>
+                <div class="result-summary-card">
+                  <h2 class="result-summary-card__title" data-i18n="result_summary_title">
+                    Как собран конфиг
+                  </h2>
+                  <dl id="resultSummaryFields" class="result-summary-card__fields"></dl>
+                  <div id="resultRiskLabels" class="result-risk-list" aria-live="polite"></div>
+                </div>
+
+                <aside class="diagnostics-card">
+                  <h2 class="diagnostics-card__title" data-i18n="diagnostics_title">
+                    Что проверить, если не работает
+                  </h2>
+                  <ul class="diagnostics-card__list">
+                    <li data-i18n="diagnostics_no_handshake">
+                      Если не подключается: проверьте endpoint, порт, доступность UDP, режим AWG и версию клиента.
+                    </li>
+                    <li data-i18n="diagnostics_connected_no_sites">
+                      Если подключается, но сайты не открываются: проверьте DNS, AllowedIPs, IPv6 и MTU.
+                    </li>
+                    <li data-i18n="diagnostics_wifi_vs_mobile">
+                      Если работает в Wi-Fi, но не работает в мобильной сети: попробуйте другой порт, hostname вместо IP или другой endpoint-режим.
+                    </li>
+                    <li data-i18n="diagnostics_import_failed">
+                      Если импорт не проходит: проверьте режим AWG 1.5 / AWG 2.0, формат профиля и способ импорта.
+                    </li>
+                  </ul>
+                  <a
+                    class="diagnostics-card__link"
+                    href="https://t.me/amnezia_config"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-i18n="diagnostics_open_troubleshooting"
+                  >Открыть диагностику</a>
+                </aside>
+              </section>
 
               <button type="button" id="infoLink" class="info-link" data-i18n="btn_info">
                 Дополнительная информация

@@ -905,7 +905,7 @@ const mergeConfigAfterWarp = async (id, token, initialConfig) => {
  */
 const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false } = {}) => {
   if (!presetKeys.length) {
-    return { cidrs: null, routesSource: 'default' };
+    return { cidrs: null, routesSource: 'default', routesTelemetrySource: 'static' };
   }
   const { sites, staticCidrs, communityLists, unknown } = expandPresetsToSites(presetKeys);
   if (unknown.length) {
@@ -925,14 +925,21 @@ const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false } 
   const staticFiltered = includeIpv6 ? staticCidrs : staticCidrs.filter(isIpv4Cidr);
 
   let resolvedCidrs = [];
+  let routesTelemetrySource = staticFiltered.length && !sites.length ? 'static' : 'unknown';
   if (sites.length) {
     // IPv4-only by default: fewer routes, better compatibility with routers and mobile clients.
-    const { cidrs } = await fetchCidrsForDomains(sites, {
+    const { cidrs, source } = await fetchCidrsForDomains(sites, {
       includeIpv6,
       communityLists,
       hasStaticFallback: staticFiltered.length > 0,
     });
     resolvedCidrs = cidrs;
+    routesTelemetrySource = {
+      opencck: 'opencck',
+      community: 'itdoginfo',
+      antifilter: 'antifilter',
+      mixed: 'fallback',
+    }[source] || 'unknown';
   }
 
   const merged = Array.from(new Set([...resolvedCidrs, ...staticFiltered])).sort();
@@ -944,7 +951,12 @@ const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false } 
     err.statusCode = 502;
     throw err;
   }
-  return { cidrs: merged, routesSource: 'presets', sitesResolved: sites.length };
+  return {
+    cidrs: merged,
+    routesSource: 'presets',
+    routesTelemetrySource,
+    sitesResolved: sites.length,
+  };
 };
 
 /**
@@ -1018,7 +1030,12 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
   // so applying router caps after mobile ensures router-mode values win on overlap.
   if (awg2Obf && routeOpts.mobileMode) awg2Obf = applyMobileModeOverrides(awg2Obf);
   if (awg2Obf && routeOpts.routerMode) awg2Obf = applyRouterModeCaps(awg2Obf);
-  const { cidrs: routeCidrs, routesSource, sitesResolved } = await resolvePresetsPromise;
+  const {
+    cidrs: routeCidrs,
+    routesSource,
+    routesTelemetrySource,
+    sitesResolved,
+  } = await resolvePresetsPromise;
   const effectiveClientIPv6 = routeOpts.mobileMode ? null : clientIPv6;
   const effectiveRouteCidrs = routeOpts.mobileMode && routeCidrs
     ? routeCidrs.filter((c) => !c.includes(':'))
@@ -1053,6 +1070,7 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
     ),
     meta: {
       routesSource,
+      routesTelemetrySource,
       sitesResolved: sitesResolved ?? 0,
       presetsUsed: presetKeys.length,
       appliedExtras: { cps5: canApplyExtraCps, mobile: Boolean(routeOpts.mobileMode) },
@@ -1209,6 +1227,7 @@ const handler = async (req, res) => {
       count: configsOut.length,
       mode,
       routesSource: firstMeta.routesSource,
+      routesTelemetrySource: firstMeta.routesTelemetrySource,
       routesPresets: presetKeys.length ? presetKeys : undefined,
       presetSitesCount: firstMeta.sitesResolved || undefined,
       ...(warning ? { warning } : {}),

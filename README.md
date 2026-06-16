@@ -26,6 +26,7 @@ Web UI and HTTP API for building `.conf` files for the **AmneziaWG** client (Wir
 - Route presets: tile-selectable domain bundles → aggregated IPv4 (or IPv4+IPv6) CIDRs in `AllowedIPs`. With no selection, defaults to `0.0.0.0/0`; `::/0` is added only when IPv6 is explicitly enabled.
 - DNS presets for the `DNS` line in the config.
 - One-click `.conf` download plus two Windows Task Scheduler templates: `public/static/SchedulerAmnezia-15.bat` (Legacy 1.5 → `AmneziaWarp.conf`) and `SchedulerAmnezia-20.bat` (AWG 2.0 → `AmneziaWarp-AWG2.conf`); edit the `amneziawg.exe` path in the .bat if needed.
+- After generation, an explainable result card summarizes the AWG format, variants, endpoint and route sources, profiles, IPv6, `vpn://` availability, risk labels, and practical first diagnostic steps.
 - `cps5`, `mobile`, `link` opt-in extras (see [Optional Extras](#optional-extras)).
 - Cloudflare WARP API requests retry on network errors and 429 / 502 / 503 / 504 responses.
 
@@ -54,6 +55,14 @@ If you open the static files in `public/` without `vercel dev`, the UI loads pre
 ## Deploy
 
 Designed for **Vercel**. Connect the repository in the Vercel dashboard or run `vercel` / `vercel --prod` from the project root.
+
+## Privacy-safe telemetry
+
+Product events use the existing Yandex.Metrika integration through the no-op-safe adapter in `public/static/analytics.js`. If analytics is unavailable or blocked, product actions continue normally.
+
+Tracked events: `generation_started`, `generation_succeeded`, `generation_partially_succeeded`, `generation_failed`, `config_downloaded`, `config_preview_opened`, `vpn_link_copied`, `history_item_previewed`, `history_item_downloaded`, `healthcheck_opened`, and `status_modal_opened`.
+
+Only bounded product metadata is allowed: mode, requested/produced counts, endpoint/route source categories, warning counts, full/split route mode, mobile/router flags, CPS mode, non-negative generation duration, and a coarse error category. The adapter does **not** collect `.conf` contents, `PrivateKey`, `PresharedKey`, WARP tokens, full endpoint strings, `AllowedIPs`, custom CIDRs, raw error messages, or a full user agent supplied by the application.
 
 ## Repository layout
 
@@ -95,7 +104,7 @@ These rules are non-obvious, easy to break, and silently fatal. They are enforce
 
 ### `GET` / `POST` `/api/warp`
 
-Returns JSON: `success`, on success `content` (`.conf` body in **base64**), `mode` (`legacy` | `awg2`), optionally `routesSource`, `routesPresets`, `presetSitesCount`, `appliedExtras`, `vpnLink`.
+Returns JSON: `success`, on success `content` (`.conf` body in **base64**), `mode` (`legacy` | `awg2`), optionally `routesSource`, privacy-safe `routesTelemetrySource` (`opencck` | `itdoginfo` | `antifilter` | `static` | `fallback` | `unknown`), `routesPresets`, `presetSitesCount`, `appliedExtras`, `vpnLink`.
 
 Parameters via query string (`GET`) or JSON body fields (`POST`). Body field names match query param names (handy for long `i1`).
 
