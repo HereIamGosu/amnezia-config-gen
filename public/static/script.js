@@ -765,10 +765,84 @@ const buildWarpQueryString = (mode) => {
   return params.toString();
 };
 
+/** Renders contextual AllowedIPs explanation based on current cfgState. */
+const updateAllowedIpsExplanation = () => {
+  const el = document.getElementById('allowedIpsExplanation');
+  if (!el) return;
+
+  const lines = [];
+
+  if (cfgState.routeMode === ROUTE_MODES.FULL) {
+    lines.push(t('routing_allowedips_full',
+      'В AllowedIPs будет добавлен полный маршрут. Это направит весь поддерживаемый трафик через туннель.'));
+  } else {
+    lines.push(t('routing_allowedips_split',
+      'В AllowedIPs попадут только сети выбранных направлений. Если нужный сайт не входит в выбранные presets, он может идти мимо туннеля.'));
+    lines.push(t('routing_allowedips_limit',
+      'Большие списки AllowedIPs могут нестабильно импортироваться или работать на телефонах и роутерах. Поэтому генератор предупреждает на 80% лимита и блокирует выбор при 1000 IPv4 CIDR, если не включён режим «Без лимита».'));
+  }
+
+  if (cfgState.ignoreLimit) {
+    lines.push(t('routing_allowedips_nolimit',
+      'Режим «Без лимита» снимает защитное ограничение, но не гарантирует, что клиент или роутер корректно обработает большой список маршрутов.'));
+  }
+
+  if (cfgState.mobileMode) {
+    lines.push(t('routing_allowedips_mobile_ipv6',
+      'Mobile-профиль принудительно отключает IPv6, чтобы снизить риск проблем на мобильных сетях и клиентах.'));
+  }
+
+  el.innerHTML = lines
+    .map((line) => `<p class="allowed-ips-explanation__line">${line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`)
+    .join('');
+};
+
+/** Sets cfgState.routeMode and updates all UI state for the routes tab. */
+const updateRouteModeUI = (mode) => {
+  cfgState.routeMode = mode;
+
+  document.getElementById('routeModeFull')
+    ?.classList.toggle('route-mode-btn--active', mode === ROUTE_MODES.FULL);
+  document.getElementById('routeModeSplit')
+    ?.classList.toggle('route-mode-btn--active', mode === ROUTE_MODES.SPLIT);
+
+  const desc = document.getElementById('routeModeDescription');
+  if (desc) {
+    desc.textContent = mode === ROUTE_MODES.FULL
+      ? t('routing_mode_full_desc',
+          'Весь поддерживаемый трафик будет направлен через WARP. Это рекомендуемый вариант, если не нужно выбирать отдельные сервисы.')
+      : t('routing_mode_split_desc',
+          'Через WARP пойдут только выбранные направления. Если нужный сайт не входит в выбранные presets, он может идти мимо туннеля.');
+  }
+
+  // Dim preset tiles in full tunnel mode (pointer-events: none via CSS class)
+  document.getElementById('panel-routes')
+    ?.classList.toggle('routes-panel--full-tunnel', mode === ROUTE_MODES.FULL);
+
+  // Show "presets ignored" notice only when full + at least one preset is checked
+  const ignoredNotice = document.getElementById('presetsIgnoredNotice');
+  if (ignoredNotice) {
+    ignoredNotice.hidden = !(mode === ROUTE_MODES.FULL && getSelectedRouteIds().length > 0);
+  }
+
+  // Update CIDR counter (full tunnel: "not applicable"; split: actual count)
+  updateCidrCounter(mode === ROUTE_MODES.FULL ? 0 : cfgState.cidrCount4);
+
+  updateAllowedIpsExplanation();
+};
+
 /** Update the CIDR counter element (#cidrCounter) and mini counter (#cidrCounterMini). */
 const updateCidrCounter = (count4) => {
   const el = document.getElementById('cidrCounter');
   const mini = document.getElementById('cidrCounterMini');
+
+  // Full tunnel: CIDR counter not applicable
+  if (cfgState.routeMode === ROUTE_MODES.FULL) {
+    if (el) el.textContent = t('routing_counter_not_applicable', 'IPv4 маршруты: не применяется');
+    if (mini) mini.textContent = '';
+    return;
+  }
+
   if (cfgState.ignoreLimit) {
     if (el) {
       el.classList.remove('cidr-counter--warn', 'cidr-counter--over');
@@ -958,6 +1032,11 @@ const renderRouteTiles = (host, presetList) => {
     input.addEventListener('change', () => {
       updateTileActiveClass(label);
       refreshPresetStats();
+      // Keep "presets ignored" notice in sync when user toggles tiles
+      const ignoredNotice = document.getElementById('presetsIgnoredNotice');
+      if (ignoredNotice) {
+        ignoredNotice.hidden = !(cfgState.routeMode === ROUTE_MODES.FULL && getSelectedRouteIds().length > 0);
+      }
     });
 
     const span = document.createElement('span');
@@ -1014,6 +1093,12 @@ const initSettingsPanel = async () => {
     const btnRf = document.getElementById('presetRfPopular');
     const btnClear = document.getElementById('presetClear');
 
+    // Route mode toggle (2.6.0)
+    document.getElementById('routeModeFull')
+      ?.addEventListener('click', () => updateRouteModeUI(ROUTE_MODES.FULL));
+    document.getElementById('routeModeSplit')
+      ?.addEventListener('click', () => updateRouteModeUI(ROUTE_MODES.SPLIT));
+
     const ipv6Toggle = document.getElementById('ipv6Toggle');
     if (ipv6Toggle) {
       ipv6Toggle.checked = cfgState.includeIpv6;
@@ -1030,6 +1115,7 @@ const initSettingsPanel = async () => {
         cfgState.ignoreLimit = ignoreLimitToggle.checked;
         updateCidrCounter(cfgState.cidrCount4);
         updateTileDisabledState();
+        updateAllowedIpsExplanation();
       });
     }
 
@@ -1055,6 +1141,7 @@ const initSettingsPanel = async () => {
       mobileModeToggle.addEventListener('change', () => {
         cfgState.mobileMode = mobileModeToggle.checked;
         applyMobileModeCascade();
+        updateAllowedIpsExplanation();
       });
     }
 
@@ -1164,6 +1251,10 @@ const initSettingsPanel = async () => {
         refreshPresetStats();
       });
     }
+
+    // Initialize route mode UI (2.6.0)
+    updateRouteModeUI(cfgState.routeMode);
+    updateAllowedIpsExplanation();
 
     refreshPresetStats();
   } catch (e) {
