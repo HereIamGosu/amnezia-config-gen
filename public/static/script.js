@@ -363,6 +363,12 @@ const showPostGenRow = ({
     };
   }
 
+  // Кнопка подробностей о конфиге (ℹ) — wire up на случай клонированных строк
+  const infoBtn = row.querySelector('.post-gen-row__info');
+  if (infoBtn) {
+    infoBtn.onclick = () => openModal('resultInfoModal');
+  }
+
   // Кнопка copy vpn:// — показываем только если link есть в ответе
   const copyBtn = row.querySelector('.post-gen-row__copy-vpn-link');
   if (copyBtn) {
@@ -1388,12 +1394,13 @@ const generateConfig = async (options) => {
         renderResultExplanation(lastResultSummary);
       }
       if (allConfigs) {
-        // Multiple configs: show each as a separate variant block
+        // Multiple configs: show each as a separate download row.
+        // Auto-download only the first; remaining variants require a manual click
+        // because browsers block multiple programmatic link.click() in one tick.
         allConfigs.forEach((cfg, idx) => {
           const variantFilename = filename.replace(/\.conf$/, `_variant${idx + 1}.conf`);
           const decoded = atob(cfg.content);
           const variantBtn = idx === 0 ? buttonId : `${buttonId}_v${idx + 1}`;
-          // For first variant reuse the main post-gen row; additional variants rendered below it
           showPostGenRow({
             buttonId: variantBtn,
             readyDownloadText: `Вариант ${idx + 1}`,
@@ -1402,9 +1409,11 @@ const generateConfig = async (options) => {
             vpnLink: cfg.vpnLink,
             telemetryContext: completedContext,
           });
-          downloadFile(decoded, variantFilename);
-          telemetry.trackEvent('config_downloaded', completedContext);
-          if (idx === 0) saveToHistory(mode, decoded, variantFilename);
+          if (idx === 0) {
+            downloadFile(decoded, variantFilename);
+            telemetry.trackEvent('config_downloaded', completedContext);
+            saveToHistory(mode, decoded, variantFilename);
+          }
         });
       } else {
         const decodedConfig = atob(data.content);
