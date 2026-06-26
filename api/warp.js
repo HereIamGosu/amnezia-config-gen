@@ -1265,7 +1265,7 @@ const handler = async (req, res) => {
         : (presetKeys.length ? 'split' : 'full'),
       routesSource: firstMeta.routesSource,
       routesTelemetrySource: firstMeta.routesTelemetrySource,
-      routesPresets: presetKeys.length ? presetKeys : undefined,
+      routesPresets: effectivePresetKeys.length ? effectivePresetKeys : undefined,
       presetSitesCount: firstMeta.sitesResolved || undefined,
       ...(warning ? { warning } : {}),
     });
