@@ -149,7 +149,8 @@
       });
     }
 
-    const routeMode = presets.length ? 'split' : 'full';
+    // Use explicit routeMode from state (2.6.0) when available; fall back to inference for old snapshots
+    const routeMode = state.routeMode || (presets.length ? 'split' : 'full');
     const routesSource = normalizeRoutesSource(
       response.routesTelemetrySource || response.routesSource,
       presets.length > 0,
