@@ -2329,3 +2329,94 @@ button.info-link {
   margin-top: 4px;
 }
 .endpoint-select:focus { outline: 2px solid #fff; }
+
+/* ── Route Mode Toggle (2.6.0) ─────────────────────────────────────────────── */
+.route-mode-block {
+  margin-bottom: 12px;
+}
+
+.route-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.route-mode-toggle__label {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary, #888);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.route-mode-toggle__buttons {
+  display: flex;
+  border: 1px solid var(--color-border, #444);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.route-mode-btn {
+  padding: 4px 12px;
+  font-size: 0.85rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text, #ccc);
+  transition: background 0.15s, color 0.15s;
+}
+
+.route-mode-btn:hover:not(.route-mode-btn--active) {
+  background: var(--color-hover, rgba(255,255,255,0.07));
+}
+
+.route-mode-btn + .route-mode-btn {
+  border-left: 1px solid var(--color-border, #444);
+}
+
+.route-mode-btn--active {
+  background: var(--color-accent, #5a9fd4);
+  color: #fff;
+}
+
+.route-mode-description {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary, #888);
+  margin: 0 0 4px;
+  min-height: 1.2em;
+}
+
+.route-mode-notice--info {
+  font-size: 0.78rem;
+  color: var(--color-warning, #c9a227);
+  margin: 0 0 8px;
+  padding: 4px 8px;
+  background: var(--color-warning-bg, rgba(201,162,39,0.1));
+  border-radius: 4px;
+  border-left: 2px solid var(--color-warning, #c9a227);
+}
+
+/* ── AllowedIPs Explanation (2.6.0) ──────────────────────────────────────────── */
+.allowed-ips-explanation {
+  margin-bottom: 10px;
+}
+
+.allowed-ips-explanation__line {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary, #888);
+  margin: 2px 0;
+  line-height: 1.4;
+}
+
+/* ── Full Tunnel dimming (2.6.0) ──────────────────────────────────────────────── */
+/* Preset tiles become non-interactive in full tunnel mode.
+   Checkboxes are NOT disabled so their state survives mode switch. */
+.routes-panel--full-tunnel .cfg-tiles--routes,
+.routes-panel--full-tunnel .cfg-tiles-actions,
+.routes-panel--full-tunnel .cidr-counter-mini,
+.routes-panel--full-tunnel #presetStats {
+  opacity: 0.4;
+  pointer-events: none;
+  user-select: none;
+}
