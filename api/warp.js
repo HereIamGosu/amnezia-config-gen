@@ -1193,7 +1193,41 @@ const handler = async (req, res) => {
     const includeIpv6 = mobileMode ? false : requestedIpv6;
     const routeOpts = { includeIpv6, routerMode, cpsProtocol, extraCps, mobileMode };
 
-    const { configs, warning } = await generateMultipleWarpConfigs(count, mode, presetKeys, dnsKey, warpExtras, routeOpts);
+    // ── routeMode validation ──────────────────────────────────────────────────────
+    const routeModeRaw = String(
+      body.routeMode ?? pickQuery(req, 'routeMode') ?? ''
+    ).trim().toLowerCase();
+
+    const VALID_ROUTE_MODES = ['full', 'split'];
+
+    if (routeModeRaw && !VALID_ROUTE_MODES.includes(routeModeRaw)) {
+      res.status(400).json({
+        success: false,
+        error: 'invalid_route_mode',
+        message: 'Invalid route mode. Allowed values: full, split.',
+        allowedRouteModes: VALID_ROUTE_MODES,
+      });
+      return;
+    }
+
+    const hasExplicitRouteMode = routeModeRaw === 'full' || routeModeRaw === 'split';
+
+    if (routeModeRaw === 'split' && presetKeys.length === 0) {
+      res.status(400).json({
+        success: false,
+        error: 'empty_split_tunnel',
+        message: 'Split tunnel requires at least one selected route preset.',
+      });
+      return;
+    }
+
+    // Full tunnel override: ignore presets even if they were sent in the request
+    const effectivePresetKeys = (hasExplicitRouteMode && routeModeRaw === 'full')
+      ? []
+      : presetKeys;
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    const { configs, warning } = await generateMultipleWarpConfigs(count, mode, effectivePresetKeys, dnsKey, warpExtras, routeOpts);
 
     const dnsParts = String(getDnsString(dnsKey || DNS_DEFAULT_KEY)).split(',').map((s) => s.trim()).filter(Boolean);
     const endpointHost = warpExtras.peerEndpoint
@@ -1226,6 +1260,9 @@ const handler = async (req, res) => {
       configs: configsOut,
       count: configsOut.length,
       mode,
+      routeMode: hasExplicitRouteMode
+        ? routeModeRaw
+        : (presetKeys.length ? 'split' : 'full'),
       routesSource: firstMeta.routesSource,
       routesTelemetrySource: firstMeta.routesTelemetrySource,
       routesPresets: presetKeys.length ? presetKeys : undefined,
