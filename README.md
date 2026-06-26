@@ -22,6 +22,7 @@ Web UI and HTTP API for building `.conf` files for the **AmneziaWG** client (Wir
 
 ## Features
 
+- Explicit routing mode selection: full tunnel (all traffic) or split tunnel (selected presets only)
 - Two config formats: **Legacy** (`mode=legacy`) and **AmneziaWG 2.0** (`mode=awg2`).
 - Route presets: tile-selectable domain bundles → aggregated IPv4 (or IPv4+IPv6) CIDRs in `AllowedIPs`. With no selection, defaults to `0.0.0.0/0`; `::/0` is added only when IPv6 is explicitly enabled.
 - DNS presets for the `DNS` line in the config.
