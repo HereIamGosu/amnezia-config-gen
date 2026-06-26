@@ -532,6 +532,7 @@ const getResultStateSnapshot = () => ({
   routePresets: getSelectedRouteIds(),
   mobileMode: cfgState.mobileMode,
   routerMode: cfgState.routerMode,
+  routeMode: cfgState.routeMode,
   includeIpv6: cfgState.includeIpv6,
   ignoreLimit: cfgState.ignoreLimit,
   vpnLinkRequested: true,
@@ -546,6 +547,9 @@ const API_WARP_TIMEOUT_MS = 120000;
  * on all tested platforms. Users are warned at 80 % and blocked at 100 %.
  */
 const MAX_CIDR_LIMIT = 1000;
+
+/** Routing mode enum. Always use these constants — never bare string literals. */
+const ROUTE_MODES = Object.freeze({ FULL: 'full', SPLIT: 'split' });
 
 const TG_CHANNEL_URL = 'https://t.me/amnezia_config';
 
@@ -613,6 +617,8 @@ const cfgState = {
   extraCps: false,
   /** When true, mobile preset (low Jc/Jmax, IPv4-only). */
   mobileMode: false,
+  /** Explicit routing mode. 'full' = all traffic through tunnel; 'split' = only selected presets. */
+  routeMode: ROUTE_MODES.FULL,
   /** Number of configs to generate (1–3). */
   configCount: 1,
 };
@@ -737,8 +743,12 @@ const buildWarpQueryString = (mode) => {
   params.set('mode', mode);
   if (mode === 'legacy') params.set('template', 'warp_amnezia');
   if (mode === 'awg2') params.set('template', 'warp_amnezia_awg2');
-  const routeIds = getSelectedRouteIds();
-  if (routeIds.length) params.set('presets', routeIds.join(','));
+  params.set('routeMode', cfgState.routeMode);
+  // Only send presets in split mode — in full tunnel presets must not reach the server
+  if (cfgState.routeMode === ROUTE_MODES.SPLIT) {
+    const routeIds = getSelectedRouteIds();
+    if (routeIds.length) params.set('presets', routeIds.join(','));
+  }
   const dns = getSelectedDnsKey();
   if (dns) params.set('dns', dns);
   if (cfgState.includeIpv6) params.set('ipv6', '1');
@@ -1336,6 +1346,13 @@ const generateConfig = async (options) => {
   const readyDownloadText = mode === 'awg2'
     ? t('ready_download_awg2', 'Скачать AmneziaWarp-AWG2.conf')
     : t('ready_download_legacy', 'Скачать AmneziaWarp.conf');
+
+  // Empty split tunnel guard
+  if (cfgState.routeMode === ROUTE_MODES.SPLIT && getSelectedRouteIds().length === 0) {
+    status.textContent = t('routing_empty_split_error',
+      'Для выборочной маршрутизации выберите хотя бы одно направление или переключитесь на полный туннель.');
+    return;
+  }
 
   setAllGenerateButtonsDisabled(true);
   button.classList.add('button--loading');
