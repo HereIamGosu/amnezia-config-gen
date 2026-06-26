@@ -465,10 +465,9 @@ const appendSummaryField = (container, label, value) => {
 };
 
 const renderResultExplanation = (summary) => {
-  const section = document.getElementById('resultExplanation');
   const fields = document.getElementById('resultSummaryFields');
   const risks = document.getElementById('resultRiskLabels');
-  if (!section || !fields || !risks || !summary) return;
+  if (!fields || !risks || !summary) return;
 
   fields.textContent = '';
   risks.textContent = '';
@@ -517,7 +516,7 @@ const renderResultExplanation = (summary) => {
     });
   }
 
-  section.hidden = false;
+  document.querySelectorAll('.post-gen-row__info').forEach((btn) => { btn.hidden = false; });
 };
 
 const getResultStateSnapshot = () => ({
@@ -1614,10 +1613,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ── Закрытие модалов по клику на затемнённый оверлей ──
-  ['configPreviewModal', 'statusModal'].forEach((id) => {
+  ['configPreviewModal', 'statusModal', 'resultInfoModal'].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('click', (ev) => { if (ev.target === el) closeModal(id); });
   });
+
+  // ── Модал подробностей о конфиге ──
+  document.querySelectorAll('.post-gen-row__info').forEach((btn) => {
+    btn.addEventListener('click', () => openModal('resultInfoModal'));
+  });
+  const resultInfoCloseBtn = document.getElementById('resultInfoModalClose');
+  if (resultInfoCloseBtn) resultInfoCloseBtn.addEventListener('click', () => closeModal('resultInfoModal'));
 
   // ── Стандартные кнопки окна ──
   const closeButton = document.querySelector('.close-button');
@@ -1648,7 +1654,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const settingsEl = document.getElementById('settingsModal');
       if (settingsEl && settingsEl.style.display === 'flex') { closeSettingsModal(); return; }
       if (historyModal && historyModal.style.display === 'flex') { closeHistoryModal(); return; }
-      for (const id of ['configPreviewModal', 'statusModal']) {
+      for (const id of ['configPreviewModal', 'statusModal', 'resultInfoModal']) {
         const el = document.getElementById(id);
         if (el && el.style.display === 'flex') { closeModal(id); return; }
       }

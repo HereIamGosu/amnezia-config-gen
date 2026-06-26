@@ -1117,17 +1117,6 @@ button.info-link {
   display: none;
 }
 
-.result-explanation {
-  display: grid;
-  gap: 10px;
-  width: 100%;
-  margin: 10px 0 14px;
-}
-
-.result-explanation[hidden] {
-  display: none;
-}
-
 .result-summary-card,
 .diagnostics-card {
   padding: 12px;
@@ -1415,6 +1404,48 @@ button.info-link {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Модальное окно подробностей о конфиге
+   ───────────────────────────────────────────────────────────── */
+
+.modal-content--result-info {
+  max-width: 520px;
+  width: min(94vw, 520px);
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.result-info-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.result-info-modal__header .modal-heading {
+  margin: 0;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  color: #555;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.modal-close-btn:hover {
+  background: #e8eaed;
+  color: #1f2933;
 }
 
 /* ─────────────────────────────────────────────────────────────

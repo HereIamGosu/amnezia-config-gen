@@ -323,6 +323,9 @@
                       <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию" data-i18n-title="preview_btn_title">
                         <span aria-hidden="true">&#128065;</span>
                       </button>
+                      <button type="button" class="button button--icon-sq post-gen-row__info" title="Подробнее о конфиге" data-i18n-title="result_info_btn_title" hidden>
+                        <span aria-hidden="true">&#8505;</span>
+                      </button>
                       <button type="button" class="button button--secondary post-gen-row__copy-vpn-link" title="Скопировать vpn://-ссылку для AmneziaVPN" data-i18n-title="copy_vpn_link_title" hidden>
                         <span class="button__text" data-i18n="copy_vpn_link">📋 Скопировать vpn://</span>
                       </button>
@@ -340,6 +343,9 @@
                       </button>
                       <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию" data-i18n-title="preview_btn_title">
                         <span aria-hidden="true">&#128065;</span>
+                      </button>
+                      <button type="button" class="button button--icon-sq post-gen-row__info" title="Подробнее о конфиге" data-i18n-title="result_info_btn_title" hidden>
+                        <span aria-hidden="true">&#8505;</span>
                       </button>
                       <button type="button" class="button button--secondary post-gen-row__copy-vpn-link" title="Скопировать vpn://-ссылку для AmneziaVPN" data-i18n-title="copy_vpn_link_title" hidden>
                         <span class="button__text" data-i18n="copy_vpn_link">📋 Скопировать vpn://</span>
@@ -360,43 +366,6 @@
                   ⚙
                 </button>
               </div>
-
-              <section id="resultExplanation" class="result-explanation" hidden>
-                <div class="result-summary-card">
-                  <h2 class="result-summary-card__title" data-i18n="result_summary_title">
-                    Как собран конфиг
-                  </h2>
-                  <dl id="resultSummaryFields" class="result-summary-card__fields"></dl>
-                  <div id="resultRiskLabels" class="result-risk-list" aria-live="polite"></div>
-                </div>
-
-                <aside class="diagnostics-card">
-                  <h2 class="diagnostics-card__title" data-i18n="diagnostics_title">
-                    Что проверить, если не работает
-                  </h2>
-                  <ul class="diagnostics-card__list">
-                    <li data-i18n="diagnostics_no_handshake">
-                      Если не подключается: проверьте endpoint, порт, доступность UDP, режим AWG и версию клиента.
-                    </li>
-                    <li data-i18n="diagnostics_connected_no_sites">
-                      Если подключается, но сайты не открываются: проверьте DNS, AllowedIPs, IPv6 и MTU.
-                    </li>
-                    <li data-i18n="diagnostics_wifi_vs_mobile">
-                      Если работает в Wi-Fi, но не работает в мобильной сети: попробуйте другой порт, hostname вместо IP или другой endpoint-режим.
-                    </li>
-                    <li data-i18n="diagnostics_import_failed">
-                      Если импорт не проходит: проверьте режим AWG 1.5 / AWG 2.0, формат профиля и способ импорта.
-                    </li>
-                  </ul>
-                  <a
-                    class="diagnostics-card__link"
-                    href="https://t.me/amnezia_config"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-i18n="diagnostics_open_troubleshooting"
-                  >Открыть диагностику</a>
-                </aside>
-              </section>
 
               <button type="button" id="infoLink" class="info-link" data-i18n="btn_info">
                 Дополнительная информация
@@ -611,6 +580,45 @@
           data-i18n-aria-label="config_preview_textarea_aria"
         ></textarea>
         <button type="button" id="copyConfigBtnModal" class="button button--sm" data-i18n="btn_copy">Копировать</button>
+      </div>
+    </div>
+
+    <!-- Модальное окно: подробности о сгенерированном конфиге -->
+    <div id="resultInfoModal" class="modal" role="dialog" aria-modal="true"
+         aria-labelledby="resultInfoModalHeading" aria-hidden="true">
+      <div class="modal-content modal-content--result-info">
+        <div class="result-info-modal__header">
+          <h2 id="resultInfoModalHeading" class="modal-heading" data-i18n="result_summary_title">Как собран конфиг</h2>
+          <button type="button" class="modal-close-btn" id="resultInfoModalClose" aria-label="Закрыть">×</button>
+        </div>
+        <dl id="resultSummaryFields" class="result-summary-card__fields"></dl>
+        <div id="resultRiskLabels" class="result-risk-list" aria-live="polite"></div>
+        <aside class="diagnostics-card">
+          <h2 class="diagnostics-card__title" data-i18n="diagnostics_title">
+            Что проверить, если не работает
+          </h2>
+          <ul class="diagnostics-card__list">
+            <li data-i18n="diagnostics_no_handshake">
+              Если не подключается: проверьте endpoint, порт, доступность UDP, режим AWG и версию клиента.
+            </li>
+            <li data-i18n="diagnostics_connected_no_sites">
+              Если подключается, но сайты не открываются: проверьте DNS, AllowedIPs, IPv6 и MTU.
+            </li>
+            <li data-i18n="diagnostics_wifi_vs_mobile">
+              Если работает в Wi-Fi, но не работает в мобильной сети: попробуйте другой порт, hostname вместо IP или другой endpoint-режим.
+            </li>
+            <li data-i18n="diagnostics_import_failed">
+              Если импорт не проходит: проверьте режим AWG 1.5 / AWG 2.0, формат профиля и способ импорта.
+            </li>
+          </ul>
+          <a
+            class="diagnostics-card__link"
+            href="https://t.me/amnezia_config"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-i18n="diagnostics_open_troubleshooting"
+          >Открыть диагностику</a>
+        </aside>
       </div>
     </div>
 
