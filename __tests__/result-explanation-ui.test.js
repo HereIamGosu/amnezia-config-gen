@@ -13,7 +13,8 @@ test('result explanation loads before the main UI and stays hidden before genera
 
   assert.ok(modelIndex >= 0 && modelIndex < mainIndex);
   assert.match(html, /static\/styles\.css\?v=2\.5\.0/);
-  assert.match(html, /id="resultExplanation" class="result-explanation" hidden/);
+  assert.match(html, /id="resultInfoModal" class="modal" role="dialog" aria-modal="true"/);
+  assert.match(html, /aria-labelledby="resultInfoModalHeading" aria-hidden="true"/);
   assert.match(html, /id="resultSummaryFields"/);
   assert.match(html, /id="resultRiskLabels"/);
 });
