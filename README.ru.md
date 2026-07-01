@@ -12,7 +12,7 @@
 | **Исходный код** | <https://github.com/HereIamGosu/amnezia-config-gen> |
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
-[![Node.js ≥20](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
+[![Node.js 22](https://img.shields.io/badge/node-22.x-brightgreen)](https://nodejs.org/)
 [![CI](https://github.com/HereIamGosu/amnezia-config-gen/actions/workflows/ci.yml/badge.svg)](https://github.com/HereIamGosu/amnezia-config-gen/actions/workflows/ci.yml)
 [![Latest Release](https://img.shields.io/github/v/release/HereIamGosu/amnezia-config-gen)](https://github.com/HereIamGosu/amnezia-config-gen/releases/latest)
 [![Last Commit](https://img.shields.io/github/last-commit/HereIamGosu/amnezia-config-gen)](https://github.com/HereIamGosu/amnezia-config-gen/commits/main)
@@ -22,8 +22,9 @@
 
 ## Возможности
 
+- Явный выбор режима маршрутизации: полный туннель (весь трафик) или выборочная маршрутизация (только выбранные направления). Split tunnel требует хотя бы одно выбранное направление — пустой split tunnel отклоняется, а не молча подменяется полным туннелем.
 - Два формата конфига: **Legacy** (`mode=legacy`) и **AmneziaWG 2.0** (`mode=awg2`).
-- Пресеты маршрутов: тайл-выбор по категориям доменов → агрегированные IPv4 (или IPv4+IPv6) CIDR в `AllowedIPs`. Без выбора по умолчанию используется `0.0.0.0/0`; `::/0` добавляется только при явном включении IPv6.
+- Пресеты маршрутов: тайл-выбор по категориям доменов → агрегированные IPv4 (или IPv4+IPv6) CIDR в `AllowedIPs`. Без выбора по умолчанию используется `0.0.0.0/0`; `::/0` добавляется только при явном включении IPv6. UI ограничивает список маршрутов **1000 IPv4 CIDR** — более длинные списки нестабильны на телефонах и роутерах.
 - Несколько пресетов DNS для строки `DNS` в конфиге.
 - Скачивание `.conf` и два шаблона планировщика Windows: `public/static/SchedulerAmnezia-15.bat` (Legacy 1.5 → `AmneziaWarp.conf`) и `SchedulerAmnezia-20.bat` (AWG 2.0 → `AmneziaWarp-AWG2.conf`); путь к `amneziawg.exe` при необходимости правьте в bat.
 - После генерации карточка результата объясняет формат AWG, число вариантов, источники endpoint и маршрутов, профили, IPv6, наличие `vpn://`, уровни риска и первые шаги диагностики.
@@ -38,7 +39,7 @@
 
 ## Требования
 
-- **Node.js ≥ 20** (LTS).
+- **Node.js 22** (`engines.node: 22.x`; CI также работает на Node 22).
 - **Vercel CLI** для локального запуска серверных функций: `npm i -g vercel` или `npx vercel dev`.
 
 Отдельного `.env` для работы API не требуется — обращение идёт к публичному `api.cloudflareclient.com`.
@@ -70,16 +71,23 @@ npm start    # vercel dev → http://localhost:3000
 |---|---|
 | `public/index.html` | Точка входа UI |
 | `public/static/script.js`, `styles.css` | Логика и стили фронтенда |
+| `public/static/result-explanation.js` | Объясняемая карточка результата после генерации |
+| `public/static/analytics.js` | No-op-safe adapter privacy-ограниченной телеметрии |
 | `public/static/presets-fallback.json` | Запасной каталог пресетов без API |
 | `api/warp.js` | Эндпоинт генерации WARP-конфига |
 | `api/iplist.js` | Список пресетов и предпросмотр CIDR |
-| `api/routePresets.js` | Каталог пресетов и DNS (источник правды) |
-| `api/ipListFetch.js` | Получение CIDR по доменам (in-memory кэш 10 мин) |
-| `api/warpCpsPayloads.js` | Пул верифицированных WARP-совместимых CPS payload'ов |
-| `api/cps-presets/` | Текстовые файлы для query-параметра `i1Ref` |
-| `api/cpsExtraPackets.js` | Генерация I2..I5 для `cps5=1` |
-| `api/vpnLinkBuilder.js` | Сборка `vpn://...` ссылки для AmneziaVPN |
-| `api/_rateLimit.js` | Per-IP rate-limit (10 генераций/мин) |
+| `api/status.js` | Публичный статус пула endpoint'ов (`ok`/`degraded`/`down` по портам) |
+| `api/healthcheck.js` | TCP-проба хостов Cloudflare `api`/`engage` (кэш 30 с) |
+| `src/server/routePresets.js` | Каталог пресетов и DNS (источник правды) |
+| `src/server/ipListFetch.js` | Получение CIDR по доменам (in-memory кэш 10 мин) |
+| `src/server/communityIpFetch.js` | Community-источник CIDR (itdog.info) |
+| `src/server/warpCpsPayloads.js` | Пул верифицированных WARP-совместимых CPS payload'ов |
+| `src/server/cpsGenerator.js` | Генерация `I1` payload'ов (`quic`, `dns`, `stun`, `dtls`, `sip`, `auto`) |
+| `src/server/cps-presets/` | Текстовые файлы для query-параметра `i1Ref` |
+| `src/server/cpsExtraPackets.js` | Генерация I2..I5 для `cps5=1` |
+| `src/server/vpnLinkBuilder.js` | Сборка `vpn://...` ссылки для AmneziaVPN |
+| `src/server/endpointCache.js`, `endpointHealth.js` | Пул кандидатов endpoint и выбор по латентности |
+| `src/server/_rateLimit.js` | Per-IP rate-limit (10 генераций/мин) |
 | `scripts/dump-presets-fallback.js` | Пересборка `presets-fallback.json` из `routePresets.js` |
 | `__tests__/invariant-*.test.js` | Регрессионные тесты на критические инварианты |
 
@@ -104,13 +112,15 @@ npm start    # vercel dev → http://localhost:3000
 
 ### `GET` / `POST` `/api/warp`
 
-Возвращает JSON: `success`, при успехе `content` (тело `.conf` в **base64**), `mode` (`legacy` | `awg2`), опционально `routesSource`, privacy-safe `routesTelemetrySource` (`opencck` | `itdoginfo` | `antifilter` | `static` | `fallback` | `unknown`), `routesPresets`, `presetSitesCount`, `appliedExtras`, `vpnLink`.
+Возвращает JSON: `success`, при успехе `content` (тело `.conf` в **base64**), `mode` (`legacy` | `awg2`), `routeMode` (`full` | `split`), `configs` (массив `{ index, content, appliedExtras, endpointSource, vpnLink }` при `count > 1`), `count`, опционально `routesSource`, privacy-safe `routesTelemetrySource` (`opencck` | `itdoginfo` | `antifilter` | `static` | `fallback` | `unknown`), `routesPresets`, `presetSitesCount`, `appliedExtras`, `vpnLink`. Верхнеуровневые `content` / `vpnLink` / `appliedExtras` дублируют первый конфиг для обратной совместимости.
 
 Параметры через query (`GET`) или поля JSON-тела (`POST`). Имена в теле совпадают с query (удобно для длинного `i1`).
 
 | Параметр | Описание |
 |---|---|
 | `mode` | `legacy` (по умолчанию) или `awg2` (алиасы: `2`, `v2`; также query `awg`) |
+| `routeMode` | `full` (игнорировать пресеты, весь трафик) или `split` (нужен ≥ 1 пресет). Без параметра — выводится из `presets` |
+| `count` | Число конфигов за один запрос, `1`–`3` (по умолчанию `1`); все возвращаются в `configs[]` |
 | `presets` | Ключи пресетов через запятую (или массив в JSON-теле) |
 | `dns` | Ключ пресета DNS; в UI по умолчанию `cloudflare` |
 | `template` | См. [Шаблоны](#шаблоны) |
@@ -118,7 +128,8 @@ npm start    # vercel dev → http://localhost:3000
 | `warpPort` | UDP-порт для `engage…` или IP-fallback (для WARP-шаблонов по умолчанию **4500**; для классического wgcf часто **2408**) |
 | `persistentKeepalive`, `keepalive` | Например `25`; `0` — строка keepalive не пишется |
 | `i1` | Сырая строка CPS / obfuscation (AWG 2.0) |
-| `i1Ref` | Имя файла из `api/cps-presets/` |
+| `i1Ref` | Имя файла из `src/server/cps-presets/` |
+| `cps` | Протокол payload'а `I1`: `auto` (по умолчанию), `quic`, `dns`, `stun`, `dtls`, `sip` |
 | `plainAddress` | `1` / `true` — в `Address` без `/32` и `/128` |
 | `ipv6` | `1` — также включить IPv6 CIDR из пресетов |
 | `cps5` | `1` — добавить случайные `I2`..`I5` в `[Interface]` (только `mode=awg2`, требует непустой `I1`) |
@@ -126,13 +137,21 @@ npm start    # vercel dev → http://localhost:3000
 | `router` | `1` — профиль с router-капами |
 | `link` | `1` — добавить в JSON-ответ поле `vpnLink: "vpn://..."` для импорта в AmneziaVPN одним тапом |
 
-Ошибки: JSON `{ success: false, message }`; коды 4xx/5xx по ситуации.
+Ошибки: JSON `{ success: false, message }`; коды 4xx/5xx по ситуации. Именованные ошибки 400: `invalid_route_mode` (значение кроме `full`/`split`) и `empty_split_tunnel` (`routeMode=split` без пресетов).
 
 ### `GET` `/api/iplist`
 
 Без `?presets=...`: возвращает каталог пресетов целиком (`presets`, категории, `dnsPresets`, `dnsDefault` и т.д.).
 
 С `?presets=key1,key2`: разрешение доменов в CIDR. Ответ: `{ count, count4, count6, cidrs, sites, sitesQueried, cidrSource }`. `cidrSource` сообщает фактический источник маршрутов (`opencck`, `community`, `mixed`, `antifilter` или `static`). Неизвестные ключи → 400 со списком отсутствующих.
+
+### `GET` `/api/status`
+
+Публичный статус пула WARP-endpoint'ов: общий `status` (`ok` | `degraded`), счётчики `ok`/`degraded`/`down` по портам и источник реестра (`kv` | `fallback`). Без авторизации, без утечки IP.
+
+### `GET` `/api/healthcheck`
+
+TCP-проба доступности `api.cloudflareclient.com` и `engage.cloudflareclient.com` (порт 443) с латентностью; результат кэшируется 30 с.
 
 ## Шаблоны
 
@@ -164,7 +183,7 @@ npm start    # vercel dev → http://localhost:3000
 | `npm run lint` | ESLint (`--max-warnings 0`) |
 | `npm test` | Все тесты через встроенный `node:test` |
 | `npm run test:coverage` | Тесты с экспериментальным coverage |
-| `npm run presets:fallback` | Пересобрать `public/static/presets-fallback.json` из `api/routePresets.js` |
+| `npm run presets:fallback` | Пересобрать `public/static/presets-fallback.json` из `src/server/routePresets.js` |
 | `npm run build` | Заглушка (сборка не нужна) |
 
 Запустить один файл тестов: `node --test __tests__/invariant-i1-uppercase.test.js`.

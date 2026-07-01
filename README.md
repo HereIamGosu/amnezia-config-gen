@@ -12,7 +12,7 @@ Web UI and HTTP API for building `.conf` files for the **AmneziaWG** client (Wir
 | **Source code** | <https://github.com/HereIamGosu/amnezia-config-gen> |
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
-[![Node.js ≥20](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
+[![Node.js 22](https://img.shields.io/badge/node-22.x-brightgreen)](https://nodejs.org/)
 [![CI](https://github.com/HereIamGosu/amnezia-config-gen/actions/workflows/ci.yml/badge.svg)](https://github.com/HereIamGosu/amnezia-config-gen/actions/workflows/ci.yml)
 [![Latest Release](https://img.shields.io/github/v/release/HereIamGosu/amnezia-config-gen)](https://github.com/HereIamGosu/amnezia-config-gen/releases/latest)
 [![Last Commit](https://img.shields.io/github/last-commit/HereIamGosu/amnezia-config-gen)](https://github.com/HereIamGosu/amnezia-config-gen/commits/main)
@@ -22,8 +22,9 @@ Web UI and HTTP API for building `.conf` files for the **AmneziaWG** client (Wir
 
 ## Features
 
+- Explicit routing mode selection: full tunnel (all traffic) or split tunnel (selected presets only). Split tunnel requires at least one selected preset — an empty split tunnel is rejected instead of silently falling back to a full tunnel.
 - Two config formats: **Legacy** (`mode=legacy`) and **AmneziaWG 2.0** (`mode=awg2`).
-- Route presets: tile-selectable domain bundles → aggregated IPv4 (or IPv4+IPv6) CIDRs in `AllowedIPs`. With no selection, defaults to `0.0.0.0/0`; `::/0` is added only when IPv6 is explicitly enabled.
+- Route presets: tile-selectable domain bundles → aggregated IPv4 (or IPv4+IPv6) CIDRs in `AllowedIPs`. With no selection, defaults to `0.0.0.0/0`; `::/0` is added only when IPv6 is explicitly enabled. The UI caps route lists at **1000 IPv4 CIDRs** — larger lists are unstable on phones and routers.
 - DNS presets for the `DNS` line in the config.
 - One-click `.conf` download plus two Windows Task Scheduler templates: `public/static/SchedulerAmnezia-15.bat` (Legacy 1.5 → `AmneziaWarp.conf`) and `SchedulerAmnezia-20.bat` (AWG 2.0 → `AmneziaWarp-AWG2.conf`); edit the `amneziawg.exe` path in the .bat if needed.
 - After generation, an explainable result card summarizes the AWG format, variants, endpoint and route sources, profiles, IPv6, `vpn://` availability, risk labels, and practical first diagnostic steps.
@@ -38,7 +39,7 @@ The channel does not promise universal connectivity in any network. The material
 
 ## Requirements
 
-- **Node.js ≥ 20** (LTS).
+- **Node.js 22** (`engines.node: 22.x`; CI also runs on Node 22).
 - **Vercel CLI** for local serverless functions: `npm i -g vercel` or `npx vercel dev`.
 
 No `.env` is required — the app calls Cloudflare's public WARP API directly.
@@ -70,16 +71,23 @@ Only bounded product metadata is allowed: mode, requested/produced counts, endpo
 |---|---|
 | `public/index.html` | UI entry point |
 | `public/static/script.js`, `styles.css` | Frontend logic and styles |
+| `public/static/result-explanation.js` | Post-generation explainable result card |
+| `public/static/analytics.js` | No-op-safe privacy-limited telemetry adapter |
 | `public/static/presets-fallback.json` | Offline fallback preset catalogue |
 | `api/warp.js` | WARP config generation endpoint |
 | `api/iplist.js` | Preset list and CIDR preview |
-| `api/routePresets.js` | Source of truth for all route and DNS presets |
-| `api/ipListFetch.js` | Domain → CIDR resolution (10-min in-memory cache) |
-| `api/warpCpsPayloads.js` | Pool of verified WARP-compatible CPS payloads |
-| `api/cps-presets/` | Text files referenced via `i1Ref` query param |
-| `api/cpsExtraPackets.js` | Generates I2..I5 for `cps5=1` |
-| `api/vpnLinkBuilder.js` | Builds `vpn://...` AmneziaVPN one-tap import URI |
-| `api/_rateLimit.js` | Per-IP rate limiter (10 generations/min) |
+| `api/status.js` | Public endpoint-pool status (per-port `ok`/`degraded`/`down`) |
+| `api/healthcheck.js` | TCP probe of Cloudflare `api`/`engage` hosts (30-s cache) |
+| `src/server/routePresets.js` | Source of truth for all route and DNS presets |
+| `src/server/ipListFetch.js` | Domain → CIDR resolution (10-min in-memory cache) |
+| `src/server/communityIpFetch.js` | Community CIDR source (itdog.info) |
+| `src/server/warpCpsPayloads.js` | Pool of verified WARP-compatible CPS payloads |
+| `src/server/cpsGenerator.js` | Generates `I1` payloads (`quic`, `dns`, `stun`, `dtls`, `sip`, `auto`) |
+| `src/server/cps-presets/` | Text files referenced via `i1Ref` query param |
+| `src/server/cpsExtraPackets.js` | Generates I2..I5 for `cps5=1` |
+| `src/server/vpnLinkBuilder.js` | Builds `vpn://...` AmneziaVPN one-tap import URI |
+| `src/server/endpointCache.js`, `endpointHealth.js` | Endpoint candidate pool and latency-based selection |
+| `src/server/_rateLimit.js` | Per-IP rate limiter (10 generations/min) |
 | `scripts/dump-presets-fallback.js` | Regenerates `presets-fallback.json` from `routePresets.js` |
 | `__tests__/invariant-*.test.js` | Critical-invariant regression tests |
 
@@ -104,13 +112,15 @@ These rules are non-obvious, easy to break, and silently fatal. They are enforce
 
 ### `GET` / `POST` `/api/warp`
 
-Returns JSON: `success`, on success `content` (`.conf` body in **base64**), `mode` (`legacy` | `awg2`), optionally `routesSource`, privacy-safe `routesTelemetrySource` (`opencck` | `itdoginfo` | `antifilter` | `static` | `fallback` | `unknown`), `routesPresets`, `presetSitesCount`, `appliedExtras`, `vpnLink`.
+Returns JSON: `success`, on success `content` (`.conf` body in **base64**), `mode` (`legacy` | `awg2`), `routeMode` (`full` | `split`), `configs` (array of `{ index, content, appliedExtras, endpointSource, vpnLink }` when `count > 1`), `count`, optionally `routesSource`, privacy-safe `routesTelemetrySource` (`opencck` | `itdoginfo` | `antifilter` | `static` | `fallback` | `unknown`), `routesPresets`, `presetSitesCount`, `appliedExtras`, `vpnLink`. Top-level `content` / `vpnLink` / `appliedExtras` mirror the first config for backward compatibility.
 
 Parameters via query string (`GET`) or JSON body fields (`POST`). Body field names match query param names (handy for long `i1`).
 
 | Param | Description |
 |---|---|
 | `mode` | `legacy` (default) or `awg2` (aliases: `2`, `v2`; or query `awg`) |
+| `routeMode` | `full` (ignore presets, route everything) or `split` (requires ≥ 1 preset). Omitted → inferred from `presets` |
+| `count` | Number of configs to generate in one request, `1`–`3` (default `1`); all returned in `configs[]` |
 | `presets` | Comma-separated preset keys (or array in JSON body) |
 | `dns` | DNS preset key; UI default is `cloudflare` |
 | `template` | See [Templates](#templates) |
@@ -118,7 +128,8 @@ Parameters via query string (`GET`) or JSON body fields (`POST`). Body field nam
 | `warpPort` | UDP port for `engage…` or IP fallback (default for WARP templates: **4500**; classic wgcf often: **2408**) |
 | `persistentKeepalive`, `keepalive` | E.g. `25`; `0` omits the keepalive line |
 | `i1` | Raw CPS / obfuscation string (AWG 2.0) |
-| `i1Ref` | Filename from `api/cps-presets/` |
+| `i1Ref` | Filename from `src/server/cps-presets/` |
+| `cps` | `I1` payload protocol: `auto` (default), `quic`, `dns`, `stun`, `dtls`, `sip` |
 | `plainAddress` | `1` / `true` — omit `/32` and `/128` from `Address` |
 | `ipv6` | `1` — also include IPv6 CIDRs from presets |
 | `cps5` | `1` — append random `I2`..`I5` to `[Interface]` (only for `mode=awg2`, requires non-empty `I1`) |
@@ -126,13 +137,21 @@ Parameters via query string (`GET`) or JSON body fields (`POST`). Body field nam
 | `router` | `1` — router caps profile |
 | `link` | `1` — include `vpnLink: "vpn://..."` in JSON response for AmneziaVPN one-tap import |
 
-Errors: JSON `{ success: false, message }`; HTTP 4xx/5xx as appropriate.
+Errors: JSON `{ success: false, message }`; HTTP 4xx/5xx as appropriate. Named 400 errors: `invalid_route_mode` (value other than `full`/`split`) and `empty_split_tunnel` (`routeMode=split` without presets).
 
 ### `GET` `/api/iplist`
 
 Without `?presets=...`: returns the full preset catalogue (`presets`, categories, `dnsPresets`, `dnsDefault`, etc.).
 
 With `?presets=key1,key2`: resolves domains to CIDRs. Response: `{ count, count4, count6, cidrs, sites, sitesQueried, cidrSource }`. `cidrSource` reports the actual route source (`opencck`, `community`, `mixed`, `antifilter`, or `static`). Unknown keys → 400 with the offending list.
+
+### `GET` `/api/status`
+
+Public status of the WARP endpoint pool: overall `status` (`ok` | `degraded`), per-port `ok`/`degraded`/`down` counters, and the registry source (`kv` | `fallback`). No auth, no IP leakage.
+
+### `GET` `/api/healthcheck`
+
+TCP reachability probe of `api.cloudflareclient.com` and `engage.cloudflareclient.com` (port 443) with latency; results cached for 30 s.
 
 ## Templates
 
@@ -164,7 +183,7 @@ With `?presets=key1,key2`: resolves domains to CIDRs. Response: `{ count, count4
 | `npm run lint` | ESLint (`--max-warnings 0`) |
 | `npm test` | Run all tests via built-in `node:test` |
 | `npm run test:coverage` | Run tests with experimental coverage |
-| `npm run presets:fallback` | Regenerate `public/static/presets-fallback.json` from `api/routePresets.js` |
+| `npm run presets:fallback` | Regenerate `public/static/presets-fallback.json` from `src/server/routePresets.js` |
 | `npm run build` | No-op (no build step required) |
 
 To run a single test file: `node --test __tests__/invariant-i1-uppercase.test.js`.
