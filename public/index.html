@@ -805,6 +805,25 @@
 
               <!-- ── Tab 1: Маршруты ── -->
               <div class="tab-panel" id="panel-routes" role="tabpanel">
+                <!-- Route Mode Toggle (2.6.0) -->
+                <div class="route-mode-block">
+                  <div class="route-mode-toggle" role="group" aria-labelledby="routeModeLabel">
+                    <span id="routeModeLabel" class="route-mode-toggle__label" data-i18n="routing_mode_title">Маршрутизация</span>
+                    <div class="route-mode-toggle__buttons">
+                      <button type="button" class="route-mode-btn route-mode-btn--active"
+                              id="routeModeFull" data-i18n="routing_mode_full">Полный туннель</button>
+                      <button type="button" class="route-mode-btn"
+                              id="routeModeSplit" data-i18n="routing_mode_split">Выборочная</button>
+                    </div>
+                  </div>
+                  <p id="routeModeDescription" class="route-mode-description" aria-live="polite"></p>
+                  <p id="presetsIgnoredNotice" class="route-mode-notice route-mode-notice--info" hidden
+                     data-i18n="routing_presets_ignored_in_full">
+                    Вы выбрали полный туннель. Presets не будут ограничивать маршруты в этом режиме.
+                  </p>
+                </div>
+                <!-- AllowedIPs explanation (2.6.0) -->
+                <div id="allowedIpsExplanation" class="allowed-ips-explanation" aria-live="polite"></div>
                 <div class="cfg-tiles-actions">
                   <button type="button" class="cfg-tiles-action" id="presetRfPopular" data-i18n="preset_btn_popular">Основной набор</button>
                   <button type="button" class="cfg-tiles-action" id="presetClear" data-i18n="preset_btn_clear">Снять всё</button>

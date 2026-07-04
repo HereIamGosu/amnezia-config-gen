@@ -2329,3 +2329,90 @@ button.info-link {
   margin-top: 4px;
 }
 .endpoint-select:focus { outline: 2px solid #fff; }
+
+/* ── Route Mode Toggle (2.6.0) ─────────────────────────────────────────────── */
+.route-mode-block {
+  margin-bottom: 12px;
+}
+
+.route-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.route-mode-toggle__label {
+  font-size: inherit;
+  color: #000;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.route-mode-toggle__buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.route-mode-btn {
+  padding: 3px 10px;
+  font-size: inherit;
+  font-family: inherit;
+  background-color: #c0c0c0;
+  border: 2px outset #ffffff;
+  border-radius: 2px;
+  cursor: pointer;
+  color: #000;
+}
+
+.route-mode-btn:hover:not(.route-mode-btn--active) {
+  background-color: #808080;
+}
+
+.route-mode-btn:active,
+.route-mode-btn--active {
+  border: 2px inset #ffffff;
+  background-color: #c0c0c0;
+  color: #000;
+}
+
+.route-mode-description {
+  font-size: inherit;
+  color: #000;
+  margin: 0 0 4px;
+  min-height: 1.2em;
+}
+
+.route-mode-notice--info {
+  font-size: inherit;
+  color: #000;
+  margin: 0 0 8px;
+  padding: 3px 6px;
+  background-color: #c0c0c0;
+  border: 2px inset #ffffff;
+}
+
+/* ── AllowedIPs Explanation (2.6.0) ──────────────────────────────────────────── */
+.allowed-ips-explanation {
+  margin-bottom: 10px;
+}
+
+.allowed-ips-explanation__line {
+  font-size: inherit;
+  color: #000;
+  margin: 2px 0;
+  line-height: 1.4;
+}
+
+/* ── Full Tunnel dimming (2.6.0) ──────────────────────────────────────────────── */
+/* Preset tiles become non-interactive in full tunnel mode.
+   Checkboxes are NOT disabled so their state survives mode switch. */
+.routes-panel--full-tunnel .cfg-tiles--routes,
+.routes-panel--full-tunnel .cfg-tiles-actions,
+.routes-panel--full-tunnel .cidr-counter-mini,
+.routes-panel--full-tunnel #presetStats {
+  opacity: 0.4;
+  pointer-events: none;
+  user-select: none;
+}

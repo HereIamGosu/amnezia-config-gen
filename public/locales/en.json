@@ -201,5 +201,19 @@
   "diagnostics_connected_no_sites": "If it connects but websites do not open: check DNS, AllowedIPs, IPv6, and MTU.",
   "diagnostics_wifi_vs_mobile": "If it works on Wi-Fi but not on mobile network: try another port, hostname instead of IP, or another endpoint mode.",
   "diagnostics_import_failed": "If import fails: check AWG 1.5 / AWG 2.0 mode, profile format, and import method.",
-  "diagnostics_open_troubleshooting": "Open troubleshooting"
+  "diagnostics_open_troubleshooting": "Open troubleshooting",
+
+  "routing_mode_title": "Routing",
+  "routing_mode_full": "Full tunnel",
+  "routing_mode_split": "Split tunnel",
+  "routing_mode_full_desc": "All supported traffic will be routed through WARP. Use this if you do not need to choose specific services.",
+  "routing_mode_split_desc": "Only selected destinations will be routed through WARP. If a website is not covered by selected presets, it may bypass the tunnel.",
+  "routing_empty_split_error": "Choose at least one destination for split tunnel or switch back to full tunnel.",
+  "routing_presets_ignored_in_full": "Full tunnel is selected. Presets will not limit routes in this mode.",
+  "routing_allowedips_full": "AllowedIPs will use the default full route. All supported traffic will go through the tunnel.",
+  "routing_allowedips_split": "AllowedIPs will include only networks from selected destinations. If a website is not covered by selected presets, it may bypass the tunnel.",
+  "routing_allowedips_limit": "Large AllowedIPs lists may import or work unstably on phones and routers. The generator warns at 80% of the limit and blocks selection at 1000 IPv4 CIDR unless \"No limit\" is enabled.",
+  "routing_allowedips_nolimit": "\"No limit\" removes the safety cap, but it does not guarantee that the client or router will handle a large route list correctly.",
+  "routing_allowedips_mobile_ipv6": "Mobile profile forces IPv6 off to reduce issues on mobile networks and clients.",
+  "routing_counter_not_applicable": "IPv4 routes: not applicable"
 }
