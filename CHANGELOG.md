@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [2.6.1] - 2026-07-04
+
+### Added
+- Regression-тесты для модели маршрутизации 2.6.0: `full` / `split`, обратная совместимость запросов без `routeMode`, явный `routeMode=split` с пресетами (`__tests__/routing-mode.test.js`).
+- Frontend guard-тесты (`__tests__/routing-frontend-guards.test.js`): блокировка пустого split tunnel до запроса, CIDR counter, порог предупреждения 80 %, жёсткий лимит 1000 CIDR, режим «Без лимита», отключение IPv6 в mobile-профиле, отсутствие лишних секретов в local history.
+- Проверки на отсутствие утечки `PrivateKey` / `PresharedKey` / WARP token / `vpn://` payload / полного `.conf` в API-ошибках, warnings, result summary и telemetry (`__tests__/secret-leakage.test.js` включён в стандартный `npm test`).
+
+### Changed
+- Ничего в пользовательском поведении: релиз закрепляет `2.6.0 — Routing Clarity` тестами и contract-проверками, без новых функций и без изменения формата `.conf` или `vpn://`.
+
+### Security
+- Зафиксирован инвариант WARP AWG 2.0: `H1–H4` остаются `1/2/3/4` и не рандомизируются (пир Cloudflare — стандартный WireGuard peer). См. `__tests__/invariant-i3-warp-h-fixed.test.js`.
+
 ## [2.6.0] - 2026-06-27
 
 ### Added

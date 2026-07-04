@@ -155,4 +155,20 @@ describe('routeMode validation — positive paths (WARP mock)', () => {
       assert.equal(res.getBody().success, true);
     } finally { m.mock.restore(); net.createConnection = realNetCreate; }
   });
+
+  // FR-RSH-003 — explicit split with presets builds a config (AllowedIPs from selected presets).
+  test('routeMode=split + presets → 200 and response routeMode is split', async () => {
+    clearModules();
+    const m = installWarpMock();
+    net.createConnection = (_o, cb) => { const s = mockNetOk(); if (cb) setImmediate(cb); return s; };
+    try {
+      const handler = require('../api/warp');
+      const res = makeRes();
+      await handler(makeReq({ mode: 'awg2', routeMode: 'split', presets: 'telegram' }), res);
+      assert.equal(res.getStatus(), 200);
+      const body = res.getBody();
+      assert.equal(body.success, true);
+      assert.equal(body.routeMode, 'split');
+    } finally { m.mock.restore(); net.createConnection = realNetCreate; }
+  });
 });
