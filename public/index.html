@@ -272,15 +272,6 @@
               />
             </header>
 
-            <!-- Onboarding «Что это?» — коллапсируемый вводный блок (2.7.0) -->
-            <details id="onboardingBlock" class="onboarding">
-              <summary class="onboarding__summary" data-i18n="onboarding_title">Что это?</summary>
-              <div class="onboarding__body">
-                <p data-i18n="onboarding_body">Генератор создаёт готовый AmneziaWG/WARP-профиль для импорта в VPN-клиент. Можно скачать .conf или скопировать vpn://, если клиент поддерживает быстрый импорт. Полный туннель направляет весь поддерживаемый трафик через WARP, выборочная маршрутизация — только выбранные направления. Работоспособность зависит от клиента, сети, endpoint, DNS и маршрутов.</p>
-                <p class="onboarding__note" data-i18n="onboarding_no_guarantee">Генератор снижает количество ручной настройки, но не гарантирует работу в любой сети и любом клиенте.</p>
-              </div>
-            </details>
-
             <!-- Сообщение о конфигурации и файле планировщика -->
             <div class="info-message">
               <p data-i18n-html="info_message_p1">
@@ -295,6 +286,15 @@
                 каждом указан свой файл конфига в «Загрузках».
               </p>
             </div>
+
+            <!-- Onboarding «Что это?» — компактный коллапсируемый вводный блок (2.7.0) -->
+            <details id="onboardingBlock" class="onboarding">
+              <summary class="onboarding__summary" data-i18n="onboarding_title">Что это?</summary>
+              <div class="onboarding__body">
+                <p data-i18n="onboarding_body">Генератор создаёт готовый AmneziaWG/WARP-профиль для импорта в VPN-клиент. Можно скачать .conf или скопировать vpn://, если клиент поддерживает быстрый импорт. Полный туннель направляет весь поддерживаемый трафик через WARP, выборочная маршрутизация — только выбранные направления. Работоспособность зависит от клиента, сети, endpoint, DNS и маршрутов.</p>
+                <p class="onboarding__note" data-i18n="onboarding_no_guarantee">Генератор снижает количество ручной настройки, но не гарантирует работу в любой сети и любом клиенте.</p>
+              </div>
+            </details>
 
             <!-- Раздел для статуса, обновляемый в реальном времени -->
             <section id="status" aria-live="polite"></section>
