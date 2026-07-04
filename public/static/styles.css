@@ -2344,57 +2344,53 @@ button.info-link {
 }
 
 .route-mode-toggle__label {
-  font-size: 0.85rem;
-  color: var(--color-text-secondary, #888);
+  font-size: inherit;
+  color: #000;
   white-space: nowrap;
   user-select: none;
 }
 
 .route-mode-toggle__buttons {
   display: flex;
-  border: 1px solid var(--color-border, #444);
-  border-radius: 4px;
-  overflow: hidden;
+  gap: 4px;
 }
 
 .route-mode-btn {
-  padding: 4px 12px;
-  font-size: 0.85rem;
-  background: transparent;
-  border: none;
+  padding: 3px 10px;
+  font-size: inherit;
+  font-family: inherit;
+  background-color: #c0c0c0;
+  border: 2px outset #ffffff;
+  border-radius: 2px;
   cursor: pointer;
-  color: var(--color-text, #ccc);
-  transition: background 0.15s, color 0.15s;
+  color: #000;
 }
 
 .route-mode-btn:hover:not(.route-mode-btn--active) {
-  background: var(--color-hover, rgba(255,255,255,0.07));
+  background-color: #808080;
 }
 
-.route-mode-btn + .route-mode-btn {
-  border-left: 1px solid var(--color-border, #444);
-}
-
+.route-mode-btn:active,
 .route-mode-btn--active {
-  background: var(--color-accent, #5a9fd4);
-  color: #fff;
+  border: 2px inset #ffffff;
+  background-color: #c0c0c0;
+  color: #000;
 }
 
 .route-mode-description {
-  font-size: 0.8rem;
-  color: var(--color-text-secondary, #888);
+  font-size: inherit;
+  color: #000;
   margin: 0 0 4px;
   min-height: 1.2em;
 }
 
 .route-mode-notice--info {
-  font-size: 0.78rem;
-  color: var(--color-warning, #c9a227);
+  font-size: inherit;
+  color: #000;
   margin: 0 0 8px;
-  padding: 4px 8px;
-  background: var(--color-warning-bg, rgba(201,162,39,0.1));
-  border-radius: 4px;
-  border-left: 2px solid var(--color-warning, #c9a227);
+  padding: 3px 6px;
+  background-color: #c0c0c0;
+  border: 2px inset #ffffff;
 }
 
 /* ── AllowedIPs Explanation (2.6.0) ──────────────────────────────────────────── */
@@ -2403,8 +2399,8 @@ button.info-link {
 }
 
 .allowed-ips-explanation__line {
-  font-size: 0.78rem;
-  color: var(--color-text-secondary, #888);
+  font-size: inherit;
+  color: #000;
   margin: 2px 0;
   line-height: 1.4;
 }
