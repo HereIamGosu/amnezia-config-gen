@@ -157,6 +157,41 @@ With `?presets=key1,key2`: resolves domains to CIDRs. Response: `{ count, count4
 
 `appliedExtras: { cps5, mobile }` in the response reports what was actually applied (`cps5` may be `false` even when requested — Legacy mode silently ignores it).
 
+## Compatibility
+
+Since 2.7.0 the `/api/warp` response carries an optional, additive `compatibility` summary
+(`recommended` / `experimental` / `notRecommended` / `warnings`). It is metadata only:
+it never contains keys, `.conf` text, or the `vpn://` payload, and it does not change any
+existing response field. After a generation the UI shows a compatibility card that tells you
+which clients are a reasonable target for the produced profile.
+
+The compatibility model lives in [`src/server/clientCompatibility.js`](src/server/clientCompatibility.js)
+via `getCompatibilityForGeneration({ mode, exportType, mobile, router, link })`.
+
+### AWG 2.0 and Cloudflare WARP
+
+AWG 2.0 refers to **client-side configuration parameters**. The Cloudflare WARP peer remains a
+standard WireGuard peer, so some WARP parameters are intentionally fixed (see the AWG 2.0 / WARP
+invariants above). Selecting AWG 2.0 does **not** mean Cloudflare's server supports AWG 2.0.
+
+### Export targets
+
+[`src/server/exportTargets.js`](src/server/exportTargets.js) is a v0 registry describing output
+formats and how ready each one is:
+
+| Target | Status |
+|---|---|
+| `.conf` | stable |
+| `vpn://` | stable |
+| QR | experimental |
+| sing-box / Mihomo / Clash | experimental |
+| Throne | research |
+| OpenWrt | documentation |
+
+Experimental and research targets are **not** stable exporters — they are labelled honestly so
+they are not mistaken for a working import path. The generator reduces manual configuration, but
+it does not guarantee connectivity in every network or client.
+
 ## NPM scripts
 
 | Command | Action |

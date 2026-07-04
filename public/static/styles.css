@@ -2416,3 +2416,121 @@ button.info-link {
   pointer-events: none;
   user-select: none;
 }
+
+/* ── Onboarding «Что это?» (2.7.0) ────────────────────────────────────────────── */
+.onboarding {
+  margin: 8px 0 12px;
+  padding: 6px 12px;
+  background-color: #eef1f5;
+  border: 2px solid #000080;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.onboarding__summary {
+  cursor: pointer;
+  font-weight: bold;
+  color: #000080;
+  user-select: none;
+  list-style: revert;
+}
+
+.onboarding__body {
+  margin-top: 6px;
+}
+
+.onboarding__body p {
+  margin: 4px 0;
+  color: #000;
+}
+
+.onboarding__note {
+  font-style: italic;
+  color: #404040;
+}
+
+/* ── AWG 2.0 disclaimer (2.7.0) ───────────────────────────────────────────────── */
+.awg2-disclaimer {
+  margin: 4px 0 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #404040;
+}
+
+/* ── Compatibility card (2.7.0) ───────────────────────────────────────────────── */
+.compat-card {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background-color: #c0c0c0;
+  border: 2px solid #000080;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.compat-card[hidden] {
+  display: none;
+}
+
+.compat-card__title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: #000080;
+}
+
+.compat-card__format {
+  margin-bottom: 6px;
+  font-weight: bold;
+  color: #000;
+}
+
+.compat-card__group {
+  margin-top: 6px;
+}
+
+.compat-card__group[hidden] {
+  display: none;
+}
+
+.compat-card__group-title {
+  margin: 0 0 2px;
+  font-size: 11px;
+  color: #000;
+}
+
+.compat-card__list {
+  margin: 0;
+  padding-left: 16px;
+  list-style: square;
+}
+
+.compat-card__item {
+  margin: 2px 0;
+}
+
+.compat-card__client {
+  font-weight: bold;
+  color: #000;
+}
+
+.compat-card__meta {
+  color: #404040;
+}
+
+.compat-card__meta::before {
+  content: " — ";
+}
+
+.compat-card__warnings {
+  margin-top: 8px;
+  border-top: 1px solid #808080;
+  padding-top: 6px;
+}
+
+.compat-card__warnings[hidden] {
+  display: none;
+}
+
+.compat-card__warning {
+  margin: 3px 0;
+  color: #000;
+}

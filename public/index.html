@@ -272,6 +272,15 @@
               />
             </header>
 
+            <!-- Onboarding «Что это?» — коллапсируемый вводный блок (2.7.0) -->
+            <details id="onboardingBlock" class="onboarding">
+              <summary class="onboarding__summary" data-i18n="onboarding_title">Что это?</summary>
+              <div class="onboarding__body">
+                <p data-i18n="onboarding_body">Генератор создаёт готовый AmneziaWG/WARP-профиль для импорта в VPN-клиент. Можно скачать .conf или скопировать vpn://, если клиент поддерживает быстрый импорт. Полный туннель направляет весь поддерживаемый трафик через WARP, выборочная маршрутизация — только выбранные направления. Работоспособность зависит от клиента, сети, endpoint, DNS и маршрутов.</p>
+                <p class="onboarding__note" data-i18n="onboarding_no_guarantee">Генератор снижает количество ручной настройки, но не гарантирует работу в любой сети и любом клиенте.</p>
+              </div>
+            </details>
+
             <!-- Сообщение о конфигурации и файле планировщика -->
             <div class="info-message">
               <p data-i18n-html="info_message_p1">
@@ -337,6 +346,8 @@
                     <button id="generateButtonAwg2" class="button" type="button">
                       <span class="button__text" data-i18n="btn_gen_awg2">Сгенерировать AWG 2.0</span>
                     </button>
+                    <!-- AWG 2.0 disclaimer (2.7.0): AWG 2.0 = client-side config, not Cloudflare peer support -->
+                    <p id="awg2Disclaimer" class="awg2-disclaimer" data-i18n="compat_awg2_disclaimer">AWG 2.0 здесь означает формат и параметры клиентской конфигурации. Cloudflare WARP peer остаётся стандартным WireGuard peer, поэтому часть параметров для WARP фиксирована намеренно.</p>
                     <div id="postGenAwg2" class="post-gen-row" hidden>
                       <button type="button" class="button post-gen-row__download">
                         <span class="button__text" data-i18n="ready_download_awg2">Скачать AmneziaWarp-AWG2.conf</span>
@@ -419,6 +430,25 @@
                 data-i18n="tg_cta_btn"
               >Подписаться на канал</a>
             </div>
+
+            <!-- Карточка совместимости — заполняется после генерации (2.7.0) -->
+            <section id="compatibilityCard" class="compat-card" aria-live="polite" hidden>
+              <h2 class="compat-card__title" data-i18n="compat_title">Совместимость</h2>
+              <div id="compatFormat" class="compat-card__format"></div>
+              <div id="compatRecommended" class="compat-card__group" hidden>
+                <h3 class="compat-card__group-title" data-i18n="compat_recommended">Подходит для импорта</h3>
+                <ul id="compatRecommendedList" class="compat-card__list"></ul>
+              </div>
+              <div id="compatExperimental" class="compat-card__group" hidden>
+                <h3 class="compat-card__group-title" data-i18n="compat_experimental">Можно попробовать</h3>
+                <ul id="compatExperimentalList" class="compat-card__list"></ul>
+              </div>
+              <div id="compatNotRecommended" class="compat-card__group" hidden>
+                <h3 class="compat-card__group-title" data-i18n="compat_not_recommended">Не подходит напрямую</h3>
+                <ul id="compatNotRecommendedList" class="compat-card__list"></ul>
+              </div>
+              <div id="compatWarnings" class="compat-card__warnings" hidden></div>
+            </section>
 
           </main>
 

@@ -215,5 +215,22 @@
   "routing_allowedips_limit": "Large AllowedIPs lists may import or work unstably on phones and routers. The generator warns at 80% of the limit and blocks selection at 1000 IPv4 CIDR unless \"No limit\" is enabled.",
   "routing_allowedips_nolimit": "\"No limit\" removes the safety cap, but it does not guarantee that the client or router will handle a large route list correctly.",
   "routing_allowedips_mobile_ipv6": "Mobile profile forces IPv6 off to reduce issues on mobile networks and clients.",
-  "routing_counter_not_applicable": "IPv4 routes: not applicable"
+  "routing_counter_not_applicable": "IPv4 routes: not applicable",
+
+  "onboarding_title": "What is this?",
+  "onboarding_body": "The generator creates a ready AmneziaWG/WARP profile for import into a VPN client. You can download a .conf file or copy vpn:// if your client supports quick import. Full tunnel routes all supported traffic through WARP, while split tunnel routes only selected destinations. Connectivity depends on the client, network, endpoint, DNS, and routes.",
+  "onboarding_no_guarantee": "The generator reduces manual configuration, but it does not guarantee connectivity in every network or client.",
+
+  "compat_awg2_disclaimer": "AWG 2.0 here means the client-side configuration format and parameters. The Cloudflare WARP peer remains a standard WireGuard peer, so some WARP parameters are intentionally fixed.",
+  "compat_title": "Compatibility",
+  "compat_format": "Format",
+  "compat_recommended": "Recommended for import",
+  "compat_experimental": "Can be tried",
+  "compat_not_recommended": "Not directly supported",
+  "compat_cloudflare_peer_notice": "AWG 2.0 fields are client-side configuration parameters. The Cloudflare WARP peer remains a standard WireGuard peer.",
+  "compat_client_version_warning": "Compatibility depends on the client and its version. If import succeeds but the tunnel does not work, try another client or profile mode.",
+  "compat_unsupported_exporter_warning": "This format does not have a stable exporter yet. It is shown as experimental or research-only.",
+  "compat_reason_no_exporter": "Direct export is not implemented yet.",
+  "compat_reason_research": "Research or documentation target only.",
+  "compat_reason_no_path": "No direct import path for this profile format."
 }

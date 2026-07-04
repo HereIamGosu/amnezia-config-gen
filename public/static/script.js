@@ -7,6 +7,7 @@
 const _i18n = { locale: 'ru', strings: {} };
 const resultExplanation = window.ResultExplanation || null;
 let lastResultSummary = null;
+let lastCompatibility = null;
 const telemetry = window.ProductTelemetry || {
   classifyGenerationError: () => 'unknown',
   durationMs: () => 0,
@@ -81,6 +82,7 @@ const loadLocale = async (lang) => {
     _i18n.locale = lang;
     applyTranslations();
     if (lastResultSummary) renderResultExplanation(lastResultSummary);
+    if (lastCompatibility) renderCompatibilityCard(lastCompatibility);
   } catch {
     // В офлайн-режиме или при 404 оставляем исходный HTML-текст (русский)
   }
@@ -523,6 +525,129 @@ const renderResultExplanation = (summary) => {
   }
 
   document.querySelectorAll('.post-gen-row__info').forEach((btn) => { btn.hidden = false; });
+};
+
+// ── Compatibility card (2.7.0) ────────────────────────────────────────────────
+
+/** Maps canonical server-side format ids to display labels. */
+const COMPAT_FORMAT_LABELS = { conf: '.conf', vpnlink: 'vpn://', qr: 'QR' };
+
+/**
+ * Localizes a fixed English server string (warning or reason) via a known-prefix
+ * lookup. Falls back to the original string, which is always secret-free.
+ */
+const localizeCompatText = (text) => {
+  if (typeof text !== 'string') return '';
+  const map = [
+    ['AWG 2.0 fields are client-side configuration parameters', 'compat_cloudflare_peer_notice'],
+    ['Compatibility depends on the client', 'compat_client_version_warning'],
+    ['This format does not have a stable exporter', 'compat_unsupported_exporter_warning'],
+    ['Direct export is not implemented', 'compat_reason_no_exporter'],
+    ['Research/documentation target only', 'compat_reason_research'],
+    ['No supported import path', 'compat_reason_no_path'],
+  ];
+  for (const [prefix, key] of map) {
+    if (text.startsWith(prefix)) return t(key, text);
+  }
+  return text;
+};
+
+const compatListItem = (primary, secondary) => {
+  const li = document.createElement('li');
+  li.className = 'compat-card__item';
+  const name = document.createElement('span');
+  name.className = 'compat-card__client';
+  name.textContent = primary;
+  li.appendChild(name);
+  if (secondary) {
+    const meta = document.createElement('span');
+    meta.className = 'compat-card__meta';
+    meta.textContent = secondary;
+    li.appendChild(meta);
+  }
+  return li;
+};
+
+const fillCompatGroup = (groupId, listId, items, buildItem) => {
+  const group = document.getElementById(groupId);
+  const list = document.getElementById(listId);
+  if (!group || !list) return;
+  list.textContent = '';
+  if (!Array.isArray(items) || items.length === 0) {
+    group.hidden = true;
+    return;
+  }
+  items.forEach((entry) => list.appendChild(buildItem(entry)));
+  group.hidden = false;
+};
+
+/**
+ * Renders the post-generation compatibility card from the /api/warp
+ * `compatibility` summary. When the summary is missing/invalid, the card is
+ * hidden and generation actions (download/preview/vpn://) keep working.
+ */
+const renderCompatibilityCard = (compatibility) => {
+  const card = document.getElementById('compatibilityCard');
+  if (!card) return;
+
+  const valid = compatibility
+    && typeof compatibility === 'object'
+    && (Array.isArray(compatibility.recommended)
+      || Array.isArray(compatibility.experimental)
+      || Array.isArray(compatibility.notRecommended));
+
+  if (!valid) {
+    card.hidden = true;
+    return;
+  }
+
+  const recommended = compatibility.recommended || [];
+  const experimental = compatibility.experimental || [];
+  const notRecommended = compatibility.notRecommended || [];
+  const warnings = compatibility.warnings || [];
+
+  // Format line: union of usable exports across recommended + experimental.
+  const formatEl = document.getElementById('compatFormat');
+  if (formatEl) {
+    const formats = new Set();
+    [...recommended, ...experimental].forEach((c) => {
+      (c.exports || []).forEach((ex) => formats.add(COMPAT_FORMAT_LABELS[ex] || ex));
+    });
+    if (formats.size === 0) formats.add('.conf');
+    formatEl.textContent = `${t('compat_format', 'Формат')}: ${[...formats].join(', ')}`;
+  }
+
+  fillCompatGroup('compatRecommended', 'compatRecommendedList', recommended, (c) => {
+    const platforms = (c.platforms || []).join(', ');
+    return compatListItem(c.name || c.clientId, platforms);
+  });
+
+  fillCompatGroup('compatExperimental', 'compatExperimentalList', experimental, (c) => {
+    const warn = (c.warnings || [])[0];
+    return compatListItem(c.name || c.clientId, warn ? localizeCompatText(warn) : '');
+  });
+
+  fillCompatGroup('compatNotRecommended', 'compatNotRecommendedList', notRecommended, (c) => (
+    compatListItem(c.name || c.clientId, localizeCompatText(c.reason || ''))
+  ));
+
+  const warnEl = document.getElementById('compatWarnings');
+  if (warnEl) {
+    warnEl.textContent = '';
+    if (warnings.length) {
+      warnings.forEach((w) => {
+        const p = document.createElement('p');
+        p.className = 'compat-card__warning';
+        p.textContent = localizeCompatText(w);
+        warnEl.appendChild(p);
+      });
+      warnEl.hidden = false;
+    } else {
+      warnEl.hidden = true;
+    }
+  }
+
+  card.hidden = false;
 };
 
 const getResultStateSnapshot = () => ({
@@ -1501,6 +1626,8 @@ const generateConfig = async (options) => {
         lastResultSummary = resultExplanation.buildResultSummary(data, resultState);
         renderResultExplanation(lastResultSummary);
       }
+      lastCompatibility = data.compatibility || null;
+      renderCompatibilityCard(lastCompatibility);
       if (allConfigs) {
         // Multiple configs: show each as a separate download row.
         // Auto-download only the first; remaining variants require a manual click

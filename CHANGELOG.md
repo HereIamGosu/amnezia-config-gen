@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-07-05
+
+### Added
+- Пояснение к режиму AWG 2.0 рядом с кнопкой генерации: AWG 2.0 относится к параметрам клиентской конфигурации, а Cloudflare WARP peer остаётся стандартным WireGuard peer (часть параметров для WARP фиксирована намеренно).
+- Серверная матрица совместимости клиентов (`src/server/clientCompatibility.js`) с функцией `getCompatibilityForGeneration({ mode, exportType, mobile, router, link })`: разбивает клиентов на `recommended` / `experimental` / `notRecommended` и формирует secret-free warnings.
+- Реестр export targets v0 (`src/server/exportTargets.js`) со статусами `stable` / `experimental` / `research` / `documentation` и helpers `getExportTarget`, `listExportTargets`, `getAvailableExportTargets`, `isStableExportTarget`.
+- Опциональное additive-поле `compatibility` в ответе `/api/warp` (не меняет существующие поля, `.conf` и `vpn://`).
+- Пост-генерационная карточка совместимости в UI: подходящие клиенты, экспериментальные варианты, форматы без прямой поддержки и предупреждения. Скрывается без ошибок, если API не вернул `compatibility`.
+- Коллапсируемый onboarding-блок «Что это?» на главной странице.
+- RU/EN локализация для всех новых текстов.
+- Тесты: `client-compatibility.test.js`, `export-targets.test.js`, `compatibility-api.test.js` (contract + backward compatibility + отсутствие утечки секретов), `compatibility-ui.test.js` (markup / script / locales / no-overpromise).
+
+### Notes
+- Сетевое ядро генератора не изменено: `.conf`, `vpn://` payload, H1–H4, CPS-пейлоады и mobile mode остались прежними. Релиз добавляет только пояснительную UX-метадату и onboarding.
+- sing-box / Clash / Mihomo / Throne представлены как experimental/research без реального exporter — они не выдаются как stable путь импорта.
+
 ## [2.6.2] - 2026-07-04
 
 ### Added

@@ -14,6 +14,7 @@ const warpLimiter = createRateLimiter({ windowMs: 60_000, maxHits: 10 });
 const { generateCpsPayload } = require('../src/server/cpsGenerator');
 const { generateI2I5 } = require('../src/server/cpsExtraPackets');
 const { buildVpnLink } = require('../src/server/vpnLinkBuilder');
+const { getCompatibilityForGeneration } = require('../src/server/clientCompatibility');
 const { getTopEndpoints, updateEndpointHealth } = require('../src/server/endpointCache');
 const { checkTcpLatency, pickBestEndpoint } = require('../src/server/endpointHealth');
 
@@ -1250,6 +1251,25 @@ const handler = async (req, res) => {
     });
 
     const firstMeta = configs[0]?.meta ?? {};
+
+    // Additive compatibility summary (2.7.0). Optional, secret-free metadata:
+    // never includes .conf text, keys, or the vpn:// payload. Guarded so a
+    // failure here can never break the core generation response.
+    let compatibility;
+    try {
+      const hasVpnLink = Boolean(configsOut[0]?.vpnLink);
+      compatibility = getCompatibilityForGeneration({
+        mode,
+        exportType: hasVpnLink ? 'vpnlink' : 'conf',
+        mobile: mobileMode,
+        router: routerMode,
+        link: hasVpnLink,
+      });
+    } catch (compatError) {
+      console.error('Compatibility summary failed (non-fatal):', compatError);
+      compatibility = undefined;
+    }
+
     res.status(200).json({
       success: true,
       // Backward-compat single-config fields (first config)
@@ -1268,6 +1288,7 @@ const handler = async (req, res) => {
       routesPresets: effectivePresetKeys.length ? effectivePresetKeys : undefined,
       presetSitesCount: firstMeta.sitesResolved || undefined,
       ...(warning ? { warning } : {}),
+      ...(compatibility ? { compatibility } : {}),
     });
   } catch (error) {
     console.error('Ошибка генерации конфигурации:', error);

@@ -157,6 +157,40 @@ npm start    # vercel dev → http://localhost:3000
 
 `appliedExtras: { cps5, mobile }` в ответе сообщает что фактически применилось (`cps5` может быть `false` даже когда запрошено — Legacy-режим его молча игнорирует).
 
+## Совместимость
+
+Начиная с 2.7.0 ответ `/api/warp` содержит опциональное additive-поле `compatibility`
+(`recommended` / `experimental` / `notRecommended` / `warnings`). Это только метадата: она не
+содержит ключей, текста `.conf` или `vpn://` payload и не меняет существующие поля ответа. После
+генерации UI показывает карточку совместимости — куда можно попробовать импортировать профиль.
+
+Модель совместимости — [`src/server/clientCompatibility.js`](src/server/clientCompatibility.js),
+функция `getCompatibilityForGeneration({ mode, exportType, mobile, router, link })`.
+
+### AWG 2.0 и Cloudflare WARP
+
+AWG 2.0 означает **параметры клиентской конфигурации**. Cloudflare WARP peer остаётся стандартным
+WireGuard peer, поэтому часть параметров для WARP фиксирована намеренно. Выбор AWG 2.0 **не**
+означает, что сервер Cloudflare поддерживает AWG 2.0.
+
+### Export targets
+
+[`src/server/exportTargets.js`](src/server/exportTargets.js) — реестр v0 форматов вывода и их
+статусов:
+
+| Target | Статус |
+|---|---|
+| `.conf` | stable |
+| `vpn://` | stable |
+| QR | experimental |
+| sing-box / Mihomo / Clash | experimental |
+| Throne | research |
+| OpenWrt | documentation |
+
+Experimental и research форматы **не** являются стабильными экспортерами — они помечены честно,
+чтобы их не приняли за рабочий путь импорта. Генератор снижает количество ручной настройки, но не
+гарантирует работу в любой сети и любом клиенте.
+
 ## NPM-скрипты
 
 | Команда | Действие |
