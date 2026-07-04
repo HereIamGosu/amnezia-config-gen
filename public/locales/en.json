@@ -33,7 +33,6 @@
   "settings_toggle_title": "Config settings",
 
   "info_message_p1": "Config can be generated for any device. By default, all traffic goes through the tunnel. Route and DNS presets can be configured in the modal window via the <strong>⚙</strong> button next to the generate buttons.",
-  "info_message_p2": "For Windows — two separate <strong>.bat</strong> files for each client version: <strong>1.5 (Legacy)</strong> and <strong>2.0</strong>; each references its own config file in the Downloads folder.",
 
   "status_modal_heading": "📡 Service Status",
   "status_loading": "Loading...",
