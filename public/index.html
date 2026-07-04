@@ -343,11 +343,11 @@
 
                   <!-- AWG2 slot -->
                   <div class="gen-slot">
-                    <button id="generateButtonAwg2" class="button" type="button">
+                    <!-- AWG 2.0 disclaimer (2.7.0) вынесен в тултип на кнопке:
+                         AWG 2.0 = клиентская конфигурация, а не поддержка на стороне Cloudflare peer. -->
+                    <button id="generateButtonAwg2" class="button" type="button" title="AWG 2.0 здесь означает формат и параметры клиентской конфигурации. Cloudflare WARP peer остаётся стандартным WireGuard peer, поэтому часть параметров для WARP фиксирована намеренно." data-i18n-title="compat_awg2_disclaimer">
                       <span class="button__text" data-i18n="btn_gen_awg2">Сгенерировать AWG 2.0</span>
                     </button>
-                    <!-- AWG 2.0 disclaimer (2.7.0): AWG 2.0 = client-side config, not Cloudflare peer support -->
-                    <p id="awg2Disclaimer" class="awg2-disclaimer" data-i18n="compat_awg2_disclaimer">AWG 2.0 здесь означает формат и параметры клиентской конфигурации. Cloudflare WARP peer остаётся стандартным WireGuard peer, поэтому часть параметров для WARP фиксирована намеренно.</p>
                     <div id="postGenAwg2" class="post-gen-row" hidden>
                       <button type="button" class="button post-gen-row__download">
                         <span class="button__text" data-i18n="ready_download_awg2">Скачать AmneziaWarp-AWG2.conf</span>

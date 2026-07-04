@@ -20,13 +20,15 @@ test('index.html has the onboarding block as a collapsible <details>', () => {
   assert.match(html, /data-i18n="onboarding_no_guarantee"/);
 });
 
-test('index.html has the AWG 2.0 disclaimer near the AWG2 generate button', () => {
+test('AWG 2.0 disclaimer is a hover tooltip on the AWG2 generate button', () => {
   const html = read('public/index.html');
-  const awg2Btn = html.indexOf('id="generateButtonAwg2"');
-  const disclaimer = html.indexOf('id="awg2Disclaimer"');
-  assert.ok(awg2Btn >= 0 && disclaimer >= 0);
-  assert.ok(disclaimer > awg2Btn, 'disclaimer should follow the AWG2 button');
-  assert.match(html, /data-i18n="compat_awg2_disclaimer"/);
+  // The AWG2 button carries the disclaimer as a localizable title attribute.
+  const btnMatch = html.match(/<button id="generateButtonAwg2"[^>]*>/);
+  assert.ok(btnMatch, 'AWG2 generate button must exist');
+  assert.match(btnMatch[0], /title="AWG 2\.0[^"]*Cloudflare WARP peer[^"]*"/);
+  assert.match(btnMatch[0], /data-i18n-title="compat_awg2_disclaimer"/);
+  // The old inline disclaimer element must be gone.
+  assert.doesNotMatch(html, /id="awg2Disclaimer"/);
 });
 
 test('index.html has the compatibility card with all sections, hidden by default', () => {
@@ -60,7 +62,6 @@ test('styles.css uses a flat card style without drop shadows', () => {
   const css = read('public/static/styles.css');
   assert.match(css, /\.compat-card \{/);
   assert.match(css, /\.onboarding \{/);
-  assert.match(css, /\.awg2-disclaimer \{/);
   // Flat style: the compatibility card rule must not add box-shadow noise.
   const cardRule = css.slice(css.indexOf('.compat-card {'), css.indexOf('.compat-card__title'));
   assert.doesNotMatch(cardRule, /box-shadow/);

@@ -2467,14 +2467,6 @@ button.info-link {
   color: #404040;
 }
 
-/* ── AWG 2.0 disclaimer (2.7.0) ───────────────────────────────────────────────── */
-.awg2-disclaimer {
-  margin: 4px 0 0;
-  font-size: 10px;
-  line-height: 1.4;
-  color: #404040;
-}
-
 /* ── Compatibility card (2.7.0) ───────────────────────────────────────────────── */
 .compat-card {
   margin-top: 12px;
