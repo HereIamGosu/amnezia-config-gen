@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [2.6.2] - 2026-07-04
+
+### Added
+- External source license audit (`docs/research/external-source-license-audit.md`) for the projects referenced by the roadmap and Claude Code / Codex prompt pack: license, copy decision, idea reuse, attribution requirement, compatibility and risk level per repository.
+- Conservative source-usage policy: if a license is missing, unclear (`NOASSERTION` / `not found`), or incompatible, do not copy code — reimplement independently and use only ideas/behaviour. Includes a `Do not copy list`, `Attribution requirements`, and an `engineering audit, not legal advice` disclaimer.
+- "External source usage" section in `README.md` and `CONTRIBUTING.md` linking the audit and reaffirming that external IP feeds / endpoint sources must only enter the internal candidate pipeline, never the generated user config.
+
+### Notes
+- Documentation / governance only: no external code was imported and no external runtime dependency was added.
+
 ## [2.6.1] - 2026-07-04
 
 ### Added

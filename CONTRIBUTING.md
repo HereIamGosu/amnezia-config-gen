@@ -60,6 +60,14 @@ Use the templates in `.github/ISSUE_TEMPLATE/`.
 
 For security-sensitive reports, see [SECURITY.md](./SECURITY.md).
 
+## External source usage
+
+Do not copy external code before checking its license. If a repository has no license, an unclear license, or an incompatible license, reimplement the mechanism independently and use only the idea or behaviour as a reference.
+
+External IP feeds and endpoint sources must never be exposed directly to generated user configs — they must go through the internal candidate pipeline and health checks.
+
+Before reusing anything from a third-party project, consult [docs/research/external-source-license-audit.md](./docs/research/external-source-license-audit.md) (engineering audit, not legal advice) and follow its Do-not-copy and Attribution sections.
+
 ## License
 
 By contributing, you agree your contributions will be licensed under the [AGPL-3.0-only](./LICENSE).
