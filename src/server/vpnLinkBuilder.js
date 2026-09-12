@@ -1,5 +1,6 @@
 const { deflateSync } = require('zlib');
 const { Buffer } = require('buffer');
+const { AWG_PROFILES } = require('./awg/profiles');
 
 /**
  * AmneziaVPN one-tap import URI: vpn://<base64url(qCompress(JSON))>.
@@ -19,7 +20,7 @@ const { Buffer } = require('buffer');
  *         last_config: "{\"config\":\"<INI>\",\"mtu\":\"1280\",\"port\":\"4500\"}",
  *         isThirdPartyConfig: true,
  *         port: "4500",
- *         protocol_version: "2",
+ *         protocol_version: "2" | "3" | "3.1",
  *         transport_proto: "udp"
  *       }
  *     }],
@@ -32,6 +33,9 @@ const { Buffer } = require('buffer');
  *
  * Note: last_config is a JSON STRING (double-nested), containing the raw
  * WireGuard INI text plus mtu/port extracted from it.
+ *
+ * Historical caveat: AWG 3.0 import envelope is not confirmed here. This
+ * builder emits vpn:// only for modes with a confirmed protocol version.
  */
 const toBase64Url = (buf) => buf.toString('base64')
   .replace(/\+/g, '-')
@@ -59,12 +63,21 @@ const extractPort = (conf) => {
   return m ? m[1] : '4500';
 };
 
+const resolveProtocolVersion = (mode) => {
+  if (mode === 'awg2') return '2';
+  if (mode === 'awg31') return AWG_PROFILES.awg31.vpnProtocolVersion;
+  if (mode === 'awg3') return null;
+  return '1.5';
+};
+
 /**
  * @param {string} confText Full .conf text (the same text that gets base64-encoded into `content`).
  * @param {{ hostName?: string, dns1?: string, dns2?: string, mode?: string }} meta
  * @returns {string} `vpn://...`
  */
 const buildVpnLink = (confText, meta = {}) => {
+  const protocolVersion = resolveProtocolVersion(meta.mode);
+  if (!protocolVersion) return null;
   const innerConfig = JSON.stringify({
     config: confText,
     mtu: extractMtu(confText),
@@ -78,7 +91,7 @@ const buildVpnLink = (confText, meta = {}) => {
         last_config: innerConfig,
         isThirdPartyConfig: true,
         port: extractPort(confText),
-        protocol_version: meta.mode === 'awg2' ? '2' : '1.5',
+        protocol_version: protocolVersion,
         transport_proto: 'udp',
       },
     }],
@@ -94,4 +107,4 @@ const buildVpnLink = (confText, meta = {}) => {
   return `vpn://${toBase64Url(compressed)}`;
 };
 
-module.exports = { buildVpnLink };
+module.exports = { buildVpnLink, resolveProtocolVersion };

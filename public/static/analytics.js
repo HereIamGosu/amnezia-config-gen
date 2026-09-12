@@ -22,7 +22,7 @@
   ]);
 
   const ENUMS = {
-    mode: new Set(['legacy', 'awg2']),
+    mode: new Set(['legacy', 'awg2', 'awg3', 'awg31']),
     endpoint_mode: new Set(['hostname', 'ip', 'auto']),
     endpoint_source: new Set(['kv', 'fallback', 'hostname', 'manual', 'unknown']),
     routes_source: new Set(['opencck', 'itdoginfo', 'antifilter', 'static', 'fallback', 'unknown']),
@@ -37,7 +37,14 @@
     'warning_count',
     'duration_ms',
   ]);
-  const BOOLEAN_KEYS = new Set(['has_warning', 'mobile_profile', 'router_profile']);
+  const BOOLEAN_KEYS = new Set([
+    'has_warning',
+    'mobile_profile',
+    'router_profile',
+    'awg_timing_ranges',
+    'awg_content_padding_experimental',
+    'awg_warp_safe',
+  ]);
 
   const sanitizePayload = (payload = {}) => {
     const safe = {};

@@ -31,6 +31,62 @@ test('AWG 2.0 disclaimer is a hover tooltip on the AWG2 generate button', () => 
   assert.doesNotMatch(html, /id="awg2Disclaimer"/);
 });
 
+test('AWG 3.0 and 3.1 controls include mandatory WARP-safe guidance', () => {
+  const html = read('public/index.html');
+  for (const [id, key] of [
+    ['generateButtonAwg3', 'compat_awg3_disclaimer'],
+    ['generateButtonAwg31', 'compat_awg31_disclaimer'],
+  ]) {
+    const button = html.match(new RegExp(`<button id="${id}"[^>]*>`));
+    assert.ok(button, `${id} must exist`);
+    assert.match(button[0], new RegExp(`data-i18n-title="${key}"`));
+  }
+  assert.match(html, /class="awg3-warp-safe-note" data-i18n="awg3_warp_safe_help"/);
+  assert.match(html, /Cloudflare остаётся стандартным WireGuard peer/);
+});
+
+test('generation controls are arranged as a two-by-two grid', () => {
+  const html = read('public/index.html');
+  const styles = read('public/static/styles.css');
+  const buttonIds = [
+    'generateButton',
+    'generateButtonAwg2',
+    'generateButtonAwg3',
+    'generateButtonAwg31',
+  ];
+  const positions = buttonIds.map((id) => html.indexOf(`id="${id}"`));
+
+  assert.ok(positions.every((position) => position >= 0), 'all four generation buttons must exist');
+  assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
+  assert.match(
+    styles,
+    /\.buttons__gen-stack\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s,
+  );
+  assert.match(styles, /\.awg3-warp-safe-note\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/s);
+});
+
+test('AWG 3.x frontend wiring is unique and uses centralized mode helpers', () => {
+  const script = read('public/static/script.js');
+  for (const declaration of [
+    'const generateButtonAwg3 =',
+    'const generateButtonAwg31 =',
+    'const awg3Options =',
+    'const awg31Options =',
+  ]) {
+    assert.equal(script.split(declaration).length - 1, 1, `${declaration} must be declared once`);
+  }
+  assert.match(script, /const getModeFilename =/);
+  assert.match(script, /const getModeLoadingLabel =/);
+  assert.match(script, /const getModeSuccessLabel =/);
+});
+
+test('release metadata and asset cache keys identify AWG 3.x release 2.7.0', () => {
+  const html = read('public/index.html');
+  assert.match(html, /AWG 1\.5, 2\.0, 3\.0 (?:и|and) 3\.1/);
+  assert.equal((html.match(/\?v=2\.7\.0/g) || []).length, 4);
+  assert.doesNotMatch(html, /\?v=2\.5\.0/);
+});
+
 test('index.html has the compatibility card with all sections, hidden by default', () => {
   const html = read('public/index.html');
   assert.match(html, /<section id="compatibilityCard" class="compat-card" aria-live="polite" hidden>/);
@@ -77,6 +133,12 @@ test('RU and EN locales contain all 2.7.0 compatibility + onboarding keys', () =
     'compat_cloudflare_peer_notice', 'compat_client_version_warning',
     'compat_unsupported_exporter_warning', 'compat_reason_no_exporter',
     'compat_reason_research', 'compat_reason_no_path',
+    'awg3_warp_safe_help', 'awg_warp_safe', 'awg_profile_label',
+    'awg_enabled_features', 'awg_experimental_features', 'awg_disabled_for_warp',
+    'awg_client_compatibility', 'awg_feature_header_disabled',
+    'awg_feature_trailers_disabled', 'awg_feature_timing', 'awg_feature_keepalive',
+    'awg_feature_content_padding', 'awg_router_warning',
+    'awg3_client_warning', 'awg31_client_warning',
   ];
   keys.forEach((key) => {
     assert.equal(typeof ru[key], 'string', `missing RU key ${key}`);

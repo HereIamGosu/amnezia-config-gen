@@ -23,7 +23,7 @@
 ## Возможности
 
 - Явный выбор режима маршрутизации: полный туннель (весь трафик) или выборочная маршрутизация (только выбранные направления)
-- Два формата конфига: **Legacy** (`mode=legacy`) и **AmneziaWG 2.0** (`mode=awg2`).
+- Четыре формата: **Legacy**, **AWG 2.0**, **AWG 3.0** и **AWG 3.1** (`mode=legacy|awg2|awg3|awg31`). Для AWG 3.x применяется WARP-safe клиентский профиль.
 - Пресеты маршрутов: тайл-выбор по категориям доменов → агрегированные IPv4 (или IPv4+IPv6) CIDR в `AllowedIPs`. Без выбора по умолчанию используется `0.0.0.0/0`; `::/0` добавляется только при явном включении IPv6.
 - Несколько пресетов DNS для строки `DNS` в конфиге.
 - Скачивание `.conf` и два шаблона планировщика Windows: `public/static/SchedulerAmnezia-15.bat` (Legacy 1.5 → `AmneziaWarp.conf`) и `SchedulerAmnezia-20.bat` (AWG 2.0 → `AmneziaWarp-AWG2.conf`); путь к `amneziawg.exe` при необходимости правьте в bat.
@@ -63,7 +63,7 @@ npm start    # vercel dev → http://localhost:3000
 
 События: `generation_started`, `generation_succeeded`, `generation_partially_succeeded`, `generation_failed`, `config_downloaded`, `config_preview_opened`, `vpn_link_copied`, `history_item_previewed`, `history_item_downloaded`, `healthcheck_opened`, `status_modal_opened`.
 
-Разрешены только ограниченные продуктовые метаданные: режим, запрошенное/полученное количество конфигов, категории источников endpoint/маршрутов, количество предупреждений, режим маршрутизации full/split, флаги mobile/router, CPS-режим, неотрицательная длительность генерации и укрупнённая категория ошибки. Adapter **не собирает** содержимое `.conf`, `PrivateKey`, `PresharedKey`, WARP-токены, полные endpoint-строки, `AllowedIPs`, custom CIDR, исходные сообщения ошибок и полный user agent со стороны приложения.
+Разрешены только ограниченные продуктовые метаданные: режим, количества конфигов, категории источников endpoint/маршрутов, предупреждения, full/split, mobile/router, CPS, безопасные boolean-флаги WARP-safe/timing/experimental padding, длительность и категория ошибки. Adapter **не собирает** содержимое `.conf`, ключи, WARP-токены, полные endpoint-строки, `AllowedIPs`, custom CIDR, исходные сообщения ошибок и полный user agent.
 
 ## Структура репозитория
 
@@ -73,6 +73,7 @@ npm start    # vercel dev → http://localhost:3000
 | `public/static/script.js`, `styles.css` | Логика и стили фронтенда |
 | `public/static/presets-fallback.json` | Запасной каталог пресетов без API |
 | `api/warp.js` | Эндпоинт генерации WARP-конфига |
+| `src/server/awg/` | AWG-профили, строгие ranges, WARP safety и финальная сериализация |
 | `api/iplist.js` | Список пресетов и предпросмотр CIDR |
 | `api/routePresets.js` | Каталог пресетов и DNS (источник правды) |
 | `api/ipListFetch.js` | Получение CIDR по доменам (in-memory кэш 10 мин) |
@@ -91,9 +92,9 @@ npm start    # vercel dev → http://localhost:3000
 | ID | Правило | Почему |
 |---|---|---|
 | **I1** | Строка в `[Interface]` ОБЯЗАНА быть **uppercase** `I1`, не `i1`. | Lowercase `i1` молча игнорируется AmneziaWG-клиентом для Windows. Источник: [wg-easy/wg-easy#2439](https://github.com/wg-easy/wg-easy/issues/2439). |
-| **I2** | Для WARP / AmneziaWG 2.0: `S1 = S2 = S3 = S4 = 0`. | Пир Cloudflare — обычный WireGuard, он не добавляет префиксы S1–S4 в пакеты. Приёмная сторона AmneziaWG снимает S2/S3/S4 со входящих пакетов; ненулевые значения молча ломают туннель. |
-| **I3** | Для WARP / AmneziaWG 2.0: `H1..H4 = 1, 2, 3, 4`. | Это дефолтные типы пакетов WireGuard; стоковый пир Cloudflare использует именно их. |
-| **I4** | Для WARP / AmneziaWG 2.0: `MTU = 1280`. | Совместимость с path MTU у WARP. |
+| **I2** | Во всех WARP-safe профилях AWG 2/3.x: `S1 = S2 = S3 = S4 = 0`. | Cloudflare — стандартный WireGuard peer и не добавляет AWG-префиксы. |
+| **I3** | Во всех WARP-safe профилях AWG 2/3.x: `H1..H4 = 1, 2, 3, 4`. | Cloudflare ожидает стандартные WireGuard message types. |
+| **I4** | WARP-safe профили используют `MTU = 1280`; AWG 3.x не выводит `HeaderProtectionKey` и не включает `RandomTrailers`/`DisableCookies`. | Peer-dependent wire-format несовместим со стандартным Cloudflare peer. |
 | **I5** | Порядок полей в `[Interface]` для AmneziaWG 2.0: `PrivateKey → Address → DNS → MTU → Jc → Jmin → Jmax → S1..S4 → H1..H4 → I1`. | Совпадает с порядком, который принимает UAPI `amneziawg-go`. |
 | **I6** | `AllowedIPs` по умолчанию **только IPv4**; IPv6 включается по тумблеру в Настройках (`?ipv6=1`). | Роутеры (GL.iNet, Keenetic, MikroTik) и мобильные клиенты имеют ограниченную ёмкость таблицы маршрутов; удвоение списка через IPv6 приводит к молчаливым отказам. |
 | **I7** | `mobile=1` форсит: `Jc=3, Jmin=64, Jmax=128, MTU=1280`, только IPv4 (перекрывает `ipv6=1`, убирает IPv6 из `Address` и `AllowedIPs`). | Мобильный профиль в пределах спецификации AWG 2.0; снижает расход батареи и молчаливые reset'ы на iOS. |
@@ -105,19 +106,21 @@ npm start    # vercel dev → http://localhost:3000
 
 ### `GET` / `POST` `/api/warp`
 
-Возвращает JSON: `success`, при успехе `content` (тело `.conf` в **base64**), `mode` (`legacy` | `awg2`), опционально `routesSource`, privacy-safe `routesTelemetrySource` (`opencck` | `itdoginfo` | `antifilter` | `static` | `fallback` | `unknown`), `routesPresets`, `presetSitesCount`, `appliedExtras`, `vpnLink`.
+Возвращает JSON: `success`, при успехе `content` (тело `.conf` в **base64**), `mode` (`legacy` | `awg2` | `awg3` | `awg31`), опционально route metadata, `appliedExtras`, `vpnLink`, `compatibility` и AWG 3.x-only capability metadata `awg`.
 
 Параметры через query (`GET`) или поля JSON-тела (`POST`). Имена в теле совпадают с query (удобно для длинного `i1`).
 
 | Параметр | Описание |
 |---|---|
-| `mode` | `legacy` (по умолчанию) или `awg2` (алиасы: `2`, `v2`; также query `awg`) |
+| `mode` | `legacy` (по умолчанию), `awg2`, `awg3` или `awg31`; AWG 3.x aliases: `3`, `3.0`, `awg30`, `v3`, `3.1`, `v3.1` |
 | `presets` | Ключи пресетов через запятую (или массив в JSON-теле) |
 | `dns` | Ключ пресета DNS; в UI по умолчанию `cloudflare` |
 | `template` | См. [Шаблоны](#шаблоны) |
 | `peerEndpoint`, `endpoint` | Полная строка `host:port` для `Endpoint` (если задана — используется как есть) |
 | `warpPort` | UDP-порт для `engage…` или IP-fallback (для WARP-шаблонов по умолчанию **4500**; для классического wgcf часто **2408**) |
-| `persistentKeepalive`, `keepalive` | Например `25`; `0` — строка keepalive не пишется |
+| `persistentKeepalive`, `keepalive` | Для старых режимов integer; для AWG 3.x строгий integer или `min-max` (default `25-35`) |
+| `rekeyAfterTime`, `rekeyTimeout`, `rejectAfterTime`, `keepaliveTimeout`, `maxHandshakeAttempts` | Строгие AWG 3.x integer/range overrides; defaults: `100-120`, `3-7`, `150-180`, `5-15`, `15-20` |
+| `experimentalContentPadding`, `contentPaddingAddition` | API-only AWG 3.x эксперимент: opt-in обязателен, default `10-100`, в ответ добавляется warning о совместимости |
 | `i1` | Сырая строка CPS / obfuscation (AWG 2.0) |
 | `i1Ref` | Имя файла из `api/cps-presets/` |
 | `plainAddress` | `1` / `true` — в `Address` без `/32` и `/128` |
@@ -141,8 +144,11 @@ npm start    # vercel dev → http://localhost:3000
 |---|---|
 | *(нет)* + `mode=legacy` | Как `warp_amnezia` |
 | *(нет)* + `mode=awg2` | Как `warp_amnezia_awg2` |
+| *(нет)* + `mode=awg3` / `mode=awg31` | WARP-safe профиль AWG 3.0 / 3.1 |
 | `warp_amnezia`, `amnezia`, `amnezia_warp` | Legacy WARP с engage-хостом, встроенный `I1` при отсутствии пользовательского, `plainAddress`, keepalive 25 |
 | `warp_amnezia_awg2`, `amnezia_awg2`, `awg2_amnezia`, `warp_awg2_amnezia` | AWG 2.0 WARP — те же peer/DNS/Address/I1 что и Legacy WARP, с WARP-safe S=0 / H=1..4 / MTU=1280 |
+| `warp_amnezia_awg3`, `warp_awg3_amnezia` | AWG 3.0 WARP-safe профиль |
+| `warp_amnezia_awg31`, `warp_awg31_amnezia` | AWG 3.1 WARP-safe профиль с явными безопасными 3.1-флагами |
 | `wgcf` | `engage.cloudflareclient.com`, UDP 4500, без встроенного I1 |
 | `awg2_random`, `awg2_dpi` | Случайные H-полосы — **НЕ** для Cloudflare WARP; свой endpoint задаёте сами |
 
@@ -173,6 +179,12 @@ AWG 2.0 означает **параметры клиентской конфиг�
 WireGuard peer, поэтому часть параметров для WARP фиксирована намеренно. Выбор AWG 2.0 **не**
 означает, что сервер Cloudflare поддерживает AWG 2.0.
 
+### AWG 3.0 / 3.1 и Cloudflare WARP
+
+Cloudflare остаётся стандартным WireGuard peer. Генератор включает только клиентские AWG 3.x механизмы, не требующие поддержки peer: junk/CPS packets, randomized rekey/handshake/keepalive timing и диапазон `PersistentKeepalive`. `H1..H4` остаются `1..4`, `S1..S4` — нулевыми; Header Protection недоступен, RandomTrailers нельзя включить. `ContentPaddingAddition` доступен только через API как эксперимент, выключен по умолчанию и может ухудшить совместимость.
+
+Нужен современный AWG 3.x-compatible parser. Для AWG 3.1 рекомендуется AmneziaVPN 5.0.1.5+ или совместимый AWG 3.1 client. Совместимость роутеров зависит от их реализации. `vpn://` для AWG 3.0 намеренно недоступен, потому что исторический `protocol_version` не подтверждён; AWG 3.1 использует подтверждённый envelope `3.1`.
+
 ### Export targets
 
 [`src/server/exportTargets.js`](src/server/exportTargets.js) — реестр v0 форматов вывода и их
@@ -181,7 +193,7 @@ WireGuard peer, поэтому часть параметров для WARP фи�
 | Target | Статус |
 |---|---|
 | `.conf` | stable |
-| `vpn://` | stable |
+| `vpn://` | stable для прежних режимов и AWG 3.1; AWG 3.0 отключён до появления подтверждения protocol mapping |
 | QR | experimental |
 | sing-box / Mihomo / Clash | experimental |
 | Throne | research |

@@ -17,6 +17,23 @@ const { buildVpnLink } = require('../src/server/vpnLinkBuilder');
 const { getCompatibilityForGeneration } = require('../src/server/clientCompatibility');
 const { getTopEndpoints, updateEndpointHealth } = require('../src/server/endpointCache');
 const { checkTcpLatency, pickBestEndpoint } = require('../src/server/endpointHealth');
+const { buildAwg3Interface } = require('../src/server/awg/configBuilder');
+const {
+  AWG3_DEFAULT_TIMINGS,
+  AWG_PROFILES,
+  buildAwgMetadata,
+  isAwg3Mode,
+  isAwg31Mode,
+  normalizeAwgMode,
+} = require('../src/server/awg/profiles');
+const { parseAwgRange } = require('../src/server/awg/ranges');
+const { WARP_SAFE_WIRE_FORMAT, assertNoBlockedWarpOverrides } = require('../src/server/awg/warpSafety');
+
+const AWG3_MODE = 'awg3';
+const AWG31_MODE = 'awg31';
+const AWG3_DEFAULT_PERSISTENT_KEEPALIVE = AWG_PROFILES.awg3.persistentKeepalive;
+const AWG3_DEFAULT_CONTENT_PADDING_ADDITION = AWG_PROFILES.awg3.contentPaddingDefault;
+const AWG3_WARP_SAFE_OBFUSCATION = WARP_SAFE_WIRE_FORMAT;
 
 const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0'];
 const DEFAULT_ALLOWED_IPS_WITH_IPV6 = ['0.0.0.0/0', '::/0'];
@@ -268,6 +285,36 @@ const buildAwg2WarpSafeObfuscation = () => {
   };
 };
 
+const parseLegacyPersistentKeepalive = (v) => {
+  if (v == null || v === '') return null;
+  const n = Number.parseInt(String(v), 10);
+  if (!Number.isFinite(n) || n < 0 || n > 65535) return null;
+  return n === 0 ? null : n;
+};
+
+const parsePersistentKeepalive = (v, { strict = false } = {}) => strict
+  ? parseAwgRange(v, { field: 'PersistentKeepalive', allowOff: true })
+  : parseLegacyPersistentKeepalive(v);
+
+const parseContentPaddingAddition = (v) => {
+  const parsed = parseAwgRange(v, { field: 'ContentPaddingAddition', allowOff: true });
+  return parsed === 'off' || parsed === '0' ? null : parsed;
+};
+
+const isEnabledFlag = (v) => v === true || v === 1 || ['1', 'true'].includes(String(v ?? '').trim().toLowerCase());
+
+const shouldEmitConfigValue = (v) => v != null && String(v).trim() !== '' && String(v).trim().toLowerCase() !== 'off' && String(v).trim() !== '0';
+
+const buildAwg3WarpSafeObfuscation = () => {
+  const junk = pickAwg2JunkDocCompliant();
+  return {
+    ...AWG3_WARP_SAFE_OBFUSCATION,
+    Jc: junk.jc,
+    Jmin: junk.jmin,
+    Jmax: junk.jmax,
+  };
+};
+
 const resolveGenerationMode = (req) => {
   let raw = '';
   if (req.query && typeof req.query === 'object') {
@@ -281,15 +328,10 @@ const resolveGenerationMode = (req) => {
       raw = '';
     }
   }
-  if (raw === 'awg2' || raw === '2' || raw === 'v2') return 'awg2';
-  return 'legacy';
+  return normalizeAwgMode(raw);
 };
 
-const resolveModeFromInput = (raw) => {
-  const s = String(raw ?? '').toLowerCase();
-  if (s === 'awg2' || s === '2' || s === 'v2') return 'awg2';
-  return 'legacy';
-};
+const resolveModeFromInput = (raw) => normalizeAwgMode(raw);
 
 /**
  * Legacy profile: field order and explicit S1/S2=0 match common WARP/Amnezia exports (Jc/Jmin/Jmax + H1..4).
@@ -412,19 +454,56 @@ const buildInterfaceAwg2WarpSafe = (privKey, clientIPv4, clientIPv6, obf, dnsLin
   return lines.join('\n');
 };
 
+const buildInterfaceAwg3Common = (
+  privKey,
+  clientIPv4,
+  clientIPv6,
+  obf,
+  dnsLine,
+  plainAddress = false,
+  i1Optional = '',
+  extraCps = null,
+  contentPaddingAddition = null,
+  includeAwg31Flags = false,
+  timings = null,
+) => buildAwg3Interface({
+  mode: includeAwg31Flags ? AWG31_MODE : AWG3_MODE,
+  privateKey: privKey,
+  clientIPv4,
+  clientIPv6,
+  obfuscation: obf,
+  dnsLine,
+  plainAddress,
+  i1: i1Optional,
+  extraCps,
+  contentPaddingAddition,
+  timings,
+});
+
+const buildInterfaceAwg3 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress, i1Optional = '', extraCps = null, contentPaddingAddition = null, timings = null) =>
+  buildInterfaceAwg3Common(privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress, i1Optional, extraCps, contentPaddingAddition, false, timings);
+
+const buildInterfaceAwg31 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress, i1Optional = '', extraCps = null, contentPaddingAddition = null, timings = null) =>
+  buildInterfaceAwg3Common(privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress, i1Optional, extraCps, contentPaddingAddition, true, timings);
+
 /**
- * @param {{ i1?: string, persistentKeepalive?: number|null, awg2WarpSafe?: boolean }} ifaceExtras
+ * @param {{ i1?: string, persistentKeepalive?: number|string|null, contentPaddingAddition?: number|string|null, awg2WarpSafe?: boolean }} ifaceExtras
  */
 const buildFullConfig = (mode, privKey, peerPub, clientIPv4, clientIPv6, peerEndpoint, awg2Obf, allowedIpList, dnsLine, ifaceExtras = {}) => {
   const i1 = ifaceExtras.i1 || '';
   const plainAddress = Boolean(ifaceExtras.plainAddress);
   const extraCps = ifaceExtras.extraCps || null;
   const mobileJunk = ifaceExtras.mobileJunk || null;
+  const contentPaddingAddition = ifaceExtras.contentPaddingAddition || null;
   const iface =
     mode === 'awg2'
       ? ifaceExtras.awg2WarpSafe
         ? buildInterfaceAwg2WarpSafe(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1, extraCps)
         : buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1, extraCps)
+      : isAwg31Mode(mode)
+        ? buildInterfaceAwg31(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1, extraCps, contentPaddingAddition, ifaceExtras.timingRanges)
+        : mode === AWG3_MODE
+          ? buildInterfaceAwg3(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1, extraCps, contentPaddingAddition, ifaceExtras.timingRanges)
       : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine, i1, plainAddress, mobileJunk);
   const defaultAllowed = ifaceExtras.mobileJunk
     ? DEFAULT_ALLOWED_IPS
@@ -437,7 +516,7 @@ PublicKey = ${peerPub}
 AllowedIPs = ${allowed}
 Endpoint = ${peerEndpoint}`;
   const ka = ifaceExtras.persistentKeepalive;
-  if (ka != null && ka > 0) peerBlock += `\nPersistentKeepalive = ${ka}`;
+  if (shouldEmitConfigValue(ka)) peerBlock += `\nPersistentKeepalive = ${ka}`;
   return `${iface}\n\n${peerBlock}`;
 };
 
@@ -607,13 +686,6 @@ const parseAllowlistedPort = (v) => {
   return { port: n };
 };
 
-const parsePersistentKeepalive = (v) => {
-  if (v == null || v === '') return null;
-  const n = Number.parseInt(String(v), 10);
-  if (!Number.isFinite(n) || n < 0 || n > 65535) return null;
-  return n === 0 ? null : n;
-};
-
 const parsePeerEndpointOverride = (v) => {
   const s = String(v ?? '').trim();
   if (!s) return null;
@@ -627,15 +699,46 @@ const parsePeerEndpointOverride = (v) => {
  * @param {import('http').IncomingMessage} req
  * @param {Record<string, unknown>} body
  */
-const collectWarpGenExtras = (req, body) => {
+const collectWarpGenExtras = (req, body, mode = 'legacy') => {
   const b = body && typeof body === 'object' ? body : {};
+  const inputValue = (name, alias) => b[name] ?? (alias ? b[alias] : undefined) ?? pickQuery(req, name) ?? (alias ? pickQuery(req, alias) : undefined);
+  if (isAwg3Mode(mode)) {
+    const blocked = {};
+    for (const field of ['headerProtectionKey', 'randomTrailers', 'disableCookies', 'S1', 'S2', 'S3', 'S4', 'H1', 'H2', 'H3', 'H4']) {
+      blocked[field] = inputValue(field);
+    }
+    assertNoBlockedWarpOverrides(blocked);
+  }
   const peerEndpoint = parsePeerEndpointOverride(
     b.peerEndpoint ?? b.endpoint ?? pickQuery(req, 'peerEndpoint') ?? pickQuery(req, 'endpoint'),
   );
   const warpPort = parseWarpPort(b.warpPort ?? b.port ?? pickQuery(req, 'warpPort') ?? pickQuery(req, 'port'));
   const persistentKeepalive = parsePersistentKeepalive(
-    b.persistentKeepalive ?? b.keepalive ?? pickQuery(req, 'persistentKeepalive') ?? pickQuery(req, 'keepalive'),
+    inputValue('persistentKeepalive', 'keepalive'),
+    { strict: isAwg3Mode(mode) },
   );
+  const experimentalContentPadding = isEnabledFlag(
+    inputValue('experimentalContentPadding'),
+  );
+  const contentPaddingAddition = isAwg3Mode(mode) && experimentalContentPadding
+    ? (inputValue('contentPaddingAddition') == null
+      ? AWG3_DEFAULT_CONTENT_PADDING_ADDITION
+      : (parseContentPaddingAddition(inputValue('contentPaddingAddition')) || AWG3_DEFAULT_CONTENT_PADDING_ADDITION))
+    : null;
+  const timingFields = {
+    rekeyAfterTime: 'RekeyAfterTime',
+    rekeyTimeout: 'RekeyTimeout',
+    rejectAfterTime: 'RejectAfterTime',
+    keepaliveTimeout: 'KeepaliveTimeout',
+    maxHandshakeAttempts: 'MaxHandshakeAttempts',
+  };
+  const timingRanges = {};
+  if (isAwg3Mode(mode)) {
+    for (const [key, iniField] of Object.entries(timingFields)) {
+      const raw = inputValue(key);
+      if (raw != null && raw !== '') timingRanges[key] = parseAwgRange(raw, { field: iniField });
+    }
+  }
   const i1RefRaw = b.i1Ref ?? pickQuery(req, 'i1Ref');
   const i1Ref = i1RefRaw != null && String(i1RefRaw).trim() !== '' ? String(i1RefRaw).trim() : null;
   const i1Raw = b.i1 != null ? String(b.i1) : null;
@@ -646,7 +749,17 @@ const collectWarpGenExtras = (req, body) => {
       .toLowerCase() === '1' ||
     String(pa ?? '')
       .toLowerCase() === 'true';
-  return { peerEndpoint, warpPort, persistentKeepalive, i1Ref, i1Raw, plainAddress };
+  return {
+    peerEndpoint,
+    warpPort,
+    persistentKeepalive,
+    timingRanges,
+    contentPaddingAddition,
+    experimentalContentPadding: isAwg3Mode(mode) && experimentalContentPadding,
+    i1Ref,
+    i1Raw,
+    plainAddress,
+  };
 };
 
 /**
@@ -666,6 +779,38 @@ const resolveTemplateOptions = (name) => {
       useEmbeddedAmneziaI1: true,
       plainAddress: true,
       forceLegacy: true,
+    };
+  }
+  if (
+    n === 'warp_amnezia_awg3' ||
+    n === 'amnezia_awg3' ||
+    n === 'awg3_amnezia' ||
+    n === 'warp_awg3_amnezia'
+  ) {
+    return {
+      engageHost: ENGAGE_CLOUDFLARE_HOST,
+      defaultEngagePort: WARP_DEFAULT_ENGAGE_UDP_PORT,
+      defaultKeepalive: AWG3_DEFAULT_PERSISTENT_KEEPALIVE,
+      useEmbeddedAmneziaI1: true,
+      plainAddress: true,
+      forceLegacy: false,
+      mode: AWG3_MODE,
+    };
+  }
+  if (
+    n === 'warp_amnezia_awg31' ||
+    n === 'amnezia_awg31' ||
+    n === 'awg31_amnezia' ||
+    n === 'warp_awg31_amnezia'
+  ) {
+    return {
+      engageHost: ENGAGE_CLOUDFLARE_HOST,
+      defaultEngagePort: WARP_DEFAULT_ENGAGE_UDP_PORT,
+      defaultKeepalive: AWG3_DEFAULT_PERSISTENT_KEEPALIVE,
+      useEmbeddedAmneziaI1: true,
+      plainAddress: true,
+      forceLegacy: false,
+      mode: AWG31_MODE,
     };
   }
   /**
@@ -742,6 +887,7 @@ const mergeTemplateIntoExtras = (extras, tmpl) => {
     out.useEmbeddedAmneziaI1 = true;
   }
   if (tmpl.plainAddress) out.plainAddress = true;
+  if (tmpl.mode) out.mode = tmpl.mode;
   out.forceLegacy = Boolean(tmpl.forceLegacy);
   if (tmpl.awg2WarpSafe) out.awg2WarpSafe = true;
   return out;
@@ -1026,7 +1172,11 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
 
   const awg2WarpSafe = Boolean(warpExtras.awg2WarpSafe);
   let awg2Obf =
-    mode === 'awg2' ? (awg2WarpSafe ? buildAwg2WarpSafeObfuscation() : buildAwg2Obfuscation()) : null;
+    mode === 'awg2'
+      ? (awg2WarpSafe ? buildAwg2WarpSafeObfuscation() : buildAwg2Obfuscation())
+      : isAwg3Mode(mode)
+        ? buildAwg3WarpSafeObfuscation()
+        : null;
   // Mobile-first, router-second: router caps clamp Jc/Jmin/Jmax via Math.min/max,
   // so applying router caps after mobile ensures router-mode values win on overlap.
   if (awg2Obf && routeOpts.mobileMode) awg2Obf = applyMobileModeOverrides(awg2Obf);
@@ -1045,8 +1195,16 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
   const i1 = await resolveI1ForGeneration(warpExtras, routeOpts.cpsProtocol);
 
   const wantExtraCps = Boolean(routeOpts.extraCps);
-  const canApplyExtraCps = wantExtraCps && mode === 'awg2' && Boolean(i1);
+  const canApplyExtraCps = wantExtraCps && (mode === 'awg2' || isAwg3Mode(mode)) && Boolean(i1);
   const extraCps = canApplyExtraCps ? generateI2I5() : null;
+  const persistentKeepalive = warpExtras.persistentKeepalive != null
+    ? warpExtras.persistentKeepalive
+    : isAwg3Mode(mode)
+      ? AWG3_DEFAULT_PERSISTENT_KEEPALIVE
+      : null;
+  const contentPaddingAddition = isAwg3Mode(mode) && warpExtras.experimentalContentPadding && warpExtras.contentPaddingAddition != null
+    ? warpExtras.contentPaddingAddition
+    : null;
 
   return {
     text: buildFullConfig(
@@ -1061,9 +1219,11 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
       dnsLine,
       {
         i1,
-        persistentKeepalive: warpExtras.persistentKeepalive,
+        persistentKeepalive,
         plainAddress: warpExtras.plainAddress,
         awg2WarpSafe: warpExtras.awg2WarpSafe,
+        contentPaddingAddition,
+        timingRanges: warpExtras.timingRanges,
         extraCps,
         mobileJunk: routeOpts.mobileMode ? { Jc: MOBILE_JC, Jmin: MOBILE_JMIN, Jmax: MOBILE_JMAX } : null,
         includeIpv6: routeOpts.includeIpv6,
@@ -1162,11 +1322,15 @@ const handler = async (req, res) => {
           ? 'warp_amnezia'
           : mode === 'awg2'
             ? 'warp_amnezia_awg2'
-            : '';
+            : mode === AWG31_MODE
+              ? 'warp_amnezia_awg31'
+              : 'warp_amnezia_awg3';
     const tmpl = resolveTemplateOptions(templateRaw);
-    const warpExtras = mergeTemplateIntoExtras(collectWarpGenExtras(req, body), tmpl);
-    if (warpExtras.forceLegacy) mode = 'legacy';
+    if (tmpl.forceLegacy) mode = 'legacy';
+    else if (tmpl.mode) mode = tmpl.mode;
+    const warpExtras = mergeTemplateIntoExtras(collectWarpGenExtras(req, body, mode), tmpl);
     delete warpExtras.forceLegacy;
+    delete warpExtras.mode;
 
     // Validate `port` param against allowlist (if explicitly provided)
     const portParamRaw = body.port ?? pickQuery(req, 'port');
@@ -1238,7 +1402,7 @@ const handler = async (req, res) => {
     const configsOut = configs.map(({ text, meta }, idx) => {
       const encoded = Buffer.from(text).toString('base64');
       let vpnLink;
-      if (wantLink) {
+      if (wantLink && mode !== AWG3_MODE) {
         vpnLink = buildVpnLink(text, { hostName: endpointHost, dns1: dnsParts[0], dns2: dnsParts[1], mode });
       }
       return {
@@ -1249,6 +1413,18 @@ const handler = async (req, res) => {
         vpnLink,
       };
     });
+
+    const responseWarnings = [];
+    if (warning) responseWarnings.push(warning);
+    if (warpExtras.contentPaddingAddition) {
+      responseWarnings.push('ContentPaddingAddition is experimental for Cloudflare WARP and may affect interoperability.');
+    }
+    if (wantLink && mode === AWG3_MODE) {
+      responseWarnings.push('vpn:// is unavailable for AWG 3.0 because its historical protocol_version is not confirmed; use the .conf export.');
+    }
+    if (routerMode && isAwg3Mode(mode)) {
+      responseWarnings.push('AWG 3.x router compatibility depends on the router firmware and client implementation.');
+    }
 
     const firstMeta = configs[0]?.meta ?? {};
 
@@ -1269,6 +1445,11 @@ const handler = async (req, res) => {
       console.error('Compatibility summary failed (non-fatal):', compatError);
       compatibility = undefined;
     }
+    const awg = buildAwgMetadata(mode, {
+      contentPaddingExperimental: Boolean(warpExtras.contentPaddingAddition),
+      routerMode,
+      vpnLinkAvailable: Boolean(configsOut[0]?.vpnLink),
+    });
 
     res.status(200).json({
       success: true,
@@ -1287,7 +1468,8 @@ const handler = async (req, res) => {
       routesTelemetrySource: firstMeta.routesTelemetrySource,
       routesPresets: effectivePresetKeys.length ? effectivePresetKeys : undefined,
       presetSitesCount: firstMeta.sitesResolved || undefined,
-      ...(warning ? { warning } : {}),
+      ...(awg ? { awg } : {}),
+      ...(responseWarnings.length ? { warning: responseWarnings.length === 1 ? responseWarnings[0] : responseWarnings } : {}),
       ...(compatibility ? { compatibility } : {}),
     });
   } catch (error) {
@@ -1295,6 +1477,15 @@ const handler = async (req, res) => {
     const sc = error.statusCode;
     const code =
       typeof sc === 'number' && sc >= 400 && sc < 600 ? sc : 500;
+    if (code === 400) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+        message: error.message,
+        ...(error.expected ? { expected: error.expected } : {}),
+      });
+      return;
+    }
     res.status(code).json({ success: false, message: error.message });
   }
 };
@@ -1304,8 +1495,12 @@ module.exports.__internals = {
   buildInterfaceLegacy,
   buildInterfaceAwg2,
   buildInterfaceAwg2WarpSafe,
+  buildInterfaceAwg3Common,
+  buildInterfaceAwg3,
+  buildInterfaceAwg31,
   buildFullConfig,
   buildAwg2WarpSafeObfuscation,
+  buildAwg3WarpSafeObfuscation,
   buildAwg2Obfuscation,
   applyMobileModeOverrides,
   applyRouterModeCaps,
@@ -1317,7 +1512,12 @@ module.exports.__internals = {
   parsePresetKeysFromBody,
   parseWarpPort,
   parsePersistentKeepalive,
+  parseContentPaddingAddition,
+  isEnabledFlag,
+  shouldEmitConfigValue,
   parsePeerEndpointOverride,
+  resolveGenerationMode,
+  resolveModeFromInput,
   isValidIPv4,
   isValidIPv6,
   PORT_ALLOWLIST,
@@ -1332,4 +1532,9 @@ module.exports.__internals = {
   ROUTER_JMIN_MAX,
   ROUTER_JMAX_MAX,
   AWG2_MTU_STOCK_PEER,
+  AWG3_DEFAULT_PERSISTENT_KEEPALIVE,
+  AWG3_DEFAULT_TIMINGS,
+  AWG3_WARP_SAFE_OBFUSCATION,
+  AWG31_MODE,
+  AWG3_MODE,
 };

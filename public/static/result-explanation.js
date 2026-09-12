@@ -95,6 +95,48 @@
     return 'unknown';
   };
 
+  const AWG_FEATURES = new Set([
+    'junk-packets',
+    'cps',
+    'timing-ranges',
+    'persistent-keepalive-range',
+    'content-padding-addition',
+  ]);
+  const AWG_DISABLED_FEATURES = new Set([
+    'header-protection',
+    'message-padding',
+    'dynamic-message-headers',
+    'random-trailers',
+    'cookie-behaviour-obfuscation',
+  ]);
+
+  const getAwg = (response) => {
+    const value = response.awg;
+    if (!value || typeof value !== 'object') return null;
+    const version = ['3.0', '3.1'].includes(value.requestedVersion)
+      ? value.requestedVersion
+      : null;
+    if (!version) return null;
+    return {
+      version,
+      profile: value.profile === 'warp-safe' ? 'warp-safe' : 'unknown',
+      enabledFeatures: Array.isArray(value.enabledFeatures)
+        ? value.enabledFeatures.filter((feature) => AWG_FEATURES.has(feature))
+        : [],
+      disabledFeatures: Array.isArray(value.disabledFeatures)
+        ? value.disabledFeatures
+          .map((item) => item && item.feature)
+          .filter((feature) => AWG_DISABLED_FEATURES.has(feature))
+        : [],
+      experimentalFeatures: Array.isArray(value.experimentalFeatures)
+        ? value.experimentalFeatures.filter((feature) => AWG_FEATURES.has(feature))
+        : [],
+      routerCompatibility: value.routerCompatibility === 'experimental/router-dependent'
+        ? value.routerCompatibility
+        : null,
+    };
+  };
+
   const buildResultSummary = (response = {}, state = {}) => {
     const actualCount = getActualCount(response);
     const requestedCount = Number.isInteger(state.configCount) ? state.configCount : null;
@@ -172,7 +214,16 @@
     }
 
     return {
-      format: response.mode === 'awg2' ? 'awg2' : response.mode === 'legacy' ? 'legacy' : 'unknown',
+      format:
+        response.mode === 'awg2'
+          ? 'awg2'
+          : response.mode === 'awg3'
+            ? 'awg3'
+            : response.mode === 'awg31'
+              ? 'awg31'
+              : response.mode === 'legacy'
+                ? 'legacy'
+                : 'unknown',
       variants: actualCount,
       endpoint,
       port: Number.isInteger(state.port) ? state.port : null,
@@ -181,6 +232,7 @@
       presets,
       profile: getProfile(state),
       ipv6: getIpv6(state),
+      awg: getAwg(response),
       vpnImport: response.vpnLink
         || (Array.isArray(response.configs) && response.configs.some((config) => config?.vpnLink))
         ? 'available'

@@ -21,6 +21,7 @@ const telemetryNow = () =>
 
 const getTelemetryContext = (mode, extra = {}) => {
   const endpointMode = cfgState.warpEndpoint === 'hostname' ? 'hostname' : 'ip';
+  const awg3 = mode === 'awg3' || mode === 'awg31';
   return {
     mode,
     count_requested: cfgState.configCount,
@@ -30,6 +31,9 @@ const getTelemetryContext = (mode, extra = {}) => {
     mobile_profile: cfgState.mobileMode,
     router_profile: cfgState.routerMode,
     cps_mode: cfgState.cpsProtocol,
+    awg_timing_ranges: awg3,
+    awg_content_padding_experimental: false,
+    awg_warp_safe: awg3,
     ...extra,
   };
 };
@@ -294,6 +298,8 @@ const openStatusModal = () => {
 const POST_GEN_ROW_IDS = {
   generateButton:     'postGenLegacy',
   generateButtonAwg2: 'postGenAwg2',
+  generateButtonAwg3: 'postGenAwg3',
+  generateButtonAwg31: 'postGenAwg31',
 };
 
 /**
@@ -397,8 +403,10 @@ const showPostGenRow = ({
 const summaryValue = (key, value) => {
   const values = {
     format: {
-      legacy: 'AWG 1.5',
-      awg2: 'AWG 2.0',
+      legacy: getModeLabel('legacy'),
+      awg2: getModeLabel('awg2'),
+      awg3: getModeLabel('awg3'),
+      awg31: getModeLabel('awg31'),
       unknown: t('result_summary_no_data', 'нет данных'),
     },
     endpointMode: {
@@ -472,6 +480,58 @@ const appendSummaryField = (container, label, value) => {
   container.appendChild(row);
 };
 
+const getModeLabel = (mode) => {
+  const labels = {
+    legacy: 'AWG 1.5',
+    awg2: 'AWG 2.0',
+    awg3: 'AWG 3.0',
+    awg31: 'AWG 3.1',
+  };
+  return labels[mode] || t('result_summary_no_data', 'нет данных');
+};
+
+const getModeFilename = (mode) => ({
+  legacy: 'AmneziaWarp.conf',
+  awg2: 'AmneziaWarp-AWG2.conf',
+  awg3: 'AmneziaWarp-AWG3.0.conf',
+  awg31: 'AmneziaWarp-AWG3.1.conf',
+}[mode] || 'AmneziaWarp.conf');
+const getModeLoadingLabel = (mode) => t(`loading_${mode}`, `Генерация конфигурации (${getModeLabel(mode)})...`);
+const getModeReadyDownloadLabel = (mode) => t(`ready_download_${mode}`, `Скачать ${getModeFilename(mode)}`);
+const getModeSuccessLabel = (mode) => t(`success_${mode}`, `Конфигурация ${getModeLabel(mode)} успешно сгенерирована.`);
+
+const getModeBadgeClass = (mode) => {
+  if (mode === 'awg2' || mode === 'awg3' || mode === 'awg31') {
+    return `history-item__badge history-item__badge--${mode}`;
+  }
+  return 'history-item__badge history-item__badge--legacy';
+};
+
+const getAwgFeatureLabel = (feature) => ({
+  'junk-packets': t('awg_feature_junk', 'Junk packets'),
+  cps: t('awg_feature_cps', 'CPS packets'),
+  'timing-ranges': t('awg_feature_timing', 'Рандомизация timing'),
+  'persistent-keepalive-range': t('awg_feature_keepalive', 'Диапазон PersistentKeepalive'),
+  'content-padding-addition': t('awg_feature_content_padding', 'Experimental ContentPaddingAddition'),
+  'header-protection': t('awg_feature_header_disabled', 'Header Protection отключён'),
+  'message-padding': t('awg_feature_padding_disabled', 'S1-S4 padding отключён'),
+  'dynamic-message-headers': t('awg_feature_headers_disabled', 'Dynamic H1-H4 отключён'),
+  'random-trailers': t('awg_feature_trailers_disabled', 'RandomTrailers отключён'),
+  'cookie-behaviour-obfuscation': t('awg_feature_cookies_disabled', 'Cookie behaviour obfuscation отключён'),
+  'router-compatibility': t('awg_router_warning', 'Совместимость с роутерами зависит от реализации роутера'),
+}[feature] || feature);
+
+const appendAwgConstraint = (container, feature) => {
+  const label = document.createElement('div');
+  label.className = 'risk-label risk-label--info';
+  const state = document.createElement('strong');
+  state.textContent = t('awg_disabled_for_warp', 'Ограничение WARP');
+  const message = document.createElement('span');
+  message.textContent = getAwgFeatureLabel(feature);
+  label.append(state, message);
+  container.appendChild(label);
+};
+
 const renderResultExplanation = (summary) => {
   const fields = document.getElementById('resultSummaryFields');
   const risks = document.getElementById('resultRiskLabels');
@@ -504,6 +564,34 @@ const renderResultExplanation = (summary) => {
   appendSummaryField(fields, t('result_summary_profile', 'Профиль'), summaryValue('profile', summary.profile));
   appendSummaryField(fields, t('result_summary_ipv6', 'IPv6'), summaryValue('ipv6', summary.ipv6));
   appendSummaryField(fields, t('result_summary_import', 'Импорт'), summaryValue('vpnImport', summary.vpnImport));
+  if (summary.awg) {
+    appendSummaryField(
+      fields,
+      t('awg_profile_label', 'AWG-профиль'),
+      `AWG ${summary.awg.version} ${t('awg_warp_safe', 'WARP-safe')}`,
+    );
+    appendSummaryField(
+      fields,
+      t('awg_enabled_features', 'Включено'),
+      summary.awg.enabledFeatures.map(getAwgFeatureLabel).join(', '),
+    );
+    summary.awg.disabledFeatures.forEach((feature) => appendAwgConstraint(risks, feature));
+    if (summary.awg.experimentalFeatures.length) {
+      appendSummaryField(
+        fields,
+        t('awg_experimental_features', 'Экспериментально'),
+        summary.awg.experimentalFeatures.map(getAwgFeatureLabel).join(', '),
+      );
+    }
+    appendSummaryField(
+      fields,
+      t('awg_client_compatibility', 'Совместимость клиента'),
+      summary.awg.version === '3.1'
+        ? t('awg31_client_warning', 'Рекомендуется AmneziaVPN 5.0.1.5+ или совместимый AWG 3.1 client.')
+        : t('awg3_client_warning', 'Требуется клиент с поддержкой параметров AWG 3.x.'),
+    );
+    if (summary.awg.routerCompatibility) appendAwgConstraint(risks, 'router-compatibility');
+  }
   appendSummaryField(fields, t('result_summary_warnings', 'Предупреждения'), String(summary.warnings.length));
 
   if (!summary.warnings.length) {
@@ -539,7 +627,7 @@ const COMPAT_FORMAT_LABELS = { conf: '.conf', vpnlink: 'vpn://', qr: 'QR' };
 const localizeCompatText = (text) => {
   if (typeof text !== 'string') return '';
   const map = [
-    ['AWG 2.0 fields are client-side configuration parameters', 'compat_cloudflare_peer_notice'],
+    ['AmneziaWG fields are client-side configuration parameters', 'compat_cloudflare_peer_notice'],
     ['Compatibility depends on the client', 'compat_client_version_warning'],
     ['This format does not have a stable exporter', 'compat_unsupported_exporter_warning'],
     ['Direct export is not implemented', 'compat_reason_no_exporter'],
@@ -868,6 +956,8 @@ const buildWarpQueryString = (mode) => {
   params.set('mode', mode);
   if (mode === 'legacy') params.set('template', 'warp_amnezia');
   if (mode === 'awg2') params.set('template', 'warp_amnezia_awg2');
+  if (mode === 'awg3') params.set('template', 'warp_amnezia_awg3');
+  if (mode === 'awg31') params.set('template', 'warp_amnezia_awg31');
   params.set('routeMode', cfgState.routeMode);
   // Only send presets in split mode — in full tunnel presets must not reach the server
   if (cfgState.routeMode === ROUTE_MODES.SPLIT) {
@@ -1458,9 +1548,8 @@ const renderHistoryPanel = () => {
 
     // Mode badge
     const badge = document.createElement('span');
-    badge.className = 'history-item__badge ' +
-      (entry.mode === 'awg2' ? 'history-item__badge--awg2' : 'history-item__badge--legacy');
-    badge.textContent = entry.mode === 'awg2' ? 'AWG 2.0' : 'AWG 1.5';
+    badge.className = getModeBadgeClass(entry.mode);
+    badge.textContent = getModeLabel(entry.mode);
 
     // Info block
     const info = document.createElement('div');
@@ -1534,7 +1623,7 @@ const downloadFile = (content, filename) => {
   URL.revokeObjectURL(link.href);
 };
 
-const GENERATE_BUTTON_IDS = ['generateButton', 'generateButtonAwg2'];
+const GENERATE_BUTTON_IDS = ['generateButton', 'generateButtonAwg2', 'generateButtonAwg3', 'generateButtonAwg31'];
 
 const setAllGenerateButtonsDisabled = (disabled) => {
   GENERATE_BUTTON_IDS.forEach((id) => {
@@ -1556,12 +1645,8 @@ const generateConfig = async (options) => {
   const resultState = getResultStateSnapshot();
   let response;
 
-  const loadingLabel = mode === 'awg2'
-    ? t('loading_awg2', 'Генерация конфигурации (AmneziaWG 2.0)...')
-    : t('loading_legacy', 'Генерация конфигурации (Legacy)...');
-  const readyDownloadText = mode === 'awg2'
-    ? t('ready_download_awg2', 'Скачать AmneziaWarp-AWG2.conf')
-    : t('ready_download_legacy', 'Скачать AmneziaWarp.conf');
+  const loadingLabel = getModeLoadingLabel(mode);
+  const readyDownloadText = getModeReadyDownloadLabel(mode);
 
   // Empty split tunnel guard
   if (cfgState.routeMode === ROUTE_MODES.SPLIT && getSelectedRouteIds().length === 0) {
@@ -1671,9 +1756,7 @@ const generateConfig = async (options) => {
           'Конфигурация создана с предупреждениями. Подробности указаны в карточке результата.',
         );
       } else {
-        status.textContent = mode === 'awg2'
-          ? t('success_awg2', 'Конфигурация AmneziaWG 2.0 успешно сгенерирована! Нужен клиент AmneziaVPN 4.8.12.9+ или совместимый AWG 2.0.')
-          : t('success_legacy', 'Конфигурация Legacy успешно сгенерирована!');
+        status.textContent = getModeSuccessLabel(mode);
       }
     } else {
       throw new Error(data.message || t('err_unknown_gen', 'Неизвестная ошибка при генерации конфигурации.'));
@@ -1726,6 +1809,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const generateButton = document.getElementById('generateButton');
   const generateButtonAwg2 = document.getElementById('generateButtonAwg2');
+  const generateButtonAwg3 = document.getElementById('generateButtonAwg3');
+  const generateButtonAwg31 = document.getElementById('generateButtonAwg31');
   const schedulerButton15 = document.getElementById('schedulerButton15');
   const schedulerButton20 = document.getElementById('schedulerButton20');
 
@@ -1745,6 +1830,22 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   awg2Options.boundGenerateClick = () => generateConfig(awg2Options);
 
+  const awg3Options = {
+    buttonId: 'generateButtonAwg3',
+    mode: 'awg3',
+    filename: getModeFilename('awg3'),
+    boundGenerateClick: () => {},
+  };
+  awg3Options.boundGenerateClick = () => generateConfig(awg3Options);
+
+  const awg31Options = {
+    buttonId: 'generateButtonAwg31',
+    mode: 'awg31',
+    filename: getModeFilename('awg31'),
+    boundGenerateClick: () => {},
+  };
+  awg31Options.boundGenerateClick = () => generateConfig(awg31Options);
+
   if (generateButton) {
     generateButton.addEventListener('click', legacyOptions.boundGenerateClick);
   } else {
@@ -1755,6 +1856,18 @@ document.addEventListener('DOMContentLoaded', () => {
     generateButtonAwg2.addEventListener('click', awg2Options.boundGenerateClick);
   } else {
     console.error('Кнопка "generateButtonAwg2" не найдена.');
+  }
+
+  if (generateButtonAwg3) {
+    generateButtonAwg3.addEventListener('click', awg3Options.boundGenerateClick);
+  } else {
+    console.error('Кнопка "generateButtonAwg3" не найдена.');
+  }
+
+  if (generateButtonAwg31) {
+    generateButtonAwg31.addEventListener('click', awg31Options.boundGenerateClick);
+  } else {
+    console.error('Кнопка "generateButtonAwg31" не найдена.');
   }
 
   if (schedulerButton15) {

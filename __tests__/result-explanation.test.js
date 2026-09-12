@@ -111,4 +111,35 @@ describe('buildResultSummary', () => {
     assert.equal(summary.routesSource, 'unknown');
     assert.ok(summary.warnings.some(({ level }) => level === 'info'));
   });
+
+  test('keeps only safe AWG 3.x capability metadata for result explanation', () => {
+    const summary = buildResultSummary({
+      success: true,
+      mode: 'awg31',
+      content: 'base64',
+      awg: {
+        requestedVersion: '3.1',
+        profile: 'warp-safe',
+        enabledFeatures: ['junk-packets', 'timing-ranges', 'PrivateKey = secret'],
+        disabledFeatures: [
+          { feature: 'header-protection', reason: 'requires-awg-peer' },
+          { feature: 'random-trailers', reason: 'requires-awg31-peer' },
+          { feature: 'Endpoint = secret', reason: 'unexpected' },
+        ],
+        experimentalFeatures: ['content-padding-addition'],
+        routerCompatibility: 'experimental/router-dependent',
+        unexpected: 'PresharedKey = secret',
+      },
+    }, {});
+
+    assert.deepEqual(summary.awg, {
+      version: '3.1',
+      profile: 'warp-safe',
+      enabledFeatures: ['junk-packets', 'timing-ranges'],
+      disabledFeatures: ['header-protection', 'random-trailers'],
+      experimentalFeatures: ['content-padding-addition'],
+      routerCompatibility: 'experimental/router-dependent',
+    });
+    assert.doesNotMatch(JSON.stringify(summary), /PrivateKey|PresharedKey|Endpoint = secret/);
+  });
 });

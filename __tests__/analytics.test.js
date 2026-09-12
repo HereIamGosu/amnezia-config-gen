@@ -13,7 +13,7 @@ const {
 describe('privacy-safe telemetry adapter', () => {
   test('sanitizer keeps only allowlisted, bounded product metadata', () => {
     const payload = sanitizePayload({
-      mode: 'awg2',
+      mode: 'awg31',
       count_requested: 3,
       count_produced: 2,
       endpoint_mode: 'auto',
@@ -24,6 +24,9 @@ describe('privacy-safe telemetry adapter', () => {
       route_mode: 'split',
       mobile_profile: true,
       router_profile: false,
+      awg_timing_ranges: true,
+      awg_content_padding_experimental: false,
+      awg_warp_safe: true,
       cps_mode: 'quic',
       duration_ms: 1234.6,
       error_code: 'http',
@@ -39,7 +42,7 @@ describe('privacy-safe telemetry adapter', () => {
     });
 
     assert.deepEqual(payload, {
-      mode: 'awg2',
+      mode: 'awg31',
       endpoint_mode: 'auto',
       endpoint_source: 'fallback',
       routes_source: 'itdoginfo',
@@ -53,6 +56,9 @@ describe('privacy-safe telemetry adapter', () => {
       has_warning: true,
       mobile_profile: true,
       router_profile: false,
+      awg_timing_ranges: true,
+      awg_content_padding_experimental: false,
+      awg_warp_safe: true,
     });
   });
 

@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Генератор AmneziaWG config для Cloudflare WARP — AWG 1.5 и AWG 2.0</title>
+    <title>Генератор AmneziaWG для Cloudflare WARP — AWG 1.5, 2.0, 3.0 и 3.1</title>
     <meta
       name="description"
-      content="Создайте готовый .conf для AmneziaWG и Cloudflare WARP: AWG 1.5, AWG 2.0, WARP-ключи, DNS, AllowedIPs, CPS и endpoint-настройки без ручной правки конфига."
+      content="Создайте WARP-safe .conf для AmneziaWG 1.5, 2.0, 3.0 и 3.1. AWG 3.x использует только клиентские возможности, совместимые со стандартным WireGuard peer Cloudflare."
     />
     <meta
       name="robots"
@@ -29,11 +29,11 @@
       href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
     />
     <!-- Подключение CSS -->
-    <link rel="stylesheet" href="static/styles.css?v=2.5.0" />
+    <link rel="stylesheet" href="static/styles.css?v=2.7.0" />
     <!-- Подключение JavaScript -->
-    <script defer src="static/analytics.js?v=2.5.0"></script>
-    <script defer src="static/result-explanation.js?v=2.5.0"></script>
-    <script defer src="static/script.js?v=2.5.0"></script>
+    <script defer src="static/analytics.js?v=2.7.0"></script>
+    <script defer src="static/result-explanation.js?v=2.7.0"></script>
+    <script defer src="static/script.js?v=2.7.0"></script>
     <!-- Yandex.Metrika counter -->
     <script type="text/javascript">
       (function (m, e, t, r, i, k, a) {
@@ -89,7 +89,7 @@
     />
     <meta
       property="og:description"
-      content="Готовый .conf для AmneziaWG: AWG 1.5, AWG 2.0, WARP-ключи, DNS, AllowedIPs, CPS и endpoint-настройки."
+      content="WARP-safe .conf для AmneziaWG 1.5, 2.0, 3.0 и 3.1; Cloudflare остаётся стандартным WireGuard peer."
     />
     <meta property="og:url" content="https://valokda-amnezia.vercel.app/" />
     <meta
@@ -110,7 +110,7 @@
     />
     <meta
       name="twitter:description"
-      content="Создайте готовый .conf для AWG 1.5 и AWG 2.0 без ручной правки конфига."
+      content="Создайте WARP-safe .conf для AWG 1.5, 2.0, 3.0 и 3.1 без ручной правки конфига."
     />
     <meta
       name="twitter:image"
@@ -137,7 +137,7 @@
             "@type": "WebPage",
             "@id": "https://valokda-amnezia.vercel.app/#webpage",
             "url": "https://valokda-amnezia.vercel.app/",
-            "name": "Генератор AmneziaWG config для Cloudflare WARP — AWG 1.5 и AWG 2.0",
+            "name": "Генератор AmneziaWG config для Cloudflare WARP — AWG 1.5, 2.0, 3.0 и 3.1",
             "isPartOf": { "@id": "https://valokda-amnezia.vercel.app/#website" },
             "about": { "@id": "https://valokda-amnezia.vercel.app/#app" },
             "inLanguage": "ru-RU",
@@ -156,7 +156,7 @@
             "operatingSystem": "Windows, Android, iOS, Linux, Router firmware",
             "inLanguage": "ru-RU",
             "isAccessibleForFree": true,
-            "description": "Веб-инструмент для генерации готовых .conf-файлов AmneziaWG для Cloudflare WARP с поддержкой AWG 1.5, AWG 2.0, DNS, AllowedIPs, CPS и endpoint-настроек.",
+            "description": "Веб-инструмент для генерации WARP-safe .conf-файлов AmneziaWG 1.5, 2.0, 3.0 и 3.1 для стандартного WireGuard peer Cloudflare.",
             "offers": {
               "@type": "Offer",
               "price": "0",
@@ -168,6 +168,8 @@
               "Cloudflare WARP registration",
               "AWG 1.5 Legacy mode",
               "AWG 2.0 mode",
+              "AWG 3.0 WARP-safe client features",
+              "AWG 3.1 WARP-safe client features",
               "AllowedIPs route presets",
               "DNS presets",
               "CPS payload selection",
@@ -194,7 +196,7 @@
   </head>
   <body>
     <noscript>
-      <p>AmneziaWG Config Generator — бесплатный веб-инструмент для генерации .conf-файлов AmneziaWG и Cloudflare WARP. Поддерживает AWG 1.5 (Legacy) и AWG 2.0, AllowedIPs route presets, DNS presets, CPS, mobile profile и vpn:// для импорта в мобильный AmneziaVPN. Для работы генератора необходим JavaScript.</p>
+      <p>AmneziaWG Config Generator — бесплатный веб-инструмент для генерации .conf-файлов AmneziaWG и Cloudflare WARP. Поддерживает AWG 1.5, 2.0, 3.0 и 3.1; AWG 3.x использует WARP-safe клиентские возможности для стандартного WireGuard peer Cloudflare. Для работы генератора необходим JavaScript.</p>
     </noscript>
     <script>
       window.va =
@@ -358,6 +360,52 @@
                       </button>
                     </div>
                   </div>
+
+                  <!-- AWG3 slot -->
+                  <div class="gen-slot">
+                    <button id="generateButtonAwg3" class="button" type="button" title="AWG 3.0 here means the client configuration format and parameters. The Cloudflare WARP peer remains a standard WireGuard peer, so some WARP parameters are intentionally fixed." data-i18n-title="compat_awg3_disclaimer">
+                      <span class="button__text" data-i18n="btn_gen_awg3">Сгенерировать AWG 3.0</span>
+                    </button>
+                    <div id="postGenAwg3" class="post-gen-row" hidden>
+                      <button type="button" class="button post-gen-row__download">
+                        <span class="button__text" data-i18n="ready_download_awg3">Скачать AmneziaWarp-AWG3.0.conf</span>
+                      </button>
+                      <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию" data-i18n-title="preview_btn_title">
+                        <span aria-hidden="true">&#128065;</span>
+                      </button>
+                      <button type="button" class="button button--icon-sq post-gen-row__info" title="Подробнее о конфиге" data-i18n-title="result_info_btn_title" hidden>
+                        <span aria-hidden="true">&#8505;</span>
+                      </button>
+                      <button type="button" class="button button--secondary post-gen-row__copy-vpn-link" title="Скопировать vpn://-ссылку для AmneziaVPN" data-i18n-title="copy_vpn_link_title" hidden>
+                        <span class="button__text" data-i18n="copy_vpn_link">📋 Скопировать vpn://</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- AWG3.1 slot -->
+                  <div class="gen-slot">
+                    <button id="generateButtonAwg31" class="button" type="button" title="AWG 3.1 here means the client configuration format and parameters. The Cloudflare WARP peer remains a standard WireGuard peer, so some WARP parameters are intentionally fixed." data-i18n-title="compat_awg31_disclaimer">
+                      <span class="button__text" data-i18n="btn_gen_awg31">Сгенерировать AWG 3.1</span>
+                    </button>
+                    <div id="postGenAwg31" class="post-gen-row" hidden>
+                      <button type="button" class="button post-gen-row__download">
+                        <span class="button__text" data-i18n="ready_download_awg31">Скачать AmneziaWarp-AWG3.1.conf</span>
+                      </button>
+                      <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию" data-i18n-title="preview_btn_title">
+                        <span aria-hidden="true">&#128065;</span>
+                      </button>
+                      <button type="button" class="button button--icon-sq post-gen-row__info" title="Подробнее о конфиге" data-i18n-title="result_info_btn_title" hidden>
+                        <span aria-hidden="true">&#8505;</span>
+                      </button>
+                      <button type="button" class="button button--secondary post-gen-row__copy-vpn-link" title="Скопировать vpn://-ссылку для AmneziaVPN" data-i18n-title="copy_vpn_link_title" hidden>
+                        <span class="button__text" data-i18n="copy_vpn_link">📋 Скопировать vpn://</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <p class="awg3-warp-safe-note" data-i18n="awg3_warp_safe_help">
+                    ℹ Cloudflare остаётся стандартным WireGuard peer. Генератор включает только AWG 3.x параметры, которые не требуют поддержки со стороны Cloudflare.
+                  </p>
 
                 </div>
                 <button
@@ -633,7 +681,7 @@
               Если работает в Wi-Fi, но не работает в мобильной сети: попробуйте другой порт, hostname вместо IP или другой endpoint-режим.
             </li>
             <li data-i18n="diagnostics_import_failed">
-              Если импорт не проходит: проверьте режим AWG 1.5 / AWG 2.0, формат профиля и способ импорта.
+              Если импорт не проходит: проверьте режим AWG, версию parser клиента, формат и способ импорта. vpn:// для AWG 3.0 намеренно недоступен.
             </li>
           </ul>
           <a
@@ -719,9 +767,9 @@
           </p>
         </div>
 
-        <!-- Секция 2: AWG 1.5 vs AWG 2.0 -->
+        <!-- Секция 2: версии AWG и Cloudflare WARP -->
         <div class="info-section">
-          <h3 class="info-section__title" data-i18n="info_s2_title">&#x2139; AWG 1.5 vs AWG 2.0</h3>
+          <h3 class="info-section__title" data-i18n="info_s2_title">&#x2139; Версии AWG и Cloudflare WARP</h3>
           <div class="info-compare">
             <div class="info-compare__col">
               <div class="info-compare__label info-compare__label--legacy">

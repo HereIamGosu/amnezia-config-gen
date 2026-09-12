@@ -2,7 +2,7 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const { inflateSync } = require('zlib');
 const { Buffer } = require('buffer');
-const { buildVpnLink } = require('../src/server/vpnLinkBuilder');
+const { buildVpnLink, resolveProtocolVersion } = require('../src/server/vpnLinkBuilder');
 
 const fromBase64Url = (s) => {
   const norm = s.replace(/-/g, '+').replace(/_/g, '/');
@@ -51,6 +51,37 @@ describe('Invariant I10: vpn:// link round-trip', () => {
     assert.equal(innerJson.config, sampleConf, 'inner config must equal original .conf text');
     assert.equal(innerJson.mtu, '1280');
     assert.equal(innerJson.port, '4500');
+  });
+
+  test('vpn:// uses protocol_version 3.1 for awg31', () => {
+    const sampleConf = [
+      '[Interface]',
+      'PrivateKey = AAAA',
+      'Address = 172.16.0.2',
+      'DNS = 1.1.1.1',
+      'MTU = 1280',
+      '',
+      '[Peer]',
+      'PublicKey = BBBB',
+      'AllowedIPs = 0.0.0.0/0, ::/0',
+      'Endpoint = engage.cloudflareclient.com:4500',
+    ].join('\n');
+
+    const link = buildVpnLink(sampleConf, { mode: 'awg31' });
+    const buf = fromBase64Url(link.slice('vpn://'.length));
+    const inflated = inflateSync(buf.slice(4));
+    const obj = JSON.parse(inflated.toString('utf8'));
+    const innerJson = JSON.parse(obj.containers[0].awg.last_config);
+
+    assert.equal(obj.containers[0].awg.protocol_version, '3.1');
+    assert.equal(innerJson.config, sampleConf);
+    assert.equal(innerJson.mtu, '1280');
+    assert.equal(innerJson.port, '4500');
+  });
+
+  test('awg3 vpn:// is disabled until its historical protocol version is confirmed', () => {
+    assert.equal(resolveProtocolVersion('awg3'), null);
+    assert.equal(buildVpnLink('[Interface]\nMTU = 1280', { mode: 'awg3' }), null);
   });
 
   test('vpn:// MTU/port extraction defaults when fields missing', () => {

@@ -30,7 +30,7 @@ const STATUS = Object.freeze({
 // Canonical warning strings (English). The UI maps these to localized copy.
 const WARNINGS = Object.freeze({
   CLOUDFLARE_PEER:
-    'AWG 2.0 fields are client-side configuration parameters. Cloudflare WARP peer remains a standard WireGuard peer.',
+    'AmneziaWG fields are client-side configuration parameters. Cloudflare WARP peer remains a standard WireGuard peer.',
   CLIENT_VERSION:
     'Compatibility depends on the client and its version. If import succeeds but the tunnel does not work, try another client or profile mode.',
   UNSUPPORTED_EXPORTER:
@@ -55,7 +55,7 @@ const CLIENTS = Object.freeze([
     name: 'AmneziaVPN',
     platforms: ['windows', 'macos', 'linux', 'android', 'ios'],
     supportedExports: ['conf', 'vpnlink', 'qr'],
-    recommendedModes: ['legacy', 'awg2'],
+    recommendedModes: ['legacy', 'awg2', 'awg3', 'awg31'],
     status: STATUS.RECOMMENDED,
     warnings: [],
     notes: ['Use vpn:// where supported for faster import.'],
@@ -65,7 +65,7 @@ const CLIENTS = Object.freeze([
     name: 'AmneziaWG',
     platforms: ['windows', 'linux', 'android'],
     supportedExports: ['conf'],
-    recommendedModes: ['legacy', 'awg2'],
+    recommendedModes: ['legacy', 'awg2', 'awg3', 'awg31'],
     status: STATUS.RECOMMENDED,
     warnings: [],
     notes: [],
@@ -181,7 +181,7 @@ const CLIENTS = Object.freeze([
   },
 ]);
 
-const VALID_MODES = ['legacy', 'awg2'];
+const VALID_MODES = ['legacy', 'awg2', 'awg3', 'awg31'];
 
 /** @returns {string[]} the export ids a generation produced, given the flags. */
 function resolveAvailableExports({ exportType, link } = {}) {
@@ -203,7 +203,7 @@ function usableExports(client, availableExports) {
  * Build the compatibility summary for a single generation result.
  *
  * @param {object} context
- * @param {('legacy'|'awg2'|string)} context.mode  generated config mode.
+ * @param {('legacy'|'awg2'|'awg3'|'awg31'|string)} context.mode  generated config mode.
  * @param {string} [context.exportType]            primary requested export id.
  * @param {boolean} [context.mobile]               mobile profile applied.
  * @param {boolean} [context.router]               router profile applied.
@@ -256,7 +256,7 @@ function getCompatibilityForGeneration(context = {}) {
   }
 
   const warnings = [];
-  if (mode === 'awg2') warnings.push(WARNINGS.CLOUDFLARE_PEER);
+  if (mode !== 'legacy') warnings.push(WARNINGS.CLOUDFLARE_PEER);
   if (experimental.length > 0) warnings.push(WARNINGS.CLIENT_VERSION);
   if (exportType) {
     const target = getExportTarget(exportType);

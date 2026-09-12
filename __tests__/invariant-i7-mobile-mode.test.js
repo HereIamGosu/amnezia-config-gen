@@ -29,12 +29,12 @@ describe('Invariant I7: mobile=1 overrides', () => {
     assert.match(conf, /^Jmin = 64$/m);
     assert.match(conf, /^Jmax = 128$/m);
     assert.match(conf, /^MTU = 1280$/m);
-    assert.match(conf, /^AllowedIPs = 0\.0\.0\.0\/0$/m);
+    assert.match(conf, /^\s*AllowedIPs = 0\.0\.0\.0\/0$/m);
 
     const interfaceBlock = conf.split(/\n\[Peer\]/)[0];
     const addressLine = interfaceBlock.split('\n').find((l) => l.startsWith('Address ='));
     assert.ok(addressLine, 'Address line must exist');
     assert.doesNotMatch(addressLine, /:/, 'Mobile mode must strip IPv6 from Address (no colons)');
-    assert.doesNotMatch(conf, /^AllowedIPs = .*:/m, 'Mobile mode must strip IPv6 from AllowedIPs');
+    assert.doesNotMatch(conf, /^\s*AllowedIPs = .*:/m, 'Mobile mode must strip IPv6 from AllowedIPs');
   });
 });

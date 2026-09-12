@@ -210,6 +210,170 @@ test('contract: vpnLink absent when link not requested', async () => {
   }
 });
 
+test('contract: awg3 refuses vpn:// until its protocol mapping is source-confirmed', async () => {
+  clearModules();
+  const httpsMock = installWarpMock();
+  net.createConnection = (opts, cb) => { const s = mockNetOk(); if (cb) setImmediate(cb); return s; };
+  try {
+    const handler = require('../api/warp');
+    const res = makeRes();
+    await handler(makeReq({ mode: 'awg3', link: '1' }), res);
+    const body = res.getBody();
+    assert.equal(body.vpnLink, undefined);
+    assert.equal(body.configs[0].vpnLink, undefined);
+  } finally {
+    httpsMock.mock.restore();
+    net.createConnection = realNetCreate;
+  }
+});
+
+test('contract: experimental AWG3 content padding uses the documented default and warning', async () => {
+  clearModules();
+  const httpsMock = installWarpMock();
+  net.createConnection = (opts, cb) => { const s = mockNetOk(); if (cb) setImmediate(cb); return s; };
+  try {
+    const handler = require('../api/warp');
+    const res = makeRes();
+    await handler(makeReq({ mode: 'awg3', experimentalContentPadding: 'true' }), res);
+    const body = res.getBody();
+    const conf = Buffer.from(body.content, 'base64').toString('utf8');
+    assert.match(conf, /^ContentPaddingAddition = 10-100$/m);
+    assert.match(String(body.warning), /ContentPaddingAddition is experimental for Cloudflare WARP/);
+  } finally {
+    httpsMock.mock.restore();
+    net.createConnection = realNetCreate;
+  }
+});
+
+test('contract: AWG3 aliases and templates resolve to canonical modes', async () => {
+  for (const [query, expected] of [
+    [{ mode: 'awg30' }, 'awg3'],
+    [{ mode: '3.1' }, 'awg31'],
+    [{ template: 'amnezia_awg3' }, 'awg3'],
+    [{ template: 'warp_awg31_amnezia' }, 'awg31'],
+  ]) {
+    clearModules();
+    const httpsMock = installWarpMock();
+    net.createConnection = (opts, cb) => { const s = mockNetOk(); if (cb) setImmediate(cb); return s; };
+    try {
+      const handler = require('../api/warp');
+      const res = makeRes();
+      await handler(makeReq(query), res);
+      assert.equal(res.getStatus(), 200);
+      assert.equal(res.getBody().mode, expected);
+    } finally {
+      httpsMock.mock.restore();
+      net.createConnection = realNetCreate;
+    }
+  }
+});
+
+test('contract: AWG3 GET overrides are normalized and reported by WARP-safe metadata', async () => {
+  clearModules();
+  const httpsMock = installWarpMock();
+  net.createConnection = (opts, cb) => { const s = mockNetOk(); if (cb) setImmediate(cb); return s; };
+  try {
+    const handler = require('../api/warp');
+    const res = makeRes();
+    await handler(makeReq({
+      mode: 'awg3',
+      rekeyAfterTime: '90-110',
+      rekeyTimeout: '4',
+      rejectAfterTime: '160-190',
+      keepaliveTimeout: '6-12',
+      maxHandshakeAttempts: '16-22',
+      persistentKeepalive: '24-34',
+      experimentalContentPadding: 'true',
+      contentPaddingAddition: '12-64',
+    }), res);
+    const body = res.getBody();
+    const conf = Buffer.from(body.content, 'base64').toString('utf8');
+    for (const line of ['RekeyAfterTime = 90-110', 'RekeyTimeout = 4', 'RejectAfterTime = 160-190', 'KeepaliveTimeout = 6-12', 'MaxHandshakeAttempts = 16-22', 'PersistentKeepalive = 24-34', 'ContentPaddingAddition = 12-64']) {
+      assert.match(conf, new RegExp(`^${line}$`, 'm'));
+    }
+    assert.equal(body.awg.requestedVersion, '3.0');
+    assert.equal(body.awg.profile, 'warp-safe');
+    assert.equal(body.awg.peerType, 'stock-wireguard');
+    assert.deepEqual(body.awg.experimentalFeatures, ['content-padding-addition']);
+  } finally {
+    httpsMock.mock.restore();
+    net.createConnection = realNetCreate;
+  }
+});
+
+test('contract: AWG31 POST accepts the same strict range fields and returns protocol metadata', async () => {
+  clearModules();
+  const httpsMock = installWarpMock();
+  net.createConnection = (opts, cb) => { const s = mockNetOk(); if (cb) setImmediate(cb); return s; };
+  try {
+    const handler = require('../api/warp');
+    const req = makeReq({}, 'POST');
+    req.body = { mode: 'awg31', rekeyTimeout: '5-8', persistentKeepalive: '30', link: true };
+    const res = makeRes();
+    await handler(req, res);
+    const body = res.getBody();
+    const conf = Buffer.from(body.content, 'base64').toString('utf8');
+    assert.equal(res.getStatus(), 200);
+    assert.match(conf, /^RekeyTimeout = 5-8$/m);
+    assert.match(conf, /^PersistentKeepalive = 30$/m);
+    assert.equal(body.awg.vpnImport.protocolVersion, '3.1');
+    assert.equal(body.awg.vpnImport.available, true);
+  } finally {
+    httpsMock.mock.restore();
+    net.createConnection = realNetCreate;
+  }
+});
+
+test('contract: malformed AWG3 ranges and blocked wire-format overrides return 400 before registration', async () => {
+  for (const query of [
+    { mode: 'awg3', rekeyAfterTime: '100-120\nPrivateKey = injected' },
+    { mode: 'awg31', contentPaddingAddition: '35-25', experimentalContentPadding: 'true' },
+    { mode: 'awg3', S4: '12' },
+    { mode: 'awg31', randomTrailers: 'on' },
+    { mode: 'awg31', disableCookies: 'on' },
+  ]) {
+    clearModules();
+    const handler = require('../api/warp');
+    const res = makeRes();
+    await handler(makeReq(query), res);
+    assert.equal(res.getStatus(), 400);
+    assert.equal(res.getBody().success, false);
+  }
+});
+
+test('contract: AWG3 composition keeps timing fields across count, CPS5, mobile/router, and IPv6 variants', async () => {
+  for (const query of [
+    { mode: 'awg3', count: '3', cps5: '1' },
+    { mode: 'awg31', mobile: '1', cps5: '1', ipv6: '1' },
+    { mode: 'awg3', router: '1' },
+    { mode: 'awg31', ipv6: '1' },
+  ]) {
+    clearModules();
+    const httpsMock = installWarpMock();
+    net.createConnection = (opts, cb) => { const s = mockNetOk(); if (cb) setImmediate(cb); return s; };
+    try {
+      const handler = require('../api/warp');
+      const res = makeRes();
+      await handler(makeReq(query), res);
+      const body = res.getBody();
+      assert.equal(res.getStatus(), 200);
+      for (const item of body.configs) {
+        const conf = Buffer.from(item.content, 'base64').toString('utf8');
+        assert.match(conf, /^RekeyAfterTime = 100-120$/m);
+        assert.match(conf, /^S4 = 0$/m);
+        assert.match(conf, /^H4 = 4$/m);
+        if (query.cps5) assert.match(conf, /^I5 = /m);
+        if (query.mobile) assert.doesNotMatch(conf, /^Address = .*:/m);
+        if (query.ipv6 === '1' && !query.mobile) assert.match(conf, /^Address = .*:/m);
+      }
+      if (query.router) assert.equal(body.awg.routerCompatibility, 'experimental/router-dependent');
+    } finally {
+      httpsMock.mock.restore();
+      net.createConnection = realNetCreate;
+    }
+  }
+});
+
 test('contract: warning absent on full success (count=2 fully delivered)', async () => {
   clearModules();
   const httpsMock = installWarpMock();

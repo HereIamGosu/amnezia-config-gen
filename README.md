@@ -23,7 +23,7 @@ Web UI and HTTP API for building `.conf` files for the **AmneziaWG** client (Wir
 ## Features
 
 - Explicit routing mode selection: full tunnel (all traffic) or split tunnel (selected presets only)
-- Two config formats: **Legacy** (`mode=legacy`) and **AmneziaWG 2.0** (`mode=awg2`).
+- Four config formats: **Legacy**, **AWG 2.0**, **AWG 3.0**, and **AWG 3.1** (`mode=legacy|awg2|awg3|awg31`). AWG 3.x modes use a WARP-safe client-side profile.
 - Route presets: tile-selectable domain bundles → aggregated IPv4 (or IPv4+IPv6) CIDRs in `AllowedIPs`. With no selection, defaults to `0.0.0.0/0`; `::/0` is added only when IPv6 is explicitly enabled.
 - DNS presets for the `DNS` line in the config.
 - One-click `.conf` download plus two Windows Task Scheduler templates: `public/static/SchedulerAmnezia-15.bat` (Legacy 1.5 → `AmneziaWarp.conf`) and `SchedulerAmnezia-20.bat` (AWG 2.0 → `AmneziaWarp-AWG2.conf`); edit the `amneziawg.exe` path in the .bat if needed.
@@ -63,7 +63,7 @@ Product events use the existing Yandex.Metrika integration through the no-op-saf
 
 Tracked events: `generation_started`, `generation_succeeded`, `generation_partially_succeeded`, `generation_failed`, `config_downloaded`, `config_preview_opened`, `vpn_link_copied`, `history_item_previewed`, `history_item_downloaded`, `healthcheck_opened`, and `status_modal_opened`.
 
-Only bounded product metadata is allowed: mode, requested/produced counts, endpoint/route source categories, warning counts, full/split route mode, mobile/router flags, CPS mode, non-negative generation duration, and a coarse error category. The adapter does **not** collect `.conf` contents, `PrivateKey`, `PresharedKey`, WARP tokens, full endpoint strings, `AllowedIPs`, custom CIDRs, raw error messages, or a full user agent supplied by the application.
+Only bounded product metadata is allowed: mode, requested/produced counts, endpoint/route source categories, warning counts, full/split route mode, mobile/router flags, CPS mode, AWG WARP-safe/timing/experimental-padding booleans, non-negative generation duration, and a coarse error category. The adapter does **not** collect `.conf` contents, `PrivateKey`, `PresharedKey`, WARP tokens, full endpoint strings, `AllowedIPs`, custom CIDRs, raw error messages, or a full user agent supplied by the application.
 
 ## Repository layout
 
@@ -73,6 +73,7 @@ Only bounded product metadata is allowed: mode, requested/produced counts, endpo
 | `public/static/script.js`, `styles.css` | Frontend logic and styles |
 | `public/static/presets-fallback.json` | Offline fallback preset catalogue |
 | `api/warp.js` | WARP config generation endpoint |
+| `src/server/awg/` | AWG profiles, strict ranges, WARP safety, and final serialization |
 | `api/iplist.js` | Preset list and CIDR preview |
 | `api/routePresets.js` | Source of truth for all route and DNS presets |
 | `api/ipListFetch.js` | Domain → CIDR resolution (10-min in-memory cache) |
@@ -91,9 +92,9 @@ These rules are non-obvious, easy to break, and silently fatal. They are enforce
 | ID | Rule | Why |
 |---|---|---|
 | **I1** | The `[Interface]` line MUST be uppercase `I1`, not `i1`. | Lowercase `i1` is silently ignored by the AmneziaWG Windows client. Reference: [wg-easy/wg-easy#2439](https://github.com/wg-easy/wg-easy/issues/2439). |
-| **I2** | For WARP / AmneziaWG 2.0: `S1 = S2 = S3 = S4 = 0`. | Cloudflare's peer is stock WireGuard and does not add S1–S4 byte prefixes. The AmneziaWG receive path strips S2/S3/S4 from incoming packets — non-zero values silently break the tunnel. |
-| **I3** | For WARP / AmneziaWG 2.0: `H1..H4 = 1, 2, 3, 4`. | These are the default WireGuard packet types; Cloudflare's stock peer uses them. |
-| **I4** | For WARP / AmneziaWG 2.0: `MTU = 1280`. | Required for WARP path-MTU compatibility. |
+| **I2** | For every WARP-safe AWG 2/3.x profile: `S1 = S2 = S3 = S4 = 0`. | Cloudflare's peer is stock WireGuard and does not add AWG byte prefixes. |
+| **I3** | For every WARP-safe AWG 2/3.x profile: `H1..H4 = 1, 2, 3, 4`. | Cloudflare expects the standard WireGuard message types. |
+| **I4** | WARP-safe profiles use `MTU = 1280`; AWG 3.x never emits `HeaderProtectionKey` or enables `RandomTrailers`/`DisableCookies`. | Peer-dependent wire-format changes cannot interoperate with the stock Cloudflare peer. |
 | **I5** | AmneziaWG 2.0 `[Interface]` field order: `PrivateKey → Address → DNS → MTU → Jc → Jmin → Jmax → S1..S4 → H1..H4 → I1`. | Matches the order `amneziawg-go` UAPI accepts. |
 | **I6** | `AllowedIPs` defaults to **IPv4-only**; IPv6 is opt-in via the Settings IPv6 toggle (`?ipv6=1`). | Routers (GL.iNet, Keenetic, MikroTik) and mobile clients have limited routing-table capacity; doubling the route count via IPv6 causes silent failures. |
 | **I7** | `mobile=1` overrides: `Jc=3, Jmin=64, Jmax=128, MTU=1280`, IPv4-only enforced (overrides `ipv6=1`, strips IPv6 from `Address` and `AllowedIPs`). | Mobile-tuned profile within AWG 2.0 spec; reduces battery drain and silent resets on iOS. |
@@ -105,19 +106,21 @@ These rules are non-obvious, easy to break, and silently fatal. They are enforce
 
 ### `GET` / `POST` `/api/warp`
 
-Returns JSON: `success`, on success `content` (`.conf` body in **base64**), `mode` (`legacy` | `awg2`), optionally `routesSource`, privacy-safe `routesTelemetrySource` (`opencck` | `itdoginfo` | `antifilter` | `static` | `fallback` | `unknown`), `routesPresets`, `presetSitesCount`, `appliedExtras`, `vpnLink`.
+Returns JSON: `success`, on success `content` (`.conf` body in **base64**), `mode` (`legacy` | `awg2` | `awg3` | `awg31`), optionally `routesSource`, privacy-safe `routesTelemetrySource`, `routesPresets`, `presetSitesCount`, `appliedExtras`, `vpnLink`, `compatibility`, and AWG 3.x-only `awg` capability metadata.
 
 Parameters via query string (`GET`) or JSON body fields (`POST`). Body field names match query param names (handy for long `i1`).
 
 | Param | Description |
 |---|---|
-| `mode` | `legacy` (default) or `awg2` (aliases: `2`, `v2`; or query `awg`) |
+| `mode` | `legacy` (default), `awg2`, `awg3`, or `awg31`; accepted AWG 3.x aliases include `3`, `3.0`, `awg30`, `v3`, `3.1`, and `v3.1` |
 | `presets` | Comma-separated preset keys (or array in JSON body) |
 | `dns` | DNS preset key; UI default is `cloudflare` |
 | `template` | See [Templates](#templates) |
 | `peerEndpoint`, `endpoint` | Full `host:port` for `Endpoint` (used as-is when given) |
 | `warpPort` | UDP port for `engage…` or IP fallback (default for WARP templates: **4500**; classic wgcf often: **2408**) |
-| `persistentKeepalive`, `keepalive` | E.g. `25`; `0` omits the keepalive line |
+| `persistentKeepalive`, `keepalive` | Integer for older modes; strict integer or `min-max` range for AWG 3.x (default `25-35`) |
+| `rekeyAfterTime`, `rekeyTimeout`, `rejectAfterTime`, `keepaliveTimeout`, `maxHandshakeAttempts` | AWG 3.x strict integer/range overrides; defaults: `100-120`, `3-7`, `150-180`, `5-15`, `15-20` |
+| `experimentalContentPadding`, `contentPaddingAddition` | API-only AWG 3.x experiment. Opt-in is required; default range when enabled is `10-100` and the response includes an interoperability warning |
 | `i1` | Raw CPS / obfuscation string (AWG 2.0) |
 | `i1Ref` | Filename from `api/cps-presets/` |
 | `plainAddress` | `1` / `true` — omit `/32` and `/128` from `Address` |
@@ -141,8 +144,11 @@ With `?presets=key1,key2`: resolves domains to CIDRs. Response: `{ count, count4
 |---|---|
 | *(none)* + `mode=legacy` | Same as `warp_amnezia` |
 | *(none)* + `mode=awg2` | Same as `warp_amnezia_awg2` |
+| *(none)* + `mode=awg3` / `mode=awg31` | WARP-safe AWG 3.0 / 3.1 client profile |
 | `warp_amnezia`, `amnezia`, `amnezia_warp` | Legacy WARP with engage-host endpoint, embedded `I1` if no user-supplied one, `plainAddress`, keepalive 25 |
 | `warp_amnezia_awg2`, `amnezia_awg2`, `awg2_amnezia`, `warp_awg2_amnezia` | AWG 2.0 WARP — same peer/DNS/Address/I1 as Legacy WARP, with WARP-safe S=0 / H=1..4 / MTU=1280 |
+| `warp_amnezia_awg3`, `warp_awg3_amnezia` | AWG 3.0 WARP-safe profile |
+| `warp_amnezia_awg31`, `warp_awg31_amnezia` | AWG 3.1 WARP-safe profile with explicit safe 3.1 flags |
 | `wgcf` | `engage.cloudflareclient.com`, UDP 4500, no embedded I1 |
 | `awg2_random`, `awg2_dpi` | Random H bands — **NOT** for Cloudflare WARP; bring your own endpoint |
 
@@ -174,6 +180,12 @@ AWG 2.0 refers to **client-side configuration parameters**. The Cloudflare WARP 
 standard WireGuard peer, so some WARP parameters are intentionally fixed (see the AWG 2.0 / WARP
 invariants above). Selecting AWG 2.0 does **not** mean Cloudflare's server supports AWG 2.0.
 
+### AWG 3.0 / 3.1 and Cloudflare WARP
+
+Cloudflare remains a standard WireGuard peer. The generator therefore enables only client-side AWG 3.x features that do not require peer-side support: junk/CPS packets, randomized rekey/handshake/keepalive timing, and a `PersistentKeepalive` range. `H1..H4` stay `1..4`, `S1..S4` stay zero, Header Protection is unavailable, and RandomTrailers cannot be enabled. `ContentPaddingAddition` is API-only, experimental, off by default, and may reduce interoperability.
+
+AWG 3.x requires a modern compatible parser. For AWG 3.1, AmneziaVPN 5.0.1.5+ or a compatible AWG 3.1 client is recommended. Router compatibility depends on the router implementation. AWG 3.0 `vpn://` export is deliberately unavailable because its historical `protocol_version` mapping has not been confirmed; AWG 3.1 uses the confirmed `3.1` envelope.
+
 ### Export targets
 
 [`src/server/exportTargets.js`](src/server/exportTargets.js) is a v0 registry describing output
@@ -182,7 +194,7 @@ formats and how ready each one is:
 | Target | Status |
 |---|---|
 | `.conf` | stable |
-| `vpn://` | stable |
+| `vpn://` | stable for existing modes and AWG 3.1; unavailable for AWG 3.0 pending protocol evidence |
 | QR | experimental |
 | sing-box / Mihomo / Clash | experimental |
 | Throne | research |

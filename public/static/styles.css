@@ -732,9 +732,9 @@ button.info-link {
 
 .buttons__gen-stack {
   flex: 1 1 0%;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 10px;
   min-width: 0;
 }
 
@@ -1049,6 +1049,17 @@ button.info-link {
   display: flex;
   flex-direction: column;
   width: 100%;
+  min-width: 0;
+}
+
+.awg3-warp-safe-note {
+  grid-column: 1 / -1;
+  margin: -6px 0 0;
+  padding: 8px 10px;
+  border: 1px solid #7a7a7a;
+  background: #ffffe1;
+  color: #222;
+  font: 11px/1.45 Arial, sans-serif;
 }
 
 /* Ряд кнопок после генерации: [Скачать (flex-grow)] [👁] [📋 vpn://]
@@ -1710,6 +1721,12 @@ button.info-link {
 
 .history-item__badge--awg2 {
   background: linear-gradient(90deg, #2ecc71, #00bcd5);
+  color: #fff;
+}
+
+.history-item__badge--awg3,
+.history-item__badge--awg31 {
+  background: linear-gradient(90deg, #7b61ff, #00bcd5);
   color: #fff;
 }
 

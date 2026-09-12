@@ -27,12 +27,12 @@ describe('Invariant I6: IPv4-only by default', () => {
 
   test('generated config defaults AllowedIPs to IPv4-only', () => {
     const conf = buildAwg2WarpConf();
-    assert.match(conf, /^AllowedIPs = 0\.0\.0\.0\/0$/m);
-    assert.doesNotMatch(conf, /^AllowedIPs = .*::\/0/m);
+    assert.match(conf, /^\s*AllowedIPs = 0\.0\.0\.0\/0$/m);
+    assert.doesNotMatch(conf, /^\s*AllowedIPs = .*::\/0/m);
   });
 
   test('generated config includes IPv6 default route only with explicit opt-in', () => {
     const conf = buildAwg2WarpConf({ includeIpv6: true });
-    assert.match(conf, /^AllowedIPs = 0\.0\.0\.0\/0, ::\/0$/m);
+    assert.match(conf, /^\s*AllowedIPs = 0\.0\.0\.0\/0, ::\/0$/m);
   });
 });
