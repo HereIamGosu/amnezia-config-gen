@@ -101,13 +101,13 @@
     'timing-ranges',
     'persistent-keepalive-range',
     'content-padding-addition',
+    'disable-cookies',
   ]);
   const AWG_DISABLED_FEATURES = new Set([
     'header-protection',
     'message-padding',
     'dynamic-message-headers',
     'random-trailers',
-    'cookie-behaviour-obfuscation',
   ]);
 
   const getAwg = (response) => {

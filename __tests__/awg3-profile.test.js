@@ -14,15 +14,15 @@ test('AWG mode aliases normalize to four canonical modes', () => {
 });
 
 test('strict AWG range parser accepts canonical values', () => {
-  for (const value of ['25', '25-35', '0', '100-120', '3-7', '150-180']) {
+  for (const value of ['25', '25-35', '0', '100-120', '3-7', '150-180', '65535', '0-0']) {
     assert.equal(parseAwgRange(value, { field: 'Test' }), value);
   }
   assert.equal(parseAwgRange(' off ', { field: 'Test', allowOff: true }), 'off');
 });
 
 test('strict AWG range parser rejects malformed, reversed, unsafe, and injected values', () => {
-  for (const value of ['35-25', 'foo', '25-', '-35', '25.0', '25x', '1-2-3', '25 - 35', '1e3', '0x19', '429496729999999', '100-120\nPrivateKey = injected']) {
-    assert.throws(() => parseAwgRange(value, { field: 'Test' }), /Invalid Test range/);
+  for (const value of ['35-25', 'foo', '25-', '-35', '25.0', '25x', '1-2-3', '25 - 35', '1e3', '0x19', '65536', '429496729999999', '100-120\nPrivateKey = injected']) {
+    assert.throws(() => parseAwgRange(value, { field: 'Test', max: 65535 }), /Invalid Test range/);
   }
 });
 
@@ -34,17 +34,28 @@ test('WARP safety is the final authority over peer-dependent fields', () => {
   );
   assert.equal(safe.headerProtectionKey, undefined);
   assert.equal(safe.randomTrailers, 'off');
-  assert.equal(safe.disableCookies, 'off');
+  assert.equal(safe.disableCookies, 'on');
   assert.doesNotThrow(() => assertWarpSafeAwgConfig(safe));
 });
 
 test('profiles and response metadata describe only the WARP-safe subset', () => {
   assert.equal(AWG_PROFILES.awg3.supports.headerProtection, false);
-  const metadata = buildAwgMetadata('awg31', { contentPaddingExperimental: true, routerMode: true, vpnLinkAvailable: true });
+  assert.equal(AWG_PROFILES.awg3.supports.contentPadding, true);
+  assert.equal(AWG_PROFILES.awg3.supports.disableCookies, false);
+  assert.equal(AWG_PROFILES.awg31.supports.disableCookies, true);
+  const metadata = buildAwgMetadata('awg31', {
+    contentPaddingEnabled: true,
+    disableCookiesEnabled: true,
+    routerMode: true,
+    vpnLinkAvailable: true,
+  });
   assert.equal(metadata.profile, 'warp-safe');
   assert.equal(metadata.peerType, 'stock-wireguard');
   assert.equal(metadata.vpnImport.protocolVersion, '3.1');
   assert.equal(metadata.routerCompatibility, 'experimental/router-dependent');
-  assert.deepEqual(metadata.experimentalFeatures, ['content-padding-addition']);
+  assert.deepEqual(metadata.experimentalFeatures, []);
+  assert.ok(metadata.enabledFeatures.includes('content-padding-addition'));
+  assert.ok(metadata.enabledFeatures.includes('disable-cookies'));
   assert.ok(metadata.disabledFeatures.some(({ feature }) => feature === 'random-trailers'));
+  assert.ok(!metadata.disabledFeatures.some(({ feature }) => feature.includes('cookie')));
 });

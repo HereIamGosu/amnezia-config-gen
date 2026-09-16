@@ -27,13 +27,26 @@ const {
   normalizeAwgMode,
 } = require('../src/server/awg/profiles');
 const { parseAwgRange } = require('../src/server/awg/ranges');
-const { WARP_SAFE_WIRE_FORMAT, assertNoBlockedWarpOverrides } = require('../src/server/awg/warpSafety');
+const {
+  WARP_SAFE_WIRE_FORMAT,
+  WarpSafetyValidationError,
+  assertNoBlockedWarpOverrides,
+} = require('../src/server/awg/warpSafety');
 
 const AWG3_MODE = 'awg3';
 const AWG31_MODE = 'awg31';
 const AWG3_DEFAULT_PERSISTENT_KEEPALIVE = AWG_PROFILES.awg3.persistentKeepalive;
 const AWG3_DEFAULT_CONTENT_PADDING_ADDITION = AWG_PROFILES.awg3.contentPaddingDefault;
 const AWG3_WARP_SAFE_OBFUSCATION = WARP_SAFE_WIRE_FORMAT;
+const AWG_RANGE_FIELDS = Object.freeze({
+  contentPaddingAddition: Object.freeze({ field: 'ContentPaddingAddition', min: 0, max: 65535, allowOff: true }),
+  persistentKeepalive: Object.freeze({ field: 'PersistentKeepalive', min: 0, max: 65535, allowOff: true }),
+  rekeyAfterTime: Object.freeze({ field: 'RekeyAfterTime', min: 0, max: 65535 }),
+  rekeyTimeout: Object.freeze({ field: 'RekeyTimeout', min: 0, max: 65535 }),
+  rejectAfterTime: Object.freeze({ field: 'RejectAfterTime', min: 0, max: 65535 }),
+  keepaliveTimeout: Object.freeze({ field: 'KeepaliveTimeout', min: 0, max: 65535 }),
+  maxHandshakeAttempts: Object.freeze({ field: 'MaxHandshakeAttempts', min: 0, max: 65535 }),
+});
 
 const DEFAULT_ALLOWED_IPS = ['0.0.0.0/0'];
 const DEFAULT_ALLOWED_IPS_WITH_IPV6 = ['0.0.0.0/0', '::/0'];
@@ -292,13 +305,24 @@ const parseLegacyPersistentKeepalive = (v) => {
   return n === 0 ? null : n;
 };
 
-const parsePersistentKeepalive = (v, { strict = false } = {}) => strict
-  ? parseAwgRange(v, { field: 'PersistentKeepalive', allowOff: true })
-  : parseLegacyPersistentKeepalive(v);
+const isDisabledAwgRange = (value) => value === 'off' || value === '0' || value === '0-0';
+
+const parsePersistentKeepalive = (v, { strict = false } = {}) => {
+  if (!strict) return parseLegacyPersistentKeepalive(v);
+  const parsed = parseAwgRange(v, AWG_RANGE_FIELDS.persistentKeepalive);
+  return isDisabledAwgRange(parsed) ? 'off' : parsed;
+};
 
 const parseContentPaddingAddition = (v) => {
-  const parsed = parseAwgRange(v, { field: 'ContentPaddingAddition', allowOff: true });
-  return parsed === 'off' || parsed === '0' ? null : parsed;
+  const parsed = parseAwgRange(v, AWG_RANGE_FIELDS.contentPaddingAddition);
+  return isDisabledAwgRange(parsed) ? null : parsed;
+};
+
+const parseAwgToggle = (v, field) => {
+  const normalized = String(v).trim().toLowerCase();
+  if (['true', '1', 'on'].includes(normalized)) return 'on';
+  if (['false', '0', 'off'].includes(normalized)) return 'off';
+  throw new WarpSafetyValidationError(`Invalid ${field} value. Use on or off.`);
 };
 
 const isEnabledFlag = (v) => v === true || v === 1 || ['1', 'true'].includes(String(v ?? '').trim().toLowerCase());
@@ -464,6 +488,7 @@ const buildInterfaceAwg3Common = (
   i1Optional = '',
   extraCps = null,
   contentPaddingAddition = null,
+  disableCookies = null,
   includeAwg31Flags = false,
   timings = null,
 ) => buildAwg3Interface({
@@ -477,14 +502,15 @@ const buildInterfaceAwg3Common = (
   i1: i1Optional,
   extraCps,
   contentPaddingAddition,
+  disableCookies,
   timings,
 });
 
 const buildInterfaceAwg3 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress, i1Optional = '', extraCps = null, contentPaddingAddition = null, timings = null) =>
-  buildInterfaceAwg3Common(privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress, i1Optional, extraCps, contentPaddingAddition, false, timings);
+  buildInterfaceAwg3Common(privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress, i1Optional, extraCps, contentPaddingAddition, null, false, timings);
 
-const buildInterfaceAwg31 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress, i1Optional = '', extraCps = null, contentPaddingAddition = null, timings = null) =>
-  buildInterfaceAwg3Common(privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress, i1Optional, extraCps, contentPaddingAddition, true, timings);
+const buildInterfaceAwg31 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress, i1Optional = '', extraCps = null, contentPaddingAddition = null, disableCookies = null, timings = null) =>
+  buildInterfaceAwg3Common(privKey, clientIPv4, clientIPv6, obf, dnsLine, plainAddress, i1Optional, extraCps, contentPaddingAddition, disableCookies, true, timings);
 
 /**
  * @param {{ i1?: string, persistentKeepalive?: number|string|null, contentPaddingAddition?: number|string|null, awg2WarpSafe?: boolean }} ifaceExtras
@@ -494,14 +520,16 @@ const buildFullConfig = (mode, privKey, peerPub, clientIPv4, clientIPv6, peerEnd
   const plainAddress = Boolean(ifaceExtras.plainAddress);
   const extraCps = ifaceExtras.extraCps || null;
   const mobileJunk = ifaceExtras.mobileJunk || null;
-  const contentPaddingAddition = ifaceExtras.contentPaddingAddition || null;
+  const contentPaddingAddition = isAwg3Mode(mode) && !Object.hasOwn(ifaceExtras, 'contentPaddingAddition')
+    ? AWG_PROFILES[mode].contentPaddingDefault
+    : (ifaceExtras.contentPaddingAddition || null);
   const iface =
     mode === 'awg2'
       ? ifaceExtras.awg2WarpSafe
         ? buildInterfaceAwg2WarpSafe(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1, extraCps)
         : buildInterfaceAwg2(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1, extraCps)
       : isAwg31Mode(mode)
-        ? buildInterfaceAwg31(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1, extraCps, contentPaddingAddition, ifaceExtras.timingRanges)
+        ? buildInterfaceAwg31(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1, extraCps, contentPaddingAddition, ifaceExtras.disableCookies, ifaceExtras.timingRanges)
         : mode === AWG3_MODE
           ? buildInterfaceAwg3(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1, extraCps, contentPaddingAddition, ifaceExtras.timingRanges)
       : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine, i1, plainAddress, mobileJunk);
@@ -704,7 +732,7 @@ const collectWarpGenExtras = (req, body, mode = 'legacy') => {
   const inputValue = (name, alias) => b[name] ?? (alias ? b[alias] : undefined) ?? pickQuery(req, name) ?? (alias ? pickQuery(req, alias) : undefined);
   if (isAwg3Mode(mode)) {
     const blocked = {};
-    for (const field of ['headerProtectionKey', 'randomTrailers', 'disableCookies', 'S1', 'S2', 'S3', 'S4', 'H1', 'H2', 'H3', 'H4']) {
+    for (const field of ['headerProtectionKey', 'randomTrailers', 'S1', 'S2', 'S3', 'S4', 'H1', 'H2', 'H3', 'H4']) {
       blocked[field] = inputValue(field);
     }
     assertNoBlockedWarpOverrides(blocked);
@@ -717,13 +745,17 @@ const collectWarpGenExtras = (req, body, mode = 'legacy') => {
     inputValue('persistentKeepalive', 'keepalive'),
     { strict: isAwg3Mode(mode) },
   );
-  const experimentalContentPadding = isEnabledFlag(
-    inputValue('experimentalContentPadding'),
-  );
-  const contentPaddingAddition = isAwg3Mode(mode) && experimentalContentPadding
-    ? (inputValue('contentPaddingAddition') == null
-      ? AWG3_DEFAULT_CONTENT_PADDING_ADDITION
-      : (parseContentPaddingAddition(inputValue('contentPaddingAddition')) || AWG3_DEFAULT_CONTENT_PADDING_ADDITION))
+  const experimentalContentPadding = isEnabledFlag(inputValue('experimentalContentPadding'));
+  const contentPaddingRaw = inputValue('contentPaddingAddition');
+  const contentPaddingAddition = isAwg3Mode(mode)
+    ? (contentPaddingRaw == null ? AWG3_DEFAULT_CONTENT_PADDING_ADDITION : parseContentPaddingAddition(contentPaddingRaw))
+    : null;
+  const disableCookiesRaw = inputValue('disableCookies');
+  if (disableCookiesRaw != null && mode !== AWG31_MODE) {
+    throw new WarpSafetyValidationError('DisableCookies is available only for AWG 3.1.');
+  }
+  const disableCookies = mode === AWG31_MODE
+    ? (disableCookiesRaw == null ? 'on' : parseAwgToggle(disableCookiesRaw, 'DisableCookies'))
     : null;
   const timingFields = {
     rekeyAfterTime: 'RekeyAfterTime',
@@ -736,7 +768,7 @@ const collectWarpGenExtras = (req, body, mode = 'legacy') => {
   if (isAwg3Mode(mode)) {
     for (const [key, iniField] of Object.entries(timingFields)) {
       const raw = inputValue(key);
-      if (raw != null && raw !== '') timingRanges[key] = parseAwgRange(raw, { field: iniField });
+      if (raw != null && raw !== '') timingRanges[key] = parseAwgRange(raw, AWG_RANGE_FIELDS[key] || { field: iniField });
     }
   }
   const i1RefRaw = b.i1Ref ?? pickQuery(req, 'i1Ref');
@@ -755,6 +787,7 @@ const collectWarpGenExtras = (req, body, mode = 'legacy') => {
     persistentKeepalive,
     timingRanges,
     contentPaddingAddition,
+    disableCookies,
     experimentalContentPadding: isAwg3Mode(mode) && experimentalContentPadding,
     i1Ref,
     i1Raw,
@@ -1202,9 +1235,7 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
     : isAwg3Mode(mode)
       ? AWG3_DEFAULT_PERSISTENT_KEEPALIVE
       : null;
-  const contentPaddingAddition = isAwg3Mode(mode) && warpExtras.experimentalContentPadding && warpExtras.contentPaddingAddition != null
-    ? warpExtras.contentPaddingAddition
-    : null;
+  const contentPaddingAddition = isAwg3Mode(mode) ? warpExtras.contentPaddingAddition : null;
 
   return {
     text: buildFullConfig(
@@ -1223,6 +1254,7 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
         plainAddress: warpExtras.plainAddress,
         awg2WarpSafe: warpExtras.awg2WarpSafe,
         contentPaddingAddition,
+        disableCookies: warpExtras.disableCookies,
         timingRanges: warpExtras.timingRanges,
         extraCps,
         mobileJunk: routeOpts.mobileMode ? { Jc: MOBILE_JC, Jmin: MOBILE_JMIN, Jmax: MOBILE_JMAX } : null,
@@ -1416,9 +1448,6 @@ const handler = async (req, res) => {
 
     const responseWarnings = [];
     if (warning) responseWarnings.push(warning);
-    if (warpExtras.contentPaddingAddition) {
-      responseWarnings.push('ContentPaddingAddition is experimental for Cloudflare WARP and may affect interoperability.');
-    }
     if (wantLink && mode === AWG3_MODE) {
       responseWarnings.push('vpn:// is unavailable for AWG 3.0 because its historical protocol_version is not confirmed; use the .conf export.');
     }
@@ -1446,7 +1475,8 @@ const handler = async (req, res) => {
       compatibility = undefined;
     }
     const awg = buildAwgMetadata(mode, {
-      contentPaddingExperimental: Boolean(warpExtras.contentPaddingAddition),
+      contentPaddingEnabled: Boolean(warpExtras.contentPaddingAddition),
+      disableCookiesEnabled: warpExtras.disableCookies === 'on',
       routerMode,
       vpnLinkAvailable: Boolean(configsOut[0]?.vpnLink),
     });
@@ -1513,6 +1543,7 @@ module.exports.__internals = {
   parseWarpPort,
   parsePersistentKeepalive,
   parseContentPaddingAddition,
+  parseAwgToggle,
   isEnabledFlag,
   shouldEmitConfigValue,
   parsePeerEndpointOverride,
@@ -1534,6 +1565,7 @@ module.exports.__internals = {
   AWG2_MTU_STOCK_PEER,
   AWG3_DEFAULT_PERSISTENT_KEEPALIVE,
   AWG3_DEFAULT_TIMINGS,
+  AWG_RANGE_FIELDS,
   AWG3_WARP_SAFE_OBFUSCATION,
   AWG31_MODE,
   AWG3_MODE,

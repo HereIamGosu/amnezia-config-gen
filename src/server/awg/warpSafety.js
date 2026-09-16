@@ -21,19 +21,27 @@ const assertWarpSafeAwgConfig = (config) => {
   if (String(config.randomTrailers || '').toLowerCase() === 'on') {
     throw new WarpSafetyValidationError('RandomTrailers cannot be enabled for Cloudflare WARP.');
   }
-  if (String(config.disableCookies || '').toLowerCase() === 'on') {
-    throw new WarpSafetyValidationError('DisableCookies cannot be enabled for Cloudflare WARP.');
+  if (config.disableCookies != null && !['on', 'off'].includes(String(config.disableCookies).toLowerCase())) {
+    throw new WarpSafetyValidationError('DisableCookies must be on or off.');
+  }
+  if (config.mode !== 'awg31' && config.disableCookies != null) {
+    throw new WarpSafetyValidationError('DisableCookies is available only for AWG 3.1.');
   }
   return config;
 };
 
-const enforceWarpSafeAwgConfig = (config = {}) => assertWarpSafeAwgConfig({
-  ...config,
-  ...WARP_SAFE_WIRE_FORMAT,
-  headerProtectionKey: undefined,
-  randomTrailers: config.mode === 'awg31' ? 'off' : undefined,
-  disableCookies: config.mode === 'awg31' ? 'off' : undefined,
-});
+const enforceWarpSafeAwgConfig = (config = {}) => {
+  const disableCookies = config.mode === 'awg31'
+    ? String(config.disableCookies || 'on').toLowerCase()
+    : undefined;
+  return assertWarpSafeAwgConfig({
+    ...config,
+    ...WARP_SAFE_WIRE_FORMAT,
+    headerProtectionKey: undefined,
+    randomTrailers: config.mode === 'awg31' ? 'off' : undefined,
+    disableCookies,
+  });
+};
 
 const assertNoBlockedWarpOverrides = (input = {}) => {
   for (const field of ['headerProtectionKey', 'S1', 'S2', 'S3', 'S4', 'H1', 'H2', 'H3', 'H4']) {
@@ -41,7 +49,7 @@ const assertNoBlockedWarpOverrides = (input = {}) => {
       throw new WarpSafetyValidationError(`${field} cannot be overridden for Cloudflare WARP.`);
     }
   }
-  for (const field of ['randomTrailers', 'disableCookies']) {
+  for (const field of ['randomTrailers']) {
     if (input[field] != null && !['', '0', 'off', 'false'].includes(String(input[field]).trim().toLowerCase())) {
       throw new WarpSafetyValidationError(`${field} cannot be enabled for Cloudflare WARP.`);
     }

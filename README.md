@@ -94,7 +94,7 @@ These rules are non-obvious, easy to break, and silently fatal. They are enforce
 | **I1** | The `[Interface]` line MUST be uppercase `I1`, not `i1`. | Lowercase `i1` is silently ignored by the AmneziaWG Windows client. Reference: [wg-easy/wg-easy#2439](https://github.com/wg-easy/wg-easy/issues/2439). |
 | **I2** | For every WARP-safe AWG 2/3.x profile: `S1 = S2 = S3 = S4 = 0`. | Cloudflare's peer is stock WireGuard and does not add AWG byte prefixes. |
 | **I3** | For every WARP-safe AWG 2/3.x profile: `H1..H4 = 1, 2, 3, 4`. | Cloudflare expects the standard WireGuard message types. |
-| **I4** | WARP-safe profiles use `MTU = 1280`; AWG 3.x never emits `HeaderProtectionKey` or enables `RandomTrailers`/`DisableCookies`. | Peer-dependent wire-format changes cannot interoperate with the stock Cloudflare peer. |
+| **I4** | WARP-safe profiles use `MTU = 1280`; AWG 3.x never emits `HeaderProtectionKey` or enables `RandomTrailers`; AWG 3.1 may enable the local-only `DisableCookies`. | Peer-dependent wire-format changes cannot interoperate with the stock Cloudflare peer; local cookie behaviour does not require Cloudflare support. |
 | **I5** | AmneziaWG 2.0 `[Interface]` field order: `PrivateKey → Address → DNS → MTU → Jc → Jmin → Jmax → S1..S4 → H1..H4 → I1`. | Matches the order `amneziawg-go` UAPI accepts. |
 | **I6** | `AllowedIPs` defaults to **IPv4-only**; IPv6 is opt-in via the Settings IPv6 toggle (`?ipv6=1`). | Routers (GL.iNet, Keenetic, MikroTik) and mobile clients have limited routing-table capacity; doubling the route count via IPv6 causes silent failures. |
 | **I7** | `mobile=1` overrides: `Jc=3, Jmin=64, Jmax=128, MTU=1280`, IPv4-only enforced (overrides `ipv6=1`, strips IPv6 from `Address` and `AllowedIPs`). | Mobile-tuned profile within AWG 2.0 spec; reduces battery drain and silent resets on iOS. |
@@ -120,7 +120,9 @@ Parameters via query string (`GET`) or JSON body fields (`POST`). Body field nam
 | `warpPort` | UDP port for `engage…` or IP fallback (default for WARP templates: **4500**; classic wgcf often: **2408**) |
 | `persistentKeepalive`, `keepalive` | Integer for older modes; strict integer or `min-max` range for AWG 3.x (default `25-35`) |
 | `rekeyAfterTime`, `rekeyTimeout`, `rejectAfterTime`, `keepaliveTimeout`, `maxHandshakeAttempts` | AWG 3.x strict integer/range overrides; defaults: `100-120`, `3-7`, `150-180`, `5-15`, `15-20` |
-| `experimentalContentPadding`, `contentPaddingAddition` | API-only AWG 3.x experiment. Opt-in is required; default range when enabled is `10-100` and the response includes an interoperability warning |
+| `contentPaddingAddition` | AWG 3.x encrypted payload padding; defaults to `10-100`; `off`, `0`, or `0-0` disables it; accepts a strict `0..65535` integer/range |
+| `experimentalContentPadding` | Deprecated compatibility flag; `true` remains accepted, while padding now follows `contentPaddingAddition` directly |
+| `disableCookies` | AWG 3.1-only strict `on/off` toggle (also `true/false/1/0`); defaults to `on` |
 | `i1` | Raw CPS / obfuscation string (AWG 2.0) |
 | `i1Ref` | Filename from `api/cps-presets/` |
 | `plainAddress` | `1` / `true` — omit `/32` and `/128` from `Address` |
@@ -182,7 +184,7 @@ invariants above). Selecting AWG 2.0 does **not** mean Cloudflare's server suppo
 
 ### AWG 3.0 / 3.1 and Cloudflare WARP
 
-Cloudflare remains a standard WireGuard peer. The generator therefore enables only client-side AWG 3.x features that do not require peer-side support: junk/CPS packets, randomized rekey/handshake/keepalive timing, and a `PersistentKeepalive` range. `H1..H4` stay `1..4`, `S1..S4` stay zero, Header Protection is unavailable, and RandomTrailers cannot be enabled. `ContentPaddingAddition` is API-only, experimental, off by default, and may reduce interoperability.
+Cloudflare remains a standard WireGuard peer. The generator enables client-side AWG 3.x features that preserve stock WireGuard parsing: junk/CPS packets, randomized rekey/handshake/keepalive timing, a `PersistentKeepalive` range, and encrypted `ContentPaddingAddition` (`10-100` by default). AWG 3.1 also defaults `DisableCookies=on`; this only suppresses this client's outgoing Cookie Replies, keeps incoming cookie handling intact, and trades away a local anti-DoS mechanism for fingerprint resistance. `H1..H4` stay `1..4`, `S1..S4` stay zero, Header Protection is unavailable, and `RandomTrailers=on` is always rejected because stock WireGuard does not parse extended handshake datagrams.
 
 AWG 3.x requires a modern compatible parser. For AWG 3.1, AmneziaVPN 5.0.1.5+ or a compatible AWG 3.1 client is recommended. Router compatibility depends on the router implementation. AWG 3.0 `vpn://` export is deliberately unavailable because its historical `protocol_version` mapping has not been confirmed; AWG 3.1 uses the confirmed `3.1` envelope.
 

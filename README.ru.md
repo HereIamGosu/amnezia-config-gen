@@ -94,7 +94,7 @@ npm start    # vercel dev → http://localhost:3000
 | **I1** | Строка в `[Interface]` ОБЯЗАНА быть **uppercase** `I1`, не `i1`. | Lowercase `i1` молча игнорируется AmneziaWG-клиентом для Windows. Источник: [wg-easy/wg-easy#2439](https://github.com/wg-easy/wg-easy/issues/2439). |
 | **I2** | Во всех WARP-safe профилях AWG 2/3.x: `S1 = S2 = S3 = S4 = 0`. | Cloudflare — стандартный WireGuard peer и не добавляет AWG-префиксы. |
 | **I3** | Во всех WARP-safe профилях AWG 2/3.x: `H1..H4 = 1, 2, 3, 4`. | Cloudflare ожидает стандартные WireGuard message types. |
-| **I4** | WARP-safe профили используют `MTU = 1280`; AWG 3.x не выводит `HeaderProtectionKey` и не включает `RandomTrailers`/`DisableCookies`. | Peer-dependent wire-format несовместим со стандартным Cloudflare peer. |
+| **I4** | WARP-safe профили используют `MTU = 1280`; AWG 3.x не выводит `HeaderProtectionKey` и не включает `RandomTrailers`; AWG 3.1 может включать локальный `DisableCookies`. | Peer-dependent wire-format несовместим со стандартным Cloudflare peer; локальное cookie-поведение не требует поддержки Cloudflare. |
 | **I5** | Порядок полей в `[Interface]` для AmneziaWG 2.0: `PrivateKey → Address → DNS → MTU → Jc → Jmin → Jmax → S1..S4 → H1..H4 → I1`. | Совпадает с порядком, который принимает UAPI `amneziawg-go`. |
 | **I6** | `AllowedIPs` по умолчанию **только IPv4**; IPv6 включается по тумблеру в Настройках (`?ipv6=1`). | Роутеры (GL.iNet, Keenetic, MikroTik) и мобильные клиенты имеют ограниченную ёмкость таблицы маршрутов; удвоение списка через IPv6 приводит к молчаливым отказам. |
 | **I7** | `mobile=1` форсит: `Jc=3, Jmin=64, Jmax=128, MTU=1280`, только IPv4 (перекрывает `ipv6=1`, убирает IPv6 из `Address` и `AllowedIPs`). | Мобильный профиль в пределах спецификации AWG 2.0; снижает расход батареи и молчаливые reset'ы на iOS. |
@@ -120,7 +120,9 @@ npm start    # vercel dev → http://localhost:3000
 | `warpPort` | UDP-порт для `engage…` или IP-fallback (для WARP-шаблонов по умолчанию **4500**; для классического wgcf часто **2408**) |
 | `persistentKeepalive`, `keepalive` | Для старых режимов integer; для AWG 3.x строгий integer или `min-max` (default `25-35`) |
 | `rekeyAfterTime`, `rekeyTimeout`, `rejectAfterTime`, `keepaliveTimeout`, `maxHandshakeAttempts` | Строгие AWG 3.x integer/range overrides; defaults: `100-120`, `3-7`, `150-180`, `5-15`, `15-20` |
-| `experimentalContentPadding`, `contentPaddingAddition` | API-only AWG 3.x эксперимент: opt-in обязателен, default `10-100`, в ответ добавляется warning о совместимости |
+| `contentPaddingAddition` | Padding внутри шифрованного AWG 3.x payload; default `10-100`; `off`, `0` или `0-0` отключает; допустим строгий integer/range `0..65535` |
+| `experimentalContentPadding` | Deprecated-флаг совместимости; `true` по-прежнему принимается, но padding теперь управляется напрямую через `contentPaddingAddition` |
+| `disableCookies` | Строгий AWG 3.1-only toggle `on/off` (также `true/false/1/0`); default `on` |
 | `i1` | Сырая строка CPS / obfuscation (AWG 2.0) |
 | `i1Ref` | Имя файла из `api/cps-presets/` |
 | `plainAddress` | `1` / `true` — в `Address` без `/32` и `/128` |
@@ -181,7 +183,7 @@ WireGuard peer, поэтому часть параметров для WARP фи�
 
 ### AWG 3.0 / 3.1 и Cloudflare WARP
 
-Cloudflare остаётся стандартным WireGuard peer. Генератор включает только клиентские AWG 3.x механизмы, не требующие поддержки peer: junk/CPS packets, randomized rekey/handshake/keepalive timing и диапазон `PersistentKeepalive`. `H1..H4` остаются `1..4`, `S1..S4` — нулевыми; Header Protection недоступен, RandomTrailers нельзя включить. `ContentPaddingAddition` доступен только через API как эксперимент, выключен по умолчанию и может ухудшить совместимость.
+Cloudflare остаётся стандартным WireGuard peer. Генератор включает клиентские AWG 3.x механизмы, сохраняющие стандартный WireGuard parsing: junk/CPS packets, randomized rekey/handshake/keepalive timing, диапазон `PersistentKeepalive` и шифрованный `ContentPaddingAddition` (`10-100` по умолчанию). AWG 3.1 также использует `DisableCookies=on`: параметр подавляет только исходящие Cookie Reply этого клиента, не отключает обработку входящих cookies и обменивает локальный anti-DoS механизм на устойчивость к fingerprinting. `H1..H4` остаются `1..4`, `S1..S4` — нулевыми; Header Protection недоступен, а `RandomTrailers=on` всегда отклоняется, потому что stock WireGuard не разбирает удлинённые handshake datagrams.
 
 Нужен современный AWG 3.x-compatible parser. Для AWG 3.1 рекомендуется AmneziaVPN 5.0.1.5+ или совместимый AWG 3.1 client. Совместимость роутеров зависит от их реализации. `vpn://` для AWG 3.0 намеренно недоступен, потому что исторический `protocol_version` не подтверждён; AWG 3.1 использует подтверждённый envelope `3.1`.
 

@@ -120,13 +120,13 @@ describe('buildResultSummary', () => {
       awg: {
         requestedVersion: '3.1',
         profile: 'warp-safe',
-        enabledFeatures: ['junk-packets', 'timing-ranges', 'PrivateKey = secret'],
+        enabledFeatures: ['junk-packets', 'timing-ranges', 'content-padding-addition', 'disable-cookies', 'PrivateKey = secret'],
         disabledFeatures: [
           { feature: 'header-protection', reason: 'requires-awg-peer' },
           { feature: 'random-trailers', reason: 'requires-awg31-peer' },
           { feature: 'Endpoint = secret', reason: 'unexpected' },
         ],
-        experimentalFeatures: ['content-padding-addition'],
+        experimentalFeatures: [],
         routerCompatibility: 'experimental/router-dependent',
         unexpected: 'PresharedKey = secret',
       },
@@ -135,9 +135,9 @@ describe('buildResultSummary', () => {
     assert.deepEqual(summary.awg, {
       version: '3.1',
       profile: 'warp-safe',
-      enabledFeatures: ['junk-packets', 'timing-ranges'],
+      enabledFeatures: ['junk-packets', 'timing-ranges', 'content-padding-addition', 'disable-cookies'],
       disabledFeatures: ['header-protection', 'random-trailers'],
-      experimentalFeatures: ['content-padding-addition'],
+      experimentalFeatures: [],
       routerCompatibility: 'experimental/router-dependent',
     });
     assert.doesNotMatch(JSON.stringify(summary), /PrivateKey|PresharedKey|Endpoint = secret/);

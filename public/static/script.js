@@ -512,12 +512,12 @@ const getAwgFeatureLabel = (feature) => ({
   cps: t('awg_feature_cps', 'CPS packets'),
   'timing-ranges': t('awg_feature_timing', 'Рандомизация timing'),
   'persistent-keepalive-range': t('awg_feature_keepalive', 'Диапазон PersistentKeepalive'),
-  'content-padding-addition': t('awg_feature_content_padding', 'Experimental ContentPaddingAddition'),
+  'content-padding-addition': t('awg_feature_content_padding', 'ContentPaddingAddition'),
+  'disable-cookies': t('awg_feature_disable_cookies', 'DisableCookies'),
   'header-protection': t('awg_feature_header_disabled', 'Header Protection отключён'),
   'message-padding': t('awg_feature_padding_disabled', 'S1-S4 padding отключён'),
   'dynamic-message-headers': t('awg_feature_headers_disabled', 'Dynamic H1-H4 отключён'),
   'random-trailers': t('awg_feature_trailers_disabled', 'RandomTrailers отключён'),
-  'cookie-behaviour-obfuscation': t('awg_feature_cookies_disabled', 'Cookie behaviour obfuscation отключён'),
   'router-compatibility': t('awg_router_warning', 'Совместимость с роутерами зависит от реализации роутера'),
 }[feature] || feature);
 

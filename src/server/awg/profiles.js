@@ -8,15 +8,20 @@ const AWG3_DEFAULT_TIMINGS = Object.freeze({
   maxHandshakeAttempts: '15-20',
 });
 
-const COMMON_AWG3_SUPPORT = Object.freeze({
+const AWG3_SUPPORT = Object.freeze({
   junk: true,
   cps: true,
   timingRanges: true,
   persistentKeepaliveRange: true,
-  contentPadding: 'experimental',
+  contentPadding: true,
   headerProtection: false,
   randomTrailers: false,
   disableCookies: false,
+});
+
+const AWG31_SUPPORT = Object.freeze({
+  ...AWG3_SUPPORT,
+  disableCookies: true,
 });
 
 const AWG_PROFILES = Object.freeze({
@@ -26,7 +31,7 @@ const AWG_PROFILES = Object.freeze({
     id: 'awg3',
     displayVersion: '3.0',
     warpSafe: true,
-    supports: COMMON_AWG3_SUPPORT,
+    supports: AWG3_SUPPORT,
     persistentKeepalive: '25-35',
     timings: AWG3_DEFAULT_TIMINGS,
     contentPaddingDefault: '10-100',
@@ -36,12 +41,12 @@ const AWG_PROFILES = Object.freeze({
     id: 'awg31',
     displayVersion: '3.1',
     warpSafe: true,
-    supports: COMMON_AWG3_SUPPORT,
+    supports: AWG31_SUPPORT,
     persistentKeepalive: '25-35',
     timings: AWG3_DEFAULT_TIMINGS,
     contentPaddingDefault: '10-100',
     vpnProtocolVersion: '3.1',
-    explicitSafeFlags: Object.freeze({ randomTrailers: 'off', disableCookies: 'off' }),
+    explicitSafeFlags: Object.freeze({ randomTrailers: 'off', disableCookies: 'on' }),
   }),
 });
 
@@ -65,19 +70,17 @@ const buildAwgMetadata = (mode, options = {}) => {
     { feature: 'message-padding', reason: 'stock-wireguard-peer' },
     { feature: 'dynamic-message-headers', reason: 'stock-wireguard-peer' },
   ];
-  if (mode === 'awg31') {
-    disabledFeatures.push(
-      { feature: 'random-trailers', reason: 'requires-awg31-peer' },
-      { feature: 'cookie-behaviour-obfuscation', reason: 'peer-not-controlled' },
-    );
-  }
+  if (mode === 'awg31') disabledFeatures.push({ feature: 'random-trailers', reason: 'requires-awg31-peer' });
+  const enabledFeatures = ['junk-packets', 'cps', 'timing-ranges', 'persistent-keepalive-range'];
+  if (options.contentPaddingEnabled) enabledFeatures.push('content-padding-addition');
+  if (mode === 'awg31' && options.disableCookiesEnabled) enabledFeatures.push('disable-cookies');
   return {
     requestedVersion: profile.displayVersion,
     profile: 'warp-safe',
     peerType: 'stock-wireguard',
-    enabledFeatures: ['junk-packets', 'cps', 'timing-ranges', 'persistent-keepalive-range'],
+    enabledFeatures,
     disabledFeatures,
-    experimentalFeatures: options.contentPaddingExperimental ? ['content-padding-addition'] : [],
+    experimentalFeatures: [],
     vpnImport: profile.vpnProtocolVersion
       ? { available: Boolean(options.vpnLinkAvailable), protocolVersion: profile.vpnProtocolVersion }
       : { available: false, reason: 'protocol-version-unconfirmed' },

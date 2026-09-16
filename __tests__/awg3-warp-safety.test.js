@@ -44,14 +44,27 @@ test('AWG3 WARP profile preserves stock-WireGuard peer invariants', () => {
   }
   assert.match(conf, /^PersistentKeepalive = 25-35$/m);
   assert.match(conf, /^MTU = 1280$/m);
-  assert.doesNotMatch(conf, /^(HeaderProtectionKey|ContentPaddingAddition|RandomTrailers|DisableCookies)\s*=/m);
+  assert.match(conf, /^ContentPaddingAddition = 10-100$/m);
+  assert.doesNotMatch(conf, /^(HeaderProtectionKey|RandomTrailers|DisableCookies)\s*=/m);
 });
 
-test('AWG31 WARP profile explicitly disables peer-dependent 3.1 flags', () => {
+test('AWG31 WARP profile enables local-only defaults and disables peer-dependent trailers', () => {
   const conf = build('awg31');
 
+  assert.match(conf, /^ContentPaddingAddition = 10-100$/m);
   assert.match(conf, /^RandomTrailers = off$/m);
-  assert.match(conf, /^DisableCookies = off$/m);
+  assert.match(conf, /^DisableCookies = on$/m);
   assert.doesNotMatch(conf, /^HeaderProtectionKey\s*=/m);
   assert.doesNotMatch(conf, /^RandomTrailers = on$/m);
+});
+
+test('AWG3 content padding and AWG31 cookies can be disabled without weakening WARP invariants', () => {
+  const awg3 = build('awg3', { contentPaddingAddition: null });
+  const awg31 = build('awg31', { contentPaddingAddition: null, disableCookies: 'off' });
+
+  assert.doesNotMatch(awg3, /^ContentPaddingAddition\s*=/m);
+  assert.doesNotMatch(awg31, /^ContentPaddingAddition\s*=/m);
+  assert.match(awg31, /^DisableCookies = off$/m);
+  assert.match(awg31, /^RandomTrailers = off$/m);
+  assert.doesNotMatch(awg31, /^HeaderProtectionKey\s*=/m);
 });

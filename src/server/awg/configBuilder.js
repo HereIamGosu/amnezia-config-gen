@@ -13,7 +13,11 @@ const buildAddressLine = (clientIPv4, clientIPv6, plainAddress) => {
 const buildAwg3Interface = (options) => {
   const profile = AWG_PROFILES[options.mode];
   if (!profile || !profile.timings) throw new TypeError(`Unsupported AWG 3.x mode: ${options.mode}`);
-  const safe = enforceWarpSafeAwgConfig({ mode: options.mode, ...options.obfuscation });
+  const safe = enforceWarpSafeAwgConfig({
+    mode: options.mode,
+    ...options.obfuscation,
+    disableCookies: options.disableCookies,
+  });
   const timings = { ...profile.timings, ...options.timings };
   const lines = [
     '[Interface]',

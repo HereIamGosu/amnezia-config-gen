@@ -80,10 +80,10 @@ test('AWG 3.x frontend wiring is unique and uses centralized mode helpers', () =
   assert.match(script, /const getModeSuccessLabel =/);
 });
 
-test('release metadata and asset cache keys identify AWG 3.x release 2.7.0', () => {
+test('release metadata and asset cache keys identify AWG 3.x patch release 2.7.1', () => {
   const html = read('public/index.html');
   assert.match(html, /AWG 1\.5, 2\.0, 3\.0 (?:и|and) 3\.1/);
-  assert.equal((html.match(/\?v=2\.7\.0/g) || []).length, 4);
+  assert.equal((html.match(/\?v=2\.7\.1/g) || []).length, 4);
   assert.doesNotMatch(html, /\?v=2\.5\.0/);
 });
 
@@ -138,6 +138,7 @@ test('RU and EN locales contain all 2.7.0 compatibility + onboarding keys', () =
     'awg_client_compatibility', 'awg_feature_header_disabled',
     'awg_feature_trailers_disabled', 'awg_feature_timing', 'awg_feature_keepalive',
     'awg_feature_content_padding', 'awg_router_warning',
+    'awg_feature_disable_cookies',
     'awg3_client_warning', 'awg31_client_warning',
   ];
   keys.forEach((key) => {

@@ -1,5 +1,5 @@
 // src/server/clientCompatibility.js
-// Client compatibility matrix — Release 2.7.0 (Compatibility & Onboarding Clarity).
+// Client compatibility matrix — Release 2.7.1 (Compatibility & Onboarding Clarity).
 //
 // Purpose: given what a single /api/warp generation actually produced (mode,
 // whether a vpn:// link exists, mobile/router flags), report which clients are
@@ -58,7 +58,7 @@ const CLIENTS = Object.freeze([
     recommendedModes: ['legacy', 'awg2', 'awg3', 'awg31'],
     status: STATUS.RECOMMENDED,
     warnings: [],
-    notes: ['Use vpn:// where supported for faster import.'],
+    notes: ['Use vpn:// where supported for faster import.', 'AWG 3.x requires a current AWG 3.1-capable release.'],
   },
   {
     clientId: 'amneziawg_client',
@@ -68,7 +68,7 @@ const CLIENTS = Object.freeze([
     recommendedModes: ['legacy', 'awg2', 'awg3', 'awg31'],
     status: STATUS.RECOMMENDED,
     warnings: [],
-    notes: [],
+    notes: ['AWG 3.x requires a current AWG 3.1-capable release.'],
   },
   {
     clientId: 'wg_tunnel',
