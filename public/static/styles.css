@@ -311,7 +311,12 @@ button.button--loading {
 
 .right-section__intro .onboarding {
   margin-bottom: 0;
-  text-align: center;
+}
+
+.right-section__intro .onboarding__summary {
+  display: block;
+  width: fit-content;
+  margin-inline: auto;
 }
 
 .right-section__intro .onboarding__body {

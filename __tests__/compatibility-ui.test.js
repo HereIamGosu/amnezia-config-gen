@@ -33,7 +33,7 @@ test('configuration summary and onboarding lead the right column', () => {
   assert.ok(intro < infoMessage, 'configuration summary must be inside the intro group');
   assert.ok(infoMessage < onboarding, 'onboarding must follow the configuration summary');
   assert.ok(onboarding < instruction, 'intro group must appear before the installation instructions');
-  assert.match(styles, /\.right-section__intro \.onboarding\s*\{[^}]*text-align:\s*center;/s);
+  assert.match(styles, /\.right-section__intro \.onboarding__summary\s*\{[^}]*display:\s*block;[^}]*width:\s*fit-content;[^}]*margin-inline:\s*auto;/s);
   assert.match(styles, /\.right-section__intro \.onboarding__body\s*\{[^}]*text-align:\s*left;/s);
 });
 
