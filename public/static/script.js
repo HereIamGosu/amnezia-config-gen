@@ -31,6 +31,7 @@ const getTelemetryContext = (mode, extra = {}) => {
     mobile_profile: cfgState.mobileMode,
     router_profile: cfgState.routerMode,
     cps_mode: cfgState.cpsProtocol,
+    cps_requested: cfgState.cpsProtocol,
     awg_timing_ranges: awg3,
     awg_content_padding_experimental: false,
     awg_warp_safe: awg3,
@@ -563,6 +564,10 @@ const renderResultExplanation = (summary) => {
   );
   appendSummaryField(fields, t('result_summary_profile', 'Профиль'), summaryValue('profile', summary.profile));
   appendSummaryField(fields, t('result_summary_ipv6', 'IPv6'), summaryValue('ipv6', summary.ipv6));
+  const cpsValue = summary.cps.requested === 'auto'
+    ? `Auto → ${summary.cps.resolved}${summary.cps.stability === 'experimental' ? ' (experimental)' : ''}`
+    : `${summary.cps.resolved}${summary.cps.stability === 'experimental' ? ' (experimental)' : ''}`;
+  appendSummaryField(fields, t('result_summary_cps', 'CPS'), cpsValue);
   appendSummaryField(fields, t('result_summary_import', 'Импорт'), summaryValue('vpnImport', summary.vpnImport));
   if (summary.awg) {
     appendSummaryField(
@@ -818,7 +823,7 @@ const cfgState = {
   ignoreLimit: false,
   /** When true, router-safe caps are applied (Jc≤2, Jmin/Jmax≤128). */
   routerMode: false,
-  /** CPS protocol for I1 field: auto | quic | dns | stun | tls | sip | static */
+  /** CPS protocol for I1 field: auto | quic | dns | stun | dtls | sip | static */
   cpsProtocol: 'auto',
   /** Set of preset IDs confirmed to return 0 IPv4 CIDRs from opencck. */
   zeroCidrPresets: new Set(),
@@ -1699,6 +1704,9 @@ const generateConfig = async (options) => {
         routes_source: data.routesTelemetrySource || 'unknown',
         has_warning: warningCount > 0,
         warning_count: warningCount,
+        cps_requested: data.cpsRequested || startedContext.cps_requested,
+        cps_resolved: data.cpsResolved || 'unknown',
+        cps_stability: data.cpsStability || 'unknown',
         duration_ms: telemetry.durationMs(startedAt, telemetryNow()),
       };
       telemetry.trackEvent(

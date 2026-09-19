@@ -125,6 +125,7 @@ npm start    # vercel dev → http://localhost:3000
 | `disableCookies` | Строгий AWG 3.1-only toggle `on/off` (также `true/false/1/0`); default `on` |
 | `i1` | Сырая строка CPS / obfuscation (AWG 2.0) |
 | `i1Ref` | Имя файла из `api/cps-presets/` |
+| `cps` | `auto` (только стабильные `static` / `sip` / `stun`) либо явный `static`, `sip`, `stun`, `quic`, `dns`, `dtls`; последние три экспериментальны. `tls` и неизвестные идентификаторы возвращают HTTP 400. |
 | `plainAddress` | `1` / `true` — в `Address` без `/32` и `/128` |
 | `ipv6` | `1` — также включить IPv6 CIDR из пресетов |
 | `cps5` | `1` — добавить случайные `I2`..`I5` в `[Interface]` (только `mode=awg2`, требует непустой `I1`) |
@@ -156,6 +157,18 @@ npm start    # vercel dev → http://localhost:3000
 
 ## Опциональные расширения
 
+### Статус CPS-протоколов
+
+| Протокол | Статус | Auto | Примечание |
+|---|---|---:|---|
+| Static | stable | да | Проверенный проектный пул WARP payload |
+| SIP | stable | да | Согласованный рандомизированный SIP INVITE |
+| STUN | stable | да | Binding Request с корректным FINGERPRINT |
+| QUIC | experimental | нет | Защищённый пакет в форме QUIC v1 Initial; interop не подтверждён |
+| DNS | experimental | нет | Пакет в форме DNS response; interop не подтверждён |
+| DTLS | experimental | нет | Пакет в форме DTLS 1.2 ClientHello; interop не подтверждён |
+| TLS | unsupported | нет | Отклоняется с HTTP 400 |
+
 | Параметр | Эффект |
 |---|---|
 | `cps5=1` | Когда `mode=awg2` и `I1` непустой, сервер добавляет `I2..I5` (случайный hex 16–64 байт через `crypto.randomBytes`) в `[Interface]`. Для Legacy и пустого `I1` молча игнорируется. |
@@ -164,6 +177,8 @@ npm start    # vercel dev → http://localhost:3000
 | `link=1` | В ответе появляется `vpnLink: vpn://<base64url(qCompress(JSON))>` для импорта в AmneziaVPN одним тапом. |
 
 `appliedExtras: { cps5, mobile }` в ответе сообщает что фактически применилось (`cps5` может быть `false` даже когда запрошено — Legacy-режим его молча игнорирует).
+
+Успешный ответ также содержит безопасные метаданные `cpsRequested`, `cpsResolved` и `cpsStability`. При `count=1..3` каждый элемент `configs[]` сообщает собственный результат; Auto разрешается независимо для каждого конфига. QUIC формирует защищённый 1200-байтный пакет в форме QUIC v1 Initial и делит его на соседние fixed-byte CPS-теги без усечения, но остаётся экспериментальным до подтверждения совместимости с WARP.
 
 ## Совместимость
 

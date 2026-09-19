@@ -28,6 +28,9 @@ describe('privacy-safe telemetry adapter', () => {
       awg_content_padding_experimental: false,
       awg_warp_safe: true,
       cps_mode: 'quic',
+      cps_requested: 'auto',
+      cps_resolved: 'stun',
+      cps_stability: 'stable',
       duration_ms: 1234.6,
       error_code: 'http',
       content: '[Interface]\nPrivateKey = secret',
@@ -39,6 +42,7 @@ describe('privacy-safe telemetry adapter', () => {
       customCidr: '192.0.2.0/24',
       message: 'sensitive upstream message',
       userAgent: 'full browser fingerprint',
+      i1: '<b 0x736563726574>',
     });
 
     assert.deepEqual(payload, {
@@ -48,6 +52,9 @@ describe('privacy-safe telemetry adapter', () => {
       routes_source: 'itdoginfo',
       route_mode: 'split',
       cps_mode: 'quic',
+      cps_requested: 'auto',
+      cps_resolved: 'stun',
+      cps_stability: 'stable',
       error_code: 'http',
       count_requested: 3,
       count_produced: 2,

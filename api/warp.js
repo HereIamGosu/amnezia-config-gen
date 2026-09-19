@@ -12,6 +12,7 @@ const { createRateLimiter } = require('../src/server/_rateLimit');
 const warpLimiter = createRateLimiter({ windowMs: 60_000, maxHits: 10 });
 
 const { generateCpsPayload } = require('../src/server/cpsGenerator');
+const { validateCpsProtocol } = require('../src/server/cps/protocols');
 const { generateI2I5 } = require('../src/server/cpsExtraPackets');
 const { buildVpnLink } = require('../src/server/vpnLinkBuilder');
 const { getCompatibilityForGeneration } = require('../src/server/clientCompatibility');
@@ -929,13 +930,16 @@ const mergeTemplateIntoExtras = (extras, tmpl) => {
 
 const resolveI1ForGeneration = async (extras, cpsProtocol = 'auto') => {
   if (extras.i1Raw != null && String(extras.i1Raw).trim() !== '') {
-    return normalizeI1Payload(extras.i1Raw);
+    return { value: normalizeI1Payload(extras.i1Raw), requested: 'custom', resolved: 'custom', stability: 'custom' };
   }
-  if (extras.i1Ref) return normalizeI1Payload(await loadI1FromRef(extras.i1Ref));
+  if (extras.i1Ref) {
+    return { value: normalizeI1Payload(await loadI1FromRef(extras.i1Ref)), requested: 'custom', resolved: 'custom', stability: 'custom' };
+  }
   if (extras.useEmbeddedAmneziaI1) {
-    return normalizeI1Payload(await generateCpsPayload(cpsProtocol));
+    const generated = await generateCpsPayload(cpsProtocol);
+    return { ...generated, value: normalizeI1Payload(generated.value) };
   }
-  return '';
+  return { value: '', requested: 'none', resolved: 'none', stability: 'none' };
 };
 
 const generateKeys = () => {
@@ -1225,7 +1229,8 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
     ? routeCidrs.filter((c) => !c.includes(':'))
     : routeCidrs;
   const dnsLine = getDnsString(dnsKey || DNS_DEFAULT_KEY);
-  const i1 = await resolveI1ForGeneration(warpExtras, routeOpts.cpsProtocol);
+  const cps = await resolveI1ForGeneration(warpExtras, routeOpts.cpsProtocol);
+  const i1 = cps.value;
 
   const wantExtraCps = Boolean(routeOpts.extraCps);
   const canApplyExtraCps = wantExtraCps && (mode === 'awg2' || isAwg3Mode(mode)) && Boolean(i1);
@@ -1268,6 +1273,7 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
       presetsUsed: presetKeys.length,
       appliedExtras: { cps5: canApplyExtraCps, mobile: Boolean(routeOpts.mobileMode) },
       endpointSource,
+      cps: { requested: cps.requested, resolved: cps.resolved, stability: cps.stability },
     },
   };
 };
@@ -1379,6 +1385,7 @@ const handler = async (req, res) => {
     const routerRaw = body.router ?? pickQuery(req, 'router');
     const routerMode = routerRaw === true || routerRaw === 1 || String(routerRaw ?? '').toLowerCase() === '1' || String(routerRaw ?? '').toLowerCase() === 'true';
     const cpsProtocol = String(body.cps ?? pickQuery(req, 'cps') ?? 'auto').toLowerCase().trim();
+    validateCpsProtocol(cpsProtocol);
     const cps5Raw = body.cps5 ?? pickQuery(req, 'cps5');
     const extraCps = cps5Raw === true || cps5Raw === 1 || String(cps5Raw ?? '').toLowerCase() === '1' || String(cps5Raw ?? '').toLowerCase() === 'true';
     const mobileRaw = body.mobile ?? pickQuery(req, 'mobile');
@@ -1442,6 +1449,9 @@ const handler = async (req, res) => {
         content: encoded,
         appliedExtras: meta.appliedExtras,
         endpointSource: meta.endpointSource,
+        cpsRequested: meta.cps.requested,
+        cpsResolved: meta.cps.resolved,
+        cpsStability: meta.cps.stability,
         vpnLink,
       };
     });
@@ -1487,6 +1497,9 @@ const handler = async (req, res) => {
       content: configsOut[0]?.content,
       vpnLink: configsOut[0]?.vpnLink,
       appliedExtras: firstMeta.appliedExtras,
+      cpsRequested: firstMeta.cps?.requested,
+      cpsResolved: firstMeta.cps?.resolved,
+      cpsStability: firstMeta.cps?.stability,
       // New: array of all configs
       configs: configsOut,
       count: configsOut.length,
@@ -1510,9 +1523,10 @@ const handler = async (req, res) => {
     if (code === 400) {
       res.status(400).json({
         success: false,
-        error: error.message,
+        error: error.code || error.message,
         message: error.message,
         ...(error.expected ? { expected: error.expected } : {}),
+        ...(error.allowedProtocols ? { allowedCpsProtocols: error.allowedProtocols } : {}),
       });
       return;
     }
@@ -1544,6 +1558,7 @@ module.exports.__internals = {
   parsePersistentKeepalive,
   parseContentPaddingAddition,
   parseAwgToggle,
+  resolveI1ForGeneration,
   isEnabledFlag,
   shouldEmitConfigValue,
   parsePeerEndpointOverride,

@@ -27,7 +27,10 @@
     endpoint_source: new Set(['kv', 'fallback', 'hostname', 'manual', 'unknown']),
     routes_source: new Set(['opencck', 'itdoginfo', 'antifilter', 'static', 'fallback', 'unknown']),
     route_mode: new Set(['full', 'split', 'unknown']),
-    cps_mode: new Set(['auto', 'quic', 'dns', 'stun', 'tls', 'sip', 'static', 'unknown']),
+    cps_mode: new Set(['auto', 'quic', 'dns', 'stun', 'dtls', 'sip', 'static', 'unknown']),
+    cps_requested: new Set(['auto', 'quic', 'dns', 'stun', 'dtls', 'sip', 'static', 'custom', 'none', 'unknown']),
+    cps_resolved: new Set(['quic', 'dns', 'stun', 'dtls', 'sip', 'static', 'custom', 'none', 'unknown']),
+    cps_stability: new Set(['stable', 'experimental', 'custom', 'none', 'unknown']),
     error_code: new Set(['timeout', 'http', 'network', 'invalid_response', 'unknown']),
   };
 

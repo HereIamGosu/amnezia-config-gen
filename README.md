@@ -125,6 +125,7 @@ Parameters via query string (`GET`) or JSON body fields (`POST`). Body field nam
 | `disableCookies` | AWG 3.1-only strict `on/off` toggle (also `true/false/1/0`); defaults to `on` |
 | `i1` | Raw CPS / obfuscation string (AWG 2.0) |
 | `i1Ref` | Filename from `api/cps-presets/` |
+| `cps` | `auto` (stable `static` / `sip` / `stun` only), or explicit `static`, `sip`, `stun`, `quic`, `dns`, `dtls`; the latter three are experimental. `tls` and unknown IDs return HTTP 400. |
 | `plainAddress` | `1` / `true` — omit `/32` and `/128` from `Address` |
 | `ipv6` | `1` — also include IPv6 CIDRs from presets |
 | `cps5` | `1` — append random `I2`..`I5` to `[Interface]` (only for `mode=awg2`, requires non-empty `I1`) |
@@ -156,6 +157,18 @@ With `?presets=key1,key2`: resolves domains to CIDRs. Response: `{ count, count4
 
 ## Optional Extras
 
+### CPS protocol status
+
+| Protocol | Status | Auto | Notes |
+|---|---|---:|---|
+| Static | stable | yes | Verified project WARP payload pool |
+| SIP | stable | yes | Coherent randomized SIP INVITE |
+| STUN | stable | yes | Binding Request with valid FINGERPRINT |
+| QUIC | experimental | no | Protected QUIC v1 Initial-shaped packet; interop pending |
+| DNS | experimental | no | Response-shaped DNS packet; interop pending |
+| DTLS | experimental | no | DTLS 1.2 ClientHello-shaped packet; interop pending |
+| TLS | unsupported | no | Rejected with HTTP 400 |
+
 | Param | Effect |
 |---|---|
 | `cps5=1` | When `mode=awg2` + non-empty `I1`, server appends `I2..I5` (random hex 16–64 bytes each via `crypto.randomBytes`) to `[Interface]`. Silently ignored for Legacy or empty `I1`. |
@@ -164,6 +177,8 @@ With `?presets=key1,key2`: resolves domains to CIDRs. Response: `{ count, count4
 | `link=1` | Response gains `vpnLink: vpn://<base64url(qCompress(JSON))>` for one-tap import in AmneziaVPN mobile app. |
 
 `appliedExtras: { cps5, mobile }` in the response reports what was actually applied (`cps5` may be `false` even when requested — Legacy mode silently ignores it).
+
+Successful responses also report secret-free `cpsRequested`, `cpsResolved`, and `cpsStability` fields. For `count=1..3`, every `configs[]` entry carries its own resolution; Auto is resolved independently for each config. QUIC is a protected 1200-byte QUIC v1 Initial-shaped packet split into adjacent fixed-byte CPS tags without truncation, but remains experimental until WARP interoperability is confirmed.
 
 ## Compatibility
 

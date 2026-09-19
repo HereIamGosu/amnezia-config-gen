@@ -197,6 +197,9 @@
       response.routesTelemetrySource || response.routesSource,
       presets.length > 0,
     );
+    const cpsRequested = typeof response.cpsRequested === 'string' ? response.cpsRequested : 'unknown';
+    const cpsResolved = typeof response.cpsResolved === 'string' ? response.cpsResolved : 'unknown';
+    const cpsStability = typeof response.cpsStability === 'string' ? response.cpsStability : 'unknown';
     if (presets.length && routesSource === 'staticFallback') {
       warnings.push({
         level: 'warning',
@@ -232,6 +235,7 @@
       presets,
       profile: getProfile(state),
       ipv6: getIpv6(state),
+      cps: { requested: cpsRequested, resolved: cpsResolved, stability: cpsStability },
       awg: getAwg(response),
       vpnImport: response.vpnLink
         || (Array.isArray(response.configs) && response.configs.some((config) => config?.vpnLink))

@@ -80,10 +80,10 @@ test('AWG 3.x frontend wiring is unique and uses centralized mode helpers', () =
   assert.match(script, /const getModeSuccessLabel =/);
 });
 
-test('release metadata and asset cache keys identify AWG 3.x patch release 2.7.1', () => {
+test('release metadata and asset cache keys identify CPS patch release 2.7.2', () => {
   const html = read('public/index.html');
   assert.match(html, /AWG 1\.5, 2\.0, 3\.0 (?:и|and) 3\.1/);
-  assert.equal((html.match(/\?v=2\.7\.1/g) || []).length, 4);
+  assert.equal((html.match(/\?v=2\.7\.2/g) || []).length, 4);
   assert.doesNotMatch(html, /\?v=2\.5\.0/);
 });
 

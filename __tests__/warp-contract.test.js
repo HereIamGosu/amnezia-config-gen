@@ -615,3 +615,59 @@ test('contract: error response has success=false and human-readable message', as
     net.createConnection = realNetCreate;
   }
 });
+
+test('contract: CPS resolution metadata is returned per config and at top level', async () => {
+  clearModules();
+  const httpsMock = installWarpMock();
+  net.createConnection = (opts, cb) => { const s = mockNetOk(); if (cb) setImmediate(cb); return s; };
+  try {
+    const handler = require('../api/warp');
+    const res = makeRes();
+    await handler(makeReq({ mode: 'awg2', cps: 'quic', count: '2' }), res);
+    const body = res.getBody();
+    assert.equal(res.getStatus(), 200);
+    assert.equal(body.cpsRequested, 'quic');
+    assert.equal(body.cpsResolved, 'quic');
+    assert.equal(body.cpsStability, 'experimental');
+    for (const config of body.configs) {
+      assert.equal(config.cpsRequested, 'quic');
+      assert.equal(config.cpsResolved, 'quic');
+      assert.equal(config.cpsStability, 'experimental');
+    }
+  } finally {
+    httpsMock.mock.restore();
+    net.createConnection = realNetCreate;
+  }
+});
+
+test('contract: Auto resolves independently per config but only to stable CPS modes', async () => {
+  clearModules();
+  const httpsMock = installWarpMock();
+  net.createConnection = (opts, cb) => { const s = mockNetOk(); if (cb) setImmediate(cb); return s; };
+  try {
+    const handler = require('../api/warp');
+    const res = makeRes();
+    await handler(makeReq({ mode: 'awg2', cps: 'auto', count: '3' }), res);
+    for (const config of res.getBody().configs) {
+      assert.equal(config.cpsRequested, 'auto');
+      assert.ok(['static', 'sip', 'stun'].includes(config.cpsResolved));
+      assert.equal(config.cpsStability, 'stable');
+    }
+  } finally {
+    httpsMock.mock.restore();
+    net.createConnection = realNetCreate;
+  }
+});
+
+test('contract: TLS and unknown CPS modes return controlled 400 before WARP registration', async () => {
+  for (const [cps, code] of [['tls', 'unsupported_cps_protocol'], ['bogus', 'invalid_cps_protocol']]) {
+    clearModules();
+    const handler = require('../api/warp');
+    const res = makeRes();
+    await handler(makeReq({ mode: 'awg2', cps }), res);
+    assert.equal(res.getStatus(), 400);
+    assert.equal(res.getBody().success, false);
+    assert.equal(res.getBody().error, code);
+    assert.ok(Array.isArray(res.getBody().allowedCpsProtocols));
+  }
+});
