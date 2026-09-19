@@ -1786,27 +1786,6 @@ const generateConfig = async (options) => {
   }
 };
 
-/**
- * @param {string} staticPath path relative to site root, e.g. static/SchedulerAmnezia-15.bat
- * @param {string} downloadName filename for Save dialog
- * @param {string} doneMessage status text on success
- */
-const downloadSchedulerBat = async (staticPath, downloadName, doneMessageKey, doneMessageFb) => {
-  const status = document.getElementById('status');
-  status.textContent = t('scheduler_downloading', 'Скачивание bat планировщика...');
-  const url = new URL(staticPath, window.location.href);
-  try {
-    const response = await fetch(url.href);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const text = await response.text();
-    downloadFile(text, downloadName);
-    status.textContent = t(doneMessageKey, doneMessageFb);
-  } catch (error) {
-    console.error('Ошибка при скачивании bat:', error);
-    status.textContent = t('scheduler_fail', 'Не удалось скачать bat. Нужен запуск сайта через хостинг (не file://) или скопируйте файлы из папки public/static репозитория.');
-  }
-};
-
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-tg-channel]').forEach((el) => {
     el.href = TG_CHANNEL_URL;
@@ -1819,8 +1798,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const generateButtonAwg2 = document.getElementById('generateButtonAwg2');
   const generateButtonAwg3 = document.getElementById('generateButtonAwg3');
   const generateButtonAwg31 = document.getElementById('generateButtonAwg31');
-  const schedulerButton15 = document.getElementById('schedulerButton15');
-  const schedulerButton20 = document.getElementById('schedulerButton20');
 
   const legacyOptions = {
     buttonId: 'generateButton',
@@ -1876,32 +1853,6 @@ document.addEventListener('DOMContentLoaded', () => {
     generateButtonAwg31.addEventListener('click', awg31Options.boundGenerateClick);
   } else {
     console.error('Кнопка "generateButtonAwg31" не найдена.');
-  }
-
-  if (schedulerButton15) {
-    schedulerButton15.addEventListener('click', () =>
-      downloadSchedulerBat(
-        'static/SchedulerAmnezia-15.bat',
-        'SchedulerAmnezia-15.bat',
-        'scheduler_done_15',
-        'Скачан планировщик для 1.5 (AmneziaWarp.conf).',
-      ),
-    );
-  } else {
-    console.error('Кнопка "schedulerButton15" не найдена.');
-  }
-
-  if (schedulerButton20) {
-    schedulerButton20.addEventListener('click', () =>
-      downloadSchedulerBat(
-        'static/SchedulerAmnezia-20.bat',
-        'SchedulerAmnezia-20.bat',
-        'scheduler_done_20',
-        'Скачан планировщик для 2.0 (AmneziaWarp-AWG2.conf).',
-      ),
-    );
-  } else {
-    console.error('Кнопка "schedulerButton20" не найдена.');
   }
 
   // ── История генераций (модальное окно) ──

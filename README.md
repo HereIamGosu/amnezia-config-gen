@@ -26,7 +26,7 @@ Web UI and HTTP API for building `.conf` files for the **AmneziaWG** client (Wir
 - Four config formats: **Legacy**, **AWG 2.0**, **AWG 3.0**, and **AWG 3.1** (`mode=legacy|awg2|awg3|awg31`). AWG 3.x modes use a WARP-safe client-side profile.
 - Route presets: tile-selectable domain bundles → aggregated IPv4 (or IPv4+IPv6) CIDRs in `AllowedIPs`. With no selection, defaults to `0.0.0.0/0`; `::/0` is added only when IPv6 is explicitly enabled.
 - DNS presets for the `DNS` line in the config.
-- One-click `.conf` download plus two Windows Task Scheduler templates: `public/static/SchedulerAmnezia-15.bat` (Legacy 1.5 → `AmneziaWarp.conf`) and `SchedulerAmnezia-20.bat` (AWG 2.0 → `AmneziaWarp-AWG2.conf`); edit the `amneziawg.exe` path in the .bat if needed.
+- One-click `.conf` download for import into AmneziaWG and compatible clients.
 - After generation, an explainable result card summarizes the AWG format, variants, endpoint and route sources, profiles, IPv6, `vpn://` availability, risk labels, and practical first diagnostic steps.
 - `cps5`, `mobile`, `link` opt-in extras (see [Optional Extras](#optional-extras)).
 - Cloudflare WARP API requests retry on network errors and 429 / 502 / 503 / 504 responses.

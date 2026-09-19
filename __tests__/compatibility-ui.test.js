@@ -20,6 +20,23 @@ test('index.html has the onboarding block as a collapsible <details>', () => {
   assert.match(html, /data-i18n="onboarding_no_guarantee"/);
 });
 
+test('configuration summary and onboarding lead the right column', () => {
+  const html = read('public/index.html');
+  const styles = read('public/static/styles.css');
+  const rightSection = html.indexOf('<div class="right-section">');
+  const intro = html.indexOf('<div class="right-section__intro">');
+  const infoMessage = html.indexOf('<div class="info-message">');
+  const onboarding = html.indexOf('<details id="onboardingBlock"');
+  const instruction = html.indexOf('<aside class="instruction">');
+
+  assert.ok(rightSection < intro, 'intro must be inside the right column');
+  assert.ok(intro < infoMessage, 'configuration summary must be inside the intro group');
+  assert.ok(infoMessage < onboarding, 'onboarding must follow the configuration summary');
+  assert.ok(onboarding < instruction, 'intro group must appear before the installation instructions');
+  assert.match(styles, /\.right-section__intro \.onboarding\s*\{[^}]*text-align:\s*center;/s);
+  assert.match(styles, /\.right-section__intro \.onboarding__body\s*\{[^}]*text-align:\s*left;/s);
+});
+
 test('AWG 2.0 disclaimer is a hover tooltip on the AWG2 generate button', () => {
   const html = read('public/index.html');
   // The AWG2 button carries the disclaimer as a localizable title attribute.

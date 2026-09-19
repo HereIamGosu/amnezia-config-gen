@@ -27,8 +27,6 @@
   "awg_router_warning": "Совместимость с роутерами зависит от реализации роутера",
   "awg3_client_warning": "Требуется клиент с поддержкой параметров AWG 3.x.",
   "awg31_client_warning": "Рекомендуется актуальный AmneziaVPN или AmneziaWG client с поддержкой AWG 3.1.",
-  "btn_scheduler_15": "Планировщик для 1.5",
-  "btn_scheduler_20": "Планировщик для 2.0",
   "btn_show_config": "👁 Показать конфиг",
   "btn_hide_config": "👁 Скрыть конфиг",
   "btn_copy": "Копировать",
@@ -58,7 +56,6 @@
 
   "close_btn_aria": "Закрыть",
   "minimize_btn_aria": "Свернуть",
-  "scheduler_row_aria": "Скачать bat планировщика",
   "preview_btn_title": "Просмотреть конфигурацию",
   "settings_toggle_title": "Настройки конфигурации",
 
@@ -95,9 +92,8 @@
   "info_s3_p2": "<strong>Для своего сервера — да.</strong> Самостоятельный AWG 2.0 требует обновлённого ядра/модуля <code>amneziawg-linux-kernel-module</code> на сервере и новых конфигов клиентов (старые конфиги AWG 1.5 становятся несовместимы). Подробнее — в <a href=\"https://docs.amnezia.org/documentation/instructions/new-amneziawg-selfhosted/\" target=\"_blank\" rel=\"noopener noreferrer\">официальной документации</a>.",
 
   "instruction_step1": "<strong>Скачивание и установка AmneziaWG:</strong><br />Перейдите по <a href=\"https://github.com/amnezia-vpn/amneziawg-windows-client/releases/\" target=\"_blank\" rel=\"noopener noreferrer\">ссылке для скачивания</a> и загрузите установочный файл для Windows. Установите по стандартному пути \"C:\\Program Files\\...\".",
-  "instruction_step2": "<strong>Генерация конфигурационного файла:</strong><br />Выберите AWG 1.5, 2.0, 3.0 или 3.1 по поддержке клиента. AWG 3.x использует WARP-safe клиентский профиль; для AWG 3.1 рекомендуется AmneziaVPN 5.0.1.5+ или совместимый клиент. Bat планировщика доступны только для AWG 1.5 и 2.0.",
-  "instruction_step3": "<strong>Загрузка и запуск bat планировщика:</strong><br />Скачайте <strong>«Планировщик для 1.5»</strong> или <strong>«Планировщик для 2.0»</strong> — тот, что соответствует вашему конфигу. Запустите выбранный <code>.bat</code> <strong>от имени администратора</strong> один раз: будет создана задача в планировщике Windows при входе в систему. При смене версии клиента удалите старую задачу в <em>Планировщике заданий</em> или используйте другой <code>.bat</code> (имена задач внутри файлов различаются).",
-  "instruction_conclusion": "После этого AmneziaWG сможет автоматически подключаться к конфигу из «Загрузок» при входе в систему 🥸 Путь к <code>amneziawg.exe</code> в bat при необходимости поправьте под свою установку.",
+  "instruction_step2": "<strong>Генерация и импорт конфигурационного файла:</strong><br />Выберите AWG 1.5, 2.0, 3.0 или 3.1 по поддержке клиента. AWG 3.x использует WARP-safe клиентский профиль; для AWG 3.1 рекомендуется AmneziaVPN 5.0.1.5+ или совместимый клиент. Скачайте конфигурацию и импортируйте файл <code>.conf</code> в клиент.",
+  "instruction_conclusion": "После импорта включите туннель в клиенте. Дальнейшее восстановление его состояния при запуске Windows выполняет сам клиент.",
 
   "tg_cta_text": "Если хотите понимать, почему один и тот же .conf может работать по-разному в LTE, Wi-Fi, на телефоне, Windows или роутере, — в Telegram-канале <strong>Amnezia Config</strong> выходят разборы по AmneziaWG, AllowedIPs, endpoint, DNS, UDP, mobile profile и обновлениям генератора.",
   "tg_cta_btn": "Подписаться на канал",
@@ -136,11 +132,6 @@
   "preset_load_fail_prefix": "Не удалось загрузить пресеты: ",
   "preset_preview_fail_prefix": "Предпросмотр недоступен: ",
   "tile_domains_suffix": " доменов в запросе",
-
-  "scheduler_downloading": "Скачивание bat планировщика...",
-  "scheduler_done_15": "Скачан планировщик для 1.5 (AmneziaWarp.conf).",
-  "scheduler_done_20": "Скачан планировщик для 2.0 (AmneziaWarp-AWG2.conf).",
-  "scheduler_fail": "Не удалось скачать bat. Нужен запуск сайта через хостинг (не file://) или скопируйте файлы из папки public/static репозитория.",
 
   "router_mode_label": "Режим роутера",
   "router_mode_title": "Уменьшает параметры junk-трейна (Jc ≤ 2, Jmin/Jmax ≤ 128 байт) для совместимости с роутерами MikroTik, GL.iNet, Keenetic и OpenWrt с ограниченной памятью.",

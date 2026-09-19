@@ -27,8 +27,6 @@
   "awg_router_warning": "Router compatibility depends on the router implementation",
   "awg3_client_warning": "A client that supports AWG 3.x parameters is required.",
   "awg31_client_warning": "A current AWG 3.1-capable AmneziaVPN or AmneziaWG client is recommended.",
-  "btn_scheduler_15": "Scheduler for 1.5",
-  "btn_scheduler_20": "Scheduler for 2.0",
   "btn_show_config": "👁 Show Config",
   "btn_hide_config": "👁 Hide Config",
   "btn_copy": "Copy",
@@ -58,7 +56,6 @@
 
   "close_btn_aria": "Close",
   "minimize_btn_aria": "Minimize",
-  "scheduler_row_aria": "Download scheduler bat",
   "preview_btn_title": "Preview configuration",
   "settings_toggle_title": "Config settings",
 
@@ -95,9 +92,8 @@
   "info_s3_p2": "<strong>For your own server — yes.</strong> Self-hosted AWG 2.0 requires an updated kernel/module <code>amneziawg-linux-kernel-module</code> on the server and new client configs (old AWG 1.5 configs become incompatible). See the <a href=\"https://docs.amnezia.org/documentation/instructions/new-amneziawg-selfhosted/\" target=\"_blank\" rel=\"noopener noreferrer\">official documentation</a> for details.",
 
   "instruction_step1": "<strong>Download and install AmneziaWG:</strong><br />Follow the <a href=\"https://github.com/amnezia-vpn/amneziawg-windows-client/releases/\" target=\"_blank\" rel=\"noopener noreferrer\">download link</a> and get the installer for Windows. Install to the default path \"C:\\Program Files\\...\".",
-  "instruction_step2": "<strong>Generate the config file:</strong><br />Choose AWG 1.5, 2.0, 3.0, or 3.1 according to client support. AWG 3.x uses a WARP-safe client profile; AWG 3.1 is recommended with AmneziaVPN 5.0.1.5+ or a compatible client. Scheduler bat files are available only for AWG 1.5 and 2.0.",
-  "instruction_step3": "<strong>Download and run the scheduler bat:</strong><br />Download <strong>\"Scheduler for 1.5\"</strong> or <strong>\"Scheduler for 2.0\"</strong> — the one matching your config. Run the chosen <code>.bat</code> <strong>as administrator</strong> once: it creates a Windows Task Scheduler task that runs at login. When switching client versions, remove the old task in <em>Task Scheduler</em> or use a different <code>.bat</code> (task names inside the files differ).",
-  "instruction_conclusion": "After that, AmneziaWG will automatically connect to the config from Downloads at login 🥸 Adjust the path to <code>amneziawg.exe</code> in the bat if needed for your installation.",
+  "instruction_step2": "<strong>Generate and import the config file:</strong><br />Choose AWG 1.5, 2.0, 3.0, or 3.1 according to client support. AWG 3.x uses a WARP-safe client profile; AWG 3.1 is recommended with AmneziaVPN 5.0.1.5+ or a compatible client. Download the configuration and import the <code>.conf</code> file into the client.",
+  "instruction_conclusion": "After importing, enable the tunnel in the client. The client restores its state when Windows starts.",
 
   "tg_cta_text": "If you want to understand why the same .conf may behave differently on LTE, Wi-Fi, a phone, Windows, or a router — the <strong>Amnezia Config</strong> Telegram channel publishes breakdowns on AmneziaWG, AllowedIPs, endpoint, DNS, UDP, mobile profile, and generator updates.",
   "tg_cta_btn": "Subscribe to the channel",
@@ -136,11 +132,6 @@
   "preset_load_fail_prefix": "Failed to load presets: ",
   "preset_preview_fail_prefix": "Preview unavailable: ",
   "tile_domains_suffix": " domains queried",
-
-  "scheduler_downloading": "Downloading scheduler bat...",
-  "scheduler_done_15": "Downloaded scheduler for 1.5 (AmneziaWarp.conf).",
-  "scheduler_done_20": "Downloaded scheduler for 2.0 (AmneziaWarp-AWG2.conf).",
-  "scheduler_fail": "Failed to download bat. The site must be served over HTTP (not file://) — or copy files from the public/static folder in the repository.",
 
   "router_mode_label": "Router mode",
   "router_mode_title": "Reduces junk-train parameters (Jc ≤ 2, Jmin/Jmax ≤ 128 bytes) for compatibility with MikroTik, GL.iNet, Keenetic and OpenWrt routers with limited memory.",

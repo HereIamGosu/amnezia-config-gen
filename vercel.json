@@ -122,24 +122,6 @@
       ]
     },
     {
-      "source": "/static/SchedulerAmnezia-15.bat",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
-        }
-      ]
-    },
-    {
-      "source": "/static/SchedulerAmnezia-20.bat",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
-        }
-      ]
-    },
-    {
       "source": "/static/(.*)",
       "headers": [
         {

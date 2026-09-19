@@ -274,25 +274,6 @@
               />
             </header>
 
-            <!-- Сообщение о конфигурации и файле планировщика -->
-            <div class="info-message">
-              <p data-i18n-html="info_message_p1">
-                Конфигурацию можно сгенерировать для любых устройств. По
-                умолчанию весь трафик идёт через туннель. Пресеты маршрутов и
-                DNS можно задать в модальном окне по кнопке
-                <strong>⚙</strong> рядом с кнопками генерации.
-              </p>
-            </div>
-
-            <!-- Onboarding «Что это?» — компактный коллапсируемый вводный блок (2.7.0) -->
-            <details id="onboardingBlock" class="onboarding">
-              <summary class="onboarding__summary" data-i18n="onboarding_title">Что это?</summary>
-              <div class="onboarding__body">
-                <p data-i18n="onboarding_body">Генератор создаёт готовый AmneziaWG/WARP-профиль для импорта в VPN-клиент. Можно скачать .conf или скопировать vpn://, если клиент поддерживает быстрый импорт. Полный туннель направляет весь поддерживаемый трафик через WARP, выборочная маршрутизация — только выбранные направления. Работоспособность зависит от клиента, сети, endpoint, DNS и маршрутов.</p>
-                <p class="onboarding__note" data-i18n="onboarding_no_guarantee">Генератор снижает количество ручной настройки, но не гарантирует работу в любой сети и любом клиенте.</p>
-              </div>
-            </details>
-
             <!-- Раздел для статуса, обновляемый в реальном времени -->
             <section id="status" aria-live="polite"></section>
 
@@ -425,39 +406,17 @@
                 Дополнительная информация
               </button>
 
-              <!-- Планировщик Windows: отдельные bat под 1.5 и 2.0 -->
-              <div
-                class="buttons__scheduler-row"
-                role="group"
-                aria-label="Скачать bat планировщика"
-                data-i18n-aria-label="scheduler_row_aria"
+              <button
+                type="button"
+                id="historyModalBtn"
+                class="button button--history-open"
+                aria-label="История генераций"
+                data-i18n-aria-label="history_btn_aria"
+                hidden
               >
-                <button
-                  type="button"
-                  id="schedulerButton15"
-                  class="button button--scheduler"
-                >
-                  <span class="button__text" data-i18n="btn_scheduler_15">Планировщик для 1.5</span>
-                </button>
-                <button
-                  type="button"
-                  id="schedulerButton20"
-                  class="button button--scheduler"
-                >
-                  <span class="button__text" data-i18n="btn_scheduler_20">Планировщик для 2.0</span>
-                </button>
-                <button
-                  type="button"
-                  id="historyModalBtn"
-                  class="button button--history-open"
-                  aria-label="История генераций"
-                  data-i18n-aria-label="history_btn_aria"
-                  hidden
-                >
-                  <span class="button__text" data-i18n="btn_history">🕐 История</span>
-                  <span id="historyCount" class="history-count-badge"></span>
-                </button>
-              </div>
+                <span class="button__text" data-i18n="btn_history">🕐 История</span>
+                <span id="historyCount" class="history-count-badge"></span>
+              </button>
             </div>
 
             <!-- CTA: Telegram-канал — появляется после первой генерации -->
@@ -497,6 +456,27 @@
 
           <!-- Правый раздел с инструкцией и футером -->
           <div class="right-section">
+            <div class="right-section__intro">
+              <!-- Сообщение о конфигурации -->
+              <div class="info-message">
+                <p data-i18n-html="info_message_p1">
+                  Конфигурацию можно сгенерировать для любых устройств. По
+                  умолчанию весь трафик идёт через туннель. Пресеты маршрутов и
+                  DNS можно задать в модальном окне по кнопке
+                  <strong>⚙</strong> рядом с кнопками генерации.
+                </p>
+              </div>
+
+              <!-- Onboarding «Что это?» — компактный коллапсируемый вводный блок (2.7.0) -->
+              <details id="onboardingBlock" class="onboarding">
+                <summary class="onboarding__summary" data-i18n="onboarding_title">Что это?</summary>
+                <div class="onboarding__body">
+                  <p data-i18n="onboarding_body">Генератор создаёт готовый AmneziaWG/WARP-профиль для импорта в VPN-клиент. Можно скачать .conf или скопировать vpn://, если клиент поддерживает быстрый импорт. Полный туннель направляет весь поддерживаемый трафик через WARP, выборочная маршрутизация — только выбранные направления. Работоспособность зависит от клиента, сети, endpoint, DNS и маршрутов.</p>
+                  <p class="onboarding__note" data-i18n="onboarding_no_guarantee">Генератор снижает количество ручной настройки, но не гарантирует работу в любой сети и любом клиенте.</p>
+                </div>
+              </details>
+            </div>
+
             <!-- Инструкция по установке и настройке -->
             <aside class="instruction">
               <h2 data-i18n="instruction_title">Инструкция по установке и настройке</h2>
@@ -519,35 +499,15 @@
                 <!-- Шаг 2: Генерация конфигурационного файла -->
                 <li data-i18n-html="instruction_step2">
                   <strong>Генерация конфигурационного файла:</strong><br />
-                  После установки нажмите
-                  <strong>«Сгенерировать AWG 1.5»</strong> (Legacy, файл
-                  <code>AmneziaWarp.conf</code>) или
-                  <strong>«Сгенерировать AWG 2.0»</strong> (файл
-                  <code>AmneziaWarp-AWG2.conf</code>) — в зависимости от версии
-                  клиента. Сохраните конфиг в папку <strong>«Загрузки»</strong>:
-                  bat планировщика ожидает именно эти имена файлов.
-                </li>
-
-                <!-- Шаг 3: Загрузка и запуск файла планировщика -->
-                <li data-i18n-html="instruction_step3">
-                  <strong>Загрузка и запуск bat планировщика:</strong><br />
-                  Скачайте
-                  <strong>«Планировщик для 1.5»</strong> или
-                  <strong>«Планировщик для 2.0»</strong> — тот, что
-                  соответствует вашему конфигу. Запустите выбранный
-                  <code>.bat</code>
-                  <strong>от имени администратора</strong> один раз: будет
-                  создана задача в планировщике Windows при входе в систему. При
-                  смене версии клиента удалите старую задачу в
-                  <em>Планировщике заданий</em> или используйте другой
-                  <code>.bat</code> (имена задач внутри файлов различаются).
+                  Выберите AWG 1.5, 2.0, 3.0 или 3.1 по поддержке клиента,
+                  скачайте конфигурацию и импортируйте файл <code>.conf</code>
+                  в AmneziaWG или совместимый клиент.
                 </li>
               </ol>
               <p data-i18n-html="instruction_conclusion">
-                После этого AmneziaWG сможет автоматически подключаться к
-                конфигу из «Загрузок» при входе в систему 🥸 Путь к
-                <code>amneziawg.exe</code> в bat при необходимости поправьте под
-                свою установку.
+                После импорта включите туннель в клиенте. Дальнейшее
+                восстановление его состояния при запуске Windows выполняет сам
+                клиент.
               </p>
             </aside>
 
