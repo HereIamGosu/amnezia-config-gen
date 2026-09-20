@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+### Added
+- DNS preset for Xbox DNS (`111.88.96.50`, `111.88.96.51` and the published IPv6 pair).
+
 ## [2.7.2] - 2026-09-19
 
 ### Fixed

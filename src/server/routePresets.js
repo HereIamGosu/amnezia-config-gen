@@ -482,6 +482,11 @@ const DNS_PRESETS = {
     label: 'malw.link',
     dns: '80.253.249.40, 193.23.209.189, 2a12:bec4:1460:5b7::2, 2a01:ecc0:680:120::2',
   },
+  xbox_dns: {
+    label: 'Xbox DNS',
+    // Published by https://xbox-dns.ru/ (primary/secondary IPv4 and IPv6 addresses).
+    dns: '111.88.96.50, 111.88.96.51, 2a00:ab00:1233:26::50, 2a00:ab00:1233:26::51',
+  },
 };
 
 const DNS_DEFAULT_KEY = 'cloudflare';
