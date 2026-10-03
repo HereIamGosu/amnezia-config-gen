@@ -13,3 +13,14 @@ updates:
     commit-message:
       prefix: build
     open-pull-requests-limit: 2
+
+  # Workflow actions are pinned to commit SHAs; Dependabot bumps the SHA and the
+  # "# vX.Y.Z" comment together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: ci
+    open-pull-requests-limit: 3

@@ -6,24 +6,31 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
-permissions:
-  contents: read
+# Nothing by default; every job asks for exactly what it needs.
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Job id stays `ci`: it is the status check name branch protection may require.
   ci:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node: ['22']
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js ${{ matrix.node }}
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          node-version: ${{ matrix.node }}
+          persist-credentials: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
           cache: npm
 
       - name: Install dependencies
@@ -43,7 +50,22 @@ jobs:
 
       - name: Tag version check
         if: github.ref_type == 'tag'
-        run: node scripts/check-release-consistency.js --tag "${GITHUB_REF_NAME}"
+        env:
+          TAG: ${{ github.ref_name }}
+        run: node scripts/check-release-consistency.js --tag "$TAG"
+
+      - name: presets-fallback drift check
+        run: |
+          cp public/static/presets-fallback.json "$RUNNER_TEMP/presets-fallback-before.json"
+          npm run presets:fallback
+          if ! diff -u "$RUNNER_TEMP/presets-fallback-before.json" public/static/presets-fallback.json > "$RUNNER_TEMP/presets-diff.txt"; then
+            echo '::error::public/static/presets-fallback.json is out of date.'
+            echo 'Run `npm run presets:fallback` and commit the result.'
+            echo
+            cat "$RUNNER_TEMP/presets-diff.txt"
+            exit 1
+          fi
+          echo 'presets-fallback.json is up-to-date.'
 
       - name: Coverage (informational)
         run: |
@@ -55,15 +77,3 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: presets-fallback drift check
-        run: |
-          cp public/static/presets-fallback.json /tmp/presets-fallback-before.json
-          npm run presets:fallback
-          if ! diff -u /tmp/presets-fallback-before.json public/static/presets-fallback.json > /tmp/presets-diff.txt; then
-            echo '::error::public/static/presets-fallback.json is out of date.'
-            echo 'Run `npm run presets:fallback` and commit the result.'
-            echo
-            cat /tmp/presets-diff.txt
-            exit 1
-          fi
-          echo 'presets-fallback.json is up-to-date.'
