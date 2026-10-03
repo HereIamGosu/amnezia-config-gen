@@ -1,4 +1,5 @@
-FROM node:22-alpine
+# Readable tag plus pinned digest (multi-arch index): the digest is what gets pulled.
+FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402
 ARG APP_REVISION=unknown
 LABEL org.opencontainers.image.source="https://github.com/HereIamGosu/amnezia-config-gen" \
       org.opencontainers.image.revision="${APP_REVISION}"
