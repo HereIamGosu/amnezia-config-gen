@@ -1940,7 +1940,14 @@ document.addEventListener('DOMContentLoaded', () => {
   initI18n();
   telemetry.trackEvent('healthcheck_opened');
   fetchHealthStatus();
-  setInterval(fetchHealthStatus, 60_000);
+  // Poll only while the tab is visible: background tabs polling every minute used to
+  // generate most of the request volume.
+  setInterval(() => {
+    if (!document.hidden) fetchHealthStatus();
+  }, 60_000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) fetchHealthStatus();
+  });
   fetchServiceStatus();
   document.querySelectorAll('.lang-btn').forEach((btn) => {
     btn.addEventListener('click', () => switchLang(btn.dataset.lang));

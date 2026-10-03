@@ -42,7 +42,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://mc.yandex.ru https://*.vercel-insights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://mc.yandex.ru https://mc.yandex.com data:; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.com https://raw.githubusercontent.com https://*.vercel-insights.com; frame-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://mc.yandex.ru; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://mc.yandex.ru https://mc.yandex.com data:; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.com https://raw.githubusercontent.com; frame-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
         }
       ]
     },

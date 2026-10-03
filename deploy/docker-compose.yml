@@ -1,0 +1,26 @@
+name: amnezia-web
+
+# Image is built and tagged per commit by deploy/remote-activate.sh (amnezia-web:<sha>).
+services:
+  web:
+    image: amnezia-web:${APP_REVISION:?set APP_REVISION}
+    container_name: amnezia-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:13100:3000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 128
+    stop_grace_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -27,7 +27,7 @@ assignees: ''
 - **Extras toggled:** ipv6 / cps5 / mobile / router / link
 - **AmneziaWG client:** OS + version (e.g. Windows 1.5.7, Android 1.4.2)
 - **Browser (if UI bug):** name + version
-- **Endpoint URL used (if testing public deployment):** valokda-amnezia.vercel.app / self-hosted
+- **Endpoint URL used (if testing public deployment):** awgconfig.com / self-hosted
 
 ## Logs / screenshots
 
