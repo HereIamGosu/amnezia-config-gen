@@ -591,6 +591,7 @@ class AutomationTests(Base):
         ad.op_deploy(self.sys, self.paths, automatic=True)  # CI published nothing new: :main unchanged
         self.assertEqual(self.attempt()["result"], "noop")
         self.assertEqual(ad.read_json(self.paths.event), event)
+        self.assertEqual(self.attempt()["target"]["slot"], self.state()["active_slot"], "no-op reports the active slot")
         os.makedirs(self.paths.conf_dir, exist_ok=True)
         ad.write_json(self.paths.paused, {"reason": "test"})
         ad.op_deploy(self.sys, self.paths, automatic=True)

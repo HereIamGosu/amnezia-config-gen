@@ -816,6 +816,7 @@ def op_deploy(sysm, paths, sha=None, force=False, automatic=False):
         target = OTHER[state["active_slot"]]
         op.target = {"sha": cand.sha, "digest": cand.digest, "slot": target}
         if cand.digest == state.get("image_digest"):
+            op.target["slot"] = state["active_slot"]
             op.finish("noop", record_event=False)
             print(f"no-op: {cand.digest} is already active in {state['active_slot']}")
             return 0
