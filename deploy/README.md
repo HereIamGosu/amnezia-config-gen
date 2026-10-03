@@ -31,6 +31,11 @@ CI (lint, tests, build-once image smoke) and the planned image delivery are desc
 
 ## Deploy / rollback
 
+> Since the blue/green controller manages the host, use `amnezia-deploy` on the VPS
+> ([CONTROLLER.md](CONTROLLER.md)). The `deploy.sh` flow below is **legacy / emergency only**: it refuses
+> on a managed host unless `AMNEZIA_LEGACY_DEPLOY=1` is set, and must be followed by
+> `amnezia-deploy reconcile`.
+
 Only committed code is deployed (`git archive`), so a dirty working tree never leaks to the server.
 
 ```bash

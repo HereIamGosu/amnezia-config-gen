@@ -1,8 +1,9 @@
 # CI and image delivery
 
-Status: **CI + image publication.** Every push to `main` that passes CI publishes the tested image
-to GHCR. Nothing deploys it: production is still updated by hand with `deploy/deploy.sh <sha>`
-(see `deploy/README.md`). The VPS stage below is a design for a later phase and is not active.
+Status: **CI + image publication + pull-based controller on the VPS.** Every push to `main` that
+passes CI publishes the tested image to GHCR. The VPS controller `amnezia-deploy`
+([CONTROLLER.md](CONTROLLER.md)) deploys it blue/green **when run by hand**; its timer is installed
+disabled. `deploy/deploy.sh` is legacy/emergency only and refuses on the managed host.
 
 ## Decision (ADR, accepted)
 
@@ -97,14 +98,8 @@ Notes:
 - Retention: the image artifact lives 7 days, `release.json` 90 days; GHCR versions are cleaned by
   a separate, explicit policy (none yet).
 
-## VPS update — design reference only (Phase 5, not enabled)
+## VPS update
 
-A systemd timer on the VPS polls `git ls-remote https://github.com/HereIamGosu/amnezia-config-gen refs/heads/main`.
-For a new SHA it resolves `ghcr.io/hereiamgosu/amnezia-config-gen:<sha>` to a digest, accepts it only
-if the CI run for that SHA succeeded, pulls **by digest**, starts the new container next to the old one
-(blue/green on a second loopback port), health-checks it, switches traffic, and keeps the previous
-container for instant rollback. How traffic is switched (a one-line upstream include owned by this
-process vs. re-binding the fixed port) is an open Phase 5 decision, because the rule "nginx is never
-changed by a push" must hold. State file:
-`{source_sha, image_digest, previous_*}`. It never runs `git pull` in a live directory and never runs
-`docker system prune -a`.
+Implemented by `amnezia-deploy`; see [CONTROLLER.md](CONTROLLER.md). `:main` is a discovery pointer
+only; containers always run from `image@sha256:…`, and the public `X-App-Revision` proves which
+release answers after a switch. Automatic deployment (the timer) is a separate owner decision.

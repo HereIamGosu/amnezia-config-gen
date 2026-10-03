@@ -11,6 +11,15 @@ REF="${1:-HEAD}"
 SHA="$(git rev-parse --short=12 "${REF}^{commit}")"
 SSH=(ssh -i "$KEY" -o BatchMode=yes "$HOST")
 
+# LEGACY / EMERGENCY ONLY. Once amnezia-deploy manages the host (deploy/CONTROLLER.md), this script
+# would start a second, uncoordinated container on 127.0.0.1:13100 and bypass blue/green. It refuses
+# unless explicitly forced for an emergency (e.g. GHCR unavailable).
+if "${SSH[@]}" "test -f /var/lib/amnezia-deploy/state.json" && [ "${AMNEZIA_LEGACY_DEPLOY:-}" != 1 ]; then
+  echo "refusing: the host is managed by amnezia-deploy (use 'amnezia-deploy deploy|rollback' on the VPS)." >&2
+  echo "emergency override: AMNEZIA_LEGACY_DEPLOY=1 $0 $*  — then run 'amnezia-deploy reconcile' and resolve it." >&2
+  exit 2
+fi
+
 echo "deploying $REF ($SHA) to $HOST"
 git archive --format=tar "$SHA" | "${SSH[@]}" "set -e
   d=/opt/amnezia-web/releases/$SHA
