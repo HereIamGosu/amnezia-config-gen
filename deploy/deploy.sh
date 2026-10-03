@@ -16,4 +16,4 @@ git archive --format=tar "$SHA" | "${SSH[@]}" "set -e
   d=/opt/amnezia-web/releases/$SHA
   rm -rf \"\$d\" && mkdir -p \"\$d\" && tar -xf - -C \"\$d\" && echo $SHA > \"\$d/REVISION\""
 "${SSH[@]}" "sh /opt/amnezia-web/releases/$SHA/deploy/remote-activate.sh $SHA"
-"${SSH[@]}" "curl -fsS -o /dev/null -w 'public /api/status: %{http_code}\n' --resolve valokda-amnezia.185-77-219-233.sslip.io:443:127.0.0.1 https://valokda-amnezia.185-77-219-233.sslip.io/api/status" || true
+"${SSH[@]}" "curl -fsS -o /dev/null -w 'public /api/status: %{http_code}\n' --resolve awgconfig.com:443:127.0.0.1 https://awgconfig.com/api/status" || true

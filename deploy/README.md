@@ -21,6 +21,7 @@ other services — never add `default_server` to the vhost and never touch other
 | image `amnezia-web:<sha>` | built per release, kept with the release for instant rollback |
 | `/etc/nginx/sites-available/amnezia-web` | copy of `deploy/nginx-amnezia.conf` |
 | `/etc/nginx/snippets/amnezia-proxy.conf` | copy of `deploy/nginx-amnezia-proxy.conf` |
+| `/etc/nginx/snippets/amnezia-site.conf` | copy of `deploy/nginx-amnezia-site.conf` (hardened site body, shared by HTTPS blocks) |
 | `/var/log/nginx/amnezia-web.{access,error}.log` | vhost logs |
 | `/etc/letsencrypt/live/<host>/` | certificate (webroot `/var/lib/letsencrypt`, `certbot.timer`) |
 | `/etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh` | `nginx -t && systemctl reload nginx` after renewal |
@@ -50,7 +51,7 @@ docker stats --no-stream amnezia-web                              # memory / CPU
 docker restart amnezia-web                                        # restart only this app
 curl -s http://127.0.0.1:13100/api/status                         # app health, bypassing nginx
 nginx -t && systemctl reload nginx                                # never restart/stop nginx
-certbot certificates -d valokda-amnezia.185-77-219-233.sslip.io   # certificate expiry
+certbot certificates -d awgconfig.com                             # certificate expiry
 df -h / && free -m && du -sh /var/log/nginx
 
 # traffic summary from the vhost log (log_format "amnezia", not "combined":
@@ -69,7 +70,7 @@ Nothing application-specific lives only on the server except the TLS key (re-iss
 1. Install Docker (with compose plugin), nginx, certbot; open 80/443.
 2. Point DNS to the new IP (for sslip.io the host name itself changes with the IP).
 3. `mkdir -p /opt/amnezia-web/releases /var/lib/letsencrypt`; copy `deploy/nginx-amnezia-proxy.conf`
-   to `/etc/nginx/snippets/amnezia-proxy.conf`.
+   and `deploy/nginx-amnezia-site.conf` to `/etc/nginx/snippets/amnezia-proxy.conf` / `amnezia-site.conf`.
 4. Install a temporary HTTP-only vhost serving `/.well-known/acme-challenge/` from
    `/var/lib/letsencrypt`, then `certbot certonly --webroot -w /var/lib/letsencrypt -d <host>`.
 5. Install `deploy/nginx-amnezia.conf` (with the new host), `nginx -t && systemctl reload nginx`.
