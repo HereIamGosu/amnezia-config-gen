@@ -7,6 +7,7 @@ const CACHE_TTL_MS = 30_000;
 const TARGETS = {
   api:    { host: 'api.cloudflareclient.com',    port: 443 },
   engage: { host: 'engage.cloudflareclient.com', port: 443 },
+  cidr:   { host: 'iplist.opencck.org',          port: 443 },
 };
 
 let cache = null; // { services, checkedAt, expiresAt }
@@ -36,15 +37,15 @@ const probeOne = (host, port) =>
   });
 
 const probeAll = async () => {
-  const [api, engage] = await Promise.all([
-    probeOne(TARGETS.api.host, TARGETS.api.port),
-    probeOne(TARGETS.engage.host, TARGETS.engage.port),
-  ]);
-  return { api, engage };
+  const entries = await Promise.all(
+    Object.entries(TARGETS).map(async ([name, { host, port }]) => [name, await probeOne(host, port)]),
+  );
+  return Object.fromEntries(entries);
 };
 
 module.exports = async (req, res) => {
   res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  res.setHeader('Cache-Control', 'no-store');
 
   if (req.method !== 'GET') {
     res.status(405).json({ ok: false, message: 'Method not allowed' });

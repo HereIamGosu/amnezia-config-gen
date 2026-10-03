@@ -70,7 +70,7 @@
         text-align: center;
       }
 
-      .status-grid {
+      .status-card-list {
         display: flex;
         flex-direction: column;
         gap: 12px;
@@ -98,7 +98,6 @@
       .status-indicator--ok      { background: #2ecc71; }
       .status-indicator--error   { background: #e74c3c; }
       .status-indicator--degraded{ background: #f39c12; }
-      .status-indicator--unknown { background: #aaa; }
 
       .status-card__info { flex: 1; min-width: 0; }
 
@@ -115,7 +114,7 @@
         line-height: 1.5;
       }
 
-      .status-card__badge {
+      .status-badge {
         font-size: 8px;
         font-weight: bold;
         padding: 3px 8px;
@@ -127,7 +126,6 @@
       .badge--ok       { background: #2ecc71; color: #fff; }
       .badge--error    { background: #e74c3c; color: #fff; }
       .badge--degraded { background: #f39c12; color: #fff; }
-      .badge--unknown  { background: #aaa;    color: #fff; }
 
       .last-checked {
         font-size: 8px;
@@ -157,7 +155,7 @@
       @media (max-width: 480px) {
         body { padding: 10px; }
         .status-card { flex-wrap: wrap; }
-        .status-card__badge { margin-left: auto; }
+        .status-badge { margin-left: auto; }
       }
     </style>
   </head>
@@ -176,13 +174,10 @@
       </div>
     </div>
 
+    <script src="static/live-status.js?v=2.7.3"></script>
     <script>
-      const SERVICE_LABELS = {
-        warp_api:    { name: 'Cloudflare WARP API', url: 'api.cloudflareclient.com' },
-        cidr_source: { name: 'Источник CIDR (iplist.opencck.org)', url: 'iplist.opencck.org' },
-      };
-
-      const STATUS_LABELS = { ok: 'ОК', error: 'ОШИБКА', degraded: 'НЕСТАБИЛЬНО', unknown: 'НЕИЗВЕСТНО' };
+      const content = document.getElementById('statusContent');
+      const lastChecked = document.getElementById('lastChecked');
 
       const formatMoscowTime = (isoStr) => {
         const d = new Date(isoStr);
@@ -194,54 +189,53 @@
         }) + ' (МСК)';
       };
 
-      const renderStatus = (data) => {
-        const content = document.getElementById('statusContent');
-        const lastChecked = document.getElementById('lastChecked');
-
-        if (!data || !data.services) {
-          content.className = 'error-msg';
-          content.textContent = 'Некорректный формат данных статуса.';
-          return;
-        }
-
-        const isInitial = data.checked_at === '1970-01-01T00:00:00Z';
-        if (isInitial) {
-          content.className = 'error-msg';
-          content.textContent = 'Данные мониторинга ещё не собраны. Healthcheck запускается раз в 30 минут через GitHub Actions.';
-          return;
-        }
-
-        let html = '<div class="status-grid">';
-        for (const [key, svc] of Object.entries(data.services)) {
-          const label = SERVICE_LABELS[key] || { name: key, url: '' };
-          const status = svc.status || 'unknown';
-          const code = svc.http_code != null ? `HTTP ${svc.http_code}` : '—';
-          html += `
-            <div class="status-card">
-              <div class="status-indicator status-indicator--${status}"></div>
-              <div class="status-card__info">
-                <div class="status-card__name">${label.name}</div>
-                <div class="status-card__detail">${label.url} &nbsp;·&nbsp; ${code}</div>
-              </div>
-              <span class="status-card__badge badge--${status}">${STATUS_LABELS[status] || status}</span>
-            </div>`;
-        }
-        html += '</div>';
-        content.className = '';
-        content.innerHTML = html;
-
-        lastChecked.hidden = false;
-        lastChecked.innerHTML = `<strong>Последняя проверка:</strong><br>${formatMoscowTime(data.checked_at)}`;
+      const showLoading = () => {
+        content.className = 'loading-msg';
+        content.textContent = 'Загрузка данных...';
+        lastChecked.hidden = true;
       };
 
-      fetch('https://raw.githubusercontent.com/HereIamGosu/amnezia-config-gen/healthcheck-snapshots/public/status.json', { cache: 'no-store' })
-        .then((r) => r.json())
-        .then(renderStatus)
-        .catch(() => {
-          const c = document.getElementById('statusContent');
-          c.className = 'error-msg';
-          c.textContent = 'Не удалось загрузить данные статуса.';
-        });
+      const showSnapshot = (snapshot) => {
+        content.className = '';
+        content.innerHTML = window.LiveStatus.renderCardsHtml(snapshot);
+        lastChecked.hidden = false;
+        lastChecked.textContent = '';
+        const label = document.createElement('strong');
+        label.textContent = 'Последняя проверка:';
+        lastChecked.append(label, document.createElement('br'), formatMoscowTime(snapshot.checkedAt),
+          document.createElement('br'), 'Обновляется автоматически раз в минуту, пока вкладка открыта.');
+      };
+
+      const showUnavailable = (err, { retryAt = null } = {}) => {
+        const reason = {
+          timeout: 'сервер не ответил вовремя',
+          rate_limited: 'слишком много запросов',
+        }[err && err.kind] || 'не удалось получить актуальные данные';
+        lastChecked.hidden = true;
+        content.className = 'error-msg';
+        content.textContent = '';
+        const title = document.createElement('strong');
+        title.textContent = 'Статус временно недоступен';
+        content.append(title, document.createElement('br'), reason);
+        if (retryAt != null) {
+          const at = new Date(retryAt).toLocaleTimeString('ru-RU', {
+            timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit',
+          });
+          content.append(document.createElement('br'), `Следующая попытка около ${at} (МСК).`);
+        }
+      };
+
+      if (window.LiveStatus) {
+        window.LiveStatus.createPoller({
+          load: () => window.LiveStatus.loadSnapshot(),
+          onLoading: showLoading,
+          onData: showSnapshot,
+          onError: showUnavailable,
+        }).start();
+      } else {
+        content.className = 'error-msg';
+        content.textContent = 'Статус временно недоступен.';
+      }
     </script>
   </body>
 </html>

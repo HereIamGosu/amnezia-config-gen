@@ -109,7 +109,13 @@ const applyServiceStatus = (id, result) => {
   }
 };
 
+// Shares the nginx /api/ rate-limit zone with the status modal: rapid tab switching
+// must not turn into a request burst.
+const HEALTH_MIN_GAP_MS = 15_000;
+let lastHealthFetchAt = -Infinity;
+
 const fetchHealthStatus = async () => {
+  lastHealthFetchAt = Date.now();
   const warnEl = document.getElementById('healthWarn');
   try {
     const res = await fetch('/api/healthcheck');
@@ -175,6 +181,9 @@ const switchLang = (lang) => {
 // F-02 / F-05 / F-07: Модальные окна
 // ─────────────────────────────────────────────────────────────
 
+// Live status poller of the status modal; created on first open, stopped on close.
+let statusPoller = null;
+
 /** Открывает любое модальное окно по id. */
 const openModal = (id) => {
   const el = document.getElementById(id);
@@ -189,6 +198,7 @@ const closeModal = (id) => {
   if (!el) return;
   el.style.display = 'none';
   el.setAttribute('aria-hidden', 'true');
+  if (id === 'statusModal' && statusPoller) statusPoller.stop();
 };
 
 /**
@@ -201,18 +211,7 @@ const openPreviewModal = (decodedConfig) => {
   openModal('configPreviewModal');
 };
 
-// ── Статус сервисов ──
-
-const STATUS_SERVICE_LABELS = {
-  warp_api:    { name: 'Cloudflare WARP API', url: 'api.cloudflareclient.com' },
-  cidr_source: { name: 'Источник CIDR (iplist.opencck.org)', url: 'iplist.opencck.org' },
-};
-const getStatusText = () => ({
-  ok:      t('status_ok',      'ОК'),
-  error:   t('status_error',   'ОШИБКА'),
-  degraded: t('status_degraded', 'НЕСТАБИЛЬНО'),
-  unknown: t('status_unknown', 'НЕИЗВЕСТНО'),
-});
+// ── Статус сервисов (live: /api/status + /api/healthcheck) ──
 
 const formatMoscowTime = (isoStr) => {
   const d = new Date(isoStr);
@@ -224,72 +223,92 @@ const formatMoscowTime = (isoStr) => {
   }) + t('status_msk_suffix', ' (МСК)');
 };
 
-const renderStatusModal = (data) => {
+const getLiveStatusLabels = () => {
+  const base = window.LiveStatus.DEFAULT_LABELS;
+  return {
+    ...base,
+    names: {
+      ...base.names,
+      warp_engage: t('status_engage_name', base.names.warp_engage),
+      cidr_source: t('status_cidr_name', base.names.cidr_source),
+      endpoint_pool: t('status_pool_name', base.names.endpoint_pool),
+    },
+    statusText: {
+      ok:       t('status_ok',       base.statusText.ok),
+      error:    t('status_error',    base.statusText.error),
+      degraded: t('status_degraded', base.statusText.degraded),
+    },
+    latency:      t('status_latency',      base.latency),
+    unreachable:  t('status_unreachable',  base.unreachable),
+    poolDetail:   t('status_pool_detail',  base.poolDetail),
+    poolFallback: t('status_pool_fallback', base.poolFallback),
+  };
+};
+
+const renderStatusModalLoading = () => {
+  const content     = document.getElementById('statusModalContent');
+  const lastChecked = document.getElementById('statusModalLastChecked');
+  if (content) { content.className = 'status-loading-msg'; content.textContent = t('status_loading', 'Загрузка...'); }
+  if (lastChecked) lastChecked.hidden = true;
+};
+
+const renderStatusModal = (snapshot) => {
   const content     = document.getElementById('statusModalContent');
   const lastChecked = document.getElementById('statusModalLastChecked');
   if (!content) return;
-
-  if (!data || !data.services) {
-    content.className = 'status-error-msg';
-    content.textContent = t('status_data_error', 'Некорректный формат данных.');
-    return;
-  }
-
-  if (data.checked_at === '1970-01-01T00:00:00Z') {
-    content.className = 'status-error-msg';
-    content.innerHTML = t('status_not_yet', 'Данные мониторинга ещё не собраны.<br>Healthcheck запускается каждые 30&nbsp;мин через GitHub Actions.');
-    return;
-  }
-
-  const STATUS_TEXT = getStatusText();
-  const cidrSourceName = t('status_cidr_name', 'Источник CIDR (iplist.opencck.org)');
-  const serviceLabels = {
-    warp_api:    { name: STATUS_SERVICE_LABELS.warp_api.name, url: STATUS_SERVICE_LABELS.warp_api.url },
-    cidr_source: { name: cidrSourceName, url: STATUS_SERVICE_LABELS.cidr_source.url },
-  };
-  let html = '<div class="status-card-list">';
-  for (const [key, svc] of Object.entries(data.services)) {
-    const label  = serviceLabels[key] || STATUS_SERVICE_LABELS[key] || { name: key, url: '' };
-    const status = svc.status || 'unknown';
-    const code   = svc.http_code != null ? `HTTP ${svc.http_code}` : '—';
-    html += `
-      <div class="status-card">
-        <div class="status-indicator status-indicator--${status}"></div>
-        <div class="status-card__info">
-          <div class="status-card__name">${label.name}</div>
-          <div class="status-card__detail">${label.url} &middot; ${code}</div>
-        </div>
-        <span class="status-badge badge--${status}">${STATUS_TEXT[status] || status}</span>
-      </div>`;
-  }
-  html += '</div>';
-
   content.className = '';
-  content.innerHTML = html;
-
+  content.innerHTML = window.LiveStatus.renderCardsHtml(snapshot, getLiveStatusLabels());
   if (lastChecked) {
     lastChecked.hidden = false;
-    lastChecked.innerHTML = `<strong>${t('status_last_checked_label', 'Последняя проверка:')}</strong><br>${formatMoscowTime(data.checked_at)}`;
+    lastChecked.textContent = '';
+    const label = document.createElement('strong');
+    label.textContent = t('status_last_checked_label', 'Последняя проверка:');
+    lastChecked.append(label, document.createElement('br'), formatMoscowTime(snapshot.checkedAt),
+      document.createElement('br'), t('status_auto_refresh', 'Обновляется автоматически раз в минуту, пока вкладка открыта.'));
   }
 };
 
-/** Открывает модал статуса и загружает данные из /status.json. */
-const openStatusModal = () => {
+const formatMoscowClock = (ms) => new Date(ms).toLocaleTimeString('ru-RU', {
+  timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit',
+}) + t('status_msk_suffix', ' (МСК)');
+
+const renderStatusModalError = (err, { retryAt = null } = {}) => {
   const content     = document.getElementById('statusModalContent');
   const lastChecked = document.getElementById('statusModalLastChecked');
-
-  if (content) { content.className = 'status-loading-msg'; content.textContent = t('status_loading', 'Загрузка...'); }
   if (lastChecked) lastChecked.hidden = true;
+  if (!content) return;
+  const reason = {
+    timeout:      t('status_reason_timeout', 'сервер не ответил вовремя'),
+    rate_limited: t('status_reason_rate_limited', 'слишком много запросов'),
+  }[err && err.kind] || t('status_reason_other', 'не удалось получить актуальные данные');
+  content.className = 'status-error-msg';
+  content.textContent = '';
+  const title = document.createElement('strong');
+  title.textContent = t('status_unavailable', 'Статус временно недоступен');
+  content.append(title, document.createElement('br'), reason);
+  if (retryAt != null) {
+    content.append(document.createElement('br'),
+      t('status_retry_at', 'Следующая попытка около {time}.').replace('{time}', formatMoscowClock(retryAt)));
+  }
+};
 
+/** Открывает модал статуса; данные обновляются, пока модал открыт и вкладка видима. */
+const openStatusModal = () => {
   openModal('statusModal');
   telemetry.trackEvent('status_modal_opened');
-
-  fetch('/status.json')
-    .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-    .then(renderStatusModal)
-    .catch(() => {
-      if (content) { content.className = 'status-error-msg'; content.textContent = t('status_load_fail', 'Не удалось загрузить данные статуса.'); }
+  if (!window.LiveStatus) {
+    renderStatusModalError(new Error('live-status.js not loaded'));
+    return;
+  }
+  if (!statusPoller) {
+    statusPoller = window.LiveStatus.createPoller({
+      load: () => window.LiveStatus.loadSnapshot(),
+      onLoading: renderStatusModalLoading,
+      onData: renderStatusModal,
+      onError: renderStatusModalError,
     });
+  }
+  statusPoller.start();
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -1946,7 +1965,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!document.hidden) fetchHealthStatus();
   }, 60_000);
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) fetchHealthStatus();
+    if (!document.hidden && Date.now() - lastHealthFetchAt >= HEALTH_MIN_GAP_MS) fetchHealthStatus();
   });
   fetchServiceStatus();
   document.querySelectorAll('.lang-btn').forEach((btn) => {
