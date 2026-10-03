@@ -987,6 +987,14 @@ def op_finalize(sysm, paths, quiet=False):
     """After the grace period: stop the old slot if production is still healthy; prune images."""
     state = load_state(paths)
     pending = (state or {}).get("pending_stop")
+    if state and not pending and not os.path.exists(paths.keep_old):
+        # A standby left running earlier (e.g. while keep-old-slot was set) is stopped the same
+        # way once the grace period after the last switch is over.
+        standby = describe_container(sysm, OTHER[state["active_slot"]])
+        deployed = dt.datetime.strptime(state.get("deployed_at") or now_iso(0), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc).timestamp()
+        if standby.get("running") and sysm.time() >= deployed + GRACE_S:
+            pending = {"slot": OTHER[state["active_slot"]], "after": deployed + GRACE_S, "after_iso": now_iso(deployed + GRACE_S)}
+            state["pending_stop"] = pending
     if not pending or sysm.time() < pending["after"]:
         if not quiet:
             print("nothing to finalize" if not pending else f"grace period until {pending['after_iso']}")
@@ -1002,7 +1010,7 @@ def op_finalize(sysm, paths, quiet=False):
     old_name = container_name(sysm, pending["slot"])
     keep = os.path.exists(paths.keep_old)
     if keep:
-        # Monitoring still expects fixed container names; a stopped slot would alert falsely.
+        # Operator override: keep the old slot running (monitoring judges slots by role either way).
         op.log(result="running", note=f"{old_name} kept running ({paths.keep_old})")
     elif old_name != container_name(sysm, state["active_slot"]) and sysm.docker_inspect(old_name):
         sysm.docker("stop", old_name)

@@ -644,3 +644,31 @@ class BootstrapRetirementTests(Base):
         ad.op_reconcile(self.sys, self.paths)
         self.assertFalse([c for c in self.sys.calls if c[:2] in (("docker", "pull"), ("docker", "run"))])
         self.assertEqual(self.state()["active_slot"], "blue")
+
+
+class StandbyNormalizationTests(Base):
+    def test_standby_kept_by_the_flag_is_stopped_once_the_flag_is_gone(self):
+        self.sys.publish(SHA_A)
+        ad.op_deploy(self.sys, self.paths)
+        os.makedirs(self.paths.conf_dir, exist_ok=True)
+        open(self.paths.keep_old, "w").close()
+        self.sys.clock += ad.GRACE_S + 1
+        ad.op_finalize(self.sys, self.paths)
+        self.assertIsNone(self.state()["pending_stop"])
+        self.assertTrue(self.sys.containers[ad.LEGACY_NAME]["State"]["Running"])
+        os.remove(self.paths.keep_old)
+        ad.op_finalize(self.sys, self.paths)
+        self.assertFalse(self.sys.containers[ad.LEGACY_NAME]["State"]["Running"], "standby stopped")
+        self.assertIn(ad.LEGACY_NAME, self.sys.containers, "stopped, not removed: bootstrap rollback stays possible")
+        self.assertEqual(self.sys.served_slot, "green")
+        self.assertEqual(ad.op_rollback(self.sys, self.paths), 0)
+        self.assertEqual(self.sys.served_slot, "blue")
+
+    def test_a_running_standby_inside_the_grace_period_is_left_alone(self):
+        self.sys.publish(SHA_A)
+        ad.op_deploy(self.sys, self.paths)
+        st = self.state()
+        st["pending_stop"] = None
+        ad.write_json(self.paths.state, st)
+        ad.op_finalize(self.sys, self.paths)
+        self.assertTrue(self.sys.containers[ad.LEGACY_NAME]["State"]["Running"])

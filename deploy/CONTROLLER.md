@@ -126,10 +126,11 @@ blindly.
 ## Old slot after the grace period
 
 `finalize` (scheduled once per deploy/rollback with `systemd-run`, grace + 30 s) stops the old slot
-only if the active slot is healthy and the public check passes. While
-`/etc/amnezia-deploy/keep-old-slot` exists it keeps the old slot running instead: the Telegram ops
-bot still watches the fixed container name `amnezia-web`, so stopping or replacing a slot would
-raise a false critical alert. The flag goes away when the bot follows the active slot (Phase 7).
+only if the active slot is healthy and the public check passes. A standby that is still running
+with no pending stop (for example one kept earlier) is stopped by the next `finalize` once the
+grace period after the last switch has passed. `/etc/amnezia-deploy/keep-old-slot` is an operator
+override that keeps the old slot running; it is not needed in normal operation, because the
+monitoring judges slots by role (ACTIVE/STANDBY), so a stopped standby is not an alert.
 
 ## Images and the bootstrap exception
 
