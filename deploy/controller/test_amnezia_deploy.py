@@ -54,6 +54,7 @@ class FakeSystem:
         self.unhealthy_digests = set()
         self.broken_paths = {}  # digest -> path answering 500
         self.public_down = False
+        self.api_429 = 0  # how many /api/* public answers nginx rate-limits next
         self.logs = []
         self.calls = []
 
@@ -159,6 +160,9 @@ class FakeSystem:
     def public_get(self, path, timeout=15):
         if self.public_down:
             raise ConnectionRefusedError("public down")
+        if path.startswith("/api/") and self.api_429 > 0:
+            self.api_429 -= 1
+            return 429, {"content-type": "application/json", "retry-after": "30"}, b"{}", 0.001
         return self._answer(self._by_port(ad.SLOTS[self.served_slot]["port"]), path)
 
     # helpers
@@ -447,6 +451,56 @@ class DeployTests(Base):
         self.assertEqual(self.state()["active_slot"], "blue", "the timer never overrides a pause")
         self.assertEqual(self.deploy(force=True), 0)
         self.assertEqual(self.state()["active_slot"], "green")
+
+
+class RateLimitTests(Base):
+    def test_transient_429_after_switch_is_waited_out(self):
+        self.sys.publish(SHA_A)
+        self.sys.api_429 = 3
+        self.assertEqual(ad.op_deploy(self.sys, self.paths), 0)
+        self.assertEqual((self.state()["active_slot"], self.sys.served_slot), ("green", "green"))
+
+    def test_persistent_429_cannot_prove_the_release_so_traffic_goes_back(self):
+        self.sys.publish(SHA_A)
+        self.sys.api_429 = 10**6
+        self.assertEqual(ad.op_deploy(self.sys, self.paths), 1)
+        self.assertEqual(self.attempt()["stage"], "PUBLIC_SMOKE")
+        self.assertEqual(self.sys.served_slot, "blue")
+        self.assertEqual(ad.upstream_slot(ad.read_text(self.paths.upstream_file)), "blue")
+        self.assertEqual(self.state()["active_slot"], "blue")
+
+    def test_reconcile_reads_the_revision_from_an_unlimited_path(self):
+        self.sys.api_429 = 10**6
+        self.assertEqual(ad.reconcile(self.sys, self.paths, ad.load_state(self.paths))["serving_slot"], "blue")
+
+
+class MonitoringContractTests(Base):
+    def test_active_revision_file_follows_the_served_release(self):
+        self.assertEqual(ad.read_text(self.paths.active_revision).strip(), LEGACY_SHA)
+        self.sys.publish(SHA_A)
+        ad.op_deploy(self.sys, self.paths)
+        self.assertEqual(ad.read_text(self.paths.active_revision).strip(), SHA_A)
+        ad.op_rollback(self.sys, self.paths)
+        self.assertEqual(ad.read_text(self.paths.active_revision).strip(), LEGACY_SHA)
+
+    def test_keep_old_slot_flag_keeps_the_previous_container_running(self):
+        self.sys.publish(SHA_A)
+        ad.op_deploy(self.sys, self.paths)
+        os.makedirs(self.paths.conf_dir, exist_ok=True)
+        open(self.paths.keep_old, "w").close()
+        self.sys.clock += ad.GRACE_S + 1
+        ad.op_finalize(self.sys, self.paths)
+        self.assertTrue(self.sys.containers[ad.LEGACY_NAME]["State"]["Running"])
+        self.assertIsNone(self.state()["pending_stop"])
+
+    def test_event_contract_has_no_secrets_and_required_fields(self):
+        self.sys.publish(SHA_A)
+        ad.op_deploy(self.sys, self.paths)
+        event = ad.read_json(self.paths.event)
+        for key in ("type", "result", "stage", "source_sha", "previous_sha", "digest", "duration_s", "timestamp"):
+            self.assertIn(key, event)
+        self.assertEqual((event["source_sha"], event["previous_sha"]), (SHA_A, LEGACY_SHA))
+        self.assertNotRegex(json.dumps(event).lower(), "token|password|secret|private")
 
 
 class StateAndRecoveryTests(Base):

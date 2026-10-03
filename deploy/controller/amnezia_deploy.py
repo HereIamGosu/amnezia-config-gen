@@ -56,6 +56,7 @@ PIDS_LIMIT = 128
 
 HEALTH_DEADLINE_S = 90  # image HEALTHCHECK: interval 30s, start period 10s
 PUBLIC_PROPAGATION_S = 15
+RATE_LIMIT_WAIT_S = 90  # nginx amnezia_api zone: 30 r/min per IP (a token every 2 s), Retry-After 30
 GRACE_S = 300
 KNOWN_GOOD_KEEP = 4
 SMOKE_LATENCY_LIMIT_S = 5.0
@@ -85,19 +86,22 @@ class Paths:
 
     def __getattr__(self, name):
         files = {"state": "state.json", "attempt": "last-attempt.json", "event": "last-event.json",
-                 "lock": "lock"}
+                 "lock": "lock", "active_revision": "active-revision"}
         if name in files:
             return os.path.join(self.state_dir, files[name])
         if name == "paused":
             return os.path.join(self.conf_dir, "paused")
+        if name == "keep_old":
+            return os.path.join(self.conf_dir, "keep-old-slot")
         raise AttributeError(name)
 
 
 class DeployError(Exception):
-    def __init__(self, stage, category, message):
+    def __init__(self, stage, category, message, retry_after=None):
         super().__init__(message)
         self.stage = stage
         self.category = category
+        self.retry_after = retry_after
 
 
 class NeedsReconciliation(Exception):
@@ -428,6 +432,10 @@ def wait_healthy(sysm, name, deadline_s=HEALTH_DEADLINE_S):
 
 def _check_response(stage, label, resp, expected_rev, json_body, legacy):
     status, headers, body, elapsed = resp
+    if status == 429:
+        retry = headers.get("retry-after", "")
+        raise DeployError(stage, "rate_limited", f"{label} answered 429 (nginx rate limit)",
+                          retry_after=int(retry) if retry.isdigit() else None)
     if status != 200:
         raise DeployError(stage, "http_status", f"{label} answered {status}")
     ctype = headers.get("content-type", "")
@@ -461,17 +469,24 @@ def smoke(sysm, stage, fetch, expected_rev, legacy=False):
 
 
 def public_smoke(sysm, expected_rev, legacy=False):
-    """Through nginx with real TLS/SNI/Host; retries while reloaded workers take over."""
-    end = sysm.time() + PUBLIC_PROPAGATION_S
+    """Through nginx with real TLS/SNI/Host; retries while reloaded workers take over.
+
+    A 429 comes from nginx's per-IP limit (127.0.0.1 is shared with local tools), not from the
+    release: it proves nothing either way, so it is waited out (Retry-After) up to a longer but
+    finite deadline. If the revision still cannot be proven, the caller switches back."""
+    started = sysm.time()
     while True:
         try:
             return smoke(sysm, "PUBLIC_SMOKE", sysm.public_get, expected_rev, legacy)
         except (DeployError, OSError) as err:
+            limited = isinstance(err, DeployError) and err.category == "rate_limited"
+            end = started + (RATE_LIMIT_WAIT_S if limited else PUBLIC_PROPAGATION_S)
             if sysm.time() >= end:
                 if isinstance(err, DeployError):
                     raise
                 raise DeployError("PUBLIC_SMOKE", "connection", str(err)) from None
-            sysm.sleep(1)
+            # The zone refills a token every 2 s, so a short pause is enough; Retry-After caps it.
+            sysm.sleep(min(getattr(err, "retry_after", None) or 5, 10, max(1, end - sysm.time())) if limited else 1)
 
 
 # --- nginx upstream file (the only nginx file this controller writes) ---------------------------
@@ -564,6 +579,12 @@ def load_state(paths):
     return state
 
 
+def write_active_revision(paths, sha):
+    """Plain SHA of the release nginx serves, for the VPS telemetry collector (revision_file)."""
+    if sha:
+        write_atomic(paths.active_revision, sha + "\n")
+
+
 def slot_record(state, prefix=""):
     return {"slot": state.get(f"{prefix}slot" if prefix else "active_slot"),
             "sha": state.get(f"{prefix}source_sha"), "digest": state.get(f"{prefix}image_digest"),
@@ -612,14 +633,20 @@ class Operation:
 
 # --- reconciliation ----------------------------------------------------------------------------
 def public_revision(sysm):
-    """'<sha>' if the public answer names a release, None for the legacy (headerless) release."""
-    try:
-        status, headers, _, _ = sysm.public_get("/api/status")
-    except OSError as err:
-        raise NeedsReconciliation(f"public endpoint unreachable: {err}") from None
-    if status != 200:
-        raise NeedsReconciliation(f"public /api/status answered {status}")
-    return headers.get("x-app-revision")
+    """'<sha>' if the public answer names a release, None for the legacy (headerless) release.
+    Uses `/`: it carries X-App-Revision like every response but has no nginx request limit."""
+    end = sysm.time() + 30
+    while True:
+        try:
+            status, headers, _, _ = sysm.public_get("/")
+            if status == 200:
+                return headers.get("x-app-revision")
+            problem = f"public / answered {status}"
+        except OSError as err:
+            problem = f"public endpoint unreachable: {err}"
+        if sysm.time() >= end:
+            raise NeedsReconciliation(problem)
+        sysm.sleep(5)
 
 
 def _matches(container, revision):
@@ -678,6 +705,7 @@ def reconcile(sysm, paths, state, fix=True):
         if not state["source_sha"] or validate_state(state):
             raise NeedsReconciliation(f"nginx serves {real} but its release cannot be identified safely")
         write_json(paths.state, state)
+        write_active_revision(paths, state["source_sha"])
         actions.append(f"state adopted serving slot {real}")
     return {"serving_slot": real, "public_revision": served, "upstream_file_slot": file_slot,
             "containers": containers, "actions": actions}
@@ -760,6 +788,7 @@ def _commit(paths, sysm, state, slot, sha, digest, bootstrap, old):
         "bootstrap_image": state.get("bootstrap_image"),
     }
     write_json(paths.state, new_state)
+    write_active_revision(paths, sha)
     return new_state
 
 
@@ -953,14 +982,18 @@ def op_finalize(sysm, paths, quiet=False):
         return 0
     public_smoke(sysm, state["source_sha"], legacy=bool(state.get("bootstrap")))
     old_name = container_name(sysm, pending["slot"])
-    if old_name != container_name(sysm, state["active_slot"]) and sysm.docker_inspect(old_name):
+    keep = os.path.exists(paths.keep_old)
+    if keep:
+        # Monitoring still expects fixed container names; a stopped slot would alert falsely.
+        op.log(result="running", note=f"{old_name} kept running ({paths.keep_old})")
+    elif old_name != container_name(sysm, state["active_slot"]) and sysm.docker_inspect(old_name):
         sysm.docker("stop", old_name)
     state["pending_stop"] = None
     write_json(paths.state, state)
     prune_images(sysm, state)
     op.finish("success", record_attempt=False)
     if not quiet:
-        print(f"stopped {old_name}")
+        print(f"kept {old_name} running" if keep else f"stopped {old_name}")
     return 0
 
 
@@ -1006,6 +1039,7 @@ def op_check(sysm, paths):
 def op_reconcile(sysm, paths):
     state = load_state(paths)
     evidence = reconcile(sysm, paths, state, fix=True)
+    write_active_revision(paths, load_state(paths)["source_sha"])
     sysm.log({"ts": now_iso(sysm.time()), "op": "reconcile", "result": "consistent", **{k: evidence[k] for k in ("serving_slot", "public_revision", "actions")}})
     print(json.dumps({k: evidence[k] for k in ("serving_slot", "public_revision", "upstream_file_slot", "actions")}, indent=2))
     return 0
@@ -1036,6 +1070,7 @@ def op_bootstrap(sysm, paths, legacy_sha):
         "deployed_at": now_iso(t), "last_success": now_iso(t), "pending_stop": None, "known_good": [],
         "bootstrap_image": (info.get("Config") or {}).get("Image"),
     })
+    write_active_revision(paths, legacy_sha)
     print(f"bootstrapped: blue = {LEGACY_NAME} ({legacy_sha}); upstream file written (not reloaded)")
     return 0
 
