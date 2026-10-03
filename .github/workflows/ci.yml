@@ -77,3 +77,67 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+  image:
+    name: Build image once, test that image
+    needs: ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      IMAGE: amnezia-web:ci-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      # The only build. Everything below tests or exports this exact image.
+      - name: Build image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        env:
+          # The action would otherwise upload a build-record artifact on every run, PRs included.
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          context: .
+          file: deploy/Dockerfile
+          build-args: APP_REVISION=${{ github.sha }}
+          tags: ${{ env.IMAGE }}
+          load: true
+          push: false
+          provenance: false
+
+      - name: Record image ID
+        run: |
+          docker image inspect -f '{{.Id}}' "$IMAGE" > "$RUNNER_TEMP/image-id.txt"
+          {
+            echo '## Image'
+            echo
+            echo "- source: \`${GITHUB_SHA}\`"
+            echo "- image ID (config digest): \`$(cat "$RUNNER_TEMP/image-id.txt")\`"
+            echo "- size: $(docker image inspect -f '{{.Size}}' "$IMAGE") bytes"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke-test the built image
+        run: bash scripts/ci/smoke-image.sh "$IMAGE" "$GITHUB_SHA"
+
+      # Hand-off for a future publish job (Phase 4, not enabled): it loads this archive,
+      # checks the image ID against image-id.txt and pushes it — it never rebuilds.
+      - name: Export tested image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash # -eo pipefail: a failed docker save must fail the step
+        run: |
+          docker save "$IMAGE" | gzip > "$RUNNER_TEMP/image.tar.gz"
+          gzip -t "$RUNNER_TEMP/image.tar.gz"
+
+      - name: Upload tested image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: image-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/image.tar.gz
+            ${{ runner.temp }}/image-id.txt
+          retention-days: 7
+          if-no-files-found: error

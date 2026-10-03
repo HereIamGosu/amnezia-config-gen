@@ -41,6 +41,22 @@ test('workflows grant no permissions by default and never use privileged trigger
   }
 });
 
+test('the image is built once and the smoke test runs against that image', () => {
+  const ci = workflows.find((w) => w.file === 'ci.yml').text;
+  assert.equal((ci.match(/docker\/build-push-action@/g) || []).length, 1, 'exactly one build');
+  assert.match(ci, /push:\s*false/);
+  assert.match(ci, /load:\s*true/);
+  assert.match(ci, /APP_REVISION=\$\{\{ github\.sha \}\}/);
+  assert.match(ci, /bash scripts\/ci\/smoke-image\.sh "\$IMAGE" "\$GITHUB_SHA"/);
+  assert.doesNotMatch(ci, /docker build\b/, 'no second, ad-hoc build');
+  assert.doesNotMatch(ci, /:latest\b/);
+  assert.match(ci, /DOCKER_BUILD_RECORD_UPLOAD: false/, 'no implicit build-record artifact (PRs included)');
+  assert.match(ci, /shell: bash # -eo pipefail[^\n]*\n\s+run: \|\n\s+docker save /, 'image export must run with pipefail');
+  assert.doesNotMatch(fs.readFileSync(path.join(root, 'scripts', 'ci', 'smoke-image.sh'), 'utf8').replace(/^\s*#.*$/gm, ''), /\|\s*grep/,
+    'smoke checks must not pipe into grep (false failures under pipefail on large bodies)');
+  assert.ok(fs.existsSync(path.join(root, 'scripts', 'ci', 'smoke-image.sh')));
+});
+
 test('Dependabot keeps pinned actions and the base image current', () => {
   const config = fs.readFileSync(path.join(root, '.github', 'dependabot.yml'), 'utf8');
   assert.match(config, /package-ecosystem: github-actions\s+directory: \//);
