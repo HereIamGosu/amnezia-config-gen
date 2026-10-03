@@ -249,6 +249,7 @@ const serveStatic = (req, res, pathname) => {
   if (!found) {
     const notFound = resolveStaticFile('/404.html');
     res.statusCode = 404;
+    res.setHeader('Cache-Control', 'no-cache'); // don't let /static/* immutable rule cache a miss
     if (notFound) {
       res.setHeader('Content-Type', MIME_TYPES['.html']);
       pipeFile(notFound.filePath, res);
