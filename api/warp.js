@@ -16,7 +16,7 @@ const { getCpsProtocol, validateCpsProtocol } = require('../src/server/cps/proto
 const { generateI2I5 } = require('../src/server/cpsExtraPackets');
 const { buildVpnLink } = require('../src/server/vpnLinkBuilder');
 const { getCompatibilityForGeneration } = require('../src/server/clientCompatibility');
-const { getTopEndpoints, updateEndpointHealth } = require('../src/server/endpointCache');
+const { getTopEndpoints } = require('../src/server/endpointCache');
 const { checkTcpLatency, pickBestEndpoint } = require('../src/server/endpointHealth');
 const { buildAwg3Interface } = require('../src/server/awg/configBuilder');
 const {
@@ -74,7 +74,7 @@ const PORT_ALLOWLIST = [2408, 500, 4500, 1701, 880, 8854];
 
 /**
  * Curated WARP endpoint IPs across 5 Cloudflare /24 subnets.
- * Used when KV cache is unavailable or returns no active candidates.
+ * Used when the endpoint registry returns no candidates.
  * Format: `{ ip, cidr24 }` — port is applied separately per request.
  */
 const FALLBACK_ENDPOINTS = [
@@ -555,9 +555,8 @@ Endpoint = ${peerEndpoint}`;
 const TCP_PRECHECK_TIMEOUT_MS = 800;
 
 /**
- * Pick best endpoint via TCP latency pre-check against KV candidates.
+ * Pick best endpoint via TCP latency pre-check against endpoint registry candidates.
  * Returns { ip, cidr24 } for the winner, or falls back to random from FALLBACK_ENDPOINTS.
- * Updates KV health records as a side-effect (non-blocking, errors suppressed).
  * @param {number} port
  * @param {string[]} [excludeCidrs] avoid these /24 subnets (used for count>1 diversity)
  * @returns {Promise<{ ip: string, cidr24: string, endpointSource: 'tcp_check'|'fallback' }>}
@@ -583,11 +582,6 @@ const selectBestEndpointIp = async (port, excludeCidrs = []) => {
       return { ...result, endpoint: ep };
     }),
   );
-
-  // Fire-and-forget KV health updates (non-blocking, errors don't fail the request)
-  Promise.all(checks.map((r) =>
-    updateEndpointHealth(r.endpoint.id, { latency_ms: r.latency_ms, success: r.success }).catch(() => {}),
-  )).catch(() => {});
 
   const best = pickBestEndpoint(checks);
   if (best) return { ip: best.ip, cidr24: best.cidr24, endpointSource: 'tcp_check' };
@@ -1190,7 +1184,7 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
   }
 
   // If template overrides engageHost — use hostname directly (no TCP pre-check needed).
-  // Otherwise run TCP pre-check against KV candidates to pick the best IP endpoint.
+  // Otherwise run TCP pre-check against registry candidates to pick the best IP endpoint.
   let peerEndpoint;
   let endpointSource = 'hostname';
   if (warpExtras.peerEndpoint) {

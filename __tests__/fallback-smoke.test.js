@@ -89,11 +89,7 @@ const installCidrFallbackMock = () => mock.method(https, 'request', (options, re
   return req;
 });
 
-test('fallback smoke: generation succeeds without Vercel KV', async () => {
-  const oldUrl = process.env.KV_REST_API_URL;
-  const oldToken = process.env.KV_REST_API_TOKEN;
-  delete process.env.KV_REST_API_URL;
-  delete process.env.KV_REST_API_TOKEN;
+test('fallback smoke: generation succeeds with the static endpoint registry', async () => {
   clearEndpointModules();
   const httpsMock = installWarpApiMock();
   net.createConnection = (opts, cb) => {
@@ -122,16 +118,10 @@ test('fallback smoke: generation succeeds without Vercel KV', async () => {
   } finally {
     httpsMock.mock.restore();
     net.createConnection = realNetCreateConnection;
-    if (oldUrl === undefined) delete process.env.KV_REST_API_URL;
-    else process.env.KV_REST_API_URL = oldUrl;
-    if (oldToken === undefined) delete process.env.KV_REST_API_TOKEN;
-    else process.env.KV_REST_API_TOKEN = oldToken;
   }
 });
 
 test('fallback smoke: failed endpoint candidates do not block a successful candidate', async () => {
-  delete process.env.KV_REST_API_URL;
-  delete process.env.KV_REST_API_TOKEN;
   clearEndpointModules();
   const httpsMock = installWarpApiMock();
   let attempt = 0;
@@ -182,9 +172,7 @@ test('fallback smoke: CIDR resolution uses antifilter when the primary source is
   }
 });
 
-test('fallback smoke: /api/status reports fallback registry source without KV', async () => {
-  delete process.env.KV_REST_API_URL;
-  delete process.env.KV_REST_API_TOKEN;
+test('fallback smoke: /api/status reports the static registry as fallback source', async () => {
   clearEndpointModules();
   const handler = require('../api/status');
   const res = makeRes();
@@ -209,4 +197,26 @@ test('fallback smoke: /api/iplist reports static when static CIDRs are the actua
   } finally {
     httpsMock.mock.restore();
   }
+});
+
+test('endpoint registry has no Vercel KV integration and serves the static seed list', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.resolve(__dirname, '..');
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  assert.equal(pkg.dependencies?.['@vercel/kv'], undefined);
+  for (const file of ['src/server/endpointCache.js', 'api/warp.js', 'api/status.js']) {
+    const source = fs.readFileSync(path.join(root, file), 'utf8');
+    assert.doesNotMatch(source, /@vercel\/kv|KV_REST_API/, file);
+  }
+
+  clearEndpointModules();
+  const registry = require('../src/server/endpointCache');
+  assert.deepEqual(Object.keys(registry).sort(), ['HARDCODED_FALLBACK', 'getFallbackEndpoints', 'getTopEndpoints']);
+  const top = await registry.getTopEndpoints({ port: 2408, limit: 3, excludeCidrs: ['162.159.192.0/24'] });
+  assert.equal(top.length, 3);
+  assert.ok(top.every((e) => e.port === 2408 && e.cidr24 !== '162.159.192.0/24'));
+  top[0].ip = 'mutated';
+  assert.notEqual(registry.HARDCODED_FALLBACK[0].ip, 'mutated');
+  assert.deepEqual(await registry.getTopEndpoints({ port: 500 }), []);
 });

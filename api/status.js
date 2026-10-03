@@ -9,27 +9,22 @@ const handler = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
 
   try {
-    let cacheSource = 'fallback';
     let activeEndpoints = 0;
     const portStatus = {};
 
-    // Try to get counts per port from KV (without leaking IPs)
+    // Candidate counts per port from the endpoint registry (without leaking IPs)
     const checks = await Promise.all(
       PORT_ALLOWLIST.map(async (port) => {
         const candidates = await getTopEndpoints({ port, limit: 20 });
         const active = candidates.filter((e) => ['active', 'candidate', 'manual_whitelist'].includes(e.status));
-        return { port, count: active.length, fromFallback: active.every((e) => e.tcp_latency_p50_ms == null) };
+        return { port, count: active.length };
       }),
     );
 
-    let anyFromKv = false;
-    for (const { port, count, fromFallback } of checks) {
-      if (!fromFallback) anyFromKv = true;
+    for (const { port, count } of checks) {
       activeEndpoints += count;
       portStatus[String(port)] = count === 0 ? 'down' : (count < 3 ? 'degraded' : 'ok');
     }
-    if (anyFromKv) cacheSource = 'kv';
-
     const hasDown = Object.values(portStatus).some((s) => s === 'down');
     const hasDegraded = Object.values(portStatus).some((s) => s === 'degraded');
     const statusStr = hasDown && hasDegraded ? 'degraded'
@@ -43,7 +38,7 @@ const handler = async (req, res) => {
       active_endpoints: activeEndpoints,
       ports: portStatus,
       message: statusStr === 'ok' ? 'All ports operational' : 'Some ports have reduced availability',
-      cache_source: cacheSource,
+      cache_source: 'fallback', // static registry; field kept for response compatibility
     });
   } catch {
     res.status(200).json({
