@@ -48,6 +48,20 @@ jobs:
       - name: Release consistency check
         run: npm run release:check
 
+      # public/static/* is cached for a year under ?v=<version>: changing it requires a
+      # version bump. Base = PR base, or the previous main commit for a push.
+      - name: Immutable asset version check
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch')
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = 0000000000000000000000000000000000000000 ]; then
+            echo 'No base commit (new branch); nothing to compare.'
+            exit 0
+          fi
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          node scripts/check-asset-version-bump.js "$BASE_SHA" HEAD
+
       - name: Tag version check
         if: github.ref_type == 'tag'
         env:
