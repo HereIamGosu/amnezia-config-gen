@@ -697,3 +697,12 @@ test('RU and EN locales define the live status strings', () => {
   }
   assert.equal(ru.status_not_yet, undefined, 'GitHub Actions snapshot text must be gone');
 });
+
+test('the committed status snapshot and its serving rules are gone', () => {
+  assert.equal(fs.existsSync(path.join(root, 'public', 'status.json')), false);
+  const vercel = JSON.parse(read('vercel.json'));
+  assert.equal(vercel.headers.some((rule) => rule.source === '/status.json'), false);
+  const csp = vercel.headers.flatMap((rule) => rule.headers).find((h) => h.key === 'Content-Security-Policy').value;
+  assert.doesNotMatch(csp, /raw\.githubusercontent\.com/, 'no browser code fetches GitHub snapshots any more');
+  assert.match(csp, /connect-src 'self'/);
+});
