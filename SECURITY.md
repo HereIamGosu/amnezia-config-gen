@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-This project tracks `main`. There are no LTS branches; security fixes ship to `main` and are deployed to <https://valokda-amnezia.vercel.app/> within hours.
+This project tracks `main`. There are no LTS branches; security fixes ship to `main` and are deployed to <https://awgconfig.com/> within hours.
 
 ## Reporting a Vulnerability
 
