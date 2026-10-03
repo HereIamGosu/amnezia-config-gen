@@ -12,7 +12,7 @@ test('result explanation loads before the main UI and stays hidden before genera
   const mainIndex = html.indexOf('static/script.js');
 
   assert.ok(modelIndex >= 0 && modelIndex < mainIndex);
-  assert.match(html, /static\/styles\.css\?v=2\.7\.3/);
+  assert.ok(html.includes(`static/styles.css?v=${JSON.parse(read('package.json')).version}"`));
   assert.match(html, /id="resultInfoModal" class="modal" role="dialog" aria-modal="true"/);
   assert.match(html, /aria-labelledby="resultInfoModalHeading" aria-hidden="true"/);
   assert.match(html, /id="resultSummaryFields"/);

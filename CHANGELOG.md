@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [2.7.4] - 2026-10-03
+
+### Fixed
+- `/api/status` no longer reports `degraded` when it simply has no endpoint health data. States are formalised as `ok` / `degraded` / `down` (measured) and `unknown` (no runtime data); the built-in endpoint list has no measurements, so the pool now reports `unknown`. The response adds `candidates` and `health_source`; existing fields are kept.
+- The main page banner appears only for measured problems (`degraded`/`down`) and is localized instead of showing the English API message.
+- The service status modal and `status.html` read live `/api/status` + `/api/healthcheck` (timeout, honest "temporarily unavailable" state, visible-tab polling, Retry-After handling) instead of a committed `status.json` / GitHub snapshot branch.
+- The result summary no longer labels the endpoint source as "KV": a TCP-checked candidate from the built-in list is shown as such.
+- Frontend asset cache keys move to `?v=2.7.4`, so browsers drop the 2.7.3 copies of changed scripts.
+- `presets-fallback.json` is served with `must-revalidate` as intended; the general immutable `/static/(.*)` rule used to override it because the last matching header rule wins.
+
+### Changed
+- `/api/healthcheck` also probes TCP reachability of `iplist.opencck.org` and sends `Cache-Control: no-store`.
+- Metrika telemetry `endpoint_source` reports `tcp_check` (was `kv`) for the same case.
+
+### Removed
+- Unused Vercel KV integration (the package was never installed); the endpoint registry keeps its `getTopEndpoints` contract and fallback behaviour.
+- Committed `public/status.json`, the `healthcheck.yml` snapshot workflow and the duplicate `test-templates.yml` workflow.
+
+### CI / Build
+- CI builds the Docker image once and tests that exact image (`scripts/ci/smoke-image.sh`); workflow permissions default to none; actions are pinned to commit SHAs; Dependabot watches actions and the Docker base image.
+- Docker base image pinned by digest (`node:22-alpine@sha256:0a7108bf…`).
+- New guard: CI fails when an immutable browser asset under `public/static/` changes without a package version bump.
+- `npm run release:check` verifies asset cache keys in `status.html` as well as `index.html`.
+
+### Notes
+- No protocol, AWG profile, CPS or endpoint-selection behaviour changes.
+- Part of this work (live status UI, KV removal, CI hardening) already ran on the self-hosted production between releases under package version 2.7.3; 2.7.4 is the first release that versions it.
+
 ## [2.7.3] - 2026-10-03
 
 ### Added

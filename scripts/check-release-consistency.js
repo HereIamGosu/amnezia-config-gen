@@ -72,6 +72,25 @@ function collectVersionedAssetUrls(html) {
   return urls;
 }
 
+// Every page that loads static/* assets: each needs ?v=<package version> on all of them.
+const HTML_ENTRY_POINTS = ['public/index.html', 'public/status.html'];
+
+function checkHtmlAssetVersions(htmlByFile, packageVersion) {
+  const failures = [];
+  for (const [file, html] of Object.entries(htmlByFile)) {
+    const assets = collectVersionedAssetUrls(html);
+    if (assets.length === 0) {
+      failures.push(`${file} has no versioned static assets`);
+    }
+    for (const asset of assets) {
+      if (asset.version !== packageVersion) {
+        failures.push(`${file} asset ${asset.url} uses ${asset.version}, expected ${packageVersion}`);
+      }
+    }
+  }
+  return failures;
+}
+
 function findStaleCurrentVersionClaims(relativePath, packageVersion) {
   if (!exists(relativePath)) {
     return [];
@@ -158,17 +177,10 @@ function main() {
     failures.push(`${sourceAuditPath} is missing`);
   }
 
-  const indexHtml = readText('public/index.html');
-  const assets = collectVersionedAssetUrls(indexHtml);
-  if (assets.length === 0) {
-    failures.push('public/index.html has no versioned static assets');
-  }
-
-  for (const asset of assets) {
-    if (asset.version !== packageVersion) {
-      failures.push(`public/index.html asset ${asset.url} uses ${asset.version}, expected ${packageVersion}`);
-    }
-  }
+  failures.push(...checkHtmlAssetVersions(
+    Object.fromEntries(HTML_ENTRY_POINTS.map((file) => [file, readText(file)])),
+    packageVersion,
+  ));
 
   failures.push(...findStaleCurrentVersionClaims('README.md', packageVersion));
   failures.push(...findStaleCurrentVersionClaims('README.ru.md', packageVersion));
@@ -195,9 +207,13 @@ function main() {
   process.stdout.write(`Release consistency check passed for ${packageVersion}\n`);
 }
 
-try {
-  main();
-} catch (error) {
-  process.stderr.write(`${error.message}\n`);
-  process.exit(1);
+if (require.main === module) {
+  try {
+    main();
+  } catch (error) {
+    process.stderr.write(`${error.message}\n`);
+    process.exit(1);
+  }
 }
+
+module.exports = { checkHtmlAssetVersions, collectVersionedAssetUrls, HTML_ENTRY_POINTS };

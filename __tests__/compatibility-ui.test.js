@@ -97,10 +97,12 @@ test('AWG 3.x frontend wiring is unique and uses centralized mode helpers', () =
   assert.match(script, /const getModeSuccessLabel =/);
 });
 
-test('release metadata and asset cache keys identify protocol evidence patch release 2.7.3', () => {
+test('asset cache keys use the package version', () => {
   const html = read('public/index.html');
+  const { version } = JSON.parse(read('package.json'));
   assert.match(html, /AWG 1\.5, 2\.0, 3\.0 (?:и|and) 3\.1/);
-  assert.equal((html.match(/\?v=2\.7\.3/g) || []).length, 5);
+  assert.equal(html.split(`?v=${version}"`).length - 1, 5);
+  assert.equal((html.match(/\?v=/g) || []).length, 5, 'no asset with a stale cache key');
   assert.doesNotMatch(html, /\?v=2\.5\.0/);
 });
 

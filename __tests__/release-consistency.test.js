@@ -10,6 +10,8 @@ const { test } = require('node:test');
 
 const root = path.resolve(__dirname, '..');
 const checker = path.join(root, 'scripts', 'check-release-consistency.js');
+const { version } = require('../package.json');
+const escaped = version.replace(/[.]/g, '[.]');
 
 function runChecker(args) {
   return spawnSync(process.execPath, [checker, ...args], {
@@ -20,22 +22,35 @@ function runChecker(args) {
 }
 
 test('release checker accepts the matching release tag', () => {
-  const result = runChecker(['--tag', 'v2.7.3']);
+  const result = runChecker(['--tag', `v${version}`]);
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /Release consistency check passed for 2\.7\.3/);
+  assert.match(result.stdout, new RegExp(`Release consistency check passed for ${escaped}`));
 });
 
 test('release checker rejects a tag/package version mismatch', () => {
   const result = runChecker(['--tag', 'v2.7.2']);
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /tag v2\.7\.2 does not match package\.json version 2\.7\.3/);
+  assert.match(result.stderr, new RegExp(`tag v2[.]7[.]2 does not match package[.]json version ${escaped}`));
 });
 
 test('release checker rejects a requested target version drift', () => {
   const result = runChecker(['--version', '2.7.2']);
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /package\.json version 2\.7\.3 does not match target 2\.7\.2/);
+  assert.match(result.stderr, new RegExp(`package[.]json version ${escaped} does not match target 2[.]7[.]2`));
+});
+
+test('release checker covers the cache keys of every HTML entry point', () => {
+  const { checkHtmlAssetVersions, HTML_ENTRY_POINTS } = require('../scripts/check-release-consistency');
+  assert.deepEqual(HTML_ENTRY_POINTS, ['public/index.html', 'public/status.html']);
+  const ok = '<script src="static/live-status.js?v=9.9.9"></script>';
+  assert.deepEqual(checkHtmlAssetVersions({ 'public/status.html': ok }, '9.9.9'), []);
+  assert.deepEqual(
+    checkHtmlAssetVersions({ 'public/status.html': ok.replace('9.9.9', '9.9.8') }, '9.9.9'),
+    ['public/status.html asset static/live-status.js?v=9.9.8 uses 9.9.8, expected 9.9.9'],
+  );
+  assert.deepEqual(checkHtmlAssetVersions({ 'public/status.html': '<p>no assets</p>' }, '9.9.9'),
+    ['public/status.html has no versioned static assets']);
 });
