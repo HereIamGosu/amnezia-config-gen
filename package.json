@@ -1,6 +1,6 @@
 {
   "name": "amnezia-config-generator",
-  "version": "2.7.2",
+  "version": "2.7.3",
   "description": "Web UI and HTTP API for generating AmneziaWG (.conf) configs, primarily for Cloudflare WARP.",
   "main": "api/warp.js",
   "license": "AGPL-3.0-only",
@@ -30,6 +30,9 @@
   "scripts": {
     "start": "vercel dev",
     "build": "echo \"No build step required\"",
+    "evidence:generate": "node scripts/generate-protocol-evidence.js",
+    "evidence:check": "node scripts/generate-protocol-evidence.js --check",
+    "release:check": "node scripts/check-release-consistency.js",
     "presets:fallback": "node scripts/dump-presets-fallback.js",
     "lint": "eslint . --max-warnings 0",
     "test": "node --test \"__tests__/**/*.test.js\"",

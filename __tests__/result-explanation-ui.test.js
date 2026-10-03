@@ -12,7 +12,7 @@ test('result explanation loads before the main UI and stays hidden before genera
   const mainIndex = html.indexOf('static/script.js');
 
   assert.ok(modelIndex >= 0 && modelIndex < mainIndex);
-  assert.match(html, /static\/styles\.css\?v=2\.7\.2/);
+  assert.match(html, /static\/styles\.css\?v=2\.7\.3/);
   assert.match(html, /id="resultInfoModal" class="modal" role="dialog" aria-modal="true"/);
   assert.match(html, /aria-labelledby="resultInfoModalHeading" aria-hidden="true"/);
   assert.match(html, /id="resultSummaryFields"/);
@@ -25,6 +25,8 @@ test('generation renders summary and diagnostics without replacing result action
 
   assert.match(script, /buildResultSummary\(data, resultState\)/);
   assert.match(script, /renderResultExplanation\(lastResultSummary\)/);
+  assert.match(script, /formatAwgCapabilityEvidence/);
+  assert.match(script, /awg_protocol_evidence/);
   assert.match(script, /variantRow = row\.cloneNode\(true\)/);
   assert.match(html, /post-gen-row__download/);
   assert.match(html, /post-gen-row__preview/);
@@ -57,6 +59,16 @@ test('RU and EN locales contain result, risk, and diagnostic labels', () => {
     'diagnostics_wifi_vs_mobile',
     'diagnostics_import_failed',
     'diagnostics_open_troubleshooting',
+    'awg_protocol_evidence',
+    'awg_capability_content_padding',
+    'awg_capability_disable_cookies',
+    'awg_capability_random_trailers',
+    'awg_capability_header_protection_key',
+    'awg_evidence_status_source_confirmed',
+    'awg_evidence_status_peer_dependent_disabled',
+    'awg_effective_state_active',
+    'awg_effective_state_blocked',
+    'awg_effective_value',
   ];
 
   keys.forEach((key) => {

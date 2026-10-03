@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [2.7.3] - 2026-10-03
+
+### Added
+- Machine-readable AWG 3.x capability evidence with pinned primary sources, status validation, and generated current protocol documentation.
+- Additive API evidence metadata and a concise RU/EN result explanation based on the effective serialized profile.
+- Structured CPS evidence metadata while preserving the existing `stable`/`experimental` API terms and verified-only Auto selection.
+- Release consistency guard: `npm run release:check` validates package metadata, lockfile root versions, current release notes, source audit presence, frontend asset cache versions, and release ledger/process documents.
+- CI now runs protocol evidence and release consistency checks, and validates `v*` tag names against `package.json`.
+- Release ledger and release process documentation under `docs/releases/`.
+
+### Changed
+- Package metadata and frontend static asset cache keys now point to `2.7.3`.
+- Current README text and the 2.7.3 source audit explain the local CPA/Cookies policy and the conservative RandomTrailers decision.
+
+### Security / Protocol safety
+- WARP keeps `S1..S4=0`, `H1..H4=1..4`, blocks `HeaderProtectionKey` and `RandomTrailers=on`; consistency tests compare these runtime rules with the evidence registry.
+
+### Notes
+- This patch does not add new protocol knobs, endpoint behaviour, or recovery flows. It documents and guards the protocol evidence/release consistency work for 2.7.3.
+
 ## [2.7.2] - 2026-09-19
 
 ### Fixed
@@ -16,6 +36,16 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Added
 - Реестр CPS-протоколов, RFC 9001/структурные тесты, source audit и матрица ручной проверки совместимости.
+
+## [2.7.1] - 2026-09-16
+
+### Fixed
+- AWG 3.0/3.1 WARP policy was corrected after the source audit: `ContentPaddingAddition = 10-100` is enabled by default for AWG 3.x, AWG 3.1 uses `DisableCookies = on` by default, and both remain explicitly disableable.
+- `RandomTrailers` and `HeaderProtectionKey` remain unavailable for WARP because they depend on peer-side support.
+- AWG 3.x public range parsing is kept on the `.conf` parser contract of `0..65535`.
+
+### Notes
+- Historical changelog backfill based on `docs/releases/2.7.1.md`, `docs/releases/2.7.1-source-audit.md`, and commit `a24a67c` dated 2026-09-16.
 
 ## [2.7.0] - 2026-07-05
 

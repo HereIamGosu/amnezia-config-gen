@@ -109,6 +109,36 @@
     'dynamic-message-headers',
     'random-trailers',
   ]);
+  const AWG_CAPABILITY_KEYS = new Set([
+    'contentPaddingAddition',
+    'disableCookies',
+    'randomTrailers',
+    'headerProtectionKey',
+  ]);
+  const AWG_CAPABILITY_STATUSES = new Set([
+    'verified',
+    'source-confirmed',
+    'experimental',
+    'peer-dependent-disabled',
+    'unknown',
+  ]);
+  const AWG_EFFECTIVE_STATES = new Set(['active', 'disabled', 'blocked']);
+  const SAFE_AWG_VALUE = /^[a-z0-9 .:_/-]{1,32}$/i;
+
+  const normalizeAwgCapabilities = (capabilities) => {
+    if (!capabilities || typeof capabilities !== 'object') return {};
+    return Object.fromEntries(Object.entries(capabilities).flatMap(([key, value]) => {
+      if (!AWG_CAPABILITY_KEYS.has(key) || !value || typeof value !== 'object') return [];
+      const status = AWG_CAPABILITY_STATUSES.has(value.status) ? value.status : 'unknown';
+      const effectiveState = AWG_EFFECTIVE_STATES.has(value.effectiveState) ? value.effectiveState : 'disabled';
+      const normalized = { status, effectiveState };
+      if (value.effectiveValue != null) {
+        const effectiveValue = String(value.effectiveValue).trim();
+        if (SAFE_AWG_VALUE.test(effectiveValue)) normalized.effectiveValue = effectiveValue;
+      }
+      return [[key, normalized]];
+    }));
+  };
 
   const getAwg = (response) => {
     const value = response.awg;
@@ -131,6 +161,7 @@
       experimentalFeatures: Array.isArray(value.experimentalFeatures)
         ? value.experimentalFeatures.filter((feature) => AWG_FEATURES.has(feature))
         : [],
+      capabilities: normalizeAwgCapabilities(value.capabilities),
       routerCompatibility: value.routerCompatibility === 'experimental/router-dependent'
         ? value.routerCompatibility
         : null,

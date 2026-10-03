@@ -522,6 +522,38 @@ const getAwgFeatureLabel = (feature) => ({
   'router-compatibility': t('awg_router_warning', 'Совместимость с роутерами зависит от реализации роутера'),
 }[feature] || feature);
 
+const getAwgCapabilityLabel = (capability) => ({
+  contentPaddingAddition: t('awg_capability_content_padding', 'ContentPaddingAddition'),
+  disableCookies: t('awg_capability_disable_cookies', 'DisableCookies'),
+  randomTrailers: t('awg_capability_random_trailers', 'RandomTrailers'),
+  headerProtectionKey: t('awg_capability_header_protection_key', 'HeaderProtectionKey'),
+}[capability] || capability);
+
+const getAwgEvidenceStatusLabel = (status) => ({
+  verified: t('awg_evidence_status_verified', 'Verified'),
+  'source-confirmed': t('awg_evidence_status_source_confirmed', 'Source-confirmed'),
+  experimental: t('awg_evidence_status_experimental', 'Experimental'),
+  'peer-dependent-disabled': t('awg_evidence_status_peer_dependent_disabled', 'Disabled: compatible peer required'),
+  unknown: t('awg_evidence_status_unknown', 'Unknown'),
+}[status] || t('awg_evidence_status_unknown', 'Unknown'));
+
+const getAwgEffectiveStateLabel = (state) => ({
+  active: t('awg_effective_state_active', 'active'),
+  disabled: t('awg_effective_state_disabled', 'disabled'),
+  blocked: t('awg_effective_state_blocked', 'blocked'),
+}[state] || t('awg_effective_state_disabled', 'disabled'));
+
+const formatAwgCapabilityEvidence = (capability) => {
+  const parts = [
+    getAwgEvidenceStatusLabel(capability.status),
+    getAwgEffectiveStateLabel(capability.effectiveState),
+  ];
+  if (capability.effectiveValue) {
+    parts.push(`${t('awg_effective_value', 'value')}: ${capability.effectiveValue}`);
+  }
+  return parts.join(' · ');
+};
+
 const appendAwgConstraint = (container, feature) => {
   const label = document.createElement('div');
   label.className = 'risk-label risk-label--info';
@@ -587,6 +619,16 @@ const renderResultExplanation = (summary) => {
         t('awg_experimental_features', 'Экспериментально'),
         summary.awg.experimentalFeatures.map(getAwgFeatureLabel).join(', '),
       );
+    }
+    if (summary.awg.capabilities && Object.keys(summary.awg.capabilities).length) {
+      appendSummaryField(
+        fields,
+        t('awg_protocol_evidence', 'Protocol evidence'),
+        t('awg_evidence_scope', 'Source-confirmed describes upstream behavior, not a live test on your network.'),
+      );
+      Object.entries(summary.awg.capabilities).forEach(([key, capability]) => {
+        appendSummaryField(fields, getAwgCapabilityLabel(key), formatAwgCapabilityEvidence(capability));
+      });
     }
     appendSummaryField(
       fields,

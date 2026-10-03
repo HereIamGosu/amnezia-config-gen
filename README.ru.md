@@ -99,7 +99,7 @@ npm start    # vercel dev → http://localhost:3000
 | **I6** | `AllowedIPs` по умолчанию **только IPv4**; IPv6 включается по тумблеру в Настройках (`?ipv6=1`). | Роутеры (GL.iNet, Keenetic, MikroTik) и мобильные клиенты имеют ограниченную ёмкость таблицы маршрутов; удвоение списка через IPv6 приводит к молчаливым отказам. |
 | **I7** | `mobile=1` форсит: `Jc=3, Jmin=64, Jmax=128, MTU=1280`, только IPv4 (перекрывает `ipv6=1`, убирает IPv6 из `Address` и `AllowedIPs`). | Мобильный профиль в пределах спецификации AWG 2.0; снижает расход батареи и молчаливые reset'ы на iOS. |
 | **I8** | Если одновременно `mobile=1` и `router=1`, сначала применяется `mobile`, потом `router` через `Math.min`/`Math.max`. На пересечении побеждает `router` (например, итог `Jc = 2`). | Правило композиции реализовано в `applyRouterModeCaps` после `applyMobileModeOverrides`. |
-| **I9** | `cps5=1` добавляет `I2`–`I5` только для AWG 2.0 при непустом `I1`. | Legacy и AWG 2.0 без `I1` не должны выдавать неполную CPS-цепочку. |
+| **I9** | `cps5=1` добавляет `I2`–`I5` для AWG 2.0/3.x при непустом `I1`. | Legacy и режимы AWG без `I1` не должны выдавать неполную CPS-цепочку. |
 | **I10** | `vpn://` проходит Qt `qCompress` round-trip и помечает payload как готовый сторонний AWG-профиль. | AmneziaVPN не должна переводить импорт готового конфига в сценарий установки протокола. |
 
 ## API
@@ -178,7 +178,7 @@ npm start    # vercel dev → http://localhost:3000
 
 `appliedExtras: { cps5, mobile }` в ответе сообщает что фактически применилось (`cps5` может быть `false` даже когда запрошено — Legacy-режим его молча игнорирует).
 
-Успешный ответ также содержит безопасные метаданные `cpsRequested`, `cpsResolved` и `cpsStability`. При `count=1..3` каждый элемент `configs[]` сообщает собственный результат; Auto разрешается независимо для каждого конфига. QUIC формирует защищённый 1200-байтный пакет в форме QUIC v1 Initial и делит его на соседние fixed-byte CPS-теги без усечения, но остаётся экспериментальным до подтверждения совместимости с WARP.
+Успешный ответ также содержит безопасные метаданные `cpsRequested`, `cpsResolved`, `cpsStability` и дополнительное поле `cpsEvidenceStatus`. При `count=1..3` каждый элемент `configs[]` сообщает собственный результат; Auto разрешается независимо для каждого конфига. QUIC формирует защищённый 1200-байтный пакет в форме QUIC v1 Initial и делит его на соседние fixed-byte CPS-теги без усечения, но остаётся экспериментальным до подтверждения совместимости с WARP. Static/SIP/STUN имеют статус stable и проектное evidence verified; QUIC/DNS/DTLS экспериментальны, TLS не поддерживается, Auto выбирает только stable.
 
 ## Совместимость
 
@@ -198,7 +198,7 @@ WireGuard peer, поэтому часть параметров для WARP фи�
 
 ### AWG 3.0 / 3.1 и Cloudflare WARP
 
-Cloudflare остаётся стандартным WireGuard peer. Генератор включает клиентские AWG 3.x механизмы, сохраняющие стандартный WireGuard parsing: junk/CPS packets, randomized rekey/handshake/keepalive timing, диапазон `PersistentKeepalive` и шифрованный `ContentPaddingAddition` (`10-100` по умолчанию). AWG 3.1 также использует `DisableCookies=on`: параметр подавляет только исходящие Cookie Reply этого клиента, не отключает обработку входящих cookies и обменивает локальный anti-DoS механизм на устойчивость к fingerprinting. `H1..H4` остаются `1..4`, `S1..S4` — нулевыми; Header Protection недоступен, а `RandomTrailers=on` всегда отклоняется, потому что stock WireGuard не разбирает удлинённые handshake datagrams.
+Cloudflare остаётся стандартным WireGuard peer. Генератор включает клиентские AWG 3.x механизмы: junk/CPS packets, рандомизированные интервалы rekey/handshake/keepalive, диапазон `PersistentKeepalive` и шифрованный `ContentPaddingAddition` (`10-100` по умолчанию; `off`, `0` или `0-0` отключают его). AWG 3.1 также использует `DisableCookies=on`: параметр подавляет локальную ветку Cookie Reply при нагрузке, сохраняет обработку входящих cookie и ослабляет локальную защиту от DoS ради устойчивости к fingerprinting. `H1..H4` остаются `1..4`, `S1..S4` — нулевыми; Header Protection недоступен, а `RandomTrailers=on` отклоняется: допуск трейлеров Cloudflare не документирован, а механизм зависит от поведения принимающего peer. См. [актуальные протокольные доказательства](docs/protocol-evidence.md); исторические release notes описывают состояние своих выпусков.
 
 Нужен современный AWG 3.x-compatible parser. Для AWG 3.1 рекомендуется AmneziaVPN 5.0.1.5+ или совместимый AWG 3.1 client. Совместимость роутеров зависит от их реализации. `vpn://` для AWG 3.0 намеренно недоступен, потому что исторический `protocol_version` не подтверждён; AWG 3.1 использует подтверждённый envelope `3.1`.
 

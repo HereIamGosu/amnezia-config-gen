@@ -7,6 +7,7 @@ export default [
     ignores: [
       '.claude/**',
       '.cursor/**',
+      '.kilo/worktrees/**',
       '.vercel/**',
       'node_modules/**',
     ],

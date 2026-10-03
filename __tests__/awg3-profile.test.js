@@ -44,8 +44,7 @@ test('profiles and response metadata describe only the WARP-safe subset', () => 
   assert.equal(AWG_PROFILES.awg3.supports.disableCookies, false);
   assert.equal(AWG_PROFILES.awg31.supports.disableCookies, true);
   const metadata = buildAwgMetadata('awg31', {
-    contentPaddingEnabled: true,
-    disableCookiesEnabled: true,
+    configText: 'ContentPaddingAddition = 10-100\nDisableCookies = on\nRandomTrailers = off',
     routerMode: true,
     vpnLinkAvailable: true,
   });
@@ -54,6 +53,15 @@ test('profiles and response metadata describe only the WARP-safe subset', () => 
   assert.equal(metadata.vpnImport.protocolVersion, '3.1');
   assert.equal(metadata.routerCompatibility, 'experimental/router-dependent');
   assert.deepEqual(metadata.experimentalFeatures, []);
+  assert.equal(metadata.capabilities.contentPaddingAddition.status, 'source-confirmed');
+  assert.equal(metadata.capabilities.contentPaddingAddition.effectiveState, 'active');
+  assert.equal(metadata.capabilities.contentPaddingAddition.effectiveValue, '10-100');
+  assert.equal(metadata.capabilities.disableCookies.status, 'source-confirmed');
+  assert.equal(metadata.capabilities.disableCookies.effectiveState, 'active');
+  assert.equal(metadata.capabilities.randomTrailers.status, 'peer-dependent-disabled');
+  assert.equal(metadata.capabilities.randomTrailers.effectiveState, 'blocked');
+  assert.equal(metadata.capabilities.headerProtectionKey.status, 'peer-dependent-disabled');
+  assert.equal(metadata.capabilities.headerProtectionKey.effectiveState, 'blocked');
   assert.ok(metadata.enabledFeatures.includes('content-padding-addition'));
   assert.ok(metadata.enabledFeatures.includes('disable-cookies'));
   assert.ok(metadata.disabledFeatures.some(({ feature }) => feature === 'random-trailers'));

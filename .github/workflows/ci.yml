@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
 
@@ -33,6 +34,16 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Protocol evidence check
+        run: npm run evidence:check
+
+      - name: Release consistency check
+        run: npm run release:check
+
+      - name: Tag version check
+        if: github.ref_type == 'tag'
+        run: node scripts/check-release-consistency.js --tag "${GITHUB_REF_NAME}"
 
       - name: Coverage (informational)
         run: |

@@ -12,7 +12,7 @@ const { createRateLimiter } = require('../src/server/_rateLimit');
 const warpLimiter = createRateLimiter({ windowMs: 60_000, maxHits: 10 });
 
 const { generateCpsPayload } = require('../src/server/cpsGenerator');
-const { validateCpsProtocol } = require('../src/server/cps/protocols');
+const { getCpsProtocol, validateCpsProtocol } = require('../src/server/cps/protocols');
 const { generateI2I5 } = require('../src/server/cpsExtraPackets');
 const { buildVpnLink } = require('../src/server/vpnLinkBuilder');
 const { getCompatibilityForGeneration } = require('../src/server/clientCompatibility');
@@ -1452,6 +1452,7 @@ const handler = async (req, res) => {
         cpsRequested: meta.cps.requested,
         cpsResolved: meta.cps.resolved,
         cpsStability: meta.cps.stability,
+        cpsEvidenceStatus: getCpsProtocol(meta.cps.resolved)?.evidenceStatus,
         vpnLink,
       };
     });
@@ -1485,8 +1486,7 @@ const handler = async (req, res) => {
       compatibility = undefined;
     }
     const awg = buildAwgMetadata(mode, {
-      contentPaddingEnabled: Boolean(warpExtras.contentPaddingAddition),
-      disableCookiesEnabled: warpExtras.disableCookies === 'on',
+      configText: configs[0]?.text,
       routerMode,
       vpnLinkAvailable: Boolean(configsOut[0]?.vpnLink),
     });
@@ -1500,6 +1500,7 @@ const handler = async (req, res) => {
       cpsRequested: firstMeta.cps?.requested,
       cpsResolved: firstMeta.cps?.resolved,
       cpsStability: firstMeta.cps?.stability,
+      cpsEvidenceStatus: getCpsProtocol(firstMeta.cps?.resolved)?.evidenceStatus,
       // New: array of all configs
       configs: configsOut,
       count: configsOut.length,

@@ -126,6 +126,31 @@ describe('buildResultSummary', () => {
           { feature: 'random-trailers', reason: 'requires-awg31-peer' },
           { feature: 'Endpoint = secret', reason: 'unexpected' },
         ],
+        capabilities: {
+          contentPaddingAddition: {
+            status: 'source-confirmed',
+            effectiveState: 'active',
+            effectiveValue: '10-100',
+          },
+          disableCookies: {
+            status: 'source-confirmed',
+            effectiveState: 'active',
+            effectiveValue: 'on',
+          },
+          randomTrailers: {
+            status: 'peer-dependent-disabled',
+            effectiveState: 'blocked',
+          },
+          headerProtectionKey: {
+            status: 'peer-dependent-disabled',
+            effectiveState: 'blocked',
+          },
+          unsafeCapability: {
+            status: 'verified',
+            effectiveState: 'active',
+            effectiveValue: 'PrivateKey = secret',
+          },
+        },
         experimentalFeatures: [],
         routerCompatibility: 'experimental/router-dependent',
         unexpected: 'PresharedKey = secret',
@@ -138,8 +163,46 @@ describe('buildResultSummary', () => {
       enabledFeatures: ['junk-packets', 'timing-ranges', 'content-padding-addition', 'disable-cookies'],
       disabledFeatures: ['header-protection', 'random-trailers'],
       experimentalFeatures: [],
+      capabilities: {
+        contentPaddingAddition: {
+          status: 'source-confirmed',
+          effectiveState: 'active',
+          effectiveValue: '10-100',
+        },
+        disableCookies: {
+          status: 'source-confirmed',
+          effectiveState: 'active',
+          effectiveValue: 'on',
+        },
+        randomTrailers: {
+          status: 'peer-dependent-disabled',
+          effectiveState: 'blocked',
+        },
+        headerProtectionKey: {
+          status: 'peer-dependent-disabled',
+          effectiveState: 'blocked',
+        },
+      },
       routerCompatibility: 'experimental/router-dependent',
     });
     assert.doesNotMatch(JSON.stringify(summary), /PrivateKey|PresharedKey|Endpoint = secret/);
+  });
+
+  test('keeps old AWG metadata responses compatible when capabilities are absent', () => {
+    const summary = buildResultSummary({
+      success: true,
+      mode: 'awg3',
+      content: 'base64',
+      awg: {
+        requestedVersion: '3.0',
+        profile: 'warp-safe',
+        enabledFeatures: ['content-padding-addition'],
+        disabledFeatures: [{ feature: 'header-protection' }],
+        experimentalFeatures: [],
+      },
+    }, {});
+
+    assert.deepEqual(summary.awg.capabilities, {});
+    assert.equal(summary.awg.version, '3.0');
   });
 });

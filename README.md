@@ -99,7 +99,7 @@ These rules are non-obvious, easy to break, and silently fatal. They are enforce
 | **I6** | `AllowedIPs` defaults to **IPv4-only**; IPv6 is opt-in via the Settings IPv6 toggle (`?ipv6=1`). | Routers (GL.iNet, Keenetic, MikroTik) and mobile clients have limited routing-table capacity; doubling the route count via IPv6 causes silent failures. |
 | **I7** | `mobile=1` overrides: `Jc=3, Jmin=64, Jmax=128, MTU=1280`, IPv4-only enforced (overrides `ipv6=1`, strips IPv6 from `Address` and `AllowedIPs`). | Mobile-tuned profile within AWG 2.0 spec; reduces battery drain and silent resets on iOS. |
 | **I8** | When both `mobile=1` and `router=1` are set, `mobile` is applied first, then `router` caps via `Math.min`/`Math.max`. Router caps win on overlap (e.g. final `Jc = 2`). | Composition rule applied in `applyRouterModeCaps` after `applyMobileModeOverrides`. |
-| **I9** | `cps5=1` adds `I2`–`I5` only for AWG 2.0 when `I1` is non-empty. | Legacy mode and AWG 2.0 without `I1` must not emit partial CPS chains. |
+| **I9** | `cps5=1` adds `I2`–`I5` for AWG 2.0/3.x when `I1` is non-empty. | Legacy mode and AWG modes without `I1` must not emit partial CPS chains. |
 | **I10** | `vpn://` must survive the Qt `qCompress` round-trip and identify the payload as a ready third-party AWG profile. | Prevents AmneziaVPN from treating the import as a protocol-installation flow. |
 
 ## API
@@ -178,7 +178,7 @@ With `?presets=key1,key2`: resolves domains to CIDRs. Response: `{ count, count4
 
 `appliedExtras: { cps5, mobile }` in the response reports what was actually applied (`cps5` may be `false` even when requested — Legacy mode silently ignores it).
 
-Successful responses also report secret-free `cpsRequested`, `cpsResolved`, and `cpsStability` fields. For `count=1..3`, every `configs[]` entry carries its own resolution; Auto is resolved independently for each config. QUIC is a protected 1200-byte QUIC v1 Initial-shaped packet split into adjacent fixed-byte CPS tags without truncation, but remains experimental until WARP interoperability is confirmed.
+Successful responses also report secret-free `cpsRequested`, `cpsResolved`, `cpsStability`, and additive `cpsEvidenceStatus` fields. For `count=1..3`, every `configs[]` entry carries its own resolution; Auto is resolved independently for each config. QUIC is a protected 1200-byte QUIC v1 Initial-shaped packet split into adjacent fixed-byte CPS tags without truncation, but remains experimental until WARP interoperability is confirmed. Static/SIP/STUN are stable with verified project evidence; QUIC/DNS/DTLS are experimental, TLS is unsupported, and Auto selects stable protocols only.
 
 ## Compatibility
 
@@ -199,7 +199,7 @@ invariants above). Selecting AWG 2.0 does **not** mean Cloudflare's server suppo
 
 ### AWG 3.0 / 3.1 and Cloudflare WARP
 
-Cloudflare remains a standard WireGuard peer. The generator enables client-side AWG 3.x features that preserve stock WireGuard parsing: junk/CPS packets, randomized rekey/handshake/keepalive timing, a `PersistentKeepalive` range, and encrypted `ContentPaddingAddition` (`10-100` by default). AWG 3.1 also defaults `DisableCookies=on`; this only suppresses this client's outgoing Cookie Replies, keeps incoming cookie handling intact, and trades away a local anti-DoS mechanism for fingerprint resistance. `H1..H4` stay `1..4`, `S1..S4` stay zero, Header Protection is unavailable, and `RandomTrailers=on` is always rejected because stock WireGuard does not parse extended handshake datagrams.
+Cloudflare remains a standard WireGuard peer. The generator enables client-side AWG 3.x features: junk/CPS packets, randomized rekey/handshake/keepalive timing, a `PersistentKeepalive` range, and encrypted `ContentPaddingAddition` (`10-100` by default, disableable with `off`, `0`, or `0-0`). AWG 3.1 also defaults `DisableCookies=on`; this suppresses the local under-load Cookie Reply branch, keeps incoming cookie handling intact, and reduces local anti-DoS protection as an anti-fingerprinting trade-off. `H1..H4` stay `1..4`, `S1..S4` stay zero, Header Protection is unavailable, and `RandomTrailers=on` is always rejected: Cloudflare's tolerance of trailers is undocumented and the mechanism depends on peer receive behaviour. See [current protocol evidence](docs/protocol-evidence.md); historical release notes describe their own snapshots.
 
 AWG 3.x requires a modern compatible parser. For AWG 3.1, AmneziaVPN 5.0.1.5+ or a compatible AWG 3.1 client is recommended. Router compatibility depends on the router implementation. AWG 3.0 `vpn://` export is deliberately unavailable because its historical `protocol_version` mapping has not been confirmed; AWG 3.1 uses the confirmed `3.1` envelope.
 

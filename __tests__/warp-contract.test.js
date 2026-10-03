@@ -321,6 +321,15 @@ test('contract: AWG31 POST accepts the same strict range fields and returns prot
     assert.match(conf, /^ContentPaddingAddition = 10-100$/m);
     assert.match(conf, /^RandomTrailers = off$/m);
     assert.match(conf, /^DisableCookies = on$/m);
+    assert.equal(body.awg.evidenceModelVersion, 1);
+    assert.deepEqual(body.awg.capabilities.contentPaddingAddition, {
+      status: 'source-confirmed', effectiveState: 'active', effectiveValue: '10-100',
+    });
+    assert.deepEqual(body.awg.capabilities.disableCookies, {
+      status: 'source-confirmed', effectiveState: 'active', effectiveValue: 'on',
+    });
+    assert.equal(body.awg.capabilities.randomTrailers.effectiveState, 'blocked');
+    assert.equal(body.awg.capabilities.headerProtectionKey.effectiveState, 'blocked');
     assert.equal(body.awg.vpnImport.protocolVersion, '3.1');
     assert.equal(body.awg.vpnImport.available, true);
     assert.ok(body.awg.enabledFeatures.includes('disable-cookies'));
@@ -354,9 +363,12 @@ test('contract: ContentPaddingAddition defaults on, accepts uint16 ranges, and c
       if (expectedLine) {
         assert.match(conf, new RegExp(`^${expectedLine}$`, 'm'));
         assert.ok(body.awg.enabledFeatures.includes('content-padding-addition'));
+        assert.equal(body.awg.capabilities.contentPaddingAddition.effectiveState, 'active');
+        assert.equal(body.awg.capabilities.contentPaddingAddition.effectiveValue, expectedLine.split(' = ')[1]);
       } else {
         assert.doesNotMatch(conf, /^ContentPaddingAddition\s*=/m);
         assert.ok(!body.awg.enabledFeatures.includes('content-padding-addition'));
+        assert.equal(body.awg.capabilities.contentPaddingAddition.effectiveState, 'disabled');
       }
     } finally {
       httpsMock.mock.restore();
@@ -413,6 +425,7 @@ test('contract: AWG31 DisableCookies is a strict local toggle with default on', 
       assert.equal(res.getStatus(), 200);
       assert.match(conf, new RegExp(`^DisableCookies = ${expected}$`, 'm'));
       assert.equal(body.awg.enabledFeatures.includes('disable-cookies'), expected === 'on');
+      assert.equal(body.awg.capabilities.disableCookies.effectiveState, expected === 'on' ? 'active' : 'disabled');
     } finally {
       httpsMock.mock.restore();
       net.createConnection = realNetCreate;
@@ -629,10 +642,12 @@ test('contract: CPS resolution metadata is returned per config and at top level'
     assert.equal(body.cpsRequested, 'quic');
     assert.equal(body.cpsResolved, 'quic');
     assert.equal(body.cpsStability, 'experimental');
+    assert.equal(body.cpsEvidenceStatus, 'experimental');
     for (const config of body.configs) {
       assert.equal(config.cpsRequested, 'quic');
       assert.equal(config.cpsResolved, 'quic');
       assert.equal(config.cpsStability, 'experimental');
+      assert.equal(config.cpsEvidenceStatus, 'experimental');
     }
   } finally {
     httpsMock.mock.restore();
@@ -652,6 +667,7 @@ test('contract: Auto resolves independently per config but only to stable CPS mo
       assert.equal(config.cpsRequested, 'auto');
       assert.ok(['static', 'sip', 'stun'].includes(config.cpsResolved));
       assert.equal(config.cpsStability, 'stable');
+      assert.equal(config.cpsEvidenceStatus, 'verified');
     }
   } finally {
     httpsMock.mock.restore();
