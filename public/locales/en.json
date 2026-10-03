@@ -221,6 +221,7 @@
   "result_summary_endpoint_hostname": "Default",
   "result_summary_endpoint_auto": "Auto",
   "result_summary_endpoint_manual": "Manual",
+  "result_summary_endpoint_tcp_check": "built-in list, TCP-checked",
   "result_summary_endpoint_fallback": "Fallback",
   "result_summary_routes_community": "community lists",
   "result_summary_routes_static_fallback": "Fallback source",

@@ -42,7 +42,7 @@ const getTelemetryContext = (mode, extra = {}) => {
 const getEndpointTelemetrySource = (data, endpointMode) => {
   if (endpointMode === 'ip') return 'manual';
   const source = data && data.configs && data.configs[0] && data.configs[0].endpointSource;
-  return source === 'tcp_check' ? 'kv' : source || 'unknown';
+  return source || 'unknown';
 };
 
 const getWarningCount = (warning) =>
@@ -449,7 +449,7 @@ const summaryValue = (key, value) => {
     endpointSource: {
       hostname: t('result_summary_endpoint_hostname', 'hostname'),
       manual: t('result_summary_endpoint_manual', 'manual'),
-      kv: 'KV',
+      tcpCheck: t('result_summary_endpoint_tcp_check', 'встроенный список, проверка TCP'),
       fallback: t('result_summary_endpoint_fallback', 'fallback'),
       unknown: t('result_summary_no_data', 'нет данных'),
     },

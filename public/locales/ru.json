@@ -221,6 +221,7 @@
   "result_summary_endpoint_hostname": "По умолчанию",
   "result_summary_endpoint_auto": "Автовыбор",
   "result_summary_endpoint_manual": "Вручную",
+  "result_summary_endpoint_tcp_check": "встроенный список, проверка TCP",
   "result_summary_endpoint_fallback": "Резервный",
   "result_summary_routes_community": "community lists",
   "result_summary_routes_static_fallback": "Резервный источник",

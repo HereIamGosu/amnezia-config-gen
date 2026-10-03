@@ -61,9 +61,9 @@
     const manual = state.warpEndpoint && state.warpEndpoint !== 'hostname';
 
     if (manual) return { mode: 'manual', source: 'manual' };
-    if (rawSource === 'tcp_check') return { mode: 'auto', source: 'kv' };
+    // tcp_check: candidate from the built-in endpoint list that passed the TCP pre-check.
+    if (rawSource === 'tcp_check') return { mode: 'auto', source: 'tcpCheck' };
     if (rawSource === 'fallback') return { mode: 'auto', source: 'fallback' };
-    if (rawSource === 'kv') return { mode: 'auto', source: 'kv' };
     if (rawSource === 'hostname' || state.warpEndpoint === 'hostname') {
       return { mode: 'hostname', source: 'hostname' };
     }
