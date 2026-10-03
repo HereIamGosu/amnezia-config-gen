@@ -30,6 +30,7 @@ other services — never add `default_server` to the vhost and never touch other
 Only committed code is deployed (`git archive`), so a dirty working tree never leaks to the server.
 
 ```bash
+export DEPLOY_HOST=root@<vps-ip>
 deploy/deploy.sh                 # deploy HEAD
 deploy/deploy.sh <sha|tag>       # deploy a specific revision; also the rollback command
 ```
@@ -52,10 +53,11 @@ nginx -t && systemctl reload nginx                                # never restar
 certbot certificates -d valokda-amnezia.185-77-219-233.sslip.io   # certificate expiry
 df -h / && free -m && du -sh /var/log/nginx
 
-# traffic summary from the vhost log
+# traffic summary from the vhost log (log_format "amnezia", not "combined":
+# ip [time] "request" status ... — fields are split on quotes so malformed request lines can't shift them)
 L=/var/log/nginx/amnezia-web.access.log
-awk '{print $7}' $L | sort | uniq -c | sort -rn          # status codes (4xx/5xx/429)
-awk '{print $5}' $L | sed 's/?.*//' | sort | uniq -c | sort -rn | head -20   # paths
+awk -F'"' '{split($3, a, " "); print a[1]}' $L | sort | uniq -c | sort -rn    # status codes (4xx/5xx/429)
+awk -F'"' '{split($2, a, " "); sub(/\?.*/, "", a[2]); print a[2]}' $L | sort | uniq -c | sort -rn | head -20   # paths
 awk '{print $1}' $L | sort | uniq -c | sort -rn | head -10                   # client IPs
 ```
 

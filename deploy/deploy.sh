@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Runs locally. Ships a committed revision to the VPS and activates it.
-# Usage: deploy/deploy.sh [git-ref]        (default: HEAD)
-#        DEPLOY_HOST=root@1.2.3.4 DEPLOY_KEY=~/.ssh/key deploy/deploy.sh v2.7.3
+# Usage: DEPLOY_HOST=root@<vps-ip> deploy/deploy.sh [git-ref]     (default ref: HEAD)
+#        DEPLOY_KEY=~/.ssh/key overrides the SSH key (default ~/.ssh/amnezia_vps)
 # Rollback = deploy the previous ref again (its image is reused, no rebuild).
 set -euo pipefail
 
-HOST="${DEPLOY_HOST:-root@185.77.219.233}"
+HOST="${DEPLOY_HOST:?set DEPLOY_HOST=user@host}"
 KEY="${DEPLOY_KEY:-$HOME/.ssh/amnezia_vps}"
 REF="${1:-HEAD}"
 SHA="$(git rev-parse --short=12 "${REF}^{commit}")"
