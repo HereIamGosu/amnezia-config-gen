@@ -1,0 +1,13 @@
+# Installed DISABLED. Enabling automatic deployment is an explicit owner decision:
+#   systemctl enable --now amnezia-deploy-check.timer
+[Unit]
+Description=amnezia-deploy: periodic check of the GHCR channel
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=2min
+RandomizedDelaySec=20s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -192,3 +192,6 @@ struc.py
 {,
 .vercel
 .understand-anything/
+
+# Python bytecode (deploy/controller tests)
+__pycache__/

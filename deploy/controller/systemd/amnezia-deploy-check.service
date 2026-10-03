@@ -1,0 +1,15 @@
+[Unit]
+Description=amnezia-deploy: deploy the latest CI-published image (blue/green, pull-based)
+Documentation=https://github.com/HereIamGosu/amnezia-config-gen/blob/main/deploy/CONTROLLER.md
+After=docker.service nginx.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# --automatic never overrides a pause (/etc/amnezia-deploy/paused).
+ExecStart=/usr/local/sbin/amnezia-deploy deploy --automatic
+SyslogIdentifier=amnezia-deploy
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+TimeoutStartSec=15min

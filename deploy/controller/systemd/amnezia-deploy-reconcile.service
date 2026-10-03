@@ -1,0 +1,19 @@
+[Unit]
+Description=amnezia-deploy: reconcile the active slot after boot (never deploys)
+Documentation=https://github.com/HereIamGosu/amnezia-config-gen/blob/main/deploy/CONTROLLER.md
+After=docker.service nginx.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Give restart-policy containers time to come up before judging the state.
+ExecStartPre=/bin/sleep 30
+ExecStart=/usr/local/sbin/amnezia-deploy reconcile
+SyslogIdentifier=amnezia-deploy
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+TimeoutStartSec=5min
+
+[Install]
+WantedBy=multi-user.target
