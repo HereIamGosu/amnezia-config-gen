@@ -1076,7 +1076,7 @@ const mergeConfigAfterWarp = async (id, token, initialConfig) => {
       return next;
     }
   } catch (e) {
-    if (process.env.VERCEL_ENV !== 'production') {
+    if (process.env.NODE_ENV !== 'production') {
       console.warn('GET reg/{id} after PATCH failed, using POST reg config:', e.message || e);
     }
   }

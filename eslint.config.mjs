@@ -36,9 +36,9 @@ export default [
     },
   },
   {
-    files: ['api/**/*.js', 'src/server/**/*.js'],
+    files: ['api/**/*.js', 'src/server/**/*.js', 'server.js'],
     rules: {
-      'no-console': 'off', // console allowed in serverless functions
+      'no-console': 'off', // console allowed in server code (stdout/stderr -> docker logs)
     },
   },
   {
