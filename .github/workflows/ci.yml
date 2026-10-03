@@ -98,6 +98,11 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+    # The publish job trusts these, not the artifact: only this job's own steps can set them.
+    outputs:
+      image_id: ${{ steps.record.outputs.image_id }}
+      archive_sha256: ${{ steps.export.outputs.archive_sha256 }}
+      config_digest: ${{ steps.export.outputs.config_digest }}
     env:
       IMAGE: amnezia-web:ci-${{ github.sha }}
     steps:
@@ -123,27 +128,37 @@ jobs:
           provenance: false
 
       - name: Record image ID
+        id: record
         run: |
           docker image inspect -f '{{.Id}}' "$IMAGE" > "$RUNNER_TEMP/image-id.txt"
+          echo "image_id=$(cat "$RUNNER_TEMP/image-id.txt")" >> "$GITHUB_OUTPUT"
           {
             echo '## Image'
             echo
             echo "- source: \`${GITHUB_SHA}\`"
-            echo "- image ID (config digest): \`$(cat "$RUNNER_TEMP/image-id.txt")\`"
+            echo "- image ID: \`$(cat "$RUNNER_TEMP/image-id.txt")\`"
             echo "- size: $(docker image inspect -f '{{.Size}}' "$IMAGE") bytes"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Smoke-test the built image
         run: bash scripts/ci/smoke-image.sh "$IMAGE" "$GITHUB_SHA"
 
-      # Hand-off for a future publish job (Phase 4, not enabled): it loads this archive,
-      # checks the image ID against image-id.txt and pushes it — it never rebuilds.
+      # Hand-off to the publish job: it checks this archive against the job outputs (sha256,
+      # image ID, config digest from manifest.json) and pushes it — it never rebuilds.
       - name: Export tested image
+        id: export
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash # -eo pipefail: a failed docker save must fail the step
         run: |
           docker save "$IMAGE" | gzip > "$RUNNER_TEMP/image.tar.gz"
           gzip -t "$RUNNER_TEMP/image.tar.gz"
+          archive_sha256="$(sha256sum < "$RUNNER_TEMP/image.tar.gz" | cut -d' ' -f1)"
+          config_digest="$(gzip -dc "$RUNNER_TEMP/image.tar.gz" | tar -xOf - manifest.json \
+            | jq -r '.[0].Config' | sed -e 's#^blobs/sha256/##' -e 's#\.json$##' -e 's#^#sha256:#')"
+          [[ "$config_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::no config digest in the archive"; exit 1; }
+          echo "archive_sha256=$archive_sha256" >> "$GITHUB_OUTPUT"
+          echo "config_digest=$config_digest" >> "$GITHUB_OUTPUT"
+          echo "- archive sha256: \`$archive_sha256\`, config digest: \`$config_digest\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload tested image
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -154,4 +169,56 @@ jobs:
             ${{ runner.temp }}/image.tar.gz
             ${{ runner.temp }}/image-id.txt
           retention-days: 7
+          if-no-files-found: error
+
+  # The only job with a write permission, and it never sees source code or builds anything:
+  # it publishes the archive the image job tested. No deployment happens here.
+  publish:
+    name: Publish tested image to GHCR
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REPO_IMAGE: ghcr.io/hereiamgosu/amnezia-config-gen
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/ci
+
+      - name: Download tested image
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: image-${{ github.sha }}
+          path: ${{ runner.temp }}/image
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Publish the tested image
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          ARTIFACT_DIR: ${{ runner.temp }}/image
+          OUT_DIR: ${{ runner.temp }}/release
+          EXPECTED_IMAGE_ID: ${{ needs.image.outputs.image_id }}
+          EXPECTED_ARCHIVE_SHA256: ${{ needs.image.outputs.archive_sha256 }}
+          EXPECTED_CONFIG_DIGEST: ${{ needs.image.outputs.config_digest }}
+          ALIAS: main
+          MAIN_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: bash scripts/ci/publish-image.sh
+
+      - name: Upload release record
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ github.sha }}
+          path: ${{ runner.temp }}/release/release.json
+          retention-days: 90
           if-no-files-found: error

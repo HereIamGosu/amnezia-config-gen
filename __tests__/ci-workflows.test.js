@@ -29,7 +29,9 @@ test('workflows grant no permissions by default and never use privileged trigger
     assert.match(text, /^permissions:\s*\{\}\s*$/m, `${file}: top-level permissions must be {}`);
     assert.doesNotMatch(text, /pull_request_target|workflow_run/, file);
     assert.doesNotMatch(text, /secrets\./, file);
-    assert.doesNotMatch(text, /:\s*write\b/, `${file}: no write permission in CI`);
+    const writes = text.match(/^\s+[\w-]+:\s*write\b.*$/gm) || [];
+    assert.deepEqual(writes.map((l) => l.trim()), file === 'ci.yml' ? ['packages: write'] : [],
+      `${file}: the only write permission is packages: write in the publish job`);
     for (const checkout of text.matchAll(/uses:\s*actions\/checkout@[0-9a-f]{40}[^\n]*\n\s+with:\n\s+persist-credentials:\s*(\w+)/g)) {
       assert.equal(checkout[1], 'false', `${file}: checkout must not persist credentials`);
     }
@@ -55,6 +57,40 @@ test('the image is built once and the smoke test runs against that image', () =>
   assert.doesNotMatch(fs.readFileSync(path.join(root, 'scripts', 'ci', 'smoke-image.sh'), 'utf8').replace(/^\s*#.*$/gm, ''), /\|\s*grep/,
     'smoke checks must not pipe into grep (false failures under pipefail on large bodies)');
   assert.ok(fs.existsSync(path.join(root, 'scripts', 'ci', 'smoke-image.sh')));
+});
+
+// Splits ci.yml into its job blocks (two-space indented keys under `jobs:`).
+const jobsOf = (text) => {
+  const body = text.slice(text.indexOf('\njobs:\n') + 7);
+  const parts = body.split(/^ {2}(?=[\w-]+:\s*$)/m).filter((p) => p.trim() && !p.trim().startsWith('#'));
+  return Object.fromEntries(parts.map((p) => [p.slice(0, p.indexOf(':')), p]));
+};
+
+test('only the publish job can write, only for pushes to main, and it never builds', () => {
+  const ci = workflows.find((w) => w.file === 'ci.yml').text;
+  const jobs = jobsOf(ci);
+  assert.deepEqual(Object.keys(jobs), ['ci', 'image', 'publish']);
+  for (const name of ['ci', 'image']) {
+    assert.match(jobs[name], /permissions:\n\s+contents: read\n/, `${name}: read-only`);
+    assert.doesNotMatch(jobs[name], /packages:|docker push|docker\/login-action/, `${name} must not publish`);
+  }
+  const publish = jobs.publish;
+  assert.match(publish, /needs: image\n/);
+  assert.match(publish, /if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'\n/);
+  assert.match(publish, /permissions:\n\s+contents: read\n\s+packages: write\n/);
+  assert.match(publish, /name: image-\$\{\{ github\.sha \}\}/, 'downloads the artifact of this exact commit');
+  assert.match(publish, /bash scripts\/ci\/publish-image\.sh/);
+  assert.match(publish, /SOURCE_SHA: \$\{\{ github\.sha \}\}/);
+  assert.match(publish, /password: \$\{\{ github\.token \}\}/);
+  // Trust root: the image job's outputs, which only its own steps can set — not the artifact.
+  for (const output of ['image_id', 'archive_sha256', 'config_digest']) {
+    assert.match(jobs.image, new RegExp(`${output}: \\$\\{\\{ steps\\.(record|export)\\.outputs\\.${output} \\}\\}`), `image job output ${output}`);
+    assert.match(publish, new RegExp(`: \\$\\{\\{ needs\\.image\\.outputs\\.${output} \\}\\}`), `publish uses ${output}`);
+  }
+  assert.doesNotMatch(publish, /build-push-action|docker build|setup-buildx|npm /, 'publish must not build');
+  const script = fs.readFileSync(path.join(root, 'scripts', 'ci', 'publish-image.sh'), 'utf8');
+  assert.match(script, /docker load/);
+  assert.doesNotMatch(script.replace(/^\s*#.*$/gm, ''), /docker build\b|buildx build|:latest/);
 });
 
 test('Dependabot keeps pinned actions and the base image current', () => {
