@@ -10,7 +10,7 @@ const PORT = 41000 + Math.floor(Math.random() * 2000);
 let server;
 
 before(async () => {
-  server = spawn(process.execPath, ['server.js'], { cwd: root, env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  server = spawn(process.execPath, ['server.js'], { cwd: root, env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', APP_REVISION: 'a'.repeat(40) }, stdio: ['ignore', 'pipe', 'pipe'] });
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('server did not start')), 10000);
     server.stdout.on('data', (chunk) => { if (String(chunk).includes('listening')) { clearTimeout(timer); resolve(); } });
@@ -35,4 +35,11 @@ test('HTML entry points and API are not cached', async () => {
   assert.equal(await cacheControl('/'), 'public, max-age=0, must-revalidate');
   assert.equal(await cacheControl('/status.html'), 'public, max-age=0, must-revalidate');
   assert.equal(await cacheControl('/api/status'), 'no-store');
+});
+
+test('every response names the release it comes from', async () => {
+  for (const pathname of ['/', '/api/status', '/static/script.js?v=1', '/missing']) {
+    const res = await fetch(`http://127.0.0.1:${PORT}${pathname}`, { method: 'HEAD' });
+    assert.equal(res.headers.get('x-app-revision'), 'a'.repeat(40), pathname);
+  }
 });

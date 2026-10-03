@@ -17,6 +17,8 @@ const HOST = process.env.HOST || '0.0.0.0';
 const MAX_BODY_BYTES = 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_DURATION_S = 10;
+// Commit SHA baked into the image (deploy/Dockerfile ARG APP_REVISION); anything else is ignored.
+const APP_REVISION = /^[0-9a-f]{7,40}$/.test(process.env.APP_REVISION || '') ? process.env.APP_REVISION : null;
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -281,6 +283,8 @@ const serveStatic = (req, res, pathname) => {
 };
 
 const server = http.createServer(async (req, res) => {
+  // Lets deployment checks prove which release answers (a commit SHA is not a secret).
+  if (APP_REVISION) res.setHeader('X-App-Revision', APP_REVISION);
   let url;
   try {
     url = new URL(req.url, 'http://localhost');

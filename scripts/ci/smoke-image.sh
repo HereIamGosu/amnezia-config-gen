@@ -68,12 +68,14 @@ get() {
   TYPE="$(grep -i '^content-type:' "$headers" | tr -d '\r' | cut -d' ' -f2- || true)"
   CACHE="$(grep -i '^cache-control:' "$headers" | tr -d '\r' | cut -d' ' -f2- || true)"
   CSP="$(grep -ci '^content-security-policy:' "$headers" || true)"
+  REV_HEADER="$(grep -i '^x-app-revision:' "$headers" | tr -d '\r' | cut -d' ' -f2- || true)"
   rm -f "$headers"
 }
 is_json() { python3 -c 'import json, sys; json.load(sys.stdin)' <<<"$BODY" 2>/dev/null; }
 
 get /
 check "/ -> 200 html" '[ "$CODE" = 200 ] && [[ "$TYPE" == text/html* ]]'
+check "responses carry X-App-Revision = ${REVISION}" '[ "$REV_HEADER" = "$REVISION" ]'
 check "/ references assets ?v=${VERSION}" 'grep -q "?v=${VERSION}\"" <<<"$BODY"'
 check "/ sends a Content-Security-Policy" '[ "$CSP" -ge 1 ]'
 get /status.html
