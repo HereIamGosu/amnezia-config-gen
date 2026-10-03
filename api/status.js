@@ -1,52 +1,55 @@
 // api/status.js
 // Public status endpoint — no auth, no IP leakage.
+// State semantics (ok | degraded | down | unknown): src/server/endpointStatus.js.
 
-const { getTopEndpoints, getFallbackEndpoints } = require('../src/server/endpointCache');
+const { getTopEndpoints } = require('../src/server/endpointCache');
+const { portState, overallState, isMeasured, MESSAGES } = require('../src/server/endpointStatus');
 const { PORT_ALLOWLIST } = require('./warp').__internals;
+
+const SELECTABLE = ['active', 'candidate', 'manual_whitelist'];
 
 const handler = async (req, res) => {
   res.setHeader('X-Robots-Tag', 'noindex, nofollow');
   res.setHeader('Cache-Control', 'no-store');
 
   try {
-    let activeEndpoints = 0;
-    const portStatus = {};
-
-    // Candidate counts per port from the endpoint registry (without leaking IPs)
-    const checks = await Promise.all(
+    // Per-port candidates from the endpoint registry (counts only, never IPs).
+    const perPort = await Promise.all(
       PORT_ALLOWLIST.map(async (port) => {
-        const candidates = await getTopEndpoints({ port, limit: 20 });
-        const active = candidates.filter((e) => ['active', 'candidate', 'manual_whitelist'].includes(e.status));
-        return { port, count: active.length };
+        const candidates = (await getTopEndpoints({ port, limit: 20 }))
+          .filter((e) => SELECTABLE.includes(e.status));
+        return { port: String(port), candidates };
       }),
     );
 
-    for (const { port, count } of checks) {
-      activeEndpoints += count;
-      portStatus[String(port)] = count === 0 ? 'down' : (count < 3 ? 'degraded' : 'ok');
+    const ports = {};
+    const candidates = {};
+    for (const entry of perPort) {
+      ports[entry.port] = portState(entry.candidates);
+      candidates[entry.port] = entry.candidates.length;
     }
-    const hasDown = Object.values(portStatus).some((s) => s === 'down');
-    const hasDegraded = Object.values(portStatus).some((s) => s === 'degraded');
-    const statusStr = hasDown && hasDegraded ? 'degraded'
-      : hasDown ? 'degraded'
-      : hasDegraded ? 'degraded'
-      : 'ok';
+    const status = overallState(Object.values(ports));
+    const measured = perPort.some((entry) => entry.candidates.some(isMeasured));
 
     res.status(200).json({
-      status: statusStr,
+      status,
       updated_at: new Date().toISOString(),
-      active_endpoints: activeEndpoints,
-      ports: portStatus,
-      message: statusStr === 'ok' ? 'All ports operational' : 'Some ports have reduced availability',
+      active_endpoints: Object.values(candidates).reduce((sum, n) => sum + n, 0),
+      ports,
+      candidates,
+      health_source: measured ? 'runtime' : 'none',
+      message: MESSAGES[status],
       cache_source: 'fallback', // static registry; field kept for response compatibility
     });
   } catch {
+    // Failing to compute the status is not evidence that endpoints are failing.
     res.status(200).json({
-      status: 'degraded',
+      status: 'unknown',
       updated_at: new Date().toISOString(),
-      active_endpoints: getFallbackEndpoints().length,
-      ports: Object.fromEntries(PORT_ALLOWLIST.map((p) => [String(p), 'degraded'])),
-      message: 'Status check failed; using hardcoded fallback',
+      active_endpoints: null,
+      ports: Object.fromEntries(PORT_ALLOWLIST.map((p) => [String(p), 'unknown'])),
+      health_source: 'none',
+      message: 'Status could not be computed',
       cache_source: 'fallback',
     });
   }

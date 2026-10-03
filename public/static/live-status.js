@@ -69,7 +69,8 @@
     };
   };
 
-  const POOL_STATUS = { ok: 'ok', degraded: 'degraded', down: 'error' };
+  // /api/status states (src/server/endpointStatus.js); unknown = no health data, not a failure.
+  const POOL_STATUS = { ok: 'ok', degraded: 'degraded', down: 'error', unknown: 'unknown' };
 
   /**
    * Validates both API payloads and turns them into a render-ready snapshot.
@@ -95,7 +96,7 @@
       throw new LiveStatusError('stale', `probe result is ${Math.round(ageMs / 1000)} s old`);
     }
 
-    const ports = statusData.ports && typeof statusData.ports === 'object' ? statusData.ports : {};
+    const counts = statusData.candidates && typeof statusData.candidates === 'object' ? statusData.candidates : {};
     const list = [
       { key: 'warp_api', ...api },
       { key: 'warp_engage', ...engage },
@@ -106,8 +107,9 @@
       key: 'endpoint_pool',
       status: poolStatus,
       activeEndpoints: Number.isFinite(statusData.active_endpoints) ? statusData.active_endpoints : null,
-      okPorts: Object.keys(ports).filter((port) => ports[port] === 'ok'),
+      candidatePorts: Object.keys(counts).filter((port) => Number(counts[port]) > 0),
       fallback: statusData.cache_source === 'fallback',
+      measured: statusData.health_source === 'runtime',
     });
 
     return { checkedAt: new Date(checkedAt).toISOString(), services: list };
@@ -139,11 +141,12 @@
       warp_engage: 'engage.cloudflareclient.com',
       cidr_source: 'iplist.opencck.org',
     },
-    statusText: { ok: 'ОК', error: 'ОШИБКА', degraded: 'НЕСТАБИЛЬНО' },
+    statusText: { ok: 'ОК', error: 'ОШИБКА', degraded: 'НЕСТАБИЛЬНО', unknown: 'НЕТ ДАННЫХ' },
     latency: '{ms} мс',
     unreachable: 'нет соединения',
-    poolDetail: 'активных: {count} · порты ОК: {ports}',
-    poolFallback: 'резервный список',
+    poolDetail: 'адресов: {count} · порты: {ports}',
+    poolFallback: 'встроенный список',
+    poolUnmeasured: 'доступность не измеряется',
     none: '—',
   });
 
@@ -151,9 +154,10 @@
     if (svc.key === 'endpoint_pool') {
       const parts = [fill(labels.poolDetail, {
         count: svc.activeEndpoints ?? labels.none,
-        ports: svc.okPorts.length ? svc.okPorts.join(', ') : labels.none,
+        ports: svc.candidatePorts.length ? svc.candidatePorts.join(', ') : labels.none,
       })];
       if (svc.fallback) parts.push(labels.poolFallback);
+      if (!svc.measured) parts.push(labels.poolUnmeasured);
       return parts.join(' · ');
     }
     const reach = svc.status === 'ok'

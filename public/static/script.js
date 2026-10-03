@@ -141,7 +141,10 @@ const fetchHealthStatus = async () => {
   }
 };
 
-/** Fetch /api/status and show degraded/down banner when needed. */
+/**
+ * Fetch /api/status and show a banner only for measured problems (degraded/down).
+ * `unknown` means there is no endpoint health data — not a failure, so no banner.
+ */
 const fetchServiceStatus = async () => {
   const bannerEl = document.getElementById('statusBanner');
   if (!bannerEl) return;
@@ -150,9 +153,15 @@ const fetchServiceStatus = async () => {
     if (!res.ok) return;
     const data = await res.json();
     if (data.status === 'degraded' || data.status === 'down') {
-      bannerEl.textContent = data.message || 'Сервис работает в ограниченном режиме — некоторые конфиги могут не генерироваться';
+      const key = data.status === 'down' ? 'status_banner_down' : 'status_banner_degraded';
+      // data-i18n lets applyTranslations() re-render the text when the locale loads or changes.
+      bannerEl.dataset.i18n = key;
+      bannerEl.textContent = key === 'status_banner_down'
+        ? t(key, 'WARP-endpoint не проходят проверку — генерация может не сработать')
+        : t(key, 'Часть WARP-endpoint не проходит проверку — генерация может работать нестабильно');
       bannerEl.hidden = false;
     } else {
+      delete bannerEl.dataset.i18n;
       bannerEl.hidden = true;
     }
   } catch {
@@ -237,11 +246,13 @@ const getLiveStatusLabels = () => {
       ok:       t('status_ok',       base.statusText.ok),
       error:    t('status_error',    base.statusText.error),
       degraded: t('status_degraded', base.statusText.degraded),
+      unknown:  t('status_unknown',  base.statusText.unknown),
     },
     latency:      t('status_latency',      base.latency),
     unreachable:  t('status_unreachable',  base.unreachable),
     poolDetail:   t('status_pool_detail',  base.poolDetail),
     poolFallback: t('status_pool_fallback', base.poolFallback),
+    poolUnmeasured: t('status_pool_unmeasured', base.poolUnmeasured),
   };
 };
 

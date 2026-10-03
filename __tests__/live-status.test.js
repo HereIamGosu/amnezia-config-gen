@@ -8,11 +8,14 @@ const LiveStatus = require('../public/static/live-status.js');
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
+// Shape of /api/status with the built-in endpoint list (no runtime health data).
 const STATUS = {
-  status: 'degraded',
+  status: 'unknown',
   updated_at: '2026-10-03T18:33:23.808Z',
   active_endpoints: 11,
-  ports: { 500: 'down', 2408: 'ok' },
+  ports: { 500: 'unknown', 2408: 'unknown' },
+  candidates: { 500: 0, 2408: 11 },
+  health_source: 'none',
   cache_source: 'fallback',
 };
 const HEALTH = {
@@ -40,12 +43,13 @@ test('buildSnapshot maps live API payloads to service cards', () => {
     ['warp_api', 'ok'],
     ['warp_engage', 'error'],
     ['cidr_source', 'ok'],
-    ['endpoint_pool', 'degraded'],
+    ['endpoint_pool', 'unknown'],
   ]);
   const pool = snap.services.at(-1);
   assert.equal(pool.activeEndpoints, 11);
-  assert.deepEqual(pool.okPorts, ['2408']);
+  assert.deepEqual(pool.candidatePorts, ['2408']);
   assert.equal(pool.fallback, true);
+  assert.equal(pool.measured, false);
   assert.equal(snap.services[1].latencyMs, null);
 });
 
@@ -54,6 +58,16 @@ test('buildSnapshot omits the CIDR card when the probe is absent and maps down t
   const snap = LiveStatus.buildSnapshot({ ...STATUS, status: 'down' }, health);
   assert.equal(snap.services.some((s) => s.key === 'cidr_source'), false);
   assert.equal(snap.services.at(-1).status, 'error');
+});
+
+test('measured pool states keep their meaning; unknown is a distinct state', () => {
+  const measured = { ...STATUS, health_source: 'runtime' };
+  assert.equal(LiveStatus.buildSnapshot({ ...measured, status: 'ok' }, HEALTH).services.at(-1).status, 'ok');
+  assert.equal(LiveStatus.buildSnapshot({ ...measured, status: 'degraded' }, HEALTH).services.at(-1).status, 'degraded');
+  assert.equal(LiveStatus.buildSnapshot({ ...measured, status: 'down' }, HEALTH).services.at(-1).status, 'error');
+  const pool = LiveStatus.buildSnapshot({ ...measured, status: 'ok' }, HEALTH).services.at(-1);
+  assert.equal(pool.measured, true);
+  assert.doesNotMatch(LiveStatus.renderCardsHtml({ checkedAt: HEALTH.checkedAt, services: [pool] }), /не измеряется/);
 });
 
 test('buildSnapshot rejects malformed payloads instead of rendering partial data', () => {
@@ -133,10 +147,12 @@ test('renderCardsHtml escapes every interpolated value', () => {
   const html = LiveStatus.renderCardsHtml(snap, labels);
   assert.doesNotMatch(html, /<img/);
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
-  assert.match(html, /status-indicator--degraded/);
   assert.match(html, /14 мс/);
   assert.match(html, /нет соединения/);
-  assert.match(html, /порты ОК: 2408 · резервный список/);
+  assert.match(html, /адресов: 11 · порты: 2408 · встроенный список · доступность не измеряется/);
+  assert.match(html, /status-indicator--unknown/);
+  assert.match(html, /НЕТ ДАННЫХ/);
+  assert.doesNotMatch(html, /НЕСТАБИЛЬНО|status-indicator--degraded/, 'missing telemetry is not shown as a failure');
 });
 
 const makeHarness = ({ hidden = false } = {}) => {
