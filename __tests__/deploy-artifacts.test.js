@@ -12,3 +12,9 @@ test('Docker base image is pinned by digest and stays on Node 22', () => {
   assert.match(from[0], /^FROM node:22-alpine@sha256:[0-9a-f]{64}$/);
   assert.equal(JSON.parse(read('package.json')).engines.node, '22.x');
 });
+
+test('Dependabot watches the Docker base image without Node major upgrades', () => {
+  const config = read('.github/dependabot.yml');
+  assert.match(config, /package-ecosystem: docker\s+directory: \/deploy/);
+  assert.match(config, /dependency-name: node\s+update-types: \["version-update:semver-major"\]/);
+});

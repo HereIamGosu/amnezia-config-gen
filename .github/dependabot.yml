@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # Base image of deploy/Dockerfile (node:22-alpine@sha256:...). Dependabot keeps the
+  # tag and refreshes the pinned digest; Node major upgrades are a deliberate decision.
+  - package-ecosystem: docker
+    directory: /deploy
+    schedule:
+      interval: weekly
+      day: monday
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
+    commit-message:
+      prefix: build
+    open-pull-requests-limit: 2
