@@ -86,7 +86,7 @@ class Paths:
 
     def __getattr__(self, name):
         files = {"state": "state.json", "attempt": "last-attempt.json", "event": "last-event.json",
-                 "lock": "lock", "active_revision": "active-revision"}
+                 "lock": "lock", "active_revision": "active-revision", "failed": "failed-digests.json"}
         if name in files:
             return os.path.join(self.state_dir, files[name])
         if name == "paused":
@@ -612,7 +612,9 @@ class Operation:
                        "target_digest": self.target.get("digest"), "slot": self.target.get("slot"),
                        "duration_s": round(self.sysm.time() - self.started, 1), **extra})
 
-    def finish(self, result, error=None, previous_sha=None, record_attempt=True):
+    def finish(self, result, error=None, previous_sha=None, record_attempt=True, record_event=True):
+        """last-attempt.json: every invocation that reached a decision (monitoring: the controller runs).
+        last-event.json: only real operations (deploy/rollback/...), never no-op or paused checks."""
         duration = round(self.sysm.time() - self.started, 1)
         rec = {**self.attempt, "ended_at": now_iso(self.sysm.time()), "result": result,
                "stage": self.current, "target": self.target, "duration_s": duration}
@@ -621,8 +623,11 @@ class Operation:
             rec["error"] = str(error)[:500]
         if record_attempt:
             write_json(self.paths.attempt, rec)
+        if not record_event:
+            self.log(result=result)
+            return
         write_json(self.paths.event, {
-            "type": self.kind, "result": result, "stage": self.current,
+            "event_id": self.id, "type": self.kind, "result": result, "stage": self.current,
             "source_sha": self.target.get("sha"), "previous_sha": previous_sha,
             "digest": self.target.get("digest"), "slot": self.target.get("slot"),
             "duration_s": duration, "timestamp": now_iso(self.sysm.time()), "operation_id": self.id,
@@ -785,7 +790,8 @@ def _commit(paths, sysm, state, slot, sha, digest, bootstrap, old):
         "deployed_at": now_iso(t), "last_success": now_iso(t),
         "pending_stop": {"slot": old["slot"], "after": t + GRACE_S, "after_iso": now_iso(t + GRACE_S)},
         "known_good": known[:KNOWN_GOOD_KEEP],
-        "bootstrap_image": state.get("bootstrap_image"),
+        # Kept only while the bootstrap release is active or the rollback target.
+        "bootstrap_image": state.get("bootstrap_image") if (bootstrap or old["bootstrap"]) else None,
     }
     write_json(paths.state, new_state)
     write_active_revision(paths, sha)
@@ -794,6 +800,7 @@ def _commit(paths, sysm, state, slot, sha, digest, bootstrap, old):
 
 def op_deploy(sysm, paths, sha=None, force=False, automatic=False):
     if os.path.exists(paths.paused) and (automatic or not force):
+        Operation(sysm, paths, "deploy").finish("paused", record_event=False)
         print("paused: no deployment (use `deploy --force` to override manually)")
         return 0
     op = Operation(sysm, paths, "deploy")
@@ -809,8 +816,15 @@ def op_deploy(sysm, paths, sha=None, force=False, automatic=False):
         target = OTHER[state["active_slot"]]
         op.target = {"sha": cand.sha, "digest": cand.digest, "slot": target}
         if cand.digest == state.get("image_digest"):
-            op.log(result="noop", note="already active")
+            op.finish("noop", record_event=False)
             print(f"no-op: {cand.digest} is already active in {state['active_slot']}")
+            return 0
+        failed = read_json(paths.failed) or {}
+        if automatic and cand.digest in failed:
+            # Do not retry a digest that already failed every timer tick (and do not spam events):
+            # wait for a new release, or an explicit manual `amnezia-deploy deploy`.
+            op.finish("skipped_failed", record_event=False)
+            print(f"skipped: {cand.digest} failed at {failed[cand.digest].get('stage')}; waiting for a new release")
             return 0
         op.stage("PULL")
         sysm.docker("pull", cand.ref, timeout=600)
@@ -839,6 +853,10 @@ def op_deploy(sysm, paths, sha=None, force=False, automatic=False):
         return 2
     except DeployError as err:
         op.current = err.stage
+        if op.target.get("digest"):
+            failed = read_json(paths.failed) or {}
+            failed[op.target["digest"]] = {"stage": err.stage, "at": now_iso(sysm.time()), "sha": op.target.get("sha")}
+            write_json(paths.failed, dict(list(failed.items())[-10:]))
         op.finish("failed", err, previous_sha=(state or {}).get("source_sha"))
         print(f"FAILED at {err.stage}: {err}", file=sys.stderr)
         return 1
@@ -1040,6 +1058,7 @@ def op_reconcile(sysm, paths):
     state = load_state(paths)
     evidence = reconcile(sysm, paths, state, fix=True)
     write_active_revision(paths, load_state(paths)["source_sha"])
+    Operation(sysm, paths, "reconcile").finish("consistent", record_event=False)
     sysm.log({"ts": now_iso(sysm.time()), "op": "reconcile", "result": "consistent", **{k: evidence[k] for k in ("serving_slot", "public_revision", "actions")}})
     print(json.dumps({k: evidence[k] for k in ("serving_slot", "public_revision", "upstream_file_slot", "actions")}, indent=2))
     return 0

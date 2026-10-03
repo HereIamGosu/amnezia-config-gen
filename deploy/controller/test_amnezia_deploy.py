@@ -572,3 +572,75 @@ class LockTests(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AutomationTests(Base):
+    """Timer-facing behaviour: no event spam, visible liveness, no retry storms."""
+
+    def test_events_carry_a_stable_event_id(self):
+        self.sys.publish(SHA_A)
+        ad.op_deploy(self.sys, self.paths)
+        event = ad.read_json(self.paths.event)
+        self.assertEqual(event["event_id"], event["operation_id"])
+        self.assertRegex(event["event_id"], r"^[0-9a-f]{12}$")
+
+    def test_noop_and_paused_runs_record_an_attempt_but_no_event(self):
+        self.sys.publish(SHA_A)
+        ad.op_deploy(self.sys, self.paths)
+        event = ad.read_json(self.paths.event)
+        ad.op_deploy(self.sys, self.paths, automatic=True)  # CI published nothing new: :main unchanged
+        self.assertEqual(self.attempt()["result"], "noop")
+        self.assertEqual(ad.read_json(self.paths.event), event)
+        os.makedirs(self.paths.conf_dir, exist_ok=True)
+        ad.write_json(self.paths.paused, {"reason": "test"})
+        ad.op_deploy(self.sys, self.paths, automatic=True)
+        self.assertEqual(self.attempt()["result"], "paused")
+        self.assertEqual(ad.read_json(self.paths.event), event)
+
+    def test_reconcile_records_a_consistent_attempt(self):
+        ad.op_reconcile(self.sys, self.paths)
+        self.assertEqual((self.attempt()["type"], self.attempt()["result"]), ("reconcile", "consistent"))
+
+    def test_a_failed_digest_is_not_retried_by_the_timer_but_can_be_retried_by_hand(self):
+        digest = self.sys.publish(SHA_A)
+        self.sys.unhealthy_digests.add(digest)
+        self.assertEqual(ad.op_deploy(self.sys, self.paths, automatic=True), 1)
+        failed_event = ad.read_json(self.paths.event)
+        runs = len([c for c in self.sys.calls if c[:2] == ("docker", "run")])
+        self.assertEqual(ad.op_deploy(self.sys, self.paths, automatic=True), 0)
+        self.assertEqual(self.attempt()["result"], "skipped_failed")
+        self.assertEqual(ad.read_json(self.paths.event), failed_event, "no new event every timer tick")
+        self.assertEqual(len([c for c in self.sys.calls if c[:2] == ("docker", "run")]), runs)
+        self.sys.unhealthy_digests.clear()
+        self.assertEqual(ad.op_deploy(self.sys, self.paths), 0, "a manual deploy retries explicitly")
+        self.assertEqual(self.state()["image_digest"], digest)
+
+    def test_a_new_release_after_a_failed_one_is_deployed_automatically(self):
+        bad = self.sys.publish(SHA_A)
+        self.sys.unhealthy_digests.add(bad)
+        ad.op_deploy(self.sys, self.paths, automatic=True)
+        good = self.sys.publish(SHA_B)
+        self.assertEqual(ad.op_deploy(self.sys, self.paths, automatic=True), 0)
+        self.assertEqual(self.state()["image_digest"], good)
+
+
+class BootstrapRetirementTests(Base):
+    def test_state_stops_referencing_bootstrap_after_two_ghcr_releases(self):
+        self.sys.publish(SHA_A)
+        ad.op_deploy(self.sys, self.paths)
+        self.assertTrue(self.state()["previous_bootstrap"])
+        self.assertIsNotNone(self.state()["bootstrap_image"])
+        self.sys.clock += ad.GRACE_S + 1
+        self.sys.publish(SHA_B)
+        ad.op_deploy(self.sys, self.paths)
+        st = self.state()
+        self.assertEqual((st["source_sha"], st["previous_source_sha"]), (SHA_B, SHA_A))
+        self.assertFalse(st["bootstrap"] or st["previous_bootstrap"])
+        self.assertIsNone(st["bootstrap_image"])
+        self.assertNotIn(LEGACY_SHA, json.dumps(st))
+
+    def test_reconcile_never_discovers_or_deploys(self):
+        self.sys.publish(SHA_A)
+        ad.op_reconcile(self.sys, self.paths)
+        self.assertFalse([c for c in self.sys.calls if c[:2] in (("docker", "pull"), ("docker", "run"))])
+        self.assertEqual(self.state()["active_slot"], "blue")
