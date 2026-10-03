@@ -26,6 +26,9 @@ other services — never add `default_server` to the vhost and never touch other
 | `/etc/letsencrypt/live/<host>/` | certificate (webroot `/var/lib/letsencrypt`, `certbot.timer`) |
 | `/etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh` | `nginx -t && systemctl reload nginx` after renewal |
 
+CI (lint, tests, build-once image smoke) and the planned image delivery are described in
+[`CI_CD.md`](CI_CD.md). Nothing there deploys automatically; production is updated as below.
+
 ## Deploy / rollback
 
 Only committed code is deployed (`git archive`), so a dirty working tree never leaks to the server.
