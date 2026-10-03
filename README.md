@@ -55,7 +55,13 @@ If you open the static files in `public/` without `vercel dev`, the UI loads pre
 
 ## Deploy
 
-Designed for **Vercel**. Connect the repository in the Vercel dashboard or run `vercel` / `vercel --prod` from the project root.
+The official site <https://awgconfig.com/> is self-hosted: every push to `main` that passes CI is built
+once, tested, and published to GHCR by digest; the server pulls the verified image and switches
+traffic blue/green with an automatic rollback. Details: [`deploy/CI_CD.md`](deploy/CI_CD.md),
+[`deploy/CONTROLLER.md`](deploy/CONTROLLER.md).
+
+Forks keep working on **Vercel** as before: connect the repository in the Vercel dashboard or run
+`vercel` / `vercel --prod` from the project root.
 
 ## Privacy-safe telemetry
 

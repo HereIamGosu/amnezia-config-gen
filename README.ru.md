@@ -55,7 +55,13 @@ npm start    # vercel dev → http://localhost:3000
 
 ## Деплой
 
-Проект рассчитан на **Vercel**. Подключите репозиторий в панели Vercel или выполните `vercel` / `vercel --prod` из каталога проекта.
+Официальный сайт <https://awgconfig.com/> размещён на собственном сервере: каждый push в `main`,
+прошедший CI, собирается один раз, проверяется и публикуется в GHCR по digest; сервер сам забирает
+проверенный образ и переключает трафик blue/green с автоматическим откатом. Подробности:
+[`deploy/CI_CD.md`](deploy/CI_CD.md), [`deploy/CONTROLLER.md`](deploy/CONTROLLER.md).
+
+Форки по-прежнему работают на **Vercel**: подключите репозиторий в панели Vercel или выполните
+`vercel` / `vercel --prod` из каталога проекта.
 
 ## Privacy-safe telemetry
 
