@@ -113,7 +113,8 @@ test('/api/status reports unknown when the status cannot be computed', async () 
 test('main page banner appears only for measured problems and is localized', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const script = fs.readFileSync(path.join(__dirname, '..', 'public', 'static', 'script.js'), 'utf8');
+  // Баннер на главной рисует status.js (скрипты генератора — __tests__/helpers/frontend-scripts.js).
+  const script = fs.readFileSync(path.join(__dirname, '..', 'public', 'static', 'status.js'), 'utf8');
   const start = script.indexOf('const fetchServiceStatus');
   const body = script.slice(start, script.indexOf('};', start));
   assert.match(body, /data\.status === 'degraded' \|\| data\.status === 'down'/);

@@ -89,6 +89,8 @@
 
 html {
   scroll-behavior: smooth;
+  /* Место под полосу прокрутки зарезервировано: открытая модалка (overflow: hidden) не сдвигает страницу вбок */
+  scrollbar-gutter: stable;
   scroll-padding-top: calc(var(--header-h) + 12px);
   -webkit-text-size-adjust: 100%;
 }
@@ -1366,10 +1368,25 @@ kbd {
 
 /* ───────────────────────── Результат ───────────────────────── */
 
+/* --result-reserve — нижняя оценка высоты готового результата с карточкой совместимости (замер на 320–1440 px) */
 .result {
+  --result-reserve: 440px;
   margin-top: 14px;
   padding: 22px;
   scroll-margin-top: calc(var(--header-h) + 16px);
+}
+
+/* Загрузка и ошибка занимают место результата (showResultView держит высоту панели):
+   ответ API приходит позже клика и не сдвигает то, что ниже панели. Сообщение — вверху панели
+   и остаётся на виду при прокрутке зарезервированного места. */
+.result[data-view="loading"] > .result-state,
+.result[data-view="error"] > .result-state {
+  position: sticky;
+  top: calc(var(--header-h) + 16px);
+}
+
+.result[data-view="loading"] {
+  min-height: var(--result-reserve);
 }
 
 .result__grid {
@@ -1597,6 +1614,20 @@ kbd {
   border-top: 1px solid var(--color-border);
   color: var(--color-text-muted);
   font-size: 12px;
+}
+
+/* Подписи .conf и vpn:// лежат в одной ячейке: высота равна большей из них, вкладки не двигают панель */
+.code-pane__note--stack {
+  display: grid;
+}
+
+.code-pane__note--stack > span {
+  grid-area: 1 / 1;
+}
+
+.code-pane__note--stack[data-active="link"] > [data-note="conf"],
+.code-pane__note--stack:not([data-active="link"]) > [data-note="link"] {
+  visibility: hidden;
 }
 
 /* Состояния результата */
@@ -2471,6 +2502,8 @@ kbd {
 .cfg-tile__name {
   display: -webkit-box;
   overflow: hidden;
+  overflow-wrap: anywhere;
+  hyphens: auto;
   font-weight: 600;
   line-height: 1.3;
   -webkit-line-clamp: 2;
@@ -2971,6 +3004,8 @@ kbd {
 /* История */
 .history-list {
   display: grid;
+  /* Явная колонка minmax(0, 1fr): длинный заголовок записи не растягивает список шире окна */
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -3036,6 +3071,7 @@ kbd {
 
 .history-item__actions {
   display: flex;
+  flex: none;
   gap: 6px;
 }
 
@@ -3353,7 +3389,9 @@ kbd {
     margin: 0;
     padding: 10px var(--gutter) 16px;
     border-bottom: 1px solid var(--color-border);
-    background: rgba(7, 9, 12, 0.97);
+    /* Непрозрачный фон: текст страницы не просвечивает сквозь пункты меню */
+    background: var(--color-bg);
+    box-shadow: var(--shadow-modal);
   }
 
   .site-header.is-menu-open .site-nav__link {
@@ -3371,6 +3409,10 @@ kbd {
 
   .result__grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .result {
+    --result-reserve: 700px;
   }
 
   .cps-radio-group {
@@ -3409,9 +3451,14 @@ kbd {
   .site-header.is-menu-open .site-header__actions .lang-switcher {
     display: inline-flex;
     position: absolute;
-    top: calc(var(--header-h) + 12px);
+    top: calc(var(--header-h) + 10px);
     right: var(--gutter);
     z-index: 2;
+  }
+
+  /* Переключатель языка стоит отдельной строкой над ссылками и не перекрывает «Генератор» */
+  .site-header.is-menu-open .site-nav {
+    padding-top: 62px;
   }
 
   .hero {
@@ -3558,9 +3605,9 @@ kbd {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
-    margin-left: auto;
+    width: 44px;
+    height: 44px;
+    margin: -6px -6px -6px auto;
     border: 0;
     border-radius: var(--radius-sm);
     background: none;
@@ -3625,7 +3672,8 @@ kbd {
 
   .param-chip {
     min-height: 58px;
-    padding: 8px 10px;
+    /* Справа запас под шеврон: многоточие подписи не упирается в него */
+    padding: 8px 26px 8px 10px;
   }
 
   .step--generate {
@@ -3642,6 +3690,7 @@ kbd {
   }
 
   .result {
+    --result-reserve: 820px;
     padding: 16px;
   }
 
@@ -3741,6 +3790,201 @@ kbd {
 
   .option-row--stack .select {
     width: 100%;
+  }
+
+  /* «Скопировать ссылку» и «Готово» растягиваются на ширину ряда: без полупустых строк при переносе */
+  .settings-modal__footer > .btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0 12px;
+    white-space: normal;
+    line-height: 1.25;
+  }
+
+  .modal__footer {
+    padding: 12px 16px;
+  }
+
+  /* Тап-цели не меньше 40 px: свёртка шагов, закрытие окон, мелкие кнопки, вкладки, ссылки подвала */
+  .modal__close {
+    width: 40px;
+    height: 40px;
+  }
+
+  .btn--sm,
+  .seg__btn,
+  .lang-btn,
+  .tabs__tab,
+  .menu__item,
+  .route-mode-btn,
+  .select {
+    min-height: 40px;
+  }
+
+  .seg__btn {
+    min-width: 40px;
+  }
+
+  .btn--icon.btn--sm,
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .site-footer__links .link-btn,
+  .site-footer__links .donate-link,
+  #statusModalBtn,
+  .diagnostics-card__link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
+
+  .onboarding__summary {
+    padding: 10px 0;
+  }
+
+  .site-footer__links .link-btn {
+    min-width: 40px;
+    justify-content: center;
+  }
+
+  .brand {
+    min-height: 40px;
+  }
+
+  .site-footer__links {
+    gap: 0 18px;
+  }
+}
+
+/* Узкие телефоны (320–414 px): ничего не обрезается и не наезжает */
+@media (max-width: 480px) {
+  .result {
+    --result-reserve: 920px;
+  }
+
+  /* Иконка над подписью: в колонку ~90 px помещается слово «смартфонов» */
+  .hero__feature {
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+    gap: 6px;
+    white-space: normal;
+  }
+
+  .hero__feature > span:last-child {
+    overflow-wrap: anywhere;
+  }
+
+  /* Запись истории: профиль и кнопки сверху, описание — на всю ширину под ними */
+  .history-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "badge . actions"
+      "info info info";
+    gap: 8px 12px;
+  }
+
+  .history-item__badge {
+    grid-area: badge;
+    justify-self: start;
+  }
+
+  .history-item__info {
+    grid-area: info;
+  }
+
+  .history-item__actions {
+    grid-area: actions;
+  }
+
+  .history-item__meta {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 440px) {
+  /* Чипы параметров — список «подпись — значение» в одну колонку, без многоточий */
+  .param-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  /* Подпись слева, значение справа; длинное значение целиком переносится под подпись */
+  .param-chip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 8px;
+    min-height: 44px;
+    padding: 8px 26px 8px 12px;
+  }
+
+  .param-chip__icon,
+  .param-chip__label {
+    flex: none;
+  }
+
+  .param-chip__value {
+    max-width: 100%;
+    margin-left: auto;
+    text-align: right;
+  }
+
+  .param-chip__chevron {
+    top: calc(50% - 7px);
+  }
+}
+
+@media (max-width: 400px) {
+  .btn--generate {
+    gap: 8px;
+    padding: 6px 14px;
+    font-size: 15px;
+    line-height: 1.2;
+    white-space: normal;
+    text-wrap: balance;
+  }
+
+  .btn--generate .icon:last-child {
+    display: none;
+  }
+
+  /* Кнопки-иконки вместо подписей: заголовок окна и строка кода помещаются целиком */
+  #settingsModalReset,
+  #resultCopyCode {
+    width: 40px;
+    padding: 0;
+  }
+
+  #settingsModalReset > span,
+  #resultCopyCode > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .modal__title,
+  .modal-heading {
+    font-size: 16px;
+    overflow-wrap: break-word;
+  }
+
+  /* Три вкладки настроек видны целиком, без скрытой прокрутки ленты */
+  .tabs {
+    gap: 4px;
+  }
+
+  .tabs__tab {
+    flex: 1 1 auto;
+    padding: 8px 4px;
+    font-size: 13px;
+    text-align: center;
   }
 }
 

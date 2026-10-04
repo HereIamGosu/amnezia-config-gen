@@ -11,6 +11,7 @@ const { spawn } = require('node:child_process');
 const { test, before, after } = require('node:test');
 
 const { buildEnPage, translateBody, TARGET } = require('../scripts/build-en-page');
+const { readAppScript, readAllAppScripts } = require('./helpers/frontend-scripts');
 
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -105,11 +106,11 @@ test('JSON-LD is valid and describes the current release', () => {
 });
 
 test('language follows the URL, not navigator.language', () => {
-  const script = read('public/static/script.js');
-  assert.doesNotMatch(script, /navigator\.language/, 'Googlebot renders with en-US and would get English on the Russian URL');
-  assert.match(script, /const LANG_PATHS = \{ ru: '\/', en: '\/en' \};/);
-  assert.match(script, /const PAGE_LANG = document\.documentElement\.lang === 'en' \? 'en' : 'ru';/);
-  assert.match(script, /data-i18n-alt/, 'applyTranslations() supports every attribute the generator translates');
+  const i18n = readAppScript('i18n.js');
+  assert.doesNotMatch(readAllAppScripts(), /navigator\.language/, 'Googlebot renders with en-US and would get English on the Russian URL');
+  assert.match(i18n, /const LANG_PATHS = \{ ru: '\/', en: '\/en' \};/);
+  assert.match(i18n, /const PAGE_LANG = document\.documentElement\.lang === 'en' \? 'en' : 'ru';/);
+  assert.match(i18n, /data-i18n-alt/, 'applyTranslations() supports every attribute the generator translates');
 });
 
 test('head icons and manifest icons point to real files', () => {

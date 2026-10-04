@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
+const { APP_SCRIPTS, readAppScript } = require('./helpers/frontend-scripts');
 
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -79,7 +80,7 @@ test('four profiles in generation order, AWG 2.0 preselected, one generate butto
 });
 
 test('AWG profile wiring is centralized and uses the mode helpers', () => {
-  const script = read('public/static/script.js');
+  const script = readAppScript('script.js');
   assert.match(script, /const PROFILE_MODES = \['legacy', 'awg2', 'awg3', 'awg31'\];/);
   assert.match(script, /const DEFAULT_PROFILE = 'awg2';/);
   assert.equal(script.split('const generateConfig =').length - 1, 1, 'generateConfig must be declared once');
@@ -95,7 +96,7 @@ test('asset cache keys use the package version', () => {
   const { version } = JSON.parse(read('package.json'));
   assert.match(html, /AWG 1\.5, 2\.0, 3\.0 (?:и|and) 3\.1/);
   for (const asset of [
-    'styles.css', 'analytics.js', 'result-explanation.js', 'live-status.js', 'script.js',
+    'styles.css', 'analytics.js', 'result-explanation.js', 'live-status.js', ...APP_SCRIPTS,
     'favicon.ico', 'favicon-32x32.png', 'favicon-16x16.png', 'icon-192.png', 'apple-touch-icon.png',
     'og-amneziawg-config-generator.png',
   ]) {
@@ -116,12 +117,14 @@ test('index.html has the compatibility card with all sections, hidden by default
   assert.match(html, /data-i18n="compat_title"/);
 });
 
-test('script.js renders and can hide the compatibility card', () => {
-  const script = read('public/static/script.js');
-  assert.match(script, /const renderCompatibilityCard =/);
+test('the result panel renders and can hide the compatibility card', () => {
+  // Карточку рисует result.js, данные ответа ей передаёт генерация в script.js.
+  const result = readAppScript('result.js');
+  const script = readAppScript('script.js');
+  assert.match(result, /const renderCompatibilityCard =/);
   assert.match(script, /renderCompatibilityCard\(lastCompatibility\)/);
   // Fallback: card hidden when compatibility summary is missing/invalid.
-  assert.match(script, /card\.hidden = true;/);
+  assert.match(result, /card\.hidden = true;/);
   // Card is driven by the API response, not hardcoded client lists.
   assert.match(script, /data\.compatibility \|\| null/);
 });

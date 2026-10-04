@@ -35,7 +35,7 @@ test('FAQ text is in the HTML on load (modal from the header), translated on /en
   const answers = [...faq.matchAll(/<div class="faq__a" data-i18n-html="(faq_a\d+)">/g)].map((m) => m[1]);
   assert.equal((faq.match(/class="faq__toggle" aria-hidden="true"/g) || []).length, questions.length, 'every question shows a toggle');
   assert.equal((faq.match(/<details class="faq__item" name="faq"/g) || []).length, questions.length, 'one answer open at a time');
-  assert.ok(questions.length >= 6, 'at least six questions');
+  assert.ok(questions.length >= 10, 'at least ten questions');
   assert.equal(answers.length, questions.length);
   for (const key of [...questions, ...answers, 'faq_title', 'faq_lead']) {
     assert.ok(ru[key] && en[key], `${key} in both locales`);
@@ -52,12 +52,60 @@ test('snippets: title and description fit search results and carry the main quer
   for (const [lang, strings] of [['ru', ru], ['en', en]]) {
     assert.ok(strings.meta_title.length <= 70, `${lang} title ≤ 70 chars`);
     assert.ok(strings.meta_description.length >= 70 && strings.meta_description.length <= 160, `${lang} description 70–160 chars`);
-    assert.match(strings.meta_title, /AmneziaWG/);
+    assert.match(strings.meta_title, /Amnezia ?WG/, `${lang} title names the brand`);
     assert.match(strings.meta_title, /WARP/);
     assert.match(strings.meta_description, /AmneziaVPN/);
     assert.match(strings.meta_description, /vpn:\/\//);
   }
   assert.match(ru.meta_title, /конфиг/i, 'Russian title uses the searched word «конфиг»');
+});
+
+// Поисковый спрос (Яндекс.Метрика, 2025–2026): «amnezia wg config/конфиг», «туннель для amneziawg», «… скачать».
+// Покрываем его естественным текстом, а не списками ключевых слов.
+test('copy follows real search demand: tunnel wording, official downloads, spelling variant, former name', () => {
+  assert.match(ru.meta_title, /Amnezia WG/, 'Russian title uses the spelling people search for most');
+  assert.match(ru.meta_description, /туннел/, 'Russian description explains the .conf is imported as a tunnel');
+  assert.match(ru.hero_lead, /туннел/);
+  assert.match(en.meta_title, /AmneziaWG Config Generator/);
+  assert.match(en.meta_description, /tunnel/);
+  for (const [lang, strings] of [['ru', ru], ['en', en]]) {
+    const words = strings.meta_title.toLowerCase().match(/[\p{L}\d.]+/gu);
+    for (const word of new Set(words)) {
+      assert.ok(words.filter((w) => w === word).length <= 1, `${lang} title does not repeat "${word}"`);
+    }
+  }
+  assert.doesNotMatch(html, /<meta name="keywords"/, 'no meta keywords');
+
+  // FAQ: где скачать клиенты (только официальные ссылки) и что такое туннель
+  const faqKeys = Object.keys(ru).filter((key) => /^faq_q\d+$/.test(key));
+  const findQuestion = (pattern) => faqKeys.find((key) => pattern.test(ru[key]));
+  const download = findQuestion(/скачать/i);
+  const tunnel = findQuestion(/туннел/i);
+  assert.ok(download && tunnel, 'FAQ answers the «скачать» and «туннель» queries');
+  for (const strings of [ru, en]) {
+    const answer = strings[download.replace('_q', '_a')];
+    assert.ok(answer.includes('href="https://github.com/amnezia-vpn/amneziawg-windows-client/releases"'));
+    assert.ok(answer.includes('href="https://amnezia.org/downloads"'));
+    assert.match(strings[tunnel.replace('_q', '_a')], /\.conf/);
+  }
+  const official = new Set(['https://github.com/amnezia-vpn/amneziawg-windows-client/releases', 'https://amnezia.org/downloads']);
+  for (const strings of [ru, en]) {
+    for (const key of Object.keys(strings).filter((k) => /^faq_a\d+$/.test(k))) {
+      for (const [, href, rest] of strings[key].matchAll(/<a href="(https?:[^"]+)"([^>]*)>/g)) {
+        assert.ok(official.has(href), `${key}: external FAQ links point only to official client sources (${href})`);
+        assert.match(rest, /target="_blank" rel="noopener noreferrer"/, `${key}: ${href} opens safely`);
+      }
+    }
+  }
+  assert.match(ru.faq_a1, /Amnezia WG/, 'the spelling variant is mentioned once, in context');
+  assert.equal((JSON.stringify(ru).match(/Amnezia WG/g) || []).length, 2, 'variant appears only in the title and the FAQ, not stuffed');
+
+  // Прежнее название сайта и написание с пробелом — в структурированных данных и llms.txt
+  const ld = /<script type="application\/ld\+json">\n([\s\S]*?)\n\s*<\/script>/.exec(html)[1];
+  const app = JSON.parse(ld)['@graph'].find((node) => node['@type'] === 'WebApplication');
+  assert.ok(app.alternateName.includes('Valokda Access'), 'former name in alternateName');
+  assert.ok(app.alternateName.includes('Amnezia WG config generator'));
+  assert.match(read('public/llms.txt'), /Valokda Access/);
 });
 
 test('favicons: /favicon.ico in the site root and a 120×120 PNG for Yandex on every page', () => {

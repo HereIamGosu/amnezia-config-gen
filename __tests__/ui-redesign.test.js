@@ -10,22 +10,31 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
+const { APP_SCRIPTS, readAppScript, readAllAppScripts } = require('./helpers/frontend-scripts');
 
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
 const html = read('public/index.html');
-const script = read('public/static/script.js');
+// Скрипты генератора разбиты по зонам ответственности (__tests__/helpers/frontend-scripts.js):
+// проверка читает файл, где живёт код, а «нигде во фронтенде» — все скрипты генератора сразу.
+const script = readAppScript('script.js');
+const i18n = readAppScript('i18n.js');
+const common = readAppScript('common.js');
+const status = readAppScript('status.js');
+const result = readAppScript('result.js');
+const settings = readAppScript('settings.js');
+const allScripts = readAllAppScripts();
 const ru = JSON.parse(read('public/locales/ru.json'));
 const en = JSON.parse(read('public/locales/en.json'));
 
-/** Достаёт функции превью из script.js и исполняет их изолированно. */
+/** Достаёт функции превью из common.js и исполняет их изолированно. */
 const loadPreviewRenderers = () => {
-  const start = script.indexOf('const escapeHtml =');
-  const end = script.indexOf('let previewConfigText');
-  assert.ok(start > 0 && end > start, 'preview helpers must exist in script.js');
+  const start = common.indexOf('const escapeHtml =');
+  const end = common.indexOf('let previewConfigText');
+  assert.ok(start > 0 && end > start, 'preview helpers must exist in common.js');
   const context = {};
-  vm.runInNewContext(`${script.slice(start, end)}
+  vm.runInNewContext(`${common.slice(start, end)}
     this.renderConfigHtml = renderConfigHtml;
     this.renderVpnLinkHtml = renderVpnLinkHtml;`, context);
   return context;
@@ -64,9 +73,9 @@ test('vpn:// preview shows only the link prefix (the link embeds the key)', () =
 });
 
 test('copy and download use the full config, the mask is display-only', () => {
-  assert.match(script, /downloadFile\(variant\.decodedConfig, variant\.filename\)/);
+  assert.match(result, /downloadFile\(variant\.decodedConfig, variant\.filename\)/);
   assert.match(script, /copyText\(previewConfigText\)/);
-  assert.match(script, /currentResult\.tab === 'link' && variant\.vpnLink \? variant\.vpnLink : variant\.decodedConfig/);
+  assert.match(result, /currentResult\.tab === 'link' && variant\.vpnLink \? variant\.vpnLink : variant\.decodedConfig/);
 });
 
 test('every modal uses the shared shell: dialog role, labelled title, localized close button', () => {
@@ -92,7 +101,9 @@ test('ui-shell provides focus trap, ESC, backdrop close and focus return', () =>
   assert.match(shell, /ev\.key !== 'Tab'/);
   assert.match(shell, /opener\.focus\(/, 'focus returns to the element that opened the modal');
   assert.match(shell, /pressStartedOnBackdrop/, 'a drag that starts inside the dialog does not close it');
-  assert.ok(html.indexOf('static/ui-shell.js') < html.indexOf('static/script.js'), 'ui-shell loads before script.js');
+  for (const name of APP_SCRIPTS) {
+    assert.ok(html.indexOf(`static/${name}?`) > html.indexOf('static/ui-shell.js'), `ui-shell loads before ${name}`);
+  }
 });
 
 test('history clearing is a two-step destructive action', () => {
@@ -104,11 +115,11 @@ test('history clearing is a two-step destructive action', () => {
     'the first click only asks for confirmation');
 });
 
-test('every key used by index.html and script.js exists in both locales', () => {
+test('every key used by index.html and the generator scripts exists in both locales', () => {
   const keys = new Set();
   for (const m of html.matchAll(/data-i18n(?:-html|-title|-aria-label|-alt)?="([^"]+)"/g)) keys.add(m[1]);
-  for (const m of script.matchAll(/\bt\('([a-z0-9_]+)'/g)) keys.add(m[1]);
-  for (const m of script.matchAll(/setI18nText\([^,]+,\s*'([a-z0-9_]+)'/g)) keys.add(m[1]);
+  for (const m of allScripts.matchAll(/\bt\('([a-z0-9_]+)'/g)) keys.add(m[1]);
+  for (const m of allScripts.matchAll(/setI18nText\([^,]+,\s*'([a-z0-9_]+)'/g)) keys.add(m[1]);
   for (const key of keys) {
     assert.equal(typeof ru[key], 'string', `ru.json misses ${key}`);
     assert.equal(typeof en[key], 'string', `en.json misses ${key}`);
@@ -124,7 +135,7 @@ test('parameter chips start from the real defaults, not from mockup values', () 
   assert.match(html, /id="chipEndpoint" data-i18n="chip_endpoint_auto"/);
   assert.match(html, /<select id="warpEndpointSelect"[^>]*>\s*<option value="hostname"/);
   assert.match(html, /<input type="checkbox" class="switch" id="ipv6Toggle" \/>/, 'IPv6 toggle is unchecked by default');
-  assert.match(script, /const updateParamChips = \(\) =>/);
+  assert.match(settings, /const updateParamChips = \(\) =>/);
 });
 
 test('recent changes start with the current release', () => {
@@ -161,10 +172,10 @@ test('hero checklist labels are live, translatable text over the illustration', 
 });
 
 test('system status card shares one live poller with the status modal', () => {
-  assert.equal(script.split('LiveStatus.createPoller(').length - 1, 1, 'exactly one poller on the page');
-  assert.doesNotMatch(script, /fetch\('\/api\/healthcheck'\)/, 'no separate healthcheck polling');
-  const start = script.indexOf('const initHeroStatus');
-  const block = script.slice(start, script.indexOf('const refreshHeroStatus', start));
+  assert.equal(allScripts.split('LiveStatus.createPoller(').length - 1, 1, 'exactly one poller on the page');
+  assert.doesNotMatch(allScripts, /fetch\('\/api\/healthcheck'\)/, 'no separate healthcheck polling');
+  const start = status.indexOf('const initHeroStatus');
+  const block = status.slice(start, status.indexOf('const refreshHeroStatus', start));
   assert.match(block, /renderStatusModal\(snapshot\)/);
   assert.match(block, /renderHeroStatus\(\)/);
 });
@@ -187,12 +198,87 @@ test('header items open dialogs on the page instead of leaving it; no duplicate 
 });
 
 test('an unavailable vpn:// link is explained instead of silently hidden', () => {
-  assert.match(script, /copyLinkBtn\.setAttribute\('aria-disabled', String\(!hasLink\)\);/);
-  assert.match(script, /vpn_link_unavailable/);
+  assert.match(result, /copyLinkBtn\.setAttribute\('aria-disabled', String\(!hasLink\)\);/);
+  assert.match(result, /vpn_link_unavailable/);
   assert.ok(ru.vpn_link_unavailable && en.vpn_link_unavailable);
 });
 
 test('desktop card titles are plain titles for mouse and keyboard alike', () => {
   assert.match(read('public/static/styles.css'), /@media \(min-width: 721px\) \{\s*\.info-card__head \{\s*cursor: default;\s*pointer-events: none;/);
   assert.match(read('public/static/ui-shell.js'), /if \(desktop\) head\.setAttribute\('tabindex', '-1'\);/, 'no extra tab stop on desktop');
+});
+
+// ── Мобильная вёрстка и стабильность раскладки (QA 320–414 px) ──
+
+const css = read('public/static/styles.css');
+
+/** Тело первого @media-блока с данным условием (по балансу фигурных скобок). */
+const mediaBlock = (condition) => {
+  const start = css.indexOf(`@media ${condition} {`);
+  assert.ok(start >= 0, `@media ${condition} must exist`);
+  let depth = 0;
+  for (let i = css.indexOf('{', start); i < css.length; i += 1) {
+    if (css[i] === '{') depth += 1;
+    if (css[i] === '}') { depth -= 1; if (depth === 0) return css.slice(start, i + 1); }
+  }
+  throw new Error(`unbalanced @media ${condition}`);
+};
+
+test('status card starts with every row the API can return (no growth after the first poll)', () => {
+  const rowsDecl = status.slice(status.indexOf('const HERO_STATUS_ROWS = ['), status.indexOf('];', status.indexOf('const HERO_STATUS_ROWS = [')));
+  const rowCount = (rowsDecl.match(/\{ key: '/g) || []).length;
+  const list = html.slice(html.indexOf('<ul class="status-list" id="statusList"'), html.indexOf('</ul>', html.indexOf('id="statusList"')));
+  assert.equal((list.match(/<li class="status-row">/g) || []).length, rowCount, 'one placeholder per HERO_STATUS_ROWS entry');
+  assert.match(list, /data-i18n="status_row_cidr"/);
+  assert.match(status, /rows = HERO_STATUS_ROWS\.map\(\(row\) => \(\{ \.\.\.row, state: 'loading' \}\)\);/,
+    'the loading state keeps the optional row');
+});
+
+test('result panel keeps its height between loading, error and success', () => {
+  const start = result.indexOf('const showResultView = (view) => {');
+  const block = result.slice(start, result.indexOf('\n};', start));
+  assert.match(block, /panel\.dataset\.view = view;/);
+  assert.match(block, /panel\.style\.minHeight = reserve \? `\$\{reserve\}px` : '';/, 'loading/error hold the previous height');
+  assert.match(css, /\.result\[data-view="loading"\] \{\s*min-height: var\(--result-reserve\);/, 'the first loading reserves the result height');
+});
+
+test('.conf / vpn:// tabs do not change the note height', () => {
+  const note = html.slice(html.indexOf('id="resultCodeNote"'), html.indexOf('</p>', html.indexOf('id="resultCodeNote"')));
+  assert.match(html, /class="code-pane__note code-pane__note--stack" id="resultCodeNote"/);
+  assert.match(note, /data-note="conf" data-i18n="result_code_note"/);
+  assert.match(note, /data-note="link" data-i18n="result_link_note"/);
+  assert.match(result, /note\.dataset\.active = showLink \? 'link' : 'conf';/);
+  assert.match(css, /\.code-pane__note--stack > span \{\s*grid-area: 1 \/ 1;/);
+});
+
+test('modals do not shift the page sideways; the history list never outgrows the dialog', () => {
+  assert.match(css, /html \{[^}]*scrollbar-gutter: stable;/);
+  assert.match(css, /\.history-list \{[^}]*grid-template-columns: minmax\(0, 1fr\);/);
+});
+
+test('switching the language keeps the generated result and the scroll position', () => {
+  const switchBlock = i18n.slice(i18n.indexOf('const switchLang = (lang) => {'), i18n.indexOf('\n};', i18n.indexOf('const switchLang = (lang) => {')));
+  assert.ok(switchBlock.indexOf('saveLangHandoff(lang);') < switchBlock.indexOf('navigateToLang(lang);'));
+  const take = i18n.slice(i18n.indexOf('const takeLangHandoff = () => {'), i18n.indexOf('\n};', i18n.indexOf('const takeLangHandoff = () => {')));
+  assert.match(take, /sessionStorage\.removeItem\(LANG_HANDOFF_KEY\)/, 'the handoff is read once');
+  assert.match(take, /data\.to !== PAGE_LANG/, 'only the target language page restores it');
+  assert.match(script, /restoreLangHandoff\(\);/);
+});
+
+test('Russian interface strings do not leak English words', () => {
+  assert.doesNotMatch(ru.history_title_split, /presets/i);
+  assert.match(ru.history_title_split, /\{n\}/);
+});
+
+test('mobile tap targets are at least 40 px and narrow phones get compact controls', () => {
+  const mobile = mediaBlock('(max-width: 720px)');
+  assert.match(mobile, /\.step__toggle \{[^}]*width: 44px;\s*height: 44px;/);
+  assert.match(mobile, /\.modal__close \{\s*width: 40px;\s*height: 40px;/);
+  assert.match(mobile, /\.btn--sm,[\s\S]*?\.seg__btn,[\s\S]*?\.select \{\s*min-height: 40px;/);
+  assert.match(mediaBlock('(max-width: 960px)'), /\.site-header\.is-menu-open \.site-nav \{[^}]*background: var\(--color-bg\);/, 'the open menu is opaque');
+  const narrow = mediaBlock('(max-width: 400px)');
+  assert.match(narrow, /#settingsModalReset,\s*#resultCopyCode \{\s*width: 40px;/, 'icon-only buttons keep their text for screen readers');
+  assert.match(narrow, /\.btn--generate \{[^}]*white-space: normal;/);
+  assert.match(mediaBlock('(max-width: 440px)'), /\.param-grid \{\s*grid-template-columns: minmax\(0, 1fr\);/);
+  assert.match(mediaBlock('(max-width: 480px)'), /\.hero__feature \{[^}]*white-space: normal;/);
 });

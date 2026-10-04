@@ -5,6 +5,7 @@ const { test } = require('node:test');
 
 const { buildResultSummary } = require('../public/static/result-explanation');
 const { sanitizePayload } = require('../public/static/analytics');
+const { APP_SCRIPTS, readAppScript } = require('./helpers/frontend-scripts');
 
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -23,12 +24,13 @@ test('a TCP-checked endpoint from the built-in list is not labelled as KV', () =
 test('telemetry reports tcp_check as is and no longer accepts kv', () => {
   assert.equal(sanitizePayload({ endpoint_source: 'tcp_check' }).endpoint_source, 'tcp_check');
   assert.equal(sanitizePayload({ endpoint_source: 'kv' }).endpoint_source, undefined);
-  const script = read('public/static/script.js');
+  const script = readAppScript('script.js');
   assert.match(script, /const getEndpointTelemetrySource =[\s\S]*?return source \|\| 'unknown';/);
 });
 
 test('no user-facing KV label remains in the frontend', () => {
-  for (const file of ['public/static/script.js', 'public/static/result-explanation.js', 'public/static/analytics.js', 'public/index.html']) {
+  const generatorScripts = APP_SCRIPTS.map((name) => `public/static/${name}`);
+  for (const file of [...generatorScripts, 'public/static/result-explanation.js', 'public/static/analytics.js', 'public/index.html']) {
     assert.doesNotMatch(read(file), /'KV'|\bkv:|'kv'/, file);
   }
   for (const lang of ['ru', 'en']) {

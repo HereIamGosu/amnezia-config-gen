@@ -2,8 +2,11 @@
 
 > Free web tool at https://awgconfig.com/ that builds ready-to-import AmneziaWG `.conf` files on top of a freshly registered Cloudflare WARP device. It supports AWG 1.5 (Legacy), 2.0, 3.0 and 3.1. Cloudflare stays a standard WireGuard peer, so the generator only enables client-side AWG features that the WARP peer does not need to understand ("WARP-safe").
 
+Also known as: Amnezia WG config generator. Former name of the site: Valokda Access.
+
 Key facts:
 
+- The generated `.conf` is what AmneziaWG clients import as a "tunnel" (Add Tunnel → import from file); AmneziaVPN also accepts the `vpn://` link. The clients themselves come from the official sources: AmneziaWG for Windows at https://github.com/amnezia-vpn/amneziawg-windows-client/releases, AmneziaVPN and mobile apps at https://amnezia.org/downloads.
 - No account, server or `.env` is needed: the tool registers a WARP device through Cloudflare's public API and returns the keys with the tunnel parameters.
 - Routing: full tunnel (all traffic) or split tunnel, where selected domain presets become IPv4 CIDRs in `AllowedIPs`. IPv6 routes are added only when explicitly enabled.
 - Extras: DNS presets, CPS obfuscation packets (I1, optional I2–I5 for AWG 2.0), router and mobile profiles, WARP endpoint and UDP port selection, `vpn://` links for AmneziaVPN import.

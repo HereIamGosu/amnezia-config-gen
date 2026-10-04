@@ -110,8 +110,11 @@ describe('privacy-safe telemetry adapter', () => {
   });
 
   test('session replay is disabled because config previews contain secrets', () => {
+    // Инициализация Метрики вынесена из inline-скрипта в static/metrika.js (CSP без 'unsafe-inline').
     const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
-    assert.match(html, /webvisor:\s*false/);
-    assert.doesNotMatch(html, /webvisor:\s*true/);
+    const init = fs.readFileSync(path.join(__dirname, '..', 'public', 'static', 'metrika.js'), 'utf8');
+    assert.match(html, /<script defer src="static\/metrika\.js\?v=[^"]+"><\/script>/);
+    assert.match(init, /ym\(99328227, 'init', \{[^}]*webvisor:\s*false/);
+    for (const source of [html, init]) assert.doesNotMatch(source, /webvisor:\s*true/);
   });
 });

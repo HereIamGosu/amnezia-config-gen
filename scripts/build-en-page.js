@@ -162,7 +162,7 @@ function findClosingTag(html, tagName, from) {
 }
 
 /**
- * Applies data-i18n* translations exactly like applyTranslations() in script.js does in the
+ * Applies data-i18n* translations exactly like applyTranslations() in static/i18n.js does in the
  * browser: data-i18n -> textContent, data-i18n-html -> innerHTML, -title / -aria-label / -alt -> attributes.
  */
 function translateBody(html, en) {

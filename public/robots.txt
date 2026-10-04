@@ -10,11 +10,13 @@ Allow: /
 Disallow: /api/
 
 # Яндекс читает только свою группу, поэтому правила повторены.
-# Clean-param убирает дубли главной с метками рекламы и аналитики.
+# Clean-param убирает дубли главной с метками рекламы и аналитики, а также ссылки
+# с настройками генератора (?profile=awg3&routes=youtube,discord): это та же страница.
 User-agent: Yandex
 Allow: /
 Disallow: /api/
 Clean-param: utm_source&utm_medium&utm_campaign&utm_term&utm_content&utm_id
 Clean-param: yclid&ysclid&gclid&gbraid&wbraid&fbclid&msclkid&_openstat&from&ref
+Clean-param: profile&routes&dns&device&ipv6&cps&cps5&endpoint&port&count
 
 Sitemap: https://awgconfig.com/sitemap.xml

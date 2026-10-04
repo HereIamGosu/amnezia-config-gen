@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
+const { readAppScript, readAllAppScripts } = require('./helpers/frontend-scripts');
 
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -10,8 +11,10 @@ test('result explanation loads before the main UI and stays hidden before genera
   const html = read('public/index.html');
   const modelIndex = html.indexOf('static/result-explanation.js');
   const mainIndex = html.indexOf('static/script.js');
+  const resultIndex = html.indexOf('static/result.js');
 
   assert.ok(modelIndex >= 0 && modelIndex < mainIndex);
+  assert.ok(modelIndex < resultIndex, 'result.js reads window.ResultExplanation when it loads');
   assert.ok(html.includes(`static/styles.css?v=${JSON.parse(read('package.json')).version}"`));
   assert.match(html, /id="resultInfoModal" class="modal" role="dialog" aria-modal="true"/);
   assert.match(html, /aria-labelledby="resultInfoModalHeading" aria-hidden="true"/);
@@ -21,12 +24,14 @@ test('result explanation loads before the main UI and stays hidden before genera
 
 test('generation renders summary and diagnostics without replacing result actions', () => {
   const html = read('public/index.html');
-  const script = read('public/static/script.js');
+  // Генерация — script.js, отрисовка объяснения — result.js.
+  const script = readAppScript('script.js');
+  const result = readAppScript('result.js');
 
   assert.match(script, /buildResultSummary\(data, resultState\)/);
   assert.match(script, /renderResultExplanation\(lastResultSummary\)/);
-  assert.match(script, /formatAwgCapabilityEvidence/);
-  assert.match(script, /awg_protocol_evidence/);
+  assert.match(result, /formatAwgCapabilityEvidence/);
+  assert.match(result, /awg_protocol_evidence/);
   // Варианты (count = 2–3) — переключатель в панели результата, а не клоны строк кнопок.
   assert.match(script, /data\.configs\.map\(\(cfg, idx\) => \(\{/);
   assert.match(script, /_variant\$\{idx \+ 1\}\.conf/);
@@ -36,7 +41,7 @@ test('generation renders summary and diagnostics without replacing result action
   assert.match(html, /id="resultCopyLink"/);
   assert.match(html, /data-i18n="diagnostics_no_handshake"/);
   assert.match(html, /data-i18n="diagnostics_import_failed"/);
-  assert.doesNotMatch(script, /console\.log\(['"]vpn:\/\//);
+  assert.doesNotMatch(readAllAppScripts(), /console\.log\(['"]vpn:\/\//);
 });
 
 test('RU and EN locales contain result, risk, and diagnostic labels', () => {

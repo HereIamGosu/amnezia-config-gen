@@ -1,7 +1,7 @@
 // __tests__/routing-frontend-guards.test.js
 // Release 2.6.1 — Routing & Secret Leakage Hardening.
 //
-// The browser bundle (public/static/script.js) is not loaded into a DOM here;
+// The browser scripts (public/static/*.js) are not loaded into a DOM here;
 // following the established convention in result-explanation-ui.test.js, these
 // tests assert the source-level invariants of the frontend guards. They exist to
 // FAIL if a future edit silently removes a guard (empty-split block, CIDR limit,
@@ -10,12 +10,15 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const { test, describe } = require('node:test');
 
-const root = path.resolve(__dirname, '..');
-const script = fs.readFileSync(path.join(root, 'public/static/script.js'), 'utf8');
+const { readAppScript } = require('./helpers/frontend-scripts');
+
+// Generation and the /api/warp request live in script.js; the CIDR limit and the mobile cascade in
+// settings.js; local history in history.js.
+const script = readAppScript('script.js');
+const settings = readAppScript('settings.js');
+const history = readAppScript('history.js');
 
 describe('FR-RSH-004 — empty split tunnel is blocked on the frontend before any request', () => {
   test('generateConfig guards routeMode=split with zero selected routes and returns before fetch', () => {
@@ -45,46 +48,46 @@ describe('FR-RSH-001 — route mode is always sent; presets only leave the clien
 
 describe('FR-RSH-007..010 — CIDR counter, 80% warning, hard limit and no-limit opt-out', () => {
   test('FR-RSH-009 — hard limit constant is 1000 IPv4 CIDR', () => {
-    assert.match(script, /const MAX_CIDR_LIMIT = 1000;/,
+    assert.match(settings, /const MAX_CIDR_LIMIT = 1000;/,
       'MAX_CIDR_LIMIT must stay 1000 (router / mobile routing-table safety)');
   });
 
   test('FR-RSH-007 — split-mode counter renders the live IPv4 count against the limit', () => {
     // updateCidrCounter shows count4 / MAX_CIDR_LIMIT while in split mode.
-    assert.match(script, /const updateCidrCounter = \(count4\) =>/);
-    assert.match(script, /\$\{count4\} \/ \$\{MAX_CIDR_LIMIT\}/,
+    assert.match(settings, /const updateCidrCounter = \(count4\) =>/);
+    assert.match(settings, /\$\{count4\} \/ \$\{MAX_CIDR_LIMIT\}/,
       'counter must display the live IPv4 count against the limit');
     // Full tunnel must not show a misleading CIDR count.
-    assert.match(script, /if \(cfgState\.routeMode === ROUTE_MODES\.FULL\)[\s\S]{0,200}routing_counter_not_applicable/,
+    assert.match(settings, /if \(cfgState\.routeMode === ROUTE_MODES\.FULL\)[\s\S]{0,200}routing_counter_not_applicable/,
       'full tunnel must show "not applicable" instead of a misleading CIDR count');
   });
 
   test('FR-RSH-008 — warning fires at 80% of the limit and "over" at 100%', () => {
-    assert.match(script, /const warn = count4 >= MAX_CIDR_LIMIT \* 0\.8 && count4 < MAX_CIDR_LIMIT;/,
+    assert.match(settings, /const warn = count4 >= MAX_CIDR_LIMIT \* 0\.8 && count4 < MAX_CIDR_LIMIT;/,
       '80% warning threshold must be preserved');
-    assert.match(script, /const over = count4 >= MAX_CIDR_LIMIT;/,
+    assert.match(settings, /const over = count4 >= MAX_CIDR_LIMIT;/,
       'hard-limit (over) threshold must be preserved');
   });
 
   test('FR-RSH-009 — unchecked tiles are disabled once the limit is reached', () => {
-    assert.match(script, /const overLimit = !cfgState\.ignoreLimit && cfgState\.cidrCount4 >= MAX_CIDR_LIMIT;/,
+    assert.match(settings, /const overLimit = !cfgState\.ignoreLimit && cfgState\.cidrCount4 >= MAX_CIDR_LIMIT;/,
       'tile disabling must respect the hard limit and the no-limit opt-out');
   });
 
   test('FR-RSH-010 — "no limit" opt-out still counts but stops disabling tiles / warning as over', () => {
     // ignoreLimit branch shows the count with a "limit disabled" note and never marks over.
-    assert.match(script, /if \(cfgState\.ignoreLimit\)/, 'no-limit opt-out branch must exist');
-    assert.match(script, /cidr_limit_disabled/, 'no-limit branch must label the counter as limit-disabled');
+    assert.match(settings, /if \(cfgState\.ignoreLimit\)/, 'no-limit opt-out branch must exist');
+    assert.match(settings, /cidr_limit_disabled/, 'no-limit branch must label the counter as limit-disabled');
     // When ignoreLimit is on, overLimit is false → tiles are never disabled.
-    assert.match(script, /!cfgState\.ignoreLimit && cfgState\.cidrCount4 >= MAX_CIDR_LIMIT/);
+    assert.match(settings, /!cfgState\.ignoreLimit && cfgState\.cidrCount4 >= MAX_CIDR_LIMIT/);
   });
 });
 
 describe('FR-RSH-011 — mobile profile forces IPv6 off on the frontend (any route mode)', () => {
   test('applyMobileModeCascade unchecks and disables the IPv6 toggle while mobile is on', () => {
-    const idx = script.indexOf('const applyMobileModeCascade');
+    const idx = settings.indexOf('const applyMobileModeCascade');
     assert.ok(idx > 0, 'applyMobileModeCascade must exist');
-    const block = script.slice(idx, idx + 500);
+    const block = settings.slice(idx, idx + 500);
     assert.match(block, /if \(cfgState\.mobileMode\)/);
     assert.match(block, /cfgState\.includeIpv6 = false;/, 'mobile must force includeIpv6 = false');
     assert.match(block, /ipv6Toggle\.disabled = true;/, 'mobile must disable the IPv6 toggle');
@@ -93,9 +96,9 @@ describe('FR-RSH-011 — mobile profile forces IPv6 off on the frontend (any rou
 
 describe('FR-RSH-015 — local history persists only the deliberately generated config, no extra secrets', () => {
   test('saveToHistory entry stores no WARP token, device id, or standalone key material', () => {
-    const idx = script.indexOf('const saveToHistory');
+    const idx = history.indexOf('const saveToHistory');
     assert.ok(idx > 0, 'saveToHistory must exist');
-    const block = script.slice(idx, idx + 500);
+    const block = history.slice(idx, idx + 500);
 
     // The deliberately-saved user result (b64 of their own .conf) is expected.
     assert.match(block, /b64: btoa\(decodedConfig\)/, 'history stores the user-generated config only');
