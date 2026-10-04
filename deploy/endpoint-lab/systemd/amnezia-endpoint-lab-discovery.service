@@ -1,15 +1,15 @@
-# Endpoint Lab refresh: re-verify the pool, circuit breaker, snapshot. Installed disabled by install.sh.
-# Every hardening option below was tested on the Lab host (see deploy/ENDPOINT_LAB.md, "systemd").
+# Endpoint Lab discovery: small bounded candidate checks. Installed disabled by install.sh.
+# It yields to refresh (skips when the lock is held) and to host pressure (resource guard).
 [Unit]
-Description=Endpoint Lab: refresh the verified WARP endpoint pool
+Description=Endpoint Lab: bounded discovery of WARP endpoint candidates
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/sbin/endpoint-lab refresh
+ExecStart=/usr/local/sbin/endpoint-lab discovery
 TimeoutStartSec=300
-Nice=10
+Nice=15
 UMask=0077
 NoNewPrivileges=yes
 PrivateTmp=yes

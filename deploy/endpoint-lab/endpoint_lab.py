@@ -1,97 +1,163 @@
 #!/usr/bin/env python3
-"""endpoint-lab — verifies Cloudflare WARP WireGuard endpoints from the VPS (Endpoint Lab, Phase A).
+"""endpoint-lab — keeps a fresh pool of verified Cloudflare WARP WireGuard endpoints (Endpoint Lab).
 
 A candidate ``IP:UDP-port`` is ACTIVE only after a real stock WireGuard handshake with the Lab's own
-WARP identity *and* a TLS-verified HTTPS request that went through that tunnel. Each probe runs in a
-throw-away network namespace: the WireGuard interface is created in the host namespace (its encrypted
-UDP socket stays there) and then moved into the namespace, which has nothing but ``lo`` and that
-interface. Host routes and rules are never touched. Results go to SQLite; eligible endpoints are
-published as an atomic, secret-free ``active-pool.json``.
+WARP identity *and* a TLS-verified HTTPS request through that tunnel to one of several Cloudflare
+verification targets. Each probe runs in a throw-away network namespace: the WireGuard interface is
+created in the host namespace (its encrypted UDP socket stays there) and then moved into the
+namespace, which has nothing but ``lo`` and that interface. Host routes and rules are never touched.
 
-Phase A is manual: no timers, no discovery, no generator integration. Commands:
-status | list | import-candidates FILE | register-probe-identity | probe ID | verify ID |
-verify-all | snapshot | cleanup. Python 3 standard library only.
+Phase B adds continuous operation: ``refresh`` (re-verify the pool) and ``discovery`` (small,
+incremental, bounded candidate checks) run from systemd timers. A circuit breaker with control
+endpoints keeps a failure of the Lab itself (verification targets down, uplink, identity, local
+tooling) from being booked against endpoints. Results go to SQLite; eligible endpoints are published
+as an atomic, secret-free ``active-pool.json``. Nothing here is read by the web generator yet.
+
+Run ``endpoint-lab -h``. Python 3 standard library only.
 """
 
 from __future__ import annotations
 
 import argparse
-import base64
 import contextlib
 import datetime as dt
 try:
     import fcntl  # Linux only (the VPS); absent on Windows dev machines
 except ImportError:  # pragma: no cover
     fcntl = None
+import hashlib
+import http.client
 import ipaddress
 import json
+import math
 import os
 import re
+try:
+    import resource  # POSIX only
+except ImportError:  # pragma: no cover
+    resource = None
 import secrets
 import signal
 import sqlite3
+import ssl
+import statistics
 import subprocess
 import sys
 import tempfile
 import time
-import urllib.error
-import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 # --- fixed paths (never taken from input) --------------------------------------------------------
-CONF_DIR = "/etc/amnezia-endpoint-lab"            # 0700 root: registration metadata, operator candidates
+CONF_DIR = "/etc/amnezia-endpoint-lab"            # 0700 root: registration metadata, candidates, config
 # Ubuntu's AppArmor profile for /usr/bin/wg only lets it read files under /etc/wireguard/**.
 KEY_DIR = "/etc/wireguard/amnezia-endpoint-lab"   # 0700 root
 KEY_FILE = "wg.key"                               # 0600: WireGuard private key only
 IDENTITY_FILE = "identity.json"                   # 0600: public addressing + registration metadata
+CONFIG_FILE = "config.json"                       # optional operator config (test knobs only)
 STATE_DIR = "/var/lib/amnezia-endpoint-lab"       # 0700 root: lab.db
 PUBLIC_DIR = "/var/lib/amnezia-endpoint-lab/public"  # 0755: active-pool.json (0644), future ro mount
 DB_FILE = "lab.db"
+DB_BACKUP_DIR = "backups"                         # inside STATE_DIR: copies taken before migrations
 SNAPSHOT_FILE = "active-pool.json"
 LOCK_FILE = "/run/amnezia-endpoint-lab.lock"
+REVISION_FILE = "/usr/local/share/amnezia-endpoint-lab/REVISION"  # written by install.sh
 
 # --- protocol and policy --------------------------------------------------------------------------
 OFFICIAL_PORTS = (2408, 500, 1701, 4500)  # Cloudflare WARP WireGuard ports (developers.cloudflare.com)
+CONSUMER_PREFIX = ipaddress.ip_network("162.159.192.0/24")   # documented consumer WARP range
+CLOUDFLARE_ONE_PREFIX = ipaddress.ip_network("162.159.193.0/24")
+NEGATIVE_CONTROL_PREFIX = ipaddress.ip_network("192.0.2.0/24")  # RFC 5737 TEST-NET-1
 # Candidates must sit in these prefixes: the Lab researches WARP ingress, it is not a general scanner.
-ALLOWED_PREFIXES = tuple(ipaddress.ip_network(p) for p in (
-    "162.159.192.0/24",  # consumer WARP (official)
-    "162.159.193.0/24",  # Cloudflare One WireGuard ingress (official; must prove itself for consumer)
-    "162.159.195.0/24",  # community-observed WARP
-    "162.159.204.0/24",  # community-observed WARP
-    "188.114.96.0/22",   # community-observed WARP
-    "192.0.2.0/24",      # RFC 5737 TEST-NET-1: negative controls only
-))
-NEGATIVE_CONTROL_PREFIX = ipaddress.ip_network("192.0.2.0/24")
+ALLOWED_PREFIXES = (CONSUMER_PREFIX, CLOUDFLARE_ONE_PREFIX,
+                    ipaddress.ip_network("162.159.195.0/24"),   # legacy/community-observed WARP
+                    ipaddress.ip_network("162.159.204.0/24"),   # legacy/community-observed WARP
+                    ipaddress.ip_network("188.114.96.0/22"),    # legacy/community-observed WARP
+                    NEGATIVE_CONTROL_PREFIX)
 MAX_CANDIDATES = 64
+# Mirror of src/server/endpointCache.js HARDCODED_FALLBACK (a unit test keeps them equal).
+LEGACY_BUILTIN_IPS = ("162.159.192.1", "162.159.192.8", "162.159.193.1", "162.159.193.8", "162.159.195.1",
+                      "162.159.195.8", "188.114.96.1", "188.114.96.8", "188.114.97.1", "188.114.97.66",
+                      "188.114.99.1")
+
+# Source = provenance, never health.
+SRC_PHASE_A = "phase_a_verified"
+SRC_CONSUMER = "consumer_official_seed"
+SRC_LEGACY = "legacy_builtin"
+SRC_CF_ONE = "cloudflare_one_observation"
+SRC_COMMUNITY = "community"
+SRC_EXPERIMENTAL = "experimental"
+SRC_NEGATIVE = "negative_control"
+SOURCE_CLASSES = (SRC_PHASE_A, SRC_CONSUMER, SRC_LEGACY, SRC_CF_ONE, SRC_COMMUNITY, SRC_EXPERIMENTAL, SRC_NEGATIVE)
 
 WARP_API_HOST = "api.cloudflareclient.com"
 WARP_API_PREFIX = "/v0i1909051800"  # same API version api/warp.js uses in production
 WARP_API_TIMEOUT_S = 20
-WARP_API_MAX_ATTEMPTS = 2           # bounded; POST reg is single-attempt (a lost reply must not mean 2 registrations)
+WARP_API_MAX_ATTEMPTS = 2           # PATCH/GET only; POST reg is sent at most once, ever
 MAX_API_RESPONSE = 256 * 1024
+IDENTITY_API_CHECK_INTERVAL_S = 30 * 60
 
 MTU = 1280
-HANDSHAKE_TIMEOUT_S = 8.0           # one WireGuard initiation plus slack (REKEY_TIMEOUT is 5 s)
-POLL_INTERVAL_S = 0.1
+# Host benchmark 2026-10-04 (Phase B): detection median ~80 ms, max ~1.07 s at every polling interval;
+# 250 ms halves the CPU of a silent probe vs 100 ms. Refresh waits past WireGuard's 5 s REKEY_TIMEOUT
+# so a lost initiation is retried; discovery accepts one initiation (a miss only delays discovery).
+POLL_INTERVAL_S = 0.25
 TRIGGER_INTERVAL_S = 1.0
-HTTPS_URL = "https://1.1.1.1/cdn-cgi/trace"  # Cloudflare-operated; certificate carries IP SAN 1.1.1.1
-DNS_URL = "https://www.cloudflare.com/cdn-cgi/trace"
-DOH_URL = "https://1.1.1.1/dns-query"        # DNS check through the tunnel without resolv.conf
+REFRESH_HANDSHAKE_TIMEOUT_S = 8.0
+DISCOVERY_HANDSHAKE_TIMEOUT_S = 3.0
 TRIGGER_TARGET = "1.1.1.1"
-HTTPS_MAX_TIME_S = 10
+TARGET_MAX_TIME_S = 6
 HTTPS_MAX_BYTES = 8192
 COMMAND_TIMEOUT_S = 20
 
-ACTIVE_TTL_S = 7 * 60               # ACTIVE expires 7 min after the last successful deep verify
-SUSPECT_TO_QUARANTINE_FAILURES = 3
-QUARANTINE_S = 30 * 60
-QUARANTINE_TO_DEAD_FAILURES = 10   # further consecutive failures after entering QUARANTINE
-OBSERVATION_RETENTION_S = 30 * 24 * 3600
-STALE_RESOURCE_AGE_S = 600
-GLOBAL_GUARD_MIN_BATCH = 3
 
-SCHEMA_VERSION = 1
-SNAPSHOT_SCHEMA_VERSION = 1
+@dataclass(frozen=True)
+class Target:
+    name: str
+    url: str
+    extra: tuple = ()
+
+
+# Verified through a real tunnel on 2026-10-04 (HTTP 200, ssl_verify_result=0). Two are DNS-free IP
+# literals (certificates carry IP SANs); the third is a different Cloudflare service resolved by DoH.
+VERIFICATION_TARGETS = (
+    Target("cf-1111", "https://1.1.1.1/cdn-cgi/trace"),
+    Target("cf-1001", "https://1.0.0.1/cdn-cgi/trace"),
+    Target("cf-www", "https://www.cloudflare.com/cdn-cgi/trace", ("--doh-url", "https://1.0.0.1/dns-query")),
+)
+UNREACHABLE_TARGET = Target("simulated-unreachable", "https://192.0.2.1/cdn-cgi/trace")  # config test knob
+
+ACTIVE_TTL_S = 7 * 60               # ACTIVE expires 7 min after the last successful deep verify
+REFRESH_INTERVAL_S = 180            # timer cadence (documentation + snapshot TTL)
+SNAPSHOT_TTL_S = 300                # top-level expiry: shortly after the next expected refresh
+QUARANTINE_BACKOFF_S = (15 * 60, 30 * 60, 60 * 60)   # bounded, never unbounded exponential
+QUARANTINE_TO_DEAD_FAILURES = 10    # further consecutive failures after entering QUARANTINE (unchanged)
+DEAD_RESURRECT_AFTER_S = 6 * 3600
+MANUAL_QUARANTINE_DEFAULT_S = 3600
+MANUAL_QUARANTINE_MAX_S = 7 * 24 * 3600
+TARGET_ACTIVE, SOFT_FLOOR, MAX_ACTIVE = 24, 12, 48
+MAX_REFRESH_ENDPOINTS = 64
+REFRESH_WALL_S = 150
+REFRESH_LOCK_WAIT_S = 130
+DISCOVERY_WALL_S = (60, 120)        # normal, elevated (pool below the soft floor)
+DISCOVERY_MAX_FAILURES = 24
+DEAD_RESURRECT_PER_RUN = 2
+CF_ONE_EVERY_N_RUNS = 4             # one Cloudflare One observation per N discovery runs
+CURSOR_MULT, CURSOR_ADD = 167, 89   # deterministic permutation of a /24: (167*i + 89) mod 256
+EARLY_CONTROL_STREAK = 3
+ANOMALY_MIN, ANOMALY_SHARE = 3, 0.5
+OBSERVATION_RETENTION_S = 14 * 24 * 3600
+HISTORY_RETENTION_S = 90 * 24 * 3600   # transitions, runs, operator events
+PRUNE_INTERVAL_S = 3600
+QUICK_CHECK_INTERVAL_S = 24 * 3600
+WAL_TRUNCATE_INTERVAL_S = 24 * 3600
+STALE_RESOURCE_AGE_S = 600
+# Resource guards (MemAvailable kB, load per CPU, free disk bytes)
+DISCOVERY_MIN_MEM_KB, REFRESH_MIN_MEM_KB = 200 * 1024, 100 * 1024
+DISCOVERY_MAX_LOAD_PER_CPU = 2.0
+MIN_DISK_FREE = 512 * 1024 * 1024
+
+SCHEMA_VERSION = 2
+SNAPSHOT_SCHEMA_VERSION = 2
 
 NS_PREFIX = "ael-"
 IF_PREFIX = "ael"
@@ -99,12 +165,15 @@ NS_RE = re.compile(r"^ael-[0-9a-f]{6}$")
 IF_RE = re.compile(r"^ael[0-9a-f]{6}$")
 KEY_RE = re.compile(r"^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$")  # base64 of exactly 32 bytes
 SECRET_LIKE_RE = re.compile(r"[A-Za-z0-9+/]{42,43}=")
+REASON_RE = re.compile(r"^[\w .,:;()/#+\-]{1,200}$")
 
 # --- states and error taxonomy ----------------------------------------------------------------------
 DISCOVERED, PROBING, HANDSHAKE_OK, VERIFYING, VERIFIED, ACTIVE = (
     "DISCOVERED", "PROBING", "HANDSHAKE_OK", "VERIFYING", "VERIFIED", "ACTIVE")
 SUSPECT, QUARANTINE, DEAD = "SUSPECT", "QUARANTINE", "DEAD"
 STATES = (DISCOVERED, PROBING, HANDSHAKE_OK, VERIFYING, VERIFIED, ACTIVE, SUSPECT, QUARANTINE, DEAD)
+
+LAB_OK, LAB_DEGRADED, LAB_UNAVAILABLE = "OK", "DEGRADED", "UNAVAILABLE"
 
 TIMEOUT = "TIMEOUT"
 HANDSHAKE_NO_RESPONSE = "HANDSHAKE_NO_RESPONSE"
@@ -115,17 +184,23 @@ DNS_FAILED = "DNS_FAILED"
 HTTPS_TIMEOUT = "HTTPS_TIMEOUT"
 HTTPS_TLS_FAILED = "HTTPS_TLS_FAILED"
 TRAFFIC_FAILED = "TRAFFIC_FAILED"
+TARGETS_UNREACHABLE = "TARGETS_UNREACHABLE"     # handshake ok, every target failed: inconclusive on its own
 PROBE_IDENTITY_INVALID = "PROBE_IDENTITY_INVALID"
+PROBE_IDENTITY_AMBIGUOUS = "PROBE_IDENTITY_AMBIGUOUS"
 LOCAL_RESOURCE_ERROR = "LOCAL_RESOURCE_ERROR"
 RATE_LIMITED = "RATE_LIMITED"
 CANCELLED = "CANCELLED"
 UNKNOWN = "UNKNOWN"
 ERROR_CODES = (TIMEOUT, HANDSHAKE_NO_RESPONSE, HANDSHAKE_INVALID_OR_UNEXPECTED, TUNNEL_SETUP_FAILED,
                ROUTE_SETUP_FAILED, DNS_FAILED, HTTPS_TIMEOUT, HTTPS_TLS_FAILED, TRAFFIC_FAILED,
-               PROBE_IDENTITY_INVALID, LOCAL_RESOURCE_ERROR, RATE_LIMITED, CANCELLED, UNKNOWN)
+               TARGETS_UNREACHABLE, PROBE_IDENTITY_INVALID, PROBE_IDENTITY_AMBIGUOUS, LOCAL_RESOURCE_ERROR,
+               RATE_LIMITED, CANCELLED, UNKNOWN)
 # Failures of the Lab itself: they never penalise an endpoint. UNKNOWN is treated as ours too.
 LAB_FAILURE_CODES = frozenset({TUNNEL_SETUP_FAILED, ROUTE_SETUP_FAILED, PROBE_IDENTITY_INVALID,
-                               LOCAL_RESOURCE_ERROR, RATE_LIMITED, CANCELLED, UNKNOWN})
+                               PROBE_IDENTITY_AMBIGUOUS, LOCAL_RESOURCE_ERROR, RATE_LIMITED, CANCELLED, UNKNOWN})
+
+# Registration lifecycle of the single probe identity
+REG_ABSENT, REG_PENDING, REG_READY, REG_AMBIGUOUS, REG_INVALID = "ABSENT", "PENDING", "READY", "AMBIGUOUS", "INVALID"
 
 
 class LabError(Exception):
@@ -149,6 +224,15 @@ def iso(ts: int | None) -> str | None:
     if ts is None:
         return None
     return dt.datetime.fromtimestamp(ts, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def parse_iso(ts: object) -> int:
+    return int(dt.datetime.strptime(str(ts), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc).timestamp())
+
+
+def age_s(ts: int | None, now: int) -> int | None:
+    """Age that never goes negative when the wall clock steps back."""
+    return None if ts is None else max(0, now - ts)
 
 
 def log(message: str) -> None:
@@ -195,6 +279,18 @@ def parse_endpoint_id(endpoint_id: str) -> Endpoint:
     return parse_endpoint(m.group(1), int(m.group(2)))
 
 
+def classify_source(ip: str) -> str:
+    """Default provenance by address (used for seeds and the v1 -> v2 migration)."""
+    addr = ipaddress.ip_address(ip)
+    if addr in NEGATIVE_CONTROL_PREFIX:
+        return SRC_NEGATIVE
+    if addr in CONSUMER_PREFIX:
+        return SRC_CONSUMER
+    if addr in CLOUDFLARE_ONE_PREFIX:
+        return SRC_CF_ONE
+    return SRC_LEGACY
+
+
 def load_candidates(path: str) -> list[tuple[Endpoint, str]]:
     """Read the operator-controlled candidate file: individual IPs × official ports, no ranges."""
     with open(path, encoding="utf-8") as fh:
@@ -217,6 +313,40 @@ def load_candidates(path: str) -> list[tuple[Endpoint, str]]:
     if len(out) > MAX_CANDIDATES:
         raise LabError(UNKNOWN, f"candidates file: {len(out)} endpoints exceed the cap {MAX_CANDIDATES}")
     return out
+
+
+def cursor_ip(network: ipaddress.IPv4Network, position: int) -> str:
+    """Deterministic shuffled walk over a /24 (all 256 addresses: anycast, no LAN semantics)."""
+    return str(network.network_address + ((CURSOR_MULT * (position % 256) + CURSOR_ADD) % 256))
+
+
+# --- operator config (test knobs only) --------------------------------------------------------------
+@dataclass(frozen=True)
+class LabConfig:
+    disabled_targets: tuple = ()
+    simulate_targets_unreachable: bool = False
+
+
+def load_config(conf_dir: str = CONF_DIR) -> LabConfig:
+    path = os.path.join(conf_dir, CONFIG_FILE)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        return LabConfig()
+    except (OSError, ValueError) as exc:
+        raise LabError(LOCAL_RESOURCE_ERROR, f"config.json unreadable: {type(exc).__name__}") from None
+    names = {t.name for t in VERIFICATION_TARGETS}
+    disabled = tuple(str(n) for n in data.get("disabled_targets", []))
+    if not set(disabled) <= names:
+        raise LabError(LOCAL_RESOURCE_ERROR, "config.json: unknown target in disabled_targets")
+    return LabConfig(disabled, bool(data.get("simulate_targets_unreachable", False)))
+
+
+def active_targets(config: LabConfig) -> list[Target]:
+    if config.simulate_targets_unreachable:
+        return [UNREACHABLE_TARGET]
+    return [t for t in VERIFICATION_TARGETS if t.name not in config.disabled_targets]
 
 
 # --- probe identity -------------------------------------------------------------------------------
@@ -255,25 +385,51 @@ def _atomic_write(path: str, data: bytes, mode: int) -> None:
             os.close(dfd)
 
 
+def _read_meta(conf_dir: str) -> dict | None:
+    try:
+        with open(os.path.join(conf_dir, IDENTITY_FILE), encoding="utf-8") as fh:
+            return json.load(fh)
+    except FileNotFoundError:
+        return None
+
+
+def registration_state(meta: dict | None) -> str:
+    """ABSENT / PENDING / READY / AMBIGUOUS / INVALID. Phase A files (no state field) are READY."""
+    if meta is None:
+        return REG_ABSENT
+    state = meta.get("registration_state")
+    if state is None:
+        return REG_READY if meta.get("warp_enabled") else REG_PENDING
+    if state == REG_PENDING and not (meta.get("registration") or {}).get("id"):
+        return REG_AMBIGUOUS  # crashed between "POST may have been sent" and "response stored"
+    return state
+
+
+def _write_meta(conf_dir: str, meta: dict) -> None:
+    _atomic_write(os.path.join(conf_dir, IDENTITY_FILE), json.dumps(meta, indent=2).encode(), 0o600)
+
+
 def load_identity(conf_dir: str = CONF_DIR, key_dir: str = KEY_DIR) -> Identity:
     key_path = os.path.join(key_dir, KEY_FILE)
     try:
-        with open(os.path.join(conf_dir, IDENTITY_FILE), encoding="utf-8") as fh:
-            meta = json.load(fh)
+        meta = _read_meta(conf_dir)
+    except (OSError, ValueError) as exc:
+        raise LabError(PROBE_IDENTITY_INVALID, f"probe identity unreadable: {type(exc).__name__}") from None
+    state = registration_state(meta)
+    if state == REG_AMBIGUOUS:
+        raise LabError(PROBE_IDENTITY_AMBIGUOUS, "registration outcome unknown; operator must resolve "
+                                                 "(see ENDPOINT_LAB.md, identity recovery)")
+    if state != REG_READY:
+        raise LabError(PROBE_IDENTITY_INVALID, f"probe identity is {state}")
+    try:
         if not os.path.isfile(key_path):
             raise FileNotFoundError(key_path)
         if os.name == "posix" and os.stat(key_path).st_mode & 0o077:
             raise LabError(PROBE_IDENTITY_INVALID, "private key file is readable by group/others")
-        ident = Identity(
-            key_path=key_path,
-            public_key=meta["public_key"],
-            peer_public_key=meta["peer_public_key"],
-            address_v4=meta["address_v4"],
-            address_v6=meta.get("address_v6"),
-            registration_id=meta["registration"]["id"],
-            warp_enabled=bool(meta.get("warp_enabled")),
-            created_at=meta.get("created_at", ""),
-        )
+        ident = Identity(key_path=key_path, public_key=meta["public_key"], peer_public_key=meta["peer_public_key"],
+                         address_v4=meta["address_v4"], address_v6=meta.get("address_v6"),
+                         registration_id=meta["registration"]["id"], warp_enabled=bool(meta.get("warp_enabled")),
+                         created_at=meta.get("created_at", ""))
     except LabError:
         raise
     except (OSError, ValueError, KeyError, TypeError) as exc:
@@ -314,47 +470,71 @@ def _validate_registration(result: object) -> dict:
             "address_v6": v6, "peer_endpoint_v4": endpoint.get("v4"), "peer_endpoint_host": endpoint.get("host")}
 
 
+class ApiNotSent(Exception):
+    """The request provably never left: nothing can have been created."""
+
+
+class ApiResponseLost(Exception):
+    """The request may have reached the API, but no complete response arrived."""
+
+
 class WarpApi:
-    """Minimal consumer-WARP registration client. ``transport`` is injectable for tests."""
+    """Minimal consumer-WARP client. ``transport(method, path, body, token) -> (status, bytes)`` may raise
+    ApiNotSent / ApiResponseLost; it is injectable for tests."""
 
     def __init__(self, transport=None):
-        self.transport = transport or self._urllib_transport
+        self.transport = transport or self._http_transport
 
     @staticmethod
-    def _urllib_transport(method: str, path: str, body: dict | None, token: str | None) -> tuple[int, bytes]:
+    def _http_transport(method: str, path: str, body: dict | None, token: str | None) -> tuple[int, bytes]:
         data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(f"https://{WARP_API_HOST}{WARP_API_PREFIX}/{path}", data=data,
-                                     method=method)
-        req.add_header("Content-Type", "application/json")
-        req.add_header("User-Agent", "okhttp/3.12.1")
+        headers = {"Content-Type": "application/json", "User-Agent": "okhttp/3.12.1"}
         if token:
-            req.add_header("Authorization", f"Bearer {token}")
+            headers["Authorization"] = f"Bearer {token}"
+        conn = http.client.HTTPSConnection(WARP_API_HOST, 443, timeout=WARP_API_TIMEOUT_S,
+                                           context=ssl.create_default_context())
         try:
-            with urllib.request.urlopen(req, timeout=WARP_API_TIMEOUT_S) as resp:
+            try:
+                conn.connect()  # DNS, TCP and TLS: a failure here means nothing was sent
+            except (OSError, http.client.HTTPException) as exc:
+                raise ApiNotSent(type(exc).__name__) from None
+            try:
+                conn.request(method, f"{WARP_API_PREFIX}/{path}", body=data, headers=headers)
+                resp = conn.getresponse()
                 return resp.status, resp.read(MAX_API_RESPONSE + 1)
-        except urllib.error.HTTPError as exc:
-            return exc.code, exc.read(MAX_API_RESPONSE + 1)
+            except (OSError, http.client.HTTPException) as exc:
+                raise ApiResponseLost(type(exc).__name__) from None
+        finally:
+            conn.close()
+
+    def once(self, method: str, path: str, body: dict | None = None, token: str | None = None) -> tuple[int, dict]:
+        status, raw = self.transport(method, path, body, token)
+        if len(raw) > MAX_API_RESPONSE:
+            raise LabError(UNKNOWN, "WARP API response too large")
+        try:
+            return status, (json.loads(raw) if raw else {})
+        except ValueError:
+            return status, {"_invalid_json": True}
 
     def call(self, method: str, path: str, body: dict | None = None, token: str | None = None,
              attempts: int = WARP_API_MAX_ATTEMPTS) -> dict:
+        """Bounded retries for idempotent calls (never used for POST reg)."""
+        if method == "POST":
+            raise LabError(UNKNOWN, "POST must go through WarpApi.once")
         last = "no attempt"
         for attempt in range(attempts):
             try:
-                status, raw = self.transport(method, path, body, token)
-            except (OSError, TimeoutError) as exc:
-                last = f"network error: {type(exc).__name__}"
+                status, payload = self.once(method, path, body, token)
+            except (ApiNotSent, ApiResponseLost) as exc:
+                last = f"network: {exc}"
             else:
-                if len(raw) > MAX_API_RESPONSE:
-                    raise LabError(UNKNOWN, "WARP API response too large")
-                if 200 <= status < 300:
-                    try:
-                        return json.loads(raw or b"{}")
-                    except ValueError:
-                        raise LabError(UNKNOWN, "WARP API returned invalid JSON") from None
+                if 200 <= status < 300 and not payload.get("_invalid_json"):
+                    return payload
                 if status == 429:
-                    raise LabError(RATE_LIMITED, "WARP API rate limited the registration")
-                if status < 500:
-                    raise LabError(UNKNOWN, f"WARP API rejected {method} {path.split('/')[0]}: HTTP {status}")
+                    raise LabError(RATE_LIMITED, "WARP API rate limited the request")
+                if 400 <= status < 500:
+                    raise LabError(PROBE_IDENTITY_INVALID if status in (401, 403, 404) else UNKNOWN,
+                                   f"WARP API rejected {method} {path.split('/')[0]}: HTTP {status}")
                 last = f"HTTP {status}"
             if attempt + 1 < attempts:
                 time.sleep(2)
@@ -363,18 +543,27 @@ class WarpApi:
 
 def register_probe_identity(runner: "CommandRunner", api: WarpApi, conf_dir: str = CONF_DIR,
                             key_dir: str = KEY_DIR, clock=now_s) -> str:
-    """Create the single Lab identity, or finish enabling an existing one. Never registers twice."""
+    """ABSENT → PENDING (key + operation persisted) → exactly one POST → READY, or AMBIGUOUS when the
+    outcome cannot be known. Never POSTs twice; PENDING with a stored registration only resumes PATCH."""
     meta_path = os.path.join(conf_dir, IDENTITY_FILE)
     key_path = os.path.join(key_dir, KEY_FILE)
-    if os.path.exists(meta_path):
-        with open(meta_path, encoding="utf-8") as fh:
-            meta = json.load(fh)
-        if meta.get("warp_enabled"):
-            return "exists"
+    meta = _read_meta(conf_dir)
+    state = registration_state(meta)
+    if state == REG_READY:
+        return "exists"
+    if state == REG_AMBIGUOUS:
+        if meta.get("registration_state") != REG_AMBIGUOUS:
+            meta["registration_state"] = REG_AMBIGUOUS
+            _write_meta(conf_dir, meta)
+        raise LabError(PROBE_IDENTITY_AMBIGUOUS, "previous registration attempt has an unknown outcome; "
+                                                 "resolve manually (identity-reset) before registering again")
+    if state == REG_INVALID:
+        raise LabError(PROBE_IDENTITY_INVALID, "identity is INVALID; rotate it manually (identity-reset)")
+    if state == REG_PENDING:  # POST answered and stored, PATCH not done yet
         reg = meta["registration"]
         api.call("PATCH", f"reg/{reg['id']}", {"warp_enabled": True}, reg["token"])
-        meta["warp_enabled"] = True
-        _atomic_write(meta_path, json.dumps(meta, indent=2).encode(), 0o600)
+        meta.update(warp_enabled=True, registration_state=REG_READY)
+        _write_meta(conf_dir, meta)
         return "enabled"
     if os.path.exists(key_path):
         raise LabError(PROBE_IDENTITY_INVALID, "a private key exists without identity metadata; refusing to overwrite")
@@ -384,24 +573,77 @@ def register_probe_identity(runner: "CommandRunner", api: WarpApi, conf_dir: str
     public_key = runner.run(["wg", "pubkey"], input_text=private_key + "\n").stdout.strip()
     if not (KEY_RE.match(private_key) and KEY_RE.match(public_key)):
         raise LabError(LOCAL_RESOURCE_ERROR, "wg produced a malformed key pair")
-    tos = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")  # as api/warp.js sends it
-    body = {"install_id": "", "tos": tos, "key": public_key,
-            "fcm_token": "", "type": "ios", "locale": "en_US"}
-    response = api.call("POST", "reg", body, attempts=1)  # never retried: see WARP_API_MAX_ATTEMPTS
-    reg = _validate_registration(response.get("result"))
-    # Persist before enabling: a crash after this point resumes with PATCH instead of a new registration.
     _atomic_write(key_path, (private_key + "\n").encode(), 0o600)
     del private_key
-    meta = {"public_key": public_key, "peer_public_key": reg["peer_public_key"],
-            "address_v4": reg["address_v4"], "address_v6": reg["address_v6"],
-            "peer_endpoint_v4": reg["peer_endpoint_v4"], "peer_endpoint_host": reg["peer_endpoint_host"],
-            "registration": {"id": reg["id"], "token": reg["token"], "api": WARP_API_PREFIX},
-            "warp_enabled": False, "created_at": iso(clock())}
-    _atomic_write(meta_path, json.dumps(meta, indent=2).encode(), 0o600)
+    meta = {"registration_state": REG_PENDING, "operation_id": secrets.token_hex(8), "started_at": iso(clock()),
+            "public_key": public_key, "registration": None, "warp_enabled": False}
+    _write_meta(conf_dir, meta)  # from here on a crash reads as AMBIGUOUS, never as "try again"
+
+    def abandon() -> None:  # proven: nothing was registered with this key
+        for path in (meta_path, key_path):
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(path)
+
+    def ambiguous(why: str) -> LabError:
+        meta.update(registration_state=REG_AMBIGUOUS, ambiguous_reason=why, ambiguous_at=iso(clock()))
+        _write_meta(conf_dir, meta)
+        return LabError(PROBE_IDENTITY_AMBIGUOUS, f"registration outcome unknown ({why}); no retry")
+
+    tos = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")  # as api/warp.js sends it
+    body = {"install_id": "", "tos": tos, "key": public_key, "fcm_token": "", "type": "ios", "locale": "en_US"}
+    try:
+        status, payload = api.once("POST", "reg", body)
+    except ApiNotSent as exc:
+        abandon()
+        raise LabError(LOCAL_RESOURCE_ERROR, f"registration request not sent ({exc}); nothing registered") from None
+    except ApiResponseLost as exc:
+        raise ambiguous(f"response lost: {exc}") from None
+    if 200 <= status < 300:
+        try:
+            reg = _validate_registration(payload.get("result"))
+        except LabError as exc:
+            raise ambiguous(f"HTTP {status} with unusable body: {exc}") from None
+    elif 400 <= status < 500:  # rejected: no registration exists
+        abandon()
+        raise LabError(RATE_LIMITED if status == 429 else UNKNOWN, f"registration rejected: HTTP {status}")
+    else:  # 5xx may come after the server created the device
+        raise ambiguous(f"HTTP {status}")
+    meta.update(peer_public_key=reg["peer_public_key"], address_v4=reg["address_v4"], address_v6=reg["address_v6"],
+                peer_endpoint_v4=reg["peer_endpoint_v4"], peer_endpoint_host=reg["peer_endpoint_host"],
+                registration={"id": reg["id"], "token": reg["token"], "api": WARP_API_PREFIX},
+                created_at=iso(clock()))
+    _write_meta(conf_dir, meta)  # PENDING with a registration: a rerun only PATCHes
     api.call("PATCH", f"reg/{reg['id']}", {"warp_enabled": True}, reg["token"])
-    meta["warp_enabled"] = True
-    _atomic_write(meta_path, json.dumps(meta, indent=2).encode(), 0o600)
+    meta.update(warp_enabled=True, registration_state=REG_READY)
+    _write_meta(conf_dir, meta)
     return "created"
+
+
+def identity_reset(conf_dir: str = CONF_DIR, key_dir: str = KEY_DIR, clock=now_s) -> str:
+    """Operator recovery for AMBIGUOUS/INVALID/PENDING: files are retired (renamed), never deleted.
+    A READY identity is refused: the working identity is never removed by this tool."""
+    meta = _read_meta(conf_dir)
+    state = registration_state(meta)
+    if state in (REG_READY, REG_ABSENT):
+        raise LabError(UNKNOWN, f"identity is {state}; nothing to reset")
+    suffix = f".retired-{dt.datetime.fromtimestamp(clock(), dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+    for path in (os.path.join(conf_dir, IDENTITY_FILE), os.path.join(key_dir, KEY_FILE)):
+        if os.path.exists(path):
+            os.replace(path, path + suffix)
+    return f"retired {state} identity with suffix {suffix}"
+
+
+def identity_api_check(api: WarpApi, conf_dir: str = CONF_DIR) -> str:
+    """valid | invalid | unknown — GET reg/{id} with the stored token (read-only, bounded)."""
+    meta = _read_meta(conf_dir) or {}
+    reg = meta.get("registration") or {}
+    if not reg.get("id"):
+        return "unknown"
+    try:
+        api.call("GET", f"reg/{reg['id']}", None, reg.get("token"))
+        return "valid"
+    except LabError as exc:
+        return "invalid" if exc.code == PROBE_IDENTITY_INVALID else "unknown"
 
 
 # --- commands --------------------------------------------------------------------------------------
@@ -442,21 +684,36 @@ class ProbeResult:
     message: str = ""
     handshake_observed_at: int | None = None
     probe_completion_ms: int | None = None   # trigger → Lab saw a fresh handshake (NOT protocol RTT)
-    traffic_total_ms: int | None = None      # curl time_total over the tunnel (TLS + HTTP included)
+    traffic_total_ms: int | None = None      # curl time_total of the target that answered (TLS + HTTP)
+    traffic_bytes: int | None = None         # WireGuard rx+tx bytes during the probe
+    target_results: list = field(default_factory=list)  # [(target name, ok, error code)]
     evidence: dict = field(default_factory=dict)
+
+    @property
+    def ok(self) -> bool:
+        return self.handshake_ok and self.traffic_ok
 
     @property
     def lab_failure(self) -> bool:
         return self.error_code in LAB_FAILURE_CODES
 
+    @property
+    def inconclusive(self) -> bool:
+        return self.handshake_ok and self.error_code == TARGETS_UNREACHABLE
+
+    @property
+    def endpoint_failure(self) -> bool:
+        return not self.ok and not self.lab_failure and not self.inconclusive
+
 
 class ProbeEngine:
     """Network side of the Lab. Business logic depends only on this interface."""
 
-    def probe_handshake(self, endpoint: Endpoint, identity: Identity) -> ProbeResult:
+    def probe_handshake(self, endpoint: Endpoint, identity: Identity, timeout_s: float | None = None) -> ProbeResult:
         raise NotImplementedError
 
-    def deep_verify(self, endpoint: Endpoint, identity: Identity) -> ProbeResult:
+    def deep_verify(self, endpoint: Endpoint, identity: Identity, timeout_s: float | None = None,
+                    targets: list | None = None) -> ProbeResult:
         raise NotImplementedError
 
 
@@ -535,12 +792,12 @@ class LinuxWireGuardProbeEngine(ProbeEngine):
         self.runner.run(["ip", "netns", "exec", ns, "ping", "-c", "1", "-W", "1", "-q", TRIGGER_TARGET],
                         check=False, timeout=5)
 
-    def _await_handshake(self, ns: str, ifname: str) -> tuple[int | None, int]:
+    def _await_handshake(self, ns: str, ifname: str, timeout_s: float) -> tuple[int | None, int]:
         start = self.monotonic()
         next_trigger = start
         while True:
             elapsed = self.monotonic() - start
-            if elapsed >= HANDSHAKE_TIMEOUT_S:
+            if elapsed >= timeout_s:
                 return None, int(elapsed * 1000)
             if self.monotonic() >= next_trigger:
                 self._trigger(ns)
@@ -550,14 +807,14 @@ class LinuxWireGuardProbeEngine(ProbeEngine):
                 return latest, int((self.monotonic() - start) * 1000)
             self.sleep(POLL_INTERVAL_S)
 
-    def _curl(self, ns: str, url: str, extra: list[str]) -> tuple[int, str, dict]:
+    def _curl(self, ns: str, url: str, extra: list) -> tuple[int, str, dict]:
         marker = "\n__AEL__"
         argv = ["ip", "netns", "exec", ns, "curl", "--silent", "--show-error", "--proto", "=https",
-                "--tlsv1.2", "--max-time", str(HTTPS_MAX_TIME_S), "--max-filesize", str(HTTPS_MAX_BYTES),
+                "--tlsv1.2", "--max-time", str(TARGET_MAX_TIME_S), "--max-filesize", str(HTTPS_MAX_BYTES),
                 "--output", "-", "--write-out",
                 marker + " %{http_code} %{ssl_verify_result} %{time_appconnect} %{time_total}",
                 *extra, url]
-        res = self.runner.run(argv, check=False, timeout=HTTPS_MAX_TIME_S + 5)
+        res = self.runner.run(argv, check=False, timeout=TARGET_MAX_TIME_S + 5)
         body, _, tail = res.stdout.rpartition(marker)
         parts = tail.split()
         info = {}
@@ -571,7 +828,38 @@ class LinuxWireGuardProbeEngine(ProbeEngine):
         self.runner.run(["ip", "netns", "delete", ns], check=False)       # destroys the moved interface
         self.runner.run(["ip", "link", "delete", "dev", ifname], check=False)  # if it never moved
 
-    def _run(self, endpoint: Endpoint, identity: Identity, deep: bool) -> ProbeResult:
+    def _verify_traffic(self, ns: str, ifname: str, targets: list, result: ProbeResult) -> None:
+        """Any-one quorum over the verification targets; each target is tried at most once."""
+        for target in targets:
+            _, rx0, tx0 = self._wg_counters(ns, ifname)
+            code, body, info = self._curl(ns, target.url, list(target.extra))
+            _, rx1, tx1 = self._wg_counters(ns, ifname)
+            if code in CURL_TIMEOUT_CODES:
+                err = HTTPS_TIMEOUT
+            elif code in CURL_TLS_CODES:
+                err = HTTPS_TLS_FAILED
+            elif code in CURL_DNS_CODES:
+                err = DNS_FAILED
+            elif code != 0 or info.get("http_code") != 200 or info.get("ssl_verify_result") != "0":
+                err = TRAFFIC_FAILED
+            elif not (rx1 > rx0 and tx1 > tx0):
+                err = TRAFFIC_FAILED  # HTTPS cannot succeed without tunnel bytes
+            else:
+                err = None
+            result.target_results.append((target.name, err is None, err))
+            if err is None:
+                trace = dict(line.split("=", 1) for line in body.splitlines() if "=" in line)
+                result.traffic_ok = True
+                result.traffic_total_ms = int(info["time_total_s"] * 1000)
+                result.evidence.update(https=info, target=target.name, trace_warp=trace.get("warp"),
+                                       trace_colo=trace.get("colo"))
+                return
+        result.error_code = TARGETS_UNREACHABLE
+        result.message = "every verification target failed: " + ", ".join(
+            f"{n}={e}" for n, _, e in result.target_results)
+
+    def _run(self, endpoint: Endpoint, identity: Identity, deep: bool, timeout_s: float,
+             targets: list | None) -> ProbeResult:
         ns, ifname = self.new_names()
         evidence: dict = {"namespace": ns}
         try:
@@ -579,49 +867,31 @@ class LinuxWireGuardProbeEngine(ProbeEngine):
             self._setup(ns, ifname, endpoint, identity)
             evidence["namespace_isolated"] = True
             _, rx0, tx0 = self._wg_counters(ns, ifname)
-            latest, waited_ms = self._await_handshake(ns, ifname)
+            latest, waited_ms = self._await_handshake(ns, ifname, timeout_s)
             if latest is None:
                 _, rx1, tx1 = self._wg_counters(ns, ifname)
                 evidence.update(rx_before=rx0, tx_before=tx0, rx_after=rx1, tx_after=tx1)
                 return ProbeResult(False, error_code=HANDSHAKE_NO_RESPONSE,
-                                   message=f"no handshake within {HANDSHAKE_TIMEOUT_S:g}s",
-                                   probe_completion_ms=waited_ms, evidence=evidence)
-            result = ProbeResult(True, handshake_observed_at=latest, probe_completion_ms=waited_ms)
+                                   message=f"no handshake within {timeout_s:g}s", probe_completion_ms=waited_ms,
+                                   traffic_bytes=(rx1 - rx0) + (tx1 - tx0), evidence=evidence)
+            result = ProbeResult(True, handshake_observed_at=latest, probe_completion_ms=waited_ms, evidence=evidence)
             if deep:
-                code, body, info = self._curl(ns, HTTPS_URL, [])
-                _, rx1, tx1 = self._wg_counters(ns, ifname)
-                trace = dict(line.split("=", 1) for line in body.splitlines() if "=" in line)
-                evidence.update(rx_before=rx0, tx_before=tx0, rx_after=rx1, tx_after=tx1, https=info,
-                                trace_warp=trace.get("warp"), trace_colo=trace.get("colo"))
-                if code in CURL_TIMEOUT_CODES:
-                    result.error_code = HTTPS_TIMEOUT
-                elif code in CURL_TLS_CODES:
-                    result.error_code = HTTPS_TLS_FAILED
-                elif code != 0 or info.get("http_code") != 200 or info.get("ssl_verify_result") != "0":
-                    result.error_code = TRAFFIC_FAILED
-                elif not (rx1 > rx0 and tx1 > tx0):
-                    result.error_code = TRAFFIC_FAILED  # HTTPS cannot succeed without tunnel bytes
-                else:
-                    result.traffic_ok = True
-                    result.traffic_total_ms = int(info["time_total_s"] * 1000)
-                if result.error_code:
-                    result.message = f"curl exit {code}, https={info}"
-                dns_code, _, dns_info = self._curl(ns, DNS_URL, ["--doh-url", DOH_URL])
-                evidence["dns_ok"] = dns_code == 0 and dns_info.get("http_code") == 200
-                evidence["dns_error"] = None if evidence["dns_ok"] else (
-                    DNS_FAILED if dns_code in CURL_DNS_CODES else f"curl exit {dns_code}")
-            result.evidence = evidence
+                self._verify_traffic(ns, ifname, list(targets or VERIFICATION_TARGETS), result)
+            _, rx1, tx1 = self._wg_counters(ns, ifname)
+            evidence.update(rx_before=rx0, tx_before=tx0, rx_after=rx1, tx_after=tx1)
+            result.traffic_bytes = (rx1 - rx0) + (tx1 - tx0)
             return result
         except LabError as exc:
             return ProbeResult(False, error_code=exc.code, message=str(exc), evidence=evidence)
         finally:  # also on KeyboardInterrupt / SIGTERM: tear down, then let the run abort unrecorded
             self._teardown(ns, ifname)
 
-    def probe_handshake(self, endpoint: Endpoint, identity: Identity) -> ProbeResult:
-        return self._run(endpoint, identity, deep=False)
+    def probe_handshake(self, endpoint: Endpoint, identity: Identity, timeout_s: float | None = None) -> ProbeResult:
+        return self._run(endpoint, identity, False, timeout_s or REFRESH_HANDSHAKE_TIMEOUT_S, None)
 
-    def deep_verify(self, endpoint: Endpoint, identity: Identity) -> ProbeResult:
-        return self._run(endpoint, identity, deep=True)
+    def deep_verify(self, endpoint: Endpoint, identity: Identity, timeout_s: float | None = None,
+                    targets: list | None = None) -> ProbeResult:
+        return self._run(endpoint, identity, True, timeout_s or REFRESH_HANDSHAKE_TIMEOUT_S, targets)
 
 
 def find_stale_resources(netns_list: str, link_list: str) -> tuple[list[str], list[str]]:
@@ -661,66 +931,90 @@ class EndpointRow:
     last_error_at: int | None = None
     quarantine_until: int | None = None
     manual_blacklist: int = 0
+    quarantine_kind: str | None = None      # 'auto' | 'manual'
+    quarantine_level: int = 0               # index into QUARANTINE_BACKOFF_S
+    quarantine_failures: int = 0            # failures since entering QUARANTINE (DEAD rule)
+    active_since: int | None = None
+    first_active_at: int | None = None
+
+
+def manual_quarantine_active(row: EndpointRow, now: int) -> bool:
+    return (row.state == QUARANTINE and row.quarantine_kind == "manual"
+            and row.quarantine_until is not None and row.quarantine_until > now)
 
 
 def apply_outcome(row: EndpointRow, result: ProbeResult, deep: bool, now: int) -> EndpointRow:
-    """Pure transition. Lab failures leave the endpoint untouched (no penalty, no credit)."""
-    if result.lab_failure:
+    """Pure transition. Lab failures and inconclusive results leave the endpoint untouched.
+
+    First endpoint-specific failure: ACTIVE → SUSPECT (out of the pool at once). A second one
+    (SUSPECT, or a re-verification that failed) → QUARANTINE with bounded backoff; ten failures after
+    entering QUARANTINE → DEAD. Never-verified candidates just count failures. A deep success always
+    leads to ACTIVE unless a blacklist (→ VERIFIED) or an operator quarantine is in force."""
+    if result.lab_failure or result.inconclusive:
         return row
-    nxt = EndpointRow(**vars(row))
+    nxt = replace(row)
     if result.handshake_ok:
         nxt.last_handshake_ok_at = now
-    if deep and result.handshake_ok and result.traffic_ok:
+    if not deep:
+        # A handshake alone never creates ACTIVE and only advances fresh candidates.
+        if result.handshake_ok and nxt.state in (DISCOVERED, PROBING):
+            nxt.state, nxt.consecutive_failures = HANDSHAKE_OK, 0
+        return nxt
+    if result.ok:
         nxt.consecutive_successes += 1
         nxt.consecutive_failures = 0
         nxt.last_traffic_ok_at = now
-        nxt.quarantine_until = None
+        if manual_quarantine_active(row, now):
+            return nxt  # an operator quarantine outranks automatic recovery
+        nxt.quarantine_until = nxt.quarantine_kind = None
+        nxt.quarantine_level = nxt.quarantine_failures = 0
         if nxt.manual_blacklist:
-            nxt.state, nxt.expires_at = VERIFIED, None  # blacklist outranks every automatic state
+            nxt.state, nxt.expires_at, nxt.active_since = VERIFIED, None, None
         else:
+            nxt.active_since = row.active_since if row.state == ACTIVE and row.active_since else now
+            nxt.first_active_at = row.first_active_at or now
             nxt.state, nxt.expires_at = ACTIVE, now + ACTIVE_TTL_S
         return nxt
-    if not deep and result.handshake_ok:
-        # A handshake alone never creates ACTIVE and only advances fresh candidates. SUSPECT, QUARANTINE
-        # and DEAD keep their state and failure count: they recover through a deep verify (or re-import).
-        if nxt.state in (DISCOVERED, PROBING):
-            nxt.state = HANDSHAKE_OK
-            nxt.consecutive_failures = 0
-        return nxt
-    # endpoint failure
+    # endpoint-specific failure
     nxt.consecutive_successes = 0
     nxt.consecutive_failures += 1
     nxt.last_error_code = result.error_code or UNKNOWN
     nxt.last_error_at = now
-    nxt.expires_at = None  # leaves generator eligibility immediately
-    if row.state == ACTIVE:
-        nxt.state = SUSPECT  # first meaningful failure: out of the pool, quick recheck next
+    nxt.expires_at = nxt.active_since = None  # leaves generator eligibility immediately
+    if manual_quarantine_active(row, now):
+        return nxt
+    if row.state in (ACTIVE, VERIFYING, VERIFIED):
+        nxt.state = SUSPECT  # first meaningful failure (or a re-verification that failed)
+    elif row.state == SUSPECT:
+        nxt.state, nxt.quarantine_kind = QUARANTINE, "auto"
+        nxt.quarantine_level, nxt.quarantine_failures = 0, 0
+        nxt.quarantine_until = now + QUARANTINE_BACKOFF_S[0]
     elif row.state == QUARANTINE:
-        if nxt.consecutive_failures >= SUSPECT_TO_QUARANTINE_FAILURES + QUARANTINE_TO_DEAD_FAILURES:
-            nxt.state = DEAD
-    elif row.state != DEAD and nxt.consecutive_failures >= SUSPECT_TO_QUARANTINE_FAILURES:
-        nxt.state, nxt.quarantine_until = QUARANTINE, now + QUARANTINE_S
+        nxt.quarantine_failures += 1
+        if nxt.quarantine_failures >= QUARANTINE_TO_DEAD_FAILURES:
+            nxt.state, nxt.quarantine_until, nxt.quarantine_kind = DEAD, None, None
+        else:
+            nxt.quarantine_kind = "auto"
+            nxt.quarantine_level = min(row.quarantine_level + 1, len(QUARANTINE_BACKOFF_S) - 1)
+            nxt.quarantine_until = now + QUARANTINE_BACKOFF_S[nxt.quarantine_level]
+    # DISCOVERED / PROBING / HANDSHAKE_OK (never verified) and DEAD keep their state
     return nxt
 
 
 def is_eligible(row: EndpointRow, now: int) -> bool:
     return (row.state == ACTIVE and not row.manual_blacklist and row.expires_at is not None
-            and row.expires_at > now and row.last_traffic_ok_at is not None
-            and row.last_traffic_ok_at > now - ACTIVE_TTL_S)
+            and row.expires_at > now)
 
 
-def due_for_batch(row: EndpointRow, now: int) -> bool:
-    """verify-all skips blacklisted, DEAD and still-cooling QUARANTINE endpoints (an explicit verify may not)."""
-    if row.manual_blacklist or row.state == DEAD:
+def due_for_refresh(row: EndpointRow, source: str, now: int) -> bool:
+    """Refresh re-verifies the pool: ACTIVE, SUSPECT (accelerated recheck), VERIFYING and automatic
+    QUARANTINE whose cooldown expired. Blacklist, operator quarantine and negative controls never."""
+    if row.manual_blacklist or source == SRC_NEGATIVE:
         return False
-    return not (row.state == QUARANTINE and row.quarantine_until is not None and row.quarantine_until > now)
-
-
-def global_failure_suspected(results: list[ProbeResult]) -> bool:
-    """Every endpoint in a sizeable batch silent at once points at the Lab or the VPS uplink."""
-    endpoint_results = [r for r in results if not r.lab_failure]
-    return (len(endpoint_results) >= GLOBAL_GUARD_MIN_BATCH
-            and all(not r.handshake_ok and r.error_code == HANDSHAKE_NO_RESPONSE for r in endpoint_results))
+    if row.state in (ACTIVE, SUSPECT, VERIFYING):
+        return True
+    return (row.state == QUARANTINE and row.quarantine_kind != "manual"
+            and (row.quarantine_until is None or row.quarantine_until <= now))
 
 
 # --- storage ---------------------------------------------------------------------------------------------
@@ -760,29 +1054,94 @@ CREATE TABLE observation (
   operation_id TEXT NOT NULL
 );
 CREATE INDEX observation_endpoint_ts ON observation(endpoint_id, timestamp);
-CREATE TABLE lab_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE lab_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)
 """
+
+# v2: Phase B. Phase A rows are kept; previously verified endpoints must prove themselves again.
+SCHEMA_V2 = f"""
+ALTER TABLE endpoint ADD COLUMN source_first TEXT;
+ALTER TABLE endpoint ADD COLUMN quarantine_kind TEXT;
+ALTER TABLE endpoint ADD COLUMN quarantine_level INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE endpoint ADD COLUMN quarantine_failures INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE endpoint ADD COLUMN blacklist_reason TEXT;
+ALTER TABLE endpoint ADD COLUMN blacklist_at INTEGER;
+ALTER TABLE endpoint ADD COLUMN active_since INTEGER;
+ALTER TABLE endpoint ADD COLUMN first_active_at INTEGER;
+ALTER TABLE observation ADD COLUMN bytes INTEGER;
+ALTER TABLE observation ADD COLUMN run_kind TEXT;
+CREATE INDEX observation_ts ON observation(timestamp);
+CREATE TABLE transition (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, endpoint_id TEXT NOT NULL,
+  from_state TEXT NOT NULL, to_state TEXT NOT NULL, cause TEXT, operation_id TEXT);
+CREATE INDEX transition_ts ON transition(ts);
+CREATE TABLE operator_event (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, endpoint_id TEXT, action TEXT NOT NULL,
+  reason TEXT, operation_id TEXT NOT NULL);
+CREATE TABLE target_result (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, endpoint_id TEXT NOT NULL, target TEXT NOT NULL,
+  ok INTEGER NOT NULL, error_code TEXT, operation_id TEXT NOT NULL);
+CREATE INDEX target_result_ts ON target_result(ts);
+CREATE TABLE run (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL, kind TEXT NOT NULL,
+  started_at INTEGER NOT NULL, finished_at INTEGER, duration_ms INTEGER, status TEXT NOT NULL,
+  lab_health TEXT, lab_reason TEXT, probes INTEGER NOT NULL DEFAULT 0, endpoint_failures INTEGER NOT NULL DEFAULT 0,
+  lab_failures INTEGER NOT NULL DEFAULT 0, inconclusive INTEGER NOT NULL DEFAULT 0,
+  active_after INTEGER, cpu_ms INTEGER, maxrss_kb INTEGER, mem_available_kb INTEGER, swap_used_kb INTEGER,
+  bytes INTEGER, note TEXT);
+CREATE INDEX run_kind_started ON run(kind, started_at);
+UPDATE endpoint SET source_first = source;
+UPDATE endpoint SET first_active_at = last_traffic_ok_at WHERE last_traffic_ok_at IS NOT NULL;
+UPDATE endpoint SET source = CASE
+  WHEN source = '{SRC_NEGATIVE}' THEN '{SRC_NEGATIVE}'
+  WHEN last_traffic_ok_at IS NOT NULL THEN '{SRC_PHASE_A}'
+  WHEN ip LIKE '162.159.193.%' THEN '{SRC_CF_ONE}'
+  WHEN ip LIKE '162.159.192.%' THEN '{SRC_CONSUMER}'
+  ELSE '{SRC_LEGACY}' END;
+UPDATE endpoint SET state = '{VERIFYING}', expires_at = NULL
+  WHERE state IN ('{ACTIVE}', '{SUSPECT}', '{VERIFIED}') AND source <> '{SRC_NEGATIVE}';
+UPDATE endpoint SET quarantine_kind = 'auto' WHERE state = '{QUARANTINE}'
+"""
+MIGRATIONS = {1: SCHEMA_V1, 2: SCHEMA_V2}
 
 ROW_FIELDS = tuple(EndpointRow.__dataclass_fields__)
 
 
 class Store:
-    def __init__(self, path: str):
+    def __init__(self, path: str, clock=now_s):
+        self.path, self.clock = path, clock
         self.conn = sqlite3.connect(path, timeout=10, isolation_level=None)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
-        self.migrate()
+        self.conn.execute("PRAGMA journal_size_limit=4194304")
+        try:
+            self.migrate()
+        except BaseException:
+            self.conn.close()  # a refused or failed migration leaves no open handle behind
+            raise
 
     def migrate(self) -> None:
+        """Versioned, transactional; a copy of an existing DB is taken first. Failure = the Lab does not run."""
         version = self.conn.execute("PRAGMA user_version").fetchone()[0]
         if version > SCHEMA_VERSION:
             raise LabError(LOCAL_RESOURCE_ERROR, f"database schema {version} is newer than this Lab ({SCHEMA_VERSION})")
-        if version == 0:
+        if version == SCHEMA_VERSION:
+            return
+        if version > 0 and self.path != ":memory:":
+            backup_dir = os.path.join(os.path.dirname(self.path), DB_BACKUP_DIR)
+            os.makedirs(backup_dir, mode=0o700, exist_ok=True)
+            dest = sqlite3.connect(os.path.join(backup_dir, f"lab-v{version}-{self.clock()}.db"))
+            with dest:
+                self.conn.backup(dest)
+            dest.close()
+        try:
             with self.transaction():
-                for stmt in filter(str.strip, SCHEMA_V1.split(";")):
-                    self.conn.execute(stmt)
+                for target in range(version + 1, SCHEMA_VERSION + 1):
+                    for stmt in filter(str.strip, MIGRATIONS[target].split(";")):
+                        self.conn.execute(stmt)
                 self.conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+        except sqlite3.Error as exc:
+            raise LabError(LOCAL_RESOURCE_ERROR, f"database migration {version}->{SCHEMA_VERSION} failed: {exc}") from None
 
     @contextlib.contextmanager
     def transaction(self):
@@ -796,18 +1155,17 @@ class Store:
 
     def upsert_candidate(self, ep: Endpoint, source: str, now: int) -> bool:
         """Insert as DISCOVERED or refresh last_seen_at; returns True for a new endpoint.
-        A DEAD endpoint found again after the quarantine cooldown restarts as DISCOVERED."""
+        A DEAD endpoint found again after the resurrection delay restarts as DISCOVERED."""
         existing = self.get(ep.endpoint_id)
         is_new = existing is None
-        if existing is not None and existing["state"] == DEAD and (existing["last_error_at"] or 0) <= now - QUARANTINE_S:
-            self.conn.execute("UPDATE endpoint SET state=?, consecutive_failures=0, quarantine_until=NULL,"
-                              " updated_at=? WHERE endpoint_id=?", (DISCOVERED, now, ep.endpoint_id))
+        if existing is not None and existing["state"] == DEAD and (existing["last_error_at"] or 0) <= now - DEAD_RESURRECT_AFTER_S:
+            self.set_state(ep.endpoint_id, DISCOVERED, "reimported", None, now, consecutive_failures=0,
+                           quarantine_until=None, quarantine_kind=None, quarantine_level=0, quarantine_failures=0)
         self.conn.execute(
-            "INSERT INTO endpoint (endpoint_id, ip, port, address_family, state, source, first_seen_at,"
-            " last_seen_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)"
-            " ON CONFLICT(endpoint_id) DO UPDATE SET last_seen_at=excluded.last_seen_at, source=excluded.source,"
-            " updated_at=excluded.updated_at",
-            (ep.endpoint_id, ep.ip, ep.port, ep.family, DISCOVERED, source, now, now, now, now))
+            "INSERT INTO endpoint (endpoint_id, ip, port, address_family, state, source, source_first, first_seen_at,"
+            " last_seen_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)"
+            " ON CONFLICT(endpoint_id) DO UPDATE SET last_seen_at=excluded.last_seen_at, updated_at=excluded.updated_at",
+            (ep.endpoint_id, ep.ip, ep.port, ep.family, DISCOVERED, source, source, now, now, now, now))
         return is_new
 
     def get(self, endpoint_id: str) -> sqlite3.Row | None:
@@ -820,93 +1178,129 @@ class Store:
     def to_row(rec: sqlite3.Row) -> EndpointRow:
         return EndpointRow(**{k: rec[k] for k in ROW_FIELDS})
 
+    def set_state(self, endpoint_id: str, state: str, cause: str, operation_id: str | None, now: int, **cols) -> None:
+        old = self.get(endpoint_id)
+        if old is None:
+            raise LabError(UNKNOWN, f"unknown endpoint {endpoint_id}")
+        sets = ", ".join(["state=?", "updated_at=?"] + [f"{k}=?" for k in cols])
+        self.conn.execute(f"UPDATE endpoint SET {sets} WHERE endpoint_id=?", (state, now, *cols.values(), endpoint_id))
+        if old["state"] != state:
+            self.conn.execute("INSERT INTO transition (ts, endpoint_id, from_state, to_state, cause, operation_id)"
+                              " VALUES (?,?,?,?,?,?)", (now, endpoint_id, old["state"], state, cause, operation_id))
+
     def record(self, endpoint_id: str, result: ProbeResult, deep: bool, now: int, operation_id: str,
-               apply_transition: bool = True) -> EndpointRow:
+               apply_transition: bool = True, run_kind: str = "manual") -> EndpointRow:
         rec = self.get(endpoint_id)
         if rec is None:
-            raise LabError(UNKNOWN, f"unknown endpoint {endpoint_id}; import it from the candidates file first")
+            raise LabError(UNKNOWN, f"unknown endpoint {endpoint_id}; import it first")
         old = self.to_row(rec)
         new = apply_outcome(old, result, deep, now) if apply_transition else old
-        outcome = ("lab_failure" if result.lab_failure else "suppressed" if not apply_transition
-                   else "ok" if result.handshake_ok else "fail")
+        if result.lab_failure:
+            hs_outcome = "lab_failure"
+        elif not apply_transition:
+            hs_outcome = "suppressed"
+        else:
+            hs_outcome = "ok" if result.handshake_ok else "fail"
         self.conn.execute(
-            "INSERT INTO observation (endpoint_id, timestamp, probe_type, result, duration_ms, error_code,"
-            " operation_id) VALUES (?,?,?,?,?,?,?)",
-            (endpoint_id, now, "handshake", outcome, result.probe_completion_ms,
-             None if result.handshake_ok else result.error_code, operation_id))
+            "INSERT INTO observation (endpoint_id, timestamp, probe_type, result, duration_ms, error_code, operation_id,"
+            " bytes, run_kind) VALUES (?,?,?,?,?,?,?,?,?)",
+            (endpoint_id, now, "handshake", hs_outcome, result.probe_completion_ms,
+             None if result.handshake_ok else result.error_code, operation_id, result.traffic_bytes, run_kind))
         if deep and result.handshake_ok:
-            t_outcome = "lab_failure" if result.lab_failure else ("ok" if result.traffic_ok else "fail")
+            if result.inconclusive:
+                t_outcome = "inconclusive" if apply_transition else "suppressed"
+            elif not apply_transition:
+                t_outcome = "suppressed"
+            else:
+                t_outcome = "ok" if result.traffic_ok else "fail"
             self.conn.execute(
-                "INSERT INTO observation (endpoint_id, timestamp, probe_type, result, duration_ms, error_code,"
-                " operation_id) VALUES (?,?,?,?,?,?,?)",
+                "INSERT INTO observation (endpoint_id, timestamp, probe_type, result, duration_ms, error_code, operation_id,"
+                " run_kind) VALUES (?,?,?,?,?,?,?,?)",
                 (endpoint_id, now, "traffic", t_outcome, result.traffic_total_ms,
-                 None if result.traffic_ok else result.error_code, operation_id))
-        sets = ", ".join(f"{k}=?" for k in ROW_FIELDS if k != "endpoint_id")
-        values = [getattr(new, k) for k in ROW_FIELDS if k != "endpoint_id"]
-        self.conn.execute(
-            f"UPDATE endpoint SET {sets}, last_probe_at=?, updated_at=?,"
-            " probe_completion_ms=COALESCE(?, probe_completion_ms), traffic_total_ms=COALESCE(?, traffic_total_ms)"
-            " WHERE endpoint_id=?",
-            (*values, now, now, result.probe_completion_ms if result.handshake_ok else None,
-             result.traffic_total_ms, endpoint_id))
+                 None if result.traffic_ok else result.error_code, operation_id, run_kind))
+        for name, ok, err in result.target_results:
+            self.conn.execute("INSERT INTO target_result (ts, endpoint_id, target, ok, error_code, operation_id)"
+                              " VALUES (?,?,?,?,?,?)", (now, endpoint_id, name, int(ok), err, operation_id))
+        cols = {k: getattr(new, k) for k in ROW_FIELDS if k not in ("endpoint_id", "state")}
+        cols.update(last_probe_at=now)
+        if result.handshake_ok and result.probe_completion_ms is not None:
+            cols["probe_completion_ms"] = result.probe_completion_ms
+        if result.traffic_total_ms is not None:
+            cols["traffic_total_ms"] = result.traffic_total_ms
+        cause = "lab_failure" if result.lab_failure else (result.error_code or "verified")
+        self.set_state(endpoint_id, new.state, cause, operation_id, now, **cols)
         return new
 
-    def set_meta(self, key: str, value: str) -> None:
+    def set_meta(self, key: str, value: object) -> None:
         self.conn.execute("INSERT INTO lab_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET"
-                          " value=excluded.value", (key, value))
+                          " value=excluded.value", (key, str(value)))
 
     def meta(self) -> dict:
         return {r["key"]: r["value"] for r in self.conn.execute("SELECT key, value FROM lab_meta")}
 
+    def operator_event(self, endpoint_id: str | None, action: str, reason: str | None, now: int) -> None:
+        self.conn.execute("INSERT INTO operator_event (ts, endpoint_id, action, reason, operation_id) VALUES (?,?,?,?,?)",
+                          (now, endpoint_id, action, reason, secrets.token_hex(8)))
+
     def prune(self, now: int) -> int:
-        return self.conn.execute("DELETE FROM observation WHERE timestamp < ?",
-                                 (now - OBSERVATION_RETENTION_S,)).rowcount
+        n = self.conn.execute("DELETE FROM observation WHERE timestamp < ?", (now - OBSERVATION_RETENTION_S,)).rowcount
+        n += self.conn.execute("DELETE FROM target_result WHERE ts < ?", (now - OBSERVATION_RETENTION_S,)).rowcount
+        for table, col in (("transition", "ts"), ("run", "started_at"), ("operator_event", "ts")):
+            n += self.conn.execute(f"DELETE FROM {table} WHERE {col} < ?", (now - HISTORY_RETENTION_S,)).rowcount
+        return n
+
+    def db_bytes(self) -> int:
+        return sum(os.path.getsize(self.path + suffix) for suffix in ("", "-wal", "-shm")
+                   if os.path.exists(self.path + suffix))
+
+    def quick_check(self) -> bool:
+        return self.conn.execute("PRAGMA quick_check(1)").fetchone()[0] == "ok"
 
 
 # --- snapshot ------------------------------------------------------------------------------------------------
-SNAPSHOT_TOP_KEYS = ("schema_version", "generated_at", "expires_at", "lab_status", "endpoints")
-SNAPSHOT_LAB_STATUSES = ("ok", "empty", "degraded")
+SNAPSHOT_TOP_KEYS = ("schema_version", "generated_at", "expires_at", "lab_status", "active_count", "endpoints")
+SNAPSHOT_LAB_STATUSES = ("ok", "degraded", "unavailable")
 SNAPSHOT_ENDPOINT_KEYS = ("ip", "port", "family", "state", "lab_verified_at", "expires_at", "source_class",
                           "probe_completion_ms", "traffic_total_ms")
 
 
-def build_snapshot(rows: list[sqlite3.Row], lab_status: str, now: int) -> dict:
+def build_snapshot(rows: list[sqlite3.Row], lab_health: str, now: int) -> dict:
+    """Only fresh eligible endpoints. Top-level expiry follows the next expected refresh, so a stopped
+    timer makes the whole file stale even before individual endpoints expire."""
     endpoints = []
     for rec in rows:
-        if rec["source"] == "negative_control" or not is_eligible(Store.to_row(rec), now):
+        if rec["source"] == SRC_NEGATIVE or not is_eligible(Store.to_row(rec), now):
             continue
         endpoints.append({"ip": rec["ip"], "port": rec["port"], "family": rec["address_family"],
                           "state": "active", "lab_verified_at": iso(rec["last_traffic_ok_at"]),
                           "expires_at": iso(rec["expires_at"]), "source_class": rec["source"],
                           "probe_completion_ms": rec["probe_completion_ms"],
                           "traffic_total_ms": rec["traffic_total_ms"]})
-    expires = min((rec["expires_at"] for rec in rows if rec["source"] != "negative_control"
-                   and is_eligible(Store.to_row(rec), now)), default=now)
-    if lab_status == "ok" and not endpoints:
-        lab_status = "empty"
+    expires = now + SNAPSHOT_TTL_S
+    if endpoints:
+        expires = min(expires, min(parse_iso(e["expires_at"]) for e in endpoints))
     return {"schema_version": SNAPSHOT_SCHEMA_VERSION, "generated_at": iso(now), "expires_at": iso(expires),
-            "lab_status": lab_status, "endpoints": endpoints}
+            "lab_status": lab_health.lower(), "active_count": len(endpoints), "endpoints": endpoints}
 
 
 def validate_snapshot(doc: object, now: int) -> list[dict]:
     """What a consumer must check before trusting the file; raises on anything unexpected (fail closed)."""
-    def parse(ts: object) -> int:
-        return int(dt.datetime.strptime(str(ts), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc).timestamp())
-
     if not isinstance(doc, dict) or doc.get("schema_version") != SNAPSHOT_SCHEMA_VERSION:
         raise ValueError("unsupported snapshot schema")
     if set(doc) != set(SNAPSHOT_TOP_KEYS) or doc["lab_status"] not in SNAPSHOT_LAB_STATUSES:
         raise ValueError("unexpected snapshot fields or lab_status")
-    if parse(doc["generated_at"]) > now + 60:
+    if parse_iso(doc["generated_at"]) > now + 60:
         raise ValueError("snapshot generated in the future")
-    if parse(doc["expires_at"]) <= now:
+    if not isinstance(doc["endpoints"], list) or doc["active_count"] != len(doc["endpoints"]):
+        raise ValueError("active_count does not match endpoints")
+    if parse_iso(doc["expires_at"]) <= now:
         return []
     fresh = []
-    for ep in doc.get("endpoints", []):
+    for ep in doc["endpoints"]:
         if set(ep) != set(SNAPSHOT_ENDPOINT_KEYS):
             raise ValueError("unexpected endpoint fields")
         checked = parse_endpoint(ep["ip"], ep["port"])
-        if ep["state"] == "active" and parse(ep["expires_at"]) > now:
+        if ep["state"] == "active" and parse_iso(ep["expires_at"]) > now:
             fresh.append({**ep, "ip": checked.ip})
     return fresh
 
@@ -917,81 +1311,566 @@ def write_snapshot(public_dir: str, snapshot: dict) -> str:
     return path
 
 
+# --- host resources ------------------------------------------------------------------------------------------
+@dataclass
+class Resources:
+    mem_available_kb: int | None
+    swap_used_kb: int | None
+    load1: float | None
+    cpus: int
+    disk_free: int | None
+
+
+def read_resources(state_dir: str = STATE_DIR) -> Resources:
+    mem, swap_total, swap_free = None, None, None
+    with contextlib.suppress(OSError, ValueError):
+        with open("/proc/meminfo", encoding="ascii") as fh:
+            for line in fh:
+                key, value = line.split(":", 1)
+                if key == "MemAvailable":
+                    mem = int(value.split()[0])
+                elif key == "SwapTotal":
+                    swap_total = int(value.split()[0])
+                elif key == "SwapFree":
+                    swap_free = int(value.split()[0])
+    load = None
+    with contextlib.suppress(OSError, ValueError, AttributeError):
+        load = os.getloadavg()[0]
+    disk = None
+    with contextlib.suppress(OSError, AttributeError):
+        st = os.statvfs(state_dir)
+        disk = st.f_bavail * st.f_frsize
+    swap = swap_total - swap_free if swap_total is not None and swap_free is not None else None
+    return Resources(mem, swap, load, os.cpu_count() or 1, disk)
+
+
+def discovery_blocked_by(res: Resources) -> str | None:
+    if res.mem_available_kb is not None and res.mem_available_kb < DISCOVERY_MIN_MEM_KB:
+        return "memory"
+    if res.load1 is not None and res.load1 > DISCOVERY_MAX_LOAD_PER_CPU * res.cpus:
+        return "load"
+    if res.disk_free is not None and res.disk_free < MIN_DISK_FREE:
+        return "disk"
+    return None
+
+
+def refresh_reduced(res: Resources) -> bool:
+    return ((res.mem_available_kb is not None and res.mem_available_kb < REFRESH_MIN_MEM_KB)
+            or (res.disk_free is not None and res.disk_free < MIN_DISK_FREE // 4))
+
+
+def usage_snapshot() -> tuple[float, int]:
+    """(cpu seconds of this process + reaped children, peak RSS kB of the larger of the two)."""
+    if resource is None:
+        return 0.0, 0
+    s, c = resource.getrusage(resource.RUSAGE_SELF), resource.getrusage(resource.RUSAGE_CHILDREN)
+    return s.ru_utime + s.ru_stime + c.ru_utime + c.ru_stime, max(s.ru_maxrss, c.ru_maxrss)
+
+
 # --- orchestration -----------------------------------------------------------------------------------------------
+@dataclass
+class ControlVerdict:
+    global_ok: bool | None          # True: a control passed; False: all controls failed; None: no controls
+    results: dict                   # endpoint_id -> (ProbeResult, finished_at)
+    reason: str
+
+
+@dataclass
+class BatchOutcome:
+    results: list                   # [(endpoint_id, ProbeResult)] as recorded
+    lab_health: str
+    lab_reason: str
+    control: ControlVerdict | None
+    aborted: bool = False
+    snapshot_ok: bool = True
+
+
 class Lab:
     def __init__(self, store: Store, engine: ProbeEngine, identity_loader=load_identity, clock=now_s,
-                 public_dir: str = PUBLIC_DIR):
+                 public_dir: str = PUBLIC_DIR, config: LabConfig | None = None, api: WarpApi | None = None,
+                 monotonic=time.monotonic):
         self.store, self.engine, self.identity_loader = store, engine, identity_loader
-        self.clock, self.public_dir = clock, public_dir
+        self.clock, self.public_dir, self.monotonic = clock, public_dir, monotonic
+        self.config = config or LabConfig()
+        self.api = api
+        self.targets = active_targets(self.config)
 
-    def _probe_many(self, endpoint_ids: list[str], deep: bool) -> list[tuple[str, ProbeResult, int]]:
-        """(endpoint_id, result, finished_at): each result keeps its own time, never the batch end."""
+    # -- target ordering: the first target that answered stays first for the rest of the run
+    def _note_targets(self, res: ProbeResult) -> None:
+        winner = next((name for name, ok, _ in res.target_results if ok), None)
+        if winner and self.targets and self.targets[0].name != winner:
+            self.targets.sort(key=lambda t: t.name != winner)
+
+    # -- controls
+    def select_controls(self, now: int) -> list[str]:
+        """Two recent known-good endpoints (different IPs, preferably different ports). Kept while they
+        stay ACTIVE; otherwise replaced from the healthiest ACTIVE endpoints. Never hardcoded."""
+        rows = {r["endpoint_id"]: r for r in self.store.all()}
+
+        def usable(eid: str) -> bool:
+            r = rows.get(eid)
+            return (r is not None and r["state"] == ACTIVE and not r["manual_blacklist"]
+                    and r["source"] != SRC_NEGATIVE)
+
+        meta = self.store.meta()
+        current = [c for c in json.loads(meta.get("controls", "[]")) if usable(c)][:2]
+        ranked = sorted((r for r in rows.values() if usable(r["endpoint_id"])),
+                        key=lambda r: (-r["consecutive_successes"], -(r["last_traffic_ok_at"] or 0), r["endpoint_id"]))
+        chosen = list(current)
+        while len(chosen) < 2:
+            taken_ips = {rows[c]["ip"] for c in chosen}
+            taken_ports = {rows[c]["port"] for c in chosen}
+            pool = [r for r in ranked if r["endpoint_id"] not in chosen and r["ip"] not in taken_ips]
+            pick = next((r for r in pool if r["port"] not in taken_ports), pool[0] if pool else None)
+            if pick is None:
+                break
+            chosen.append(pick["endpoint_id"])
+        if chosen != json.loads(meta.get("controls", "[]")):
+            self.store.set_meta("controls", json.dumps(chosen))
+            self.store.set_meta("control_selected_at", now)
+            self.store.set_meta("control_reason", "highest consecutive successes among ACTIVE, distinct IPs"
+                                if chosen else "no ACTIVE endpoint available")
+        return chosen
+
+    def control_check(self, identity: Identity, now: int) -> ControlVerdict:
+        controls = self.select_controls(now)
+        if not controls:
+            return ControlVerdict(None, {}, "NO_CONTROLS")
+        results: dict = {}
+        for cid in controls:
+            res = self.engine.deep_verify(parse_endpoint_id(cid), identity, REFRESH_HANDSHAKE_TIMEOUT_S, self.targets)
+            results[cid] = (res, self.clock())
+            self._note_targets(res)
+            if res.ok:
+                return ControlVerdict(True, results, f"control {cid} verified")
+        rs = [r for r, _ in results.values()]
+        if all(r.lab_failure for r in rs):
+            reason = rs[0].error_code or UNKNOWN
+        elif all(r.inconclusive for r in rs):
+            reason = "VERIFICATION_TARGETS_UNAVAILABLE"
+        else:
+            reason = "CONTROLS_SILENT"
+            if self.api is not None:
+                last = int(self.store.meta().get("identity_api_checked_at", "0") or 0)
+                if now - last >= IDENTITY_API_CHECK_INTERVAL_S:
+                    status = identity_api_check(self.api)
+                    self.store.set_meta("identity_api_status", status)
+                    self.store.set_meta("identity_api_checked_at", now)
+                    reason = {"invalid": PROBE_IDENTITY_INVALID, "valid": "WARP_UDP_UNREACHABLE",
+                              "unknown": "VPS_NETWORK_OR_API_UNREACHABLE"}[status]
+        return ControlVerdict(False, results, reason)
+
+    # -- the batch with its circuit breaker
+    def run_batch(self, endpoint_ids: list[str], kind: str = "manual", timeout_s: float = REFRESH_HANDSHAKE_TIMEOUT_S,
+                  wall_s: float | None = None, breaker: bool = True) -> BatchOutcome:
+        for eid in endpoint_ids:
+            rec = self.store.get(eid)
+            if rec is None:
+                raise LabError(UNKNOWN, f"unknown endpoint {eid}; import it first")
+            if rec["manual_blacklist"]:
+                raise LabError(UNKNOWN, f"{eid} is blacklisted")
+        operation_id = secrets.token_hex(8)
+        started, start_mono = self.clock(), self.monotonic()
+        cpu0, _ = usage_snapshot()
+        before = {eid: Store.to_row(self.store.get(eid)) for eid in endpoint_ids}
+        results: list = []          # [(eid, result, finished_at)]
+        verdict: ControlVerdict | None = None
+        aborted = False
         try:
             identity = self.identity_loader()
         except LabError as exc:
             fail = ProbeResult(False, error_code=exc.code, message=str(exc))
-            now = self.clock()
-            return [(eid, fail, now) for eid in endpoint_ids]
-        results = []
-        for eid in endpoint_ids:  # sequential by design (Phase A: deep concurrency 1)
-            ep = parse_endpoint_id(eid)
-            res = self.engine.deep_verify(ep, identity) if deep else self.engine.probe_handshake(ep, identity)
-            results.append((eid, res, self.clock()))
-        return results
-
-    def run(self, endpoint_ids: list[str], deep: bool) -> list[tuple[str, ProbeResult]]:
-        for eid in endpoint_ids:
-            if self.store.get(eid) is None:
-                raise LabError(UNKNOWN, f"unknown endpoint {eid}; import it from the candidates file first")
-            if self.store.get(eid)["manual_blacklist"]:
-                raise LabError(UNKNOWN, f"{eid} is blacklisted")
-        operation_id = secrets.token_hex(8)
-        results = self._probe_many(endpoint_ids, deep)
-        guard = global_failure_suspected([r for _, r, _ in results])
+            results = [(eid, fail, self.clock()) for eid in endpoint_ids]
+            identity = None
+        if identity is not None:
+            bad_streak = 0
+            for eid in endpoint_ids:
+                if wall_s is not None and self.monotonic() - start_mono > wall_s:
+                    aborted = True  # budget spent: the rest simply ages
+                    break
+                res = self.engine.deep_verify(parse_endpoint_id(eid), identity, timeout_s, self.targets)
+                results.append((eid, res, self.clock()))
+                self._note_targets(res)
+                was_active = before[eid].state == ACTIVE
+                if res.ok:
+                    bad_streak = 0
+                elif was_active and (res.endpoint_failure or res.inconclusive):
+                    bad_streak += 1
+                if breaker and verdict is None and (res.inconclusive or bad_streak >= EARLY_CONTROL_STREAK):
+                    verdict = self.control_check(identity, self.clock())
+                    if verdict.global_ok is False:
+                        aborted = True  # the Lab cannot prove anything right now: stop spending probes
+                        break
+        prev_active = [(e, r) for e, r, _ in results if before[e].state == ACTIVE]
+        failed_prev = [e for e, r in prev_active if r.endpoint_failure or r.inconclusive]
+        anomaly = len(prev_active) >= ANOMALY_MIN and len(failed_prev) >= max(ANOMALY_MIN,
+                                                                               math.ceil(ANOMALY_SHARE * len(prev_active)))
+        any_inconclusive = any(r.inconclusive for _, r, _ in results)
+        mass_failure = (len(results) >= ANOMALY_MIN and all(r.endpoint_failure or r.inconclusive
+                                                             for _, r, _ in results))
+        if breaker and identity is not None and verdict is None and (anomaly or any_inconclusive or mass_failure):
+            verdict = self.control_check(identity, self.clock())
+        global_ok = verdict.global_ok if verdict else True
+        if breaker and identity is not None and verdict and global_ok is True and anomaly:
+            # The path works again: re-verify the mass failure once instead of booking a transient blip.
+            redo = [e for e in failed_prev if e not in verdict.results]
+            index = {e: i for i, (e, _, _) in enumerate(results)}
+            for eid in redo:
+                res = self.engine.deep_verify(parse_endpoint_id(eid), identity, timeout_s, self.targets)
+                results[index[eid]] = (eid, res, self.clock())
         lab_failures = [r for _, r, _ in results if r.lab_failure]
+        no_controls_mass = breaker and mass_failure and verdict is not None and verdict.global_ok is None
+        recorded = []
         now = self.clock()
-        with self.store.transaction():
-            for eid, res, finished_at in results:
-                self.store.record(eid, res, deep, finished_at, operation_id, apply_transition=not guard)
-            status = ("lab_failure" if lab_failures and len(lab_failures) == len(results)
-                      else "suspect_global" if guard else "degraded" if lab_failures else "ok")
-            self.store.set_meta("last_run_at", str(now))
-            self.store.set_meta("last_run_status", status)
-            self.store.set_meta("last_operation_id", operation_id)
-            if lab_failures:
-                self.store.set_meta("last_lab_failure", lab_failures[0].error_code or UNKNOWN)
-            self.store.prune(now)
-        self.publish()
-        return [(eid, res) for eid, res, _ in results]
+        try:
+            with self.store.transaction():
+                for eid, res, ts in results:
+                    apply = True
+                    if verdict and eid in verdict.results:
+                        apply = False                       # its later control probe decides, never twice
+                    elif res.ok or res.lab_failure:
+                        pass
+                    elif global_ok is False or no_controls_mass:
+                        apply = False                       # Lab/global failure: no endpoint penalty
+                    elif res.inconclusive:
+                        if global_ok is True:
+                            res = replace(res, error_code=TRAFFIC_FAILED,
+                                          message="targets failed here while a control endpoint passed")
+                        else:
+                            apply = False                   # nobody can prove the targets work
+                    self.store.record(eid, res, True, ts, operation_id, apply_transition=apply, run_kind=kind)
+                    recorded.append((eid, res))
+                if verdict:
+                    for cid, (res, ts) in verdict.results.items():
+                        if res.lab_failure or (not res.ok and verdict.global_ok is not True):
+                            apply = res.ok
+                        else:
+                            apply = True
+                        self.store.record(cid, res, True, ts, operation_id, apply_transition=apply, run_kind="control")
+                health, reason = self._classify(results, verdict, anomaly, no_controls_mass, lab_failures)
+                if breaker or (results and len(lab_failures) == len(results)):
+                    self._set_health(health, reason, now)  # pool refreshes own the Lab health; discovery reports only
+                cpu1, rss = usage_snapshot()
+                res_now = read_resources(os.path.dirname(self.store.path) or ".")
+                active_after = sum(is_eligible(Store.to_row(r), now) for r in self.store.all()
+                                   if r["source"] != SRC_NEGATIVE)
+                self.store.conn.execute(
+                    "INSERT INTO run (operation_id, kind, started_at, finished_at, duration_ms, status, lab_health,"
+                    " lab_reason, probes, endpoint_failures, lab_failures, inconclusive, active_after, cpu_ms, maxrss_kb,"
+                    " mem_available_kb, swap_used_kb, bytes, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (operation_id, kind, started, now, int((self.monotonic() - start_mono) * 1000),
+                     "aborted" if aborted else "completed", health, reason, len(results),
+                     sum(r.endpoint_failure for _, r in recorded), len(lab_failures),
+                     sum(r.inconclusive for _, r, _ in results), active_after, int((cpu1 - cpu0) * 1000), rss,
+                     res_now.mem_available_kb, res_now.swap_used_kb,
+                     sum((r.traffic_bytes or 0) for _, r, _ in results), None))
+                self.store.set_meta(f"last_{kind}_at", now)
+                self.store.set_meta("last_run_status", health)
+                self.store.set_meta("last_operation_id", operation_id)
+        except sqlite3.Error as exc:
+            raise LabError(LOCAL_RESOURCE_ERROR, f"DB_WRITE_FAILED: {exc}") from None
+        snapshot_ok = self.publish()
+        return BatchOutcome(recorded, health, reason, verdict, aborted, snapshot_ok)
 
-    def publish(self) -> dict:
+    def _classify(self, results, verdict, anomaly, no_controls_mass, lab_failures) -> tuple[str, str]:
+        if results and len(lab_failures) == len(results):
+            return LAB_UNAVAILABLE, lab_failures[0].error_code or UNKNOWN
+        if verdict is not None and verdict.global_ok is False:
+            return LAB_UNAVAILABLE, verdict.reason
+        if no_controls_mass:
+            return LAB_UNAVAILABLE, "NO_CONTROLS_ALL_FAILED"
+        if verdict is not None and verdict.global_ok is True and anomaly:
+            return LAB_DEGRADED, "TRANSIENT_ANOMALY_RECHECKED"
+        if lab_failures:
+            return LAB_DEGRADED, lab_failures[0].error_code or UNKNOWN
+        if verdict is not None and verdict.global_ok is None and any(r.inconclusive for _, r, _ in results):
+            return LAB_DEGRADED, "NO_CONTROLS"
+        failed_targets: dict = {}
+        probed = [r for _, r, _ in results if r.target_results]
+        for r in probed:
+            for name, ok, _ in r.target_results:
+                if not ok:
+                    failed_targets[name] = failed_targets.get(name, 0) + 1
+        bad = sorted(n for n, c in failed_targets.items() if probed and c * 2 >= len(probed))
+        if bad:
+            return LAB_DEGRADED, "TARGET_FAILING:" + ",".join(bad)
+        return LAB_OK, "ok"
+
+    def _set_health(self, health: str, reason: str, now: int) -> None:
+        meta = self.store.meta()
+        if meta.get("lab_health") != health:
+            self.store.set_meta("lab_health_since", now)
+        self.store.set_meta("lab_health", health)
+        self.store.set_meta("lab_health_reason", reason)
+
+    def publish(self) -> bool:
+        """Snapshot from committed state only. A write failure is recorded, the old file ages out."""
         now = self.clock()
-        status = self.store.meta().get("last_run_status", "ok")
-        snapshot = build_snapshot(self.store.all(), "ok" if status == "ok" else "degraded", now)
-        write_snapshot(self.public_dir, snapshot)
-        return snapshot
+        meta = self.store.meta()
+        snapshot = build_snapshot(self.store.all(), meta.get("lab_health", LAB_OK), now)
+        try:
+            write_snapshot(self.public_dir, snapshot)
+        except OSError as exc:
+            with contextlib.suppress(sqlite3.Error):
+                with self.store.transaction():
+                    self.store.set_meta("last_snapshot_error", f"SNAPSHOT_WRITE_FAILED: {type(exc).__name__}")
+                    self.store.set_meta("last_snapshot_error_at", now)
+                    self._set_health(LAB_DEGRADED, "SNAPSHOT_WRITE_FAILED", now)
+            return False
+        with contextlib.suppress(sqlite3.Error):
+            with self.store.transaction():
+                self.store.set_meta("snapshot_generated_at", now)
+                self.store.set_meta("snapshot_expires_at", parse_iso(snapshot["expires_at"]))
+                self.store.set_meta("snapshot_active_count", snapshot["active_count"])
+        return True
+
+    # -- scheduled runs
+    def refresh(self, resources: Resources | None = None) -> BatchOutcome:
+        now = self.clock()
+        res = resources or read_resources(os.path.dirname(self.store.path) or ".")
+        rows = [r for r in self.store.all() if due_for_refresh(Store.to_row(r), r["source"], now)]
+        if refresh_reduced(res):
+            rows = [r for r in rows if r["state"] == ACTIVE]
+        rank = {ACTIVE: 0, SUSPECT: 1, VERIFYING: 2, QUARANTINE: 3}
+        rows.sort(key=lambda r: (rank.get(r["state"], 9), r["expires_at"] or 0, r["endpoint_id"]))
+        ids = [r["endpoint_id"] for r in rows[:MAX_REFRESH_ENDPOINTS]]
+        return self.run_batch(ids, "refresh", REFRESH_HANDSHAKE_TIMEOUT_S, REFRESH_WALL_S, breaker=True)
+
+    def discovery_plan(self, now: int) -> tuple[list[str], dict]:
+        """Seeds first, then DEAD resurrection, then the next /24 cursor slice; budget follows the pool."""
+        meta = self.store.meta()
+        active = sum(is_eligible(Store.to_row(r), now) for r in self.store.all() if r["source"] != SRC_NEGATIVE)
+        if active >= MAX_ACTIVE:
+            return [], {"reason": "pool at cap", "active": active}
+        budget = 4 if active >= TARGET_ACTIVE else (16 if active >= SOFT_FLOOR else 32)
+        plan: list[str] = []
+        rows = self.store.all()
+        for r in rows:  # never-probed seeds (imported, legacy, community)
+            if len(plan) >= budget:
+                break
+            if (r["state"] == DISCOVERED and r["last_probe_at"] is None and not r["manual_blacklist"]
+                    and r["source"] != SRC_NEGATIVE):
+                plan.append(r["endpoint_id"])
+        dead = [r for r in rows if r["state"] == DEAD and not r["manual_blacklist"]
+                and (r["last_probe_at"] or 0) <= now - DEAD_RESURRECT_AFTER_S]
+        for r in sorted(dead, key=lambda r: r["last_probe_at"] or 0)[:DEAD_RESURRECT_PER_RUN]:
+            if len(plan) < budget:
+                plan.append(r["endpoint_id"])
+        cursor = int(meta.get("discovery_cursor", "0"))
+        runs = int(meta.get("discovery_runs", "0"))
+        new_cursor = cursor
+        while len(plan) + len(OFFICIAL_PORTS) <= budget and new_cursor - cursor < 256:
+            ip = cursor_ip(CONSUMER_PREFIX, new_cursor)
+            new_cursor += 1
+            for port in OFFICIAL_PORTS:
+                eid = f"{ip}:{port}"
+                rec = self.store.get(eid)
+                if eid in plan:
+                    continue
+                if rec is None or (rec["state"] == DISCOVERED and not rec["manual_blacklist"]
+                                   and (rec["last_probe_at"] or 0) <= now - DEAD_RESURRECT_AFTER_S):
+                    plan.append(eid)
+        cf_one = None
+        if runs % CF_ONE_EVERY_N_RUNS == 0 and len(plan) < budget + 1:
+            pos = int(meta.get("cf_one_cursor", "0"))
+            cf_one = f"{cursor_ip(CLOUDFLARE_ONE_PREFIX, pos)}:{OFFICIAL_PORTS[pos % len(OFFICIAL_PORTS)]}"
+            rec = self.store.get(cf_one)
+            if cf_one not in plan and (rec is None or rec["state"] in (DISCOVERED, DEAD)):
+                plan.append(cf_one)
+        return plan, {"active": active, "budget": budget, "cursor": cursor, "new_cursor": new_cursor,
+                      "runs": runs, "cf_one": cf_one}
+
+    def discovery(self, resources: Resources | None = None) -> BatchOutcome | str:
+        now = self.clock()
+        meta = self.store.meta()
+        if meta.get("lab_health") == LAB_UNAVAILABLE:
+            return "skipped: Lab UNAVAILABLE"
+        res = resources or read_resources(os.path.dirname(self.store.path) or ".")
+        blocked = discovery_blocked_by(res)
+        if blocked:
+            self._record_skip("discovery", f"resource guard: {blocked}", now)
+            return f"skipped: resource guard ({blocked})"
+        plan, info = self.discovery_plan(now)
+        if not plan:
+            self._record_skip("discovery", info.get("reason", "nothing to do"), now)
+            return f"skipped: {info.get('reason', 'nothing to do')}"
+        with self.store.transaction():
+            for eid in plan:
+                if self.store.get(eid) is None:
+                    ip = eid.rsplit(":", 1)[0]
+                    self.store.upsert_candidate(parse_endpoint_id(eid), classify_source(ip), now)
+        wall = DISCOVERY_WALL_S[1] if info["active"] < SOFT_FLOOR else DISCOVERY_WALL_S[0]
+        outcome = self.run_batch(plan, "discovery", DISCOVERY_HANDSHAKE_TIMEOUT_S, wall, breaker=False)
+        probed = {e for e, _ in outcome.results}
+        with self.store.transaction():  # the cursor advances only for a fully probed slice, after commit
+            slice_ids = [f"{cursor_ip(CONSUMER_PREFIX, p)}:{port}" for p in range(info["cursor"], info["new_cursor"])
+                         for port in OFFICIAL_PORTS]
+            if all(e in probed or e not in plan for e in slice_ids):
+                self.store.set_meta("discovery_cursor", info["new_cursor"])
+            self.store.set_meta("discovery_runs", info["runs"] + 1)
+            if info["cf_one"] and info["cf_one"] in probed:
+                self.store.set_meta("cf_one_cursor", int(self.store.meta().get("cf_one_cursor", "0")) + 1)
+        return outcome
+
+    def _record_skip(self, kind: str, note: str, now: int) -> None:
+        with self.store.transaction():
+            self.store.conn.execute("INSERT INTO run (operation_id, kind, started_at, finished_at, duration_ms, status,"
+                                    " note) VALUES (?,?,?,?,0,'skipped',?)", (secrets.token_hex(8), kind, now, now, note))
+
+    # -- maintenance (cheap; the expensive parts are rate-limited through lab_meta)
+    def maintenance(self) -> dict:
+        now = self.clock()
+        meta = self.store.meta()
+        done: dict = {}
+        if now - int(meta.get("last_prune_at", "0")) >= PRUNE_INTERVAL_S:
+            with self.store.transaction():
+                done["pruned"] = self.store.prune(now)
+                self.store.set_meta("last_prune_at", now)
+        mode = "TRUNCATE" if now - int(meta.get("last_wal_truncate_at", "0")) >= WAL_TRUNCATE_INTERVAL_S else "PASSIVE"
+        self.store.conn.execute(f"PRAGMA wal_checkpoint({mode})")
+        if mode == "TRUNCATE":
+            with self.store.transaction():
+                self.store.set_meta("last_wal_truncate_at", now)
+        done["checkpoint"] = mode
+        return done
+
+
+# --- statistics ----------------------------------------------------------------------------------------------------
+def _pct(ok: int, n: int) -> str:
+    return f"{100.0 * ok / n:.1f}% (n={n})" if n else "n/a (n=0)"
+
+
+def window_stats(store: Store, since: int) -> dict:
+    c = store.conn
+    hs = c.execute("SELECT result, count(*) FROM observation WHERE probe_type='handshake' AND timestamp>=? GROUP BY result",
+                   (since,)).fetchall()
+    tr = c.execute("SELECT result, count(*) FROM observation WHERE probe_type='traffic' AND timestamp>=? GROUP BY result",
+                   (since,)).fetchall()
+    hsd, trd = {r[0]: r[1] for r in hs}, {r[0]: r[1] for r in tr}
+    hs_n = hsd.get("ok", 0) + hsd.get("fail", 0)
+    tr_n = trd.get("ok", 0) + trd.get("fail", 0)
+    transitions = c.execute("SELECT from_state, to_state, count(*) FROM transition WHERE ts>=? GROUP BY 1,2 ORDER BY 3 DESC",
+                            (since,)).fetchall()
+    return {"probes": sum(hsd.values()), "handshake_success": _pct(hsd.get("ok", 0), hs_n),
+            "traffic_success": _pct(trd.get("ok", 0), tr_n), "endpoint_failures": hsd.get("fail", 0) + trd.get("fail", 0),
+            "lab_failures": hsd.get("lab_failure", 0), "suppressed": hsd.get("suppressed", 0) + trd.get("suppressed", 0),
+            "inconclusive": trd.get("inconclusive", 0),
+            "transitions": {f"{a}->{b}": n for a, b, n in transitions}}
+
+
+def yield_by(store: Store, since: int, column: str) -> dict:
+    """Per source class or per port: candidates, probes, handshake/traffic ok, became/currently active."""
+    assert column in ("source", "port")
+    c = store.conn
+    out: dict = {}
+    for key, n_ep, active_now in c.execute(
+            f"SELECT {column}, count(*), sum(state='ACTIVE' AND expires_at > ?) FROM endpoint GROUP BY {column}",
+            (store.clock(),)):
+        out[str(key)] = {"candidates": n_ep, "currently_active": active_now or 0}
+    for key, ptype, result, n in c.execute(
+            f"SELECT e.{column}, o.probe_type, o.result, count(*) FROM observation o JOIN endpoint e USING(endpoint_id)"
+            f" WHERE o.timestamp>=? GROUP BY 1,2,3", (since,)):
+        d = out.setdefault(str(key), {"candidates": 0, "currently_active": 0})
+        d[f"{ptype}_{result}"] = d.get(f"{ptype}_{result}", 0) + n
+    for key, n in c.execute(f"SELECT e.{column}, count(*) FROM transition t JOIN endpoint e USING(endpoint_id)"
+                            f" WHERE t.ts>=? AND t.to_state='ACTIVE' GROUP BY 1", (since,)):
+        out.setdefault(str(key), {})["became_active"] = n
+    return out
+
+
+def baseline_report(store: Store, hours: float) -> dict:
+    now = store.clock()
+    since = int(now - hours * 3600)
+    c = store.conn
+    runs = c.execute("SELECT * FROM run WHERE kind='refresh' AND started_at>=? AND status!='skipped' ORDER BY started_at",
+                     (since,)).fetchall()
+    active = [r["active_after"] for r in runs if r["active_after"] is not None]
+    below = 0
+    for a, b in zip(runs, list(runs[1:]) + [None]):
+        if a["active_after"] is not None and a["active_after"] < SOFT_FLOOR:
+            below += ((b["started_at"] if b else now) - a["started_at"])
+    def dur(kind: str) -> dict:
+        d = [r[0] for r in c.execute("SELECT duration_ms FROM run WHERE kind=? AND started_at>=? AND status!='skipped'",
+                                     (kind, since))]
+        if not d:
+            return {"n": 0}
+        d.sort()
+        return {"n": len(d), "median_ms": int(statistics.median(d)), "p95_ms": d[min(len(d) - 1, int(0.95 * len(d)))],
+                "max_ms": d[-1]}
+    health = c.execute("SELECT lab_health, lab_reason, count(*) FROM run WHERE started_at>=? AND lab_health IS NOT NULL"
+                       " GROUP BY 1,2", (since,)).fetchall()
+    targets = c.execute("SELECT target, ok, count(*) FROM target_result WHERE ts>=? GROUP BY 1,2", (since,)).fetchall()
+    stability = {"gt90": 0, "50to90": 0, "lt50": 0}
+    for _, ok, n in c.execute("SELECT endpoint_id, sum(result='ok'), count(*) FROM observation WHERE probe_type='traffic'"
+                              " AND run_kind='refresh' AND timestamp>=? AND result IN ('ok','fail') GROUP BY 1", (since,)):
+        share = ok / n
+        stability["gt90" if share > 0.9 else "50to90" if share >= 0.5 else "lt50"] += 1
+    res = c.execute("SELECT max(maxrss_kb), sum(cpu_ms), sum(bytes), min(mem_available_kb), min(swap_used_kb),"
+                    " max(swap_used_kb) FROM run WHERE started_at>=?", (since,)).fetchone()
+    skipped = c.execute("SELECT note, count(*) FROM run WHERE status='skipped' AND started_at>=? GROUP BY 1",
+                        (since,)).fetchall()
+    return {
+        "window_hours": hours, "refresh_runs": len(runs),
+        "active": ({"min": min(active), "median": statistics.median(active), "max": max(active)} if active else {}),
+        "time_below_soft_floor_s": below,
+        "transitions": window_stats(store, since)["transitions"],
+        "lab_health_runs": {f"{h}:{r}": n for h, r, n in health},
+        "targets": {f"{t}:{'ok' if ok else 'fail'}": n for t, ok, n in targets},
+        "refresh_duration": dur("refresh"), "discovery_duration": dur("discovery"),
+        "stability_distribution": stability,
+        "port_yield": yield_by(store, since, "port"), "source_yield": yield_by(store, since, "source"),
+        "resources": {"peak_rss_kb": res[0], "cpu_ms_total": res[1], "tunnel_bytes_total": res[2],
+                      "min_mem_available_kb": res[3], "swap_used_kb_min": res[4], "swap_used_kb_max": res[5]},
+        "skipped_runs": {n or "": k for n, k in skipped},
+        "db_bytes": store.db_bytes(),
+    }
+
+
+# --- revision -----------------------------------------------------------------------------------------------------
+def code_revision() -> dict:
+    info: dict = {}
+    with contextlib.suppress(OSError, ValueError):
+        with open(REVISION_FILE, encoding="utf-8") as fh:
+            info = json.load(fh)
+    with contextlib.suppress(OSError):
+        with open(os.path.abspath(__file__), "rb") as fh:
+            actual = hashlib.sha256(fh.read()).hexdigest()
+        info["running_sha256"] = actual
+        info["matches_install"] = info.get("sha256") == actual
+    return info
 
 
 # --- CLI ---------------------------------------------------------------------------------------------------------
 @contextlib.contextmanager
-def global_lock(path: str = LOCK_FILE):
+def global_lock(path: str = LOCK_FILE, wait_s: float = 0):
     if fcntl is None:
         raise LabError(LOCAL_RESOURCE_ERROR, "endpoint-lab runs on Linux only")
     fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
     try:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            raise LabError(LOCAL_RESOURCE_ERROR, "another endpoint-lab run holds the lock") from None
+        deadline = time.monotonic() + wait_s
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise LabError(LOCAL_RESOURCE_ERROR, "another endpoint-lab run holds the lock") from None
+                time.sleep(1)
         yield
     finally:
         os.close(fd)
 
 
 def ensure_dirs() -> None:
-    for path, mode in ((CONF_DIR, 0o700), (KEY_DIR, 0o700), (STATE_DIR, 0o700), (PUBLIC_DIR, 0o755)):
+    """State dirs are fixed up at runtime; /etc dirs come from install.sh and may be read-only for the
+    service (ProtectSystem=strict), so they are only checked."""
+    for path, mode in ((STATE_DIR, 0o700), (PUBLIC_DIR, 0o755)):
         os.makedirs(path, mode=mode, exist_ok=True)
-        os.chmod(path, mode)
+        if os.stat(path).st_mode & 0o777 != mode:
+            os.chmod(path, mode)
+    for path in (CONF_DIR, KEY_DIR):
+        if not os.path.isdir(path):
+            raise LabError(LOCAL_RESOURCE_ERROR, f"{path} missing: run install.sh")
 
 
 def format_result(eid: str, res: ProbeResult) -> str:
@@ -1003,27 +1882,111 @@ def format_result(eid: str, res: ProbeResult) -> str:
     if "rx_before" in ev:
         parts.append(f"rx {ev['rx_before']}->{ev['rx_after']} tx {ev['tx_before']}->{ev['tx_after']}")
     if ev.get("https"):
-        parts.append(f"http={ev['https'].get('http_code')} tls_verify={ev['https'].get('ssl_verify_result')}")
+        parts.append(f"http={ev['https'].get('http_code')} tls_verify={ev['https'].get('ssl_verify_result')}"
+                     f" target={ev.get('target')}")
     if "trace_warp" in ev:
-        parts.append(f"warp={ev.get('trace_warp')} colo={ev.get('trace_colo')} dns_ok={ev.get('dns_ok')}")
+        parts.append(f"warp={ev.get('trace_warp')} colo={ev.get('trace_colo')}")
+    if res.target_results and not res.traffic_ok:
+        parts.append("targets=" + ",".join(f"{n}:{e}" for n, _, e in res.target_results))
     if res.message and res.error_code:
         parts.append(f"({res.message})")
     return redact("  ".join(parts))
 
 
+def print_outcome(outcome: BatchOutcome) -> None:
+    for eid, res in outcome.results:
+        print(format_result(eid, res))
+    if outcome.control:
+        for cid, (res, _) in outcome.control.results.items():
+            print("control " + format_result(cid, res))
+        print(f"control verdict: {outcome.control.global_ok} ({outcome.control.reason})")
+    print(f"lab health: {outcome.lab_health} ({outcome.lab_reason}); aborted={outcome.aborted};"
+          f" snapshot_written={outcome.snapshot_ok}")
+
+
+def status_report(store: Store) -> dict:
+    now = store.clock()
+    rows = store.all()
+    counts: dict = {}
+    for r in rows:
+        counts[r["state"]] = counts.get(r["state"], 0) + 1
+    eligible = [r for r in rows if r["source"] != SRC_NEGATIVE and is_eligible(Store.to_row(r), now)]
+    try:
+        ident = load_identity()
+        ident_status = {"state": REG_READY, "created_at": ident.created_at}
+    except LabError as exc:
+        ident_status = {"state": exc.code, "detail": str(exc)}
+    meta = store.meta()
+    verified = [r["last_traffic_ok_at"] for r in eligible if r["last_traffic_ok_at"]]
+
+    def ts(key: str) -> str | None:
+        return iso(int(meta[key])) if key in meta else None
+
+    def last_run(kind: str) -> dict | None:
+        r = store.conn.execute("SELECT * FROM run WHERE kind=? ORDER BY id DESC LIMIT 1", (kind,)).fetchone()
+        return None if r is None else {"at": iso(r["started_at"]), "status": r["status"], "duration_ms": r["duration_ms"],
+                                       "health": r["lab_health"], "note": r["note"]}
+    return {
+        "lab": {"health": meta.get("lab_health", "UNKNOWN"), "reason": meta.get("lab_health_reason"),
+                "since": ts("lab_health_since")},
+        "identity": ident_status | {"api_check": meta.get("identity_api_status"), "api_checked_at": ts("identity_api_checked_at")},
+        "pool": {"eligible_active": len(eligible), "states": counts,
+                 "blacklisted": sum(r["manual_blacklist"] for r in rows),
+                 "target": TARGET_ACTIVE, "soft_floor": SOFT_FLOOR, "cap": MAX_ACTIVE},
+        "freshness": {"oldest_active_verified_s": age_s(min(verified), now) if verified else None,
+                      "newest_active_verified_s": age_s(max(verified), now) if verified else None,
+                      "snapshot_generated_at": ts("snapshot_generated_at"),
+                      "snapshot_expires_in_s": (int(meta["snapshot_expires_at"]) - now) if "snapshot_expires_at" in meta else None,
+                      "last_snapshot_error": meta.get("last_snapshot_error")},
+        "controls": {"ids": json.loads(meta.get("controls", "[]")), "selected_at": ts("control_selected_at"),
+                     "reason": meta.get("control_reason")},
+        "scheduler": {"refresh": last_run("refresh"), "discovery": last_run("discovery"),
+                      "discovery_cursor": meta.get("discovery_cursor", "0")},
+        "db": {"bytes_incl_wal": store.db_bytes(), "schema": store.conn.execute("PRAGMA user_version").fetchone()[0],
+               "last_quick_check": ts("last_quick_check_at"), "quick_check": meta.get("last_quick_check")},
+        "code": code_revision(),
+    }
+
+
+def _reason(text: str | None) -> str | None:
+    if text is None:
+        return None
+    if not REASON_RE.match(text):
+        raise LabError(UNKNOWN, "reason: 1-200 plain characters (letters, digits, spaces, .,:;()/#+-)")
+    return text
+
+
+def _known(store: Store, endpoint_id: str) -> str:
+    eid = parse_endpoint_id(endpoint_id).endpoint_id
+    if store.get(eid) is None:
+        raise LabError(UNKNOWN, f"unknown endpoint {eid}")
+    return eid
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="endpoint-lab", description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("status")
-    sub.add_parser("list")
-    imp = sub.add_parser("import-candidates")
-    imp.add_argument("file")
-    sub.add_parser("register-probe-identity")
-    for name in ("probe", "verify"):
+    for name in ("status", "list", "register-probe-identity", "verify-all", "snapshot", "cleanup", "seed",
+                 "refresh", "discovery", "maintenance"):
+        sub.add_parser(name)
+    sub.add_parser("identity-reset").add_argument("--confirm", action="store_true", required=True)
+    sub.add_parser("import-candidates").add_argument("file")
+    for name in ("probe", "verify", "unblacklist", "unquarantine"):
         sub.add_parser(name).add_argument("endpoint_id")
-    sub.add_parser("verify-all")
-    sub.add_parser("snapshot")
-    sub.add_parser("cleanup")
+    bl = sub.add_parser("blacklist")
+    bl.add_argument("endpoint_id")
+    bl.add_argument("reason", nargs="?")
+    q = sub.add_parser("quarantine")
+    q.add_argument("endpoint_id")
+    q.add_argument("duration_min", nargs="?", type=int, default=MANUAL_QUARANTINE_DEFAULT_S // 60)
+    q.add_argument("reason", nargs="?")
+    st = sub.add_parser("stats")
+    st.add_argument("--json", action="store_true")
+    rp = sub.add_parser("report")
+    rp.add_argument("--hours", type=float, default=24.0)
+    bench = sub.add_parser("bench")
+    bench.add_argument("endpoint_id")
+    bench.add_argument("--repeat", type=int, default=3)
     args = parser.parse_args(argv)
 
     try:
@@ -1033,59 +1996,143 @@ def main(argv: list[str] | None = None) -> int:
         ensure_dirs()
         with contextlib.suppress(FileNotFoundError):
             os.chmod(os.path.join(STATE_DIR, DB_FILE), 0o600)
-        with global_lock():
+        wait = REFRESH_LOCK_WAIT_S if args.cmd == "refresh" else 0
+        try:
+            lock = global_lock(wait_s=wait)
+            lock.__enter__()
+        except LabError:
+            if args.cmd == "discovery":  # refresh has priority: discovery simply yields
+                print("discovery skipped: another run holds the lock")
+                return 0
+            raise
+        try:
             runner = CommandRunner()
             cleanup_stale(runner, min_age_s=STALE_RESOURCE_AGE_S)
             store = Store(os.path.join(STATE_DIR, DB_FILE))
-            lab = Lab(store, LinuxWireGuardProbeEngine(runner))
-            if args.cmd == "register-probe-identity":
-                print(register_probe_identity(runner, WarpApi()))
-            elif args.cmd == "import-candidates":
-                now = now_s()
-                with store.transaction():
-                    added = sum(store.upsert_candidate(ep, src, now) for ep, src in load_candidates(args.file))
-                print(f"imported; new endpoints: {added}")
-            elif args.cmd in ("probe", "verify"):
-                eid = parse_endpoint_id(args.endpoint_id).endpoint_id
-                for e, res in lab.run([eid], deep=args.cmd == "verify"):
-                    print(format_result(e, res))
-            elif args.cmd == "verify-all":
-                ids = [r["endpoint_id"] for r in store.all() if due_for_batch(store.to_row(r), now_s())]
-                for e, res in lab.run(ids, deep=True):
-                    print(format_result(e, res))
-                print(f"run status: {store.meta().get('last_run_status')}")
-            elif args.cmd == "snapshot":
-                print(json.dumps(lab.publish(), indent=2))
-            elif args.cmd == "cleanup":
-                print(json.dumps(cleanup_stale(runner, min_age_s=0)))
-            elif args.cmd == "list":
-                for r in store.all():
-                    print(f"{r['endpoint_id']:<22} {r['state']:<12} src={r['source']:<16} ok={r['consecutive_successes']}"
-                          f" fail={r['consecutive_failures']} traffic_ok_at={iso(r['last_traffic_ok_at'])}"
-                          f" expires={iso(r['expires_at'])} err={r['last_error_code'] or '-'}")
-            elif args.cmd == "status":
-                rows = store.all()
-                counts: dict[str, int] = {}
-                for r in rows:
-                    counts[r["state"]] = counts.get(r["state"], 0) + 1
-                eligible = sum(is_eligible(store.to_row(r), now_s()) for r in rows)
-                try:
-                    ident = load_identity()
-                    ident_status = f"ok (created {ident.created_at})"
-                except LabError as exc:
-                    ident_status = f"{exc.code}: {exc}"
+            if args.cmd in ("refresh", "discovery", "maintenance"):
                 meta = store.meta()
-                print(json.dumps({"probe_identity": ident_status, "endpoints": len(rows), "states": counts,
-                                  "eligible_active": eligible, "last_run_at": iso(int(meta["last_run_at"]))
-                                  if "last_run_at" in meta else None,
-                                  "last_run_status": meta.get("last_run_status")}, indent=2))
-        return 0
+                if store.clock() - int(meta.get("last_quick_check_at", "0")) >= QUICK_CHECK_INTERVAL_S:
+                    ok = store.quick_check()
+                    if not ok:
+                        raise LabError(LOCAL_RESOURCE_ERROR, "DB_CORRUPT: quick_check failed; DB left untouched")
+                    with store.transaction():
+                        store.set_meta("last_quick_check_at", store.clock())
+                        store.set_meta("last_quick_check", "ok")
+            lab = Lab(store, LinuxWireGuardProbeEngine(runner), config=load_config(), api=WarpApi())
+            return _dispatch(args, store, lab, runner)
+        finally:
+            lock.__exit__(None, None, None)
     except LabError as exc:
         log(f"endpoint-lab: {exc.code}: {exc}")
         return 2
     except KeyboardInterrupt:
         log(f"endpoint-lab: {CANCELLED}: interrupted; probe resources torn down, nothing recorded")
         return 130
+
+
+def _dispatch(args, store: Store, lab: Lab, runner: CommandRunner) -> int:
+    now = store.clock()
+    if args.cmd == "register-probe-identity":
+        print(register_probe_identity(runner, WarpApi()))
+    elif args.cmd == "identity-reset":
+        print(identity_reset())
+    elif args.cmd == "import-candidates":
+        with store.transaction():
+            added = sum(store.upsert_candidate(ep, src, now) for ep, src in load_candidates(args.file))
+        print(f"imported; new endpoints: {added}")
+    elif args.cmd == "seed":
+        with store.transaction():
+            added = sum(store.upsert_candidate(parse_endpoint(ip, port), classify_source(ip), now)
+                        for ip in LEGACY_BUILTIN_IPS for port in OFFICIAL_PORTS)
+        print(f"seeded legacy builtin candidates; new endpoints: {added}")
+    elif args.cmd == "probe":
+        eid = _known(store, args.endpoint_id)
+        identity = load_identity()
+        res = lab.engine.probe_handshake(parse_endpoint_id(eid), identity)
+        with store.transaction():
+            store.record(eid, res, False, store.clock(), secrets.token_hex(8))
+        print(format_result(eid, res))
+    elif args.cmd == "verify":
+        print_outcome(lab.run_batch([_known(store, args.endpoint_id)], "manual"))
+    elif args.cmd == "verify-all":
+        ids = [r["endpoint_id"] for r in store.all() if not r["manual_blacklist"]]
+        print_outcome(lab.run_batch(ids, "manual"))
+    elif args.cmd == "refresh":
+        outcome = lab.refresh()
+        lab.maintenance()
+        print_outcome(outcome)
+        if not outcome.snapshot_ok:
+            return 4
+    elif args.cmd == "discovery":
+        outcome = lab.discovery()
+        lab.maintenance()
+        if isinstance(outcome, str):
+            print(f"discovery {outcome}")
+        else:
+            print_outcome(outcome)
+            if not outcome.snapshot_ok:
+                return 4
+    elif args.cmd == "maintenance":
+        print(json.dumps(lab.maintenance()))
+    elif args.cmd == "snapshot":
+        lab.publish()
+        with open(os.path.join(PUBLIC_DIR, SNAPSHOT_FILE), encoding="utf-8") as fh:
+            print(fh.read())
+    elif args.cmd == "cleanup":
+        print(json.dumps(cleanup_stale(runner, min_age_s=0)))
+    elif args.cmd in ("blacklist", "unblacklist", "quarantine", "unquarantine"):
+        eid = _known(store, args.endpoint_id)
+        reason = _reason(getattr(args, "reason", None))
+        with store.transaction():
+            if args.cmd == "blacklist":
+                store.conn.execute("UPDATE endpoint SET manual_blacklist=1, blacklist_reason=?, blacklist_at=?,"
+                                   " expires_at=NULL WHERE endpoint_id=?", (reason, now, eid))
+            elif args.cmd == "unblacklist":
+                store.conn.execute("UPDATE endpoint SET manual_blacklist=0, blacklist_reason=NULL, blacklist_at=NULL"
+                                   " WHERE endpoint_id=?", (eid,))
+                store.set_state(eid, VERIFYING, "unblacklisted", None, now, expires_at=None)
+            elif args.cmd == "quarantine":
+                minutes = args.duration_min
+                if not 1 <= minutes <= MANUAL_QUARANTINE_MAX_S // 60:
+                    raise LabError(UNKNOWN, f"duration: 1..{MANUAL_QUARANTINE_MAX_S // 60} minutes")
+                store.set_state(eid, QUARANTINE, "operator", None, now, quarantine_kind="manual",
+                                quarantine_until=now + minutes * 60, expires_at=None, active_since=None)
+            else:
+                rec = store.get(eid)
+                if rec["state"] != QUARANTINE:
+                    raise LabError(UNKNOWN, f"{eid} is not quarantined")
+                store.set_state(eid, VERIFYING, "unquarantined", None, now, quarantine_kind=None,
+                                quarantine_until=None, quarantine_level=0, quarantine_failures=0)
+            store.operator_event(eid, args.cmd, reason, now)
+        lab.publish()
+        print(f"{args.cmd}: {eid}")
+    elif args.cmd == "list":
+        for r in store.all():
+            flags = " BLACKLIST" if r["manual_blacklist"] else ""
+            print(f"{r['endpoint_id']:<22} {r['state']:<11} src={r['source']:<27} ok={r['consecutive_successes']}"
+                  f" fail={r['consecutive_failures']} traffic_ok_at={iso(r['last_traffic_ok_at'])}"
+                  f" expires={iso(r['expires_at'])} q_until={iso(r['quarantine_until'])}"
+                  f" err={r['last_error_code'] or '-'}{flags}")
+    elif args.cmd == "status":
+        print(json.dumps(status_report(store), indent=2))
+    elif args.cmd == "stats":
+        out = {label: window_stats(store, now - secs) for label, secs in (("15m", 900), ("1h", 3600), ("24h", 86400))}
+        out["source_yield_24h"] = yield_by(store, now - 86400, "source")
+        out["port_yield_24h"] = yield_by(store, now - 86400, "port")
+        print(json.dumps(out, indent=2))
+    elif args.cmd == "report":
+        print(json.dumps(baseline_report(store, args.hours), indent=2))
+    elif args.cmd == "bench":
+        eid = _known(store, args.endpoint_id)
+        identity = load_identity()
+        for i in range(max(1, min(args.repeat, 10))):
+            cpu0, _ = usage_snapshot()
+            t0 = time.monotonic()
+            res = lab.engine.deep_verify(parse_endpoint_id(eid), identity, REFRESH_HANDSHAKE_TIMEOUT_S, lab.targets)
+            cpu1, rss = usage_snapshot()
+            print(f"bench#{i} wall_ms={int((time.monotonic() - t0) * 1000)} cpu_ms={int((cpu1 - cpu0) * 1000)}"
+                  f" maxrss_kb={rss} " + format_result(eid, res))
+    return 0
 
 
 def _sigterm_to_interrupt(signum, frame):

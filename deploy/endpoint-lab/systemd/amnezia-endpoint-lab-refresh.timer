@@ -1,11 +1,12 @@
-# Phase B template — NOT installed or enabled in Phase A. Interval is a baseline to calibrate.
+# Installed disabled; enabled only after the manual hardening tests. Cadence: ~3 min (ACTIVE TTL 7 min).
 [Unit]
 Description=Endpoint Lab refresh schedule
 
 [Timer]
-OnBootSec=5min
-OnUnitActiveSec=5min
-RandomizedDelaySec=30s
+OnBootSec=3min
+OnUnitActiveSec=3min
+RandomizedDelaySec=20s
+AccuracySec=5s
 
 [Install]
 WantedBy=timers.target

@@ -1,0 +1,11 @@
+# Installed disabled; enabled only after the manual hardening tests. Cadence: ~30 min with large jitter.
+[Unit]
+Description=Endpoint Lab discovery schedule
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=30min
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
