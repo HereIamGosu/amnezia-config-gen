@@ -439,6 +439,7 @@ class SchedulerTests(LabFixture):
         suspects = [self.add(f"188.114.96.{i}", state=lab.SUSPECT, source=lab.SRC_LEGACY) for i in range(1, 11)]
         plan = self.make_lab(FakeProbeEngine()).refresh_plan(NOW, lab.Resources(10 ** 6, 0, 0.1, 2, 10 ** 10))
         self.assertEqual(plan[:10], active[:10])            # ceil(30/3) = 10 least-recently verified ACTIVE
+        self.assertEqual([p for p in plan if p in active], active[:10])  # exactly that slice, no other ACTIVE
         self.assertEqual(len([p for p in plan if p in suspects]), lab.REFRESH_SUSPECT_MAX)
         self.assertLessEqual(len(plan), lab.MAX_REFRESH_ENDPOINTS)
         few = self.make_lab(FakeProbeEngine())
