@@ -302,8 +302,8 @@
 
         <nav class="site-nav" id="siteNav" aria-label="Основная навигация" data-i18n-aria-label="nav_aria">
           <a class="site-nav__link site-nav__link--active" href="#generator" data-i18n="nav_generator">Генератор</a>
-          <a class="site-nav__link" href="status.html" data-i18n="nav_status">Статус</a>
-          <a class="site-nav__link" href="#instructions" data-i18n="nav_instructions">Инструкции</a>
+          <a class="site-nav__link" href="status.html" data-status-link data-i18n="nav_status">Статус</a>
+          <a class="site-nav__link" href="#instructions" data-open-modal="instructionModal" data-i18n="nav_instructions">Инструкции</a>
           <a class="site-nav__link" href="#faq" data-open-modal="faqModal" data-i18n="nav_faq">FAQ</a>
           <button type="button" class="site-nav__link" id="historyModalBtn" aria-label="История генераций" data-i18n-aria-label="history_btn_aria">
             <span data-i18n="nav_history">История</span>
@@ -489,12 +489,6 @@
                 <h2 class="step__title" id="stepParamsTitle" data-i18n-html="step2_title">Настройте параметры <span class="step__title-note">(опционально)</span></h2>
                 <p class="step__subtitle" data-i18n="step2_subtitle">Оставьте по умолчанию или настройте под свои задачи.</p>
               </div>
-              <div class="step__aside">
-                <button type="button" id="settingsToggle" class="link-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsModal" title="Настройки конфигурации" data-i18n-title="settings_toggle_title">
-                  <svg class="icon icon--sm" aria-hidden="true"><use href="#i-gear"/></svg>
-                  <span data-i18n="btn_advanced_settings">Расширенные настройки</span>
-                </button>
-              </div>
               <button type="button" class="step__toggle" data-step-toggle data-collapse-mobile aria-expanded="true" aria-controls="stepParamsBody" aria-label="Свернуть или развернуть шаг" data-i18n-aria-label="step_toggle_aria">
                 <svg class="icon" aria-hidden="true"><use href="#i-chevron-down"/></svg>
               </button>
@@ -630,24 +624,12 @@
                           <span data-i18n="result_action_compat">Совместимость клиентов</span>
                         </button>
                       </li>
-                      <li role="none">
-                        <button type="button" class="menu__item" role="menuitem" data-result-action="regenerate">
-                          <svg class="icon icon--sm" aria-hidden="true"><use href="#i-refresh"/></svg>
-                          <span data-i18n="result_action_regenerate">Сгенерировать заново</span>
-                        </button>
-                      </li>
                     </ul>
                   </div>
                 </div>
 
                 <dl class="summary-list" id="resultQuickSummary"></dl>
 
-                <div class="result__links">
-                  <button type="button" class="link-btn" data-open-modal="instructionModal">
-                    <span data-i18n="compat_more_link">Подробнее о совместимости</span>
-                    <svg class="icon icon--sm" aria-hidden="true"><use href="#i-arrow-right"/></svg>
-                  </button>
-                </div>
               </div>
 
               <div class="code-pane">
@@ -883,7 +865,7 @@
         <header class="modal__header">
           <span class="modal__icon"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg></span>
           <div class="modal__titles">
-            <h2 id="statusModalHeading" class="modal__title" data-i18n="status_modal_heading">Статус сервисов</h2>
+            <h2 id="statusModalHeading" class="modal__title" data-i18n="status_modal_heading">Статус системы</h2>
             <p class="modal__subtitle">Live /api/status + /api/healthcheck</p>
           </div>
           <button type="button" class="modal__close" data-close-modal aria-label="Закрыть" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
@@ -922,18 +904,12 @@
         <header class="modal__header">
           <span class="modal__icon"><svg class="icon" aria-hidden="true"><use href="#i-help"/></svg></span>
           <div class="modal__titles">
-            <h2 id="modalHeading" class="modal__title" data-i18n="info_modal_heading">Дополнительная информация</h2>
-            <p class="modal__subtitle" data-i18n="info_modal_subtitle">Маршруты, версии AWG и ограничения Cloudflare peer</p>
+            <h2 id="modalHeading" class="modal__title" data-i18n="info_modal_heading">Какой профиль выбрать?</h2>
+            <p class="modal__subtitle" data-i18n="info_modal_subtitle">Версии AWG, маршруты и ограничения Cloudflare peer</p>
           </div>
           <button type="button" class="modal__close" data-close-modal aria-label="Закрыть" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
         </header>
         <div class="modal__body">
-          <div class="info-section">
-            <h3 class="info-section__title" data-i18n="info_s1_title">Маршруты и AllowedIPs</h3>
-            <p data-i18n-html="info_s1_p1">По умолчанию весь трафик идёт через туннель (<strong>AllowedIPs = 0.0.0.0/0</strong>). В настройках (шаг 2) можно выбрать DNS-сервер и пресеты — тогда через туннель пойдут только нужные IPv4-подсети. IPv6 можно включить опционально, но это увеличивает число маршрутов в 2–3 раза и может вызывать сбои на роутерах и мобильных клиентах. Безопасный лимит — <strong>1000 IPv4 CIDR</strong>.</p>
-            <p data-i18n-html="info_s1_p2">IP-диапазоны можно заменить вручную. Актуальные списки — на <a href="https://iplist.opencck.org/ru" target="_blank" rel="noopener noreferrer">opencck.org</a> и <a href="https://rockblack.pro/vpn/dopolnitelno/diapazon-ip-adresov" target="_blank" rel="noopener noreferrer">rockblack.pro</a>.</p>
-          </div>
-
           <div class="info-compare">
             <div class="info-compare__col">
               <div class="info-compare__label">AWG 1.5 <span class="tag">Legacy</span></div>
@@ -969,6 +945,12 @@
                 <li data-i18n="info_awg31_li3">Если импорт не проходит — выберите AWG 2.0</li>
               </ul>
             </div>
+          </div>
+
+          <div class="info-section">
+            <h3 class="info-section__title" data-i18n="info_s1_title">Маршруты и AllowedIPs</h3>
+            <p data-i18n-html="info_s1_p1">По умолчанию весь трафик идёт через туннель (<strong>AllowedIPs = 0.0.0.0/0</strong>). В настройках (шаг 2) можно выбрать DNS-сервер и пресеты — тогда через туннель пойдут только нужные IPv4-подсети. IPv6 можно включить опционально, но это увеличивает число маршрутов в 2–3 раза и может вызывать сбои на роутерах и мобильных клиентах. Безопасный лимит — <strong>1000 IPv4 CIDR</strong>.</p>
+            <p data-i18n-html="info_s1_p2">IP-диапазоны можно заменить вручную. Актуальные списки — на <a href="https://iplist.opencck.org/ru" target="_blank" rel="noopener noreferrer">opencck.org</a> и <a href="https://rockblack.pro/vpn/dopolnitelno/diapazon-ip-adresov" target="_blank" rel="noopener noreferrer">rockblack.pro</a>.</p>
           </div>
 
           <div class="callout callout--warn">
@@ -1065,7 +1047,7 @@
             </details>
             <details class="faq__item" name="faq">
               <summary class="faq__q"><span class="faq__num" aria-hidden="true">05</span><span class="faq__q-text" data-i18n="faq_q5">Конфиг импортировался, но не подключается. Что делать?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
-              <div class="faq__a" data-i18n-html="faq_a5">Попробуйте другой UDP-порт (2408, 500, 1701) и IP-адрес endpoint вместо hostname — это меняется в настройках на шаге 2. В мобильной сети включите мобильный профиль. Убедитесь, что версия клиента поддерживает выбранный профиль AWG. Если подключение есть, но сайты не открываются, проверьте DNS и маршруты. Текущее состояние сервисов — на странице <a href="status.html">«Статус»</a>.</div>
+              <div class="faq__a" data-i18n-html="faq_a5">Попробуйте другой UDP-порт (2408, 500, 1701) и IP-адрес endpoint вместо hostname — это меняется в настройках на шаге 2. В мобильной сети включите мобильный профиль. Убедитесь, что версия клиента поддерживает выбранный профиль AWG. Если подключение есть, но сайты не открываются, проверьте DNS и маршруты. Текущее состояние сервисов — на странице <a href="status.html" data-status-link>«Статус»</a>.</div>
             </details>
             <details class="faq__item" name="faq">
               <summary class="faq__q"><span class="faq__num" aria-hidden="true">06</span><span class="faq__q-text" data-i18n="faq_q6">Это бесплатно? Что происходит с ключами?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>

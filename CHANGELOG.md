@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 - Neutral technical wording: the CPS5 hint says "strengthens traffic obfuscation" instead of "DPI evasion".
 
 ### Fixed
+- A dialog opened from another dialog (config preview from History, Status from the FAQ) now opens on top of it, and closing it returns to the previous dialog; it used to open underneath.
+- UX clean-up: the redundant "Advanced settings" link is gone (each step-2 chip opens its settings tab); "Status" (in the header and in the FAQ answer) and "Guide" in the header open dialogs instead of leaving the page or only scrolling; "Which profile to choose?" opens a dialog with that title and the profile comparison first; the result panel drops the duplicate "More on compatibility" link and "Generate again" item; for profiles without `vpn://` (AWG 3.0) the copy button stays visible and explains why; error and info toasts no longer show a success tick; desktop card titles are plain titles for mouse and keyboard (no unexpected links, no extra tab stops); one name "System status" for the card and the dialog.
 - The inline SVG filter used a wrong XML namespace (`/1000/svg`).
 
 ## [2.7.4] - 2026-10-03

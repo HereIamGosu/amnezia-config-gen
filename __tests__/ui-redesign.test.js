@@ -168,3 +168,31 @@ test('system status card shares one live poller with the status modal', () => {
   assert.match(block, /renderStatusModal\(snapshot\)/);
   assert.match(block, /renderHeroStatus\(\)/);
 });
+
+test('a dialog opened from another dialog stacks on top and returns to it on close', () => {
+  const shell = read('public/static/ui-shell.js');
+  assert.match(shell, /modal\.style\.zIndex = String\(60 \+ stack\.length \* 2\);/, 'the newest dialog is always on top');
+  assert.doesNotMatch(shell, /closeModal\(top\);\s*openModal\(openerEl/, 'opening from a dialog no longer closes it');
+  assert.match(read('public/static/styles.css'), /\.modal\.is-stacked \{/);
+});
+
+test('header items open dialogs on the page instead of leaving it; no duplicate controls', () => {
+  assert.match(html, /<a class="site-nav__link" href="status\.html" data-status-link data-i18n="nav_status">/);
+  assert.match(script, /closest\('\[data-status-link\]'\)/, 'status links (header, FAQ answer) open the status dialog');
+  assert.match(en.faq_a5, /data-status-link/, 'the FAQ status link opens the dialog too');
+  assert.match(html, /<a class="site-nav__link" href="#instructions" data-open-modal="instructionModal"/);
+  assert.doesNotMatch(html, /id="settingsToggle"/, 'step 2 chips already open the settings');
+  assert.doesNotMatch(html, /data-result-action="regenerate"/, 'the generate button is right above the result');
+  assert.doesNotMatch(html, /class="result__links"/, 'the compatibility card is right below the result');
+});
+
+test('an unavailable vpn:// link is explained instead of silently hidden', () => {
+  assert.match(script, /copyLinkBtn\.setAttribute\('aria-disabled', String\(!hasLink\)\);/);
+  assert.match(script, /vpn_link_unavailable/);
+  assert.ok(ru.vpn_link_unavailable && en.vpn_link_unavailable);
+});
+
+test('desktop card titles are plain titles for mouse and keyboard alike', () => {
+  assert.match(read('public/static/styles.css'), /@media \(min-width: 721px\) \{\s*\.info-card__head \{\s*cursor: default;\s*pointer-events: none;/);
+  assert.match(read('public/static/ui-shell.js'), /if \(desktop\) head\.setAttribute\('tabindex', '-1'\);/, 'no extra tab stop on desktop');
+});

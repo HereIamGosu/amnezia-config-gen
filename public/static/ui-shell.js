@@ -40,6 +40,10 @@
     if (isOpen(id)) return;
     openers.set(id, opener || doc.activeElement);
     stack.push(id);
+    // Окно, открытое из другого окна (просмотр конфига из истории), всегда ложится сверху;
+    // после закрытия пользователь возвращается в предыдущее окно.
+    modal.style.zIndex = String(60 + stack.length * 2);
+    modal.classList.toggle('is-stacked', stack.length > 1);
     modal.classList.add('is-open');
     modal.setAttribute('aria-hidden', 'false');
     syncScrollLock();
@@ -55,7 +59,8 @@
     const modal = getModal(id);
     if (!modal || !isOpen(id)) return;
     stack.splice(stack.indexOf(id), 1);
-    modal.classList.remove('is-open');
+    modal.style.zIndex = '';
+    modal.classList.remove('is-open', 'is-stacked');
     modal.setAttribute('aria-hidden', 'true');
     syncScrollLock();
     modal.dispatchEvent(new CustomEvent('modal:close', { bubbles: true }));
@@ -116,9 +121,6 @@
     const openerEl = target.closest && target.closest('[data-open-modal]');
     if (openerEl) {
       ev.preventDefault();
-      const top = topModalId();
-      // Ссылка из одного окна в другое заменяет текущее окно, а не громоздит их друг на друга.
-      if (top && getModal(top).contains(openerEl)) closeModal(top);
       openModal(openerEl.getAttribute('data-open-modal'), openerEl);
     }
   });
@@ -264,7 +266,7 @@
   // ── Тост ───────────────────────────────────────────────────────
 
   let toastTimer = null;
-  const toast = (text) => {
+  const toast = (text, kind = 'success') => {
     let el = doc.getElementById('uiToast');
     if (!el) {
       el = doc.createElement('div');
@@ -275,11 +277,12 @@
       doc.body.appendChild(el);
     }
     el.textContent = '';
+    el.className = `toast toast--${kind === 'info' ? 'info' : 'success'}`;
     const icon = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
     icon.setAttribute('class', 'icon icon--sm');
     icon.setAttribute('aria-hidden', 'true');
     const use = doc.createElementNS('http://www.w3.org/2000/svg', 'use');
-    use.setAttribute('href', '#i-check');
+    use.setAttribute('href', kind === 'info' ? '#i-info' : '#i-check');
     icon.appendChild(use);
     const label = doc.createElement('span');
     label.textContent = text;
@@ -288,6 +291,21 @@
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { el.hidden = true; }, 2600);
   };
+
+  // ── Заголовки нижних карточек ──────────────────────────────────
+  // На десктопе это просто заголовки (действия — явные кнопки внутри карточки), поэтому и для
+  // клавиатуры они выключены; в мобильном списке заголовок — кликабельная строка со стрелкой.
+
+  const desktopQuery = globalScope.matchMedia ? globalScope.matchMedia('(min-width: 721px)') : null;
+  const syncCardHeads = () => {
+    const desktop = !!(desktopQuery && desktopQuery.matches);
+    doc.querySelectorAll('.info-card__head').forEach((head) => {
+      if (desktop) head.setAttribute('tabindex', '-1');
+      else head.removeAttribute('tabindex');
+    });
+  };
+  syncCardHeads();
+  if (desktopQuery) desktopQuery.addEventListener('change', syncCardHeads);
 
   // ── Прямые ссылки на модалки (например, /#faq из выдачи) ─────────
 

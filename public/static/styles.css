@@ -1516,13 +1516,6 @@ kbd {
   color: #4ade80;
 }
 
-.result__links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
-  margin-top: 16px;
-}
-
 /* Окно кода */
 .code-pane {
   display: flex;
@@ -1823,6 +1816,15 @@ kbd {
 
 .info-card__head .icon {
   color: var(--color-blue-hover);
+}
+
+/* На десктопе заголовок карточки — просто заголовок: действия даны явными кнопками и ссылками
+   внутри карточки. Кликабельной строкой со стрелкой он становится только в мобильном списке. */
+@media (min-width: 721px) {
+  .info-card__head {
+    cursor: default;
+    pointer-events: none;
+  }
 }
 
 .info-card__titles {
@@ -3232,6 +3234,10 @@ kbd {
   color: var(--color-success);
 }
 
+.toast--info .icon {
+  color: var(--color-cyan);
+}
+
 /* ───────────────────────── Анимации ───────────────────────── */
 
 @keyframes spin {
@@ -3971,4 +3977,9 @@ html.is-modal-open {
   .faq__a {
     margin: 0 12px;
   }
+}
+
+/* Окно поверх другого окна: затемнение слабее, чтобы не «проваливаться» в черноту */
+.modal.is-stacked {
+  background: rgba(3, 5, 8, 0.45);
 }

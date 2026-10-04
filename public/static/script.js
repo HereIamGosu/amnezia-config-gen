@@ -202,8 +202,8 @@ const openModal = (id, opener) => {
   el.setAttribute('aria-hidden', 'false');
 };
 
-const toast = (text) => {
-  if (uiShell) uiShell.toast(text);
+const toast = (text, kind) => {
+  if (uiShell) uiShell.toast(text, kind);
 };
 
 /** Копирует текст в буфер; без Clipboard API (http, старые браузеры) — через выделение. */
@@ -724,8 +724,17 @@ const renderResultSuccess = () => {
   const copyLinkBtn = document.getElementById('resultCopyLink');
   const linkTab = document.getElementById('resultTabLink');
   const hasLink = !!(variant && variant.vpnLink);
-  if (copyLinkBtn) copyLinkBtn.hidden = !hasLink;
-  if (linkTab) linkTab.disabled = !hasLink;
+  const linkReason = hasLink
+    ? t('copy_vpn_link_title', 'Скопировать vpn://-ссылку для AmneziaVPN')
+    : t('vpn_link_unavailable', 'Для этого профиля ссылка vpn:// недоступна — импортируйте файл .conf.');
+  if (copyLinkBtn) {
+    copyLinkBtn.setAttribute('aria-disabled', String(!hasLink));
+    copyLinkBtn.title = linkReason;
+  }
+  if (linkTab) {
+    linkTab.disabled = !hasLink;
+    linkTab.title = hasLink ? '' : linkReason;
+  }
   if (!hasLink && currentResult.tab === 'link') {
     currentResult.tab = 'conf';
     if (uiShell) uiShell.selectTab('resultTabConf');
@@ -757,12 +766,16 @@ const initResultPanel = () => {
 
   document.getElementById('resultCopyLink')?.addEventListener('click', async () => {
     const variant = activeVariant();
-    if (!variant || !variant.vpnLink) return;
+    if (!variant) return;
+    if (!variant.vpnLink) {
+      toast(t('vpn_link_unavailable', 'Для этого профиля ссылка vpn:// недоступна — импортируйте файл .conf.'), 'info');
+      return;
+    }
     if (await copyText(variant.vpnLink)) {
       telemetry.trackEvent('vpn_link_copied', currentResult.telemetryContext);
       toast(t('vpn_link_copied', 'Ссылка скопирована, откройте AmneziaVPN на телефоне.'));
     } else {
-      toast(t('vpn_link_copy_failed', 'Не удалось скопировать ссылку.'));
+      toast(t('vpn_link_copy_failed', 'Не удалось скопировать ссылку.'), 'info');
     }
   });
 
@@ -770,7 +783,8 @@ const initResultPanel = () => {
     const variant = activeVariant();
     if (!variant) return;
     const text = currentResult.tab === 'link' && variant.vpnLink ? variant.vpnLink : variant.decodedConfig;
-    toast(await copyText(text) ? t('btn_copied', 'Скопировано!') : t('copy_failed', 'Не удалось скопировать.'));
+    const copied = await copyText(text);
+    toast(copied ? t('btn_copied', 'Скопировано!') : t('copy_failed', 'Не удалось скопировать.'), copied ? 'success' : 'info');
   });
 
   document.getElementById('resultTabConf')?.closest('[role="tablist"]')?.addEventListener('tabs:change', (ev) => {
@@ -801,9 +815,6 @@ const initResultPanel = () => {
         }
         break;
       }
-      case 'regenerate':
-        document.getElementById('generateButton')?.click();
-        break;
       default:
         break;
     }
@@ -1373,7 +1384,6 @@ const SETTINGS_TABS = { routes: 'tab-routes', dnscps: 'tab-dnscps', extra: 'tab-
 const openSettingsModal = ({ tab = 'routes', focusId = null, opener = null } = {}) => {
   if (uiShell) uiShell.selectTab(SETTINGS_TABS[tab] || SETTINGS_TABS.routes);
   openModal('settingsModal', opener);
-  document.getElementById('settingsToggle')?.setAttribute('aria-expanded', 'true');
   const target = focusId && document.getElementById(focusId);
   if (target) {
     target.scrollIntoView({ block: 'center' });
@@ -1763,12 +1773,8 @@ const renderRouteTiles = (host, presetList) => {
 
 const initSettingsPanel = async () => {
   const dnsHost = document.getElementById('dnsTiles');
-  const toggleBtn = document.getElementById('settingsToggle');
   const settingsModal = document.getElementById('settingsModal');
 
-  if (toggleBtn) {
-    toggleBtn.addEventListener('click', () => openSettingsModal({ opener: toggleBtn }));
-  }
   document.querySelectorAll('[data-settings-tab]').forEach((chip) => {
     chip.addEventListener('click', () => openSettingsModal({
       tab: chip.dataset.settingsTab,
@@ -1777,10 +1783,7 @@ const initSettingsPanel = async () => {
     }));
   });
   if (settingsModal) {
-    settingsModal.addEventListener('modal:close', () => {
-      if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
-      updateParamChips();
-    });
+    settingsModal.addEventListener('modal:close', updateParamChips);
     // Любая правка внутри настроек сразу видна на чипах шага 2 (обработчики ниже меняют cfgState
     // синхронно, а этот слушатель на всплытии срабатывает после них).
     settingsModal.addEventListener('change', updateParamChips);
@@ -2364,6 +2367,13 @@ document.addEventListener('DOMContentLoaded', () => {
   fetchServiceStatus();
   const statusModalBtn = document.getElementById('statusModalBtn');
   if (statusModalBtn) statusModalBtn.addEventListener('click', () => openStatusModal(statusModalBtn));
+  // Делегирование: ссылки внутри переводимого текста (ответ FAQ) перерисовываются при загрузке словаря
+  document.addEventListener('click', (ev) => {
+    const link = ev.target.closest && ev.target.closest('[data-status-link]');
+    if (!link || ev.button !== 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
+    ev.preventDefault();
+    openStatusModal(link);
+  });
   const statusRefreshBtn = document.getElementById('statusRefreshBtn');
   if (statusRefreshBtn) {
     statusRefreshBtn.addEventListener('click', () => {
@@ -2378,7 +2388,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (copyConfigBtnModal) {
     copyConfigBtnModal.addEventListener('click', async () => {
       if (!previewConfigText) return;
-      toast(await copyText(previewConfigText) ? t('btn_copied', 'Скопировано!') : t('copy_failed', 'Не удалось скопировать.'));
+      const copied = await copyText(previewConfigText);
+      toast(copied ? t('btn_copied', 'Скопировано!') : t('copy_failed', 'Не удалось скопировать.'), copied ? 'success' : 'info');
     });
   }
 

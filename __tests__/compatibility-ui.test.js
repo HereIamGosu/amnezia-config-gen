@@ -131,7 +131,7 @@ test('script.js does not break existing result actions', () => {
   for (const id of ['resultDownload', 'resultCopyLink', 'resultMoreBtn', 'resultCopyCode']) {
     assert.match(html, new RegExp(`id="${id}"`), `${id} must exist`);
   }
-  for (const action of ['preview', 'explain', 'compat', 'regenerate']) {
+  for (const action of ['preview', 'explain', 'compat']) {
     assert.match(html, new RegExp(`data-result-action="${action}"`), `${action} action must exist`);
   }
 });
