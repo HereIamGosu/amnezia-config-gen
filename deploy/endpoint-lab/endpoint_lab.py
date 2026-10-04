@@ -325,6 +325,7 @@ def cursor_ip(network: ipaddress.IPv4Network, position: int) -> str:
 class LabConfig:
     disabled_targets: tuple = ()
     simulate_targets_unreachable: bool = False
+    simulate_failing_targets: tuple = ()   # these targets point to an unreachable TEST-NET address
 
 
 def load_config(conf_dir: str = CONF_DIR) -> LabConfig:
@@ -338,15 +339,17 @@ def load_config(conf_dir: str = CONF_DIR) -> LabConfig:
         raise LabError(LOCAL_RESOURCE_ERROR, f"config.json unreadable: {type(exc).__name__}") from None
     names = {t.name for t in VERIFICATION_TARGETS}
     disabled = tuple(str(n) for n in data.get("disabled_targets", []))
-    if not set(disabled) <= names:
-        raise LabError(LOCAL_RESOURCE_ERROR, "config.json: unknown target in disabled_targets")
-    return LabConfig(disabled, bool(data.get("simulate_targets_unreachable", False)))
+    failing = tuple(str(n) for n in data.get("simulate_failing_targets", []))
+    if not (set(disabled) | set(failing)) <= names:
+        raise LabError(LOCAL_RESOURCE_ERROR, "config.json: unknown target name")
+    return LabConfig(disabled, bool(data.get("simulate_targets_unreachable", False)), failing)
 
 
 def active_targets(config: LabConfig) -> list[Target]:
     if config.simulate_targets_unreachable:
         return [UNREACHABLE_TARGET]
-    return [t for t in VERIFICATION_TARGETS if t.name not in config.disabled_targets]
+    return [Target(t.name, UNREACHABLE_TARGET.url) if t.name in config.simulate_failing_targets else t
+            for t in VERIFICATION_TARGETS if t.name not in config.disabled_targets]
 
 
 # --- probe identity -------------------------------------------------------------------------------

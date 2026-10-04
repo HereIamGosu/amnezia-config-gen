@@ -745,6 +745,10 @@ class LinuxEngineTests(unittest.TestCase):
                 json.dump({"simulate_targets_unreachable": True}, fh)
             self.assertEqual(lab.active_targets(lab.load_config(tmp)), [lab.UNREACHABLE_TARGET])
             with open(os.path.join(tmp, lab.CONFIG_FILE), "w", encoding="utf-8") as fh:
+                json.dump({"simulate_failing_targets": ["cf-1111"]}, fh)
+            first = lab.active_targets(lab.load_config(tmp))[0]
+            self.assertEqual((first.name, first.url), ("cf-1111", lab.UNREACHABLE_TARGET.url))
+            with open(os.path.join(tmp, lab.CONFIG_FILE), "w", encoding="utf-8") as fh:
                 json.dump({"disabled_targets": ["https://evil.example"]}, fh)
             with self.assertRaises(lab.LabError):
                 lab.load_config(tmp)
