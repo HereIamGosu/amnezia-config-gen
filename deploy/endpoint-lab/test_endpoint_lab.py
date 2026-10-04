@@ -113,7 +113,8 @@ class ValidationTests(unittest.TestCase):
         self.assertNotEqual(ips[:4], ["162.159.192.0", "162.159.192.1", "162.159.192.2", "162.159.192.3"])
 
     def test_legacy_builtins_mirror_the_generator_seed_list(self):
-        js = open(os.path.join(HERE, "..", "..", "src", "server", "endpointCache.js"), encoding="utf-8").read()
+        with open(os.path.join(HERE, "..", "..", "src", "server", "endpointCache.js"), encoding="utf-8") as fh:
+            js = fh.read()
         block = js[js.index("HARDCODED_FALLBACK = ["):js.index("];")]
         self.assertEqual(tuple(re.findall(r"ip: '([\d.]+)'", block)), lab.LEGACY_BUILTIN_IPS)
 
