@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "generated_at": "2027-01-15T07:58:20Z",
+  "lab": {
+    "health": "OK",
+    "reason": "ok",
+    "since": "2027-01-15T07:00:00Z"
+  },
+  "identity": {
+    "state": "PROBE_IDENTITY_INVALID",
+    "detail": "probe identity is ABSENT",
+    "api_check": null,
+    "api_checked_at": null
+  },
+  "pool": {
+    "eligible_active": 8,
+    "states": {
+      "ACTIVE": 8,
+      "DEAD": 1
+    },
+    "blacklisted": 0,
+    "target": 24,
+    "soft_floor": 12,
+    "cap": 48
+  },
+  "freshness": {
+    "oldest_active_verified_s": 0,
+    "newest_active_verified_s": 0,
+    "snapshot_generated_at": "2027-01-15T07:58:20Z",
+    "snapshot_expires_in_s": 180,
+    "last_snapshot_error": null
+  },
+  "controls": {
+    "count": 0,
+    "selected_at": null
+  },
+  "scheduler": {
+    "refresh": {
+      "at": "2027-01-15T07:58:20Z",
+      "status": "completed",
+      "duration_ms": 0,
+      "health": "OK",
+      "note": null
+    },
+    "discovery": null,
+    "discovery_cursor": "0"
+  },
+  "db": {
+    "bytes_incl_wal": 2570696,
+    "schema": 3,
+    "last_quick_check": null,
+    "quick_check": null
+  },
+  "code": {
+    "commit": null,
+    "matches_install": false
+  },
+  "stats_15m": {
+    "probes": 90,
+    "handshake_success": "88.9% (n=90)",
+    "traffic_success": "100.0% (n=80)",
+    "endpoint_failures": 10,
+    "lab_failures": 0,
+    "suppressed": 0,
+    "inconclusive": 0,
+    "transitions": {
+      "QUARANTINE->DEAD": 1
+    },
+    "sessions": {
+      "first_session_ok": 64,
+      "second_session_rescued": 16,
+      "both_sessions_failed": 0
+    }
+  }
+}

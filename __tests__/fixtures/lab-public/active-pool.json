@@ -1,0 +1,97 @@
+{
+  "schema_version": 2,
+  "generated_at": "2027-01-15T07:58:20Z",
+  "expires_at": "2027-01-15T08:01:20Z",
+  "lab_status": "ok",
+  "active_count": 8,
+  "endpoints": [
+    {
+      "ip": "162.159.192.1",
+      "port": 500,
+      "family": 4,
+      "state": "active",
+      "lab_verified_at": "2027-01-15T07:58:20Z",
+      "expires_at": "2027-01-15T08:05:20Z",
+      "source_class": "consumer_official_seed",
+      "probe_completion_ms": 80,
+      "traffic_total_ms": 40
+    },
+    {
+      "ip": "162.159.192.2",
+      "port": 1701,
+      "family": 4,
+      "state": "active",
+      "lab_verified_at": "2027-01-15T07:58:20Z",
+      "expires_at": "2027-01-15T08:05:20Z",
+      "source_class": "consumer_official_seed",
+      "probe_completion_ms": 80,
+      "traffic_total_ms": 40
+    },
+    {
+      "ip": "162.159.192.3",
+      "port": 4500,
+      "family": 4,
+      "state": "active",
+      "lab_verified_at": "2027-01-15T07:58:20Z",
+      "expires_at": "2027-01-15T08:05:20Z",
+      "source_class": "consumer_official_seed",
+      "probe_completion_ms": 80,
+      "traffic_total_ms": 40
+    },
+    {
+      "ip": "162.159.192.4",
+      "port": 2408,
+      "family": 4,
+      "state": "active",
+      "lab_verified_at": "2027-01-15T07:58:20Z",
+      "expires_at": "2027-01-15T08:05:20Z",
+      "source_class": "consumer_official_seed",
+      "probe_completion_ms": 80,
+      "traffic_total_ms": 40
+    },
+    {
+      "ip": "162.159.192.5",
+      "port": 500,
+      "family": 4,
+      "state": "active",
+      "lab_verified_at": "2027-01-15T07:58:20Z",
+      "expires_at": "2027-01-15T08:05:20Z",
+      "source_class": "consumer_official_seed",
+      "probe_completion_ms": 80,
+      "traffic_total_ms": 40
+    },
+    {
+      "ip": "162.159.192.6",
+      "port": 1701,
+      "family": 4,
+      "state": "active",
+      "lab_verified_at": "2027-01-15T07:58:20Z",
+      "expires_at": "2027-01-15T08:05:20Z",
+      "source_class": "consumer_official_seed",
+      "probe_completion_ms": 80,
+      "traffic_total_ms": 40
+    },
+    {
+      "ip": "162.159.192.7",
+      "port": 4500,
+      "family": 4,
+      "state": "active",
+      "lab_verified_at": "2027-01-15T07:58:20Z",
+      "expires_at": "2027-01-15T08:05:20Z",
+      "source_class": "consumer_official_seed",
+      "probe_completion_ms": 80,
+      "traffic_total_ms": 40
+    },
+    {
+      "ip": "162.159.192.8",
+      "port": 2408,
+      "family": 4,
+      "state": "active",
+      "lab_verified_at": "2027-01-15T07:58:20Z",
+      "expires_at": "2027-01-15T08:05:20Z",
+      "source_class": "consumer_official_seed",
+      "probe_completion_ms": 80,
+      "traffic_total_ms": 40
+    }
+  ]
+}

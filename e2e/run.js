@@ -9,12 +9,15 @@
 //   E2E_REQUIRE_CHROME=1 — без Chrome падать, а не пропускать (CI);
 //   E2E_PORT            — порт сервера (по умолчанию свободный);
 //   E2E_PUBLIC_DIR      — отдавать другую копию public/ (например, собранную scripts/build-assets.js).
+// Публичные файлы Endpoint Lab: сервер читает пустой временный каталог (ENDPOINT_LAB_PUBLIC_DIR), тесты Lab
+// кладут в него данные сами (E2E_LAB_DIR); каталог удаляется после прогона.
 // Аргументы после `--` — фильтр файлов: `npm run test:e2e -- generate` прогонит generate.e2e.js.
 'use strict';
 
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const net = require('node:net');
+const os = require('node:os');
 const path = require('node:path');
 const { findChrome, launchChrome } = require('./lib/chrome');
 
@@ -32,8 +35,10 @@ const freePort = () => new Promise((resolve, reject) => {
   });
 });
 
+const LAB_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'awg-e2e-lab-'));
+
 const startServer = async (port) => {
-  const env = { ...process.env, PORT: String(port), HOST: '127.0.0.1' };
+  const env = { ...process.env, PORT: String(port), HOST: '127.0.0.1', ENDPOINT_LAB_PUBLIC_DIR: LAB_DIR };
   if (process.env.E2E_PUBLIC_DIR) env.PUBLIC_DIR = path.resolve(process.env.E2E_PUBLIC_DIR);
   const proc = spawn(process.execPath, [path.join(ROOT, 'server.js')], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = '';
@@ -87,6 +92,7 @@ const main = async () => {
   let chrome = null;
   const cleanup = async () => {
     await Promise.all([chrome && chrome.close(), stopProcess(server && server.proc)]);
+    fs.rmSync(LAB_DIR, { recursive: true, force: true });
   };
   process.once('SIGINT', () => { cleanup().finally(() => process.exit(130)); });
 
@@ -98,7 +104,7 @@ const main = async () => {
       const child = spawn(process.execPath, ['--test', '--test-concurrency=1', '--test-reporter=spec', ...files], {
         cwd: ROOT,
         stdio: 'inherit',
-        env: { ...process.env, E2E_BASE_URL: server.baseUrl, E2E_BROWSER_WS: chrome.wsUrl },
+        env: { ...process.env, E2E_BASE_URL: server.baseUrl, E2E_BROWSER_WS: chrome.wsUrl, E2E_LAB_DIR: LAB_DIR },
       });
       child.on('exit', (exitCode, signal) => resolve(signal ? 1 : exitCode));
     });

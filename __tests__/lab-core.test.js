@@ -226,3 +226,19 @@ test('fixtures are allowed only on localhost and only by known name', () => {
   assert.equal(Core.fixtureFromLocation('?fixture=../../etc', 'localhost'), null);
   for (const name of ['healthy', 'degraded', 'unavailable', 'stale', 'empty', 'mixed']) assert.ok(Core.FIXTURE_NAMES.includes(name));
 });
+
+test('coverage: active-only marks the compatibility list, anything else reads as full', () => {
+  assert.equal(norm(overview()).view.coverage, 'full');
+  assert.equal(norm(overview({ coverage: 'active-only' })).view.coverage, 'active-only');
+  assert.equal(norm(overview({ coverage: 'everything' })).view.coverage, 'full');
+});
+
+test('details: a missing lastError is unknown, null means no error', () => {
+  const base = { schemaVersion: 1, endpoint: endpoint() };
+  const unknown = Core.normalizeEndpointDetails(base, NOW).view;
+  assert.equal(unknown.lastErrorKnown, false);
+  const none = Core.normalizeEndpointDetails({ ...base, lastError: null }, NOW).view;
+  assert.deepEqual([none.lastErrorKnown, none.lastError], [true, null]);
+  const coded = Core.normalizeEndpointDetails({ ...base, lastError: { code: 'traffic_failed', at: iso(NOW - 5e3) } }, NOW).view;
+  assert.deepEqual(coded.lastError, { code: 'traffic_failed', message: null, at: NOW - 5e3 });
+});

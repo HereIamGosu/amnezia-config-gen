@@ -24,10 +24,11 @@ const response = (status, body, headers = {}) => ({
 
 const api = { overview: '/api/lab', endpoint: (id, range) => `/api/lab?endpoint=${encodeURIComponent(id)}&range=${range}` };
 
-test('without a configured API the adapter answers not-connected and makes no request', async () => {
+test('the page reads the same-origin /api/lab; without addresses it answers not-connected and makes no request', async () => {
+  assert.equal(Data.LAB_API.overview, '/api/lab');
+  assert.equal(Data.LAB_API.endpoint('[2606:4700::1]:2408', '24h'), '/api/lab?endpoint=%5B2606%3A4700%3A%3A1%5D%3A2408&range=24h');
   let calls = 0;
-  const source = Data.createLabSource({ fetchImpl: () => { calls += 1; }, now: () => NOW });
-  assert.equal(Data.LAB_API.overview, null, 'this branch must not assume a production Lab API');
+  const source = Data.createLabSource({ fetchImpl: () => { calls += 1; }, api: { overview: null, endpoint: null }, now: () => NOW });
   assert.equal(source.connected, false);
   assert.deepEqual(await source.loadOverview(), { kind: 'not-connected' });
   assert.deepEqual(await source.loadEndpoint('162.159.192.18:2408'), { kind: 'not-connected' });
@@ -49,7 +50,7 @@ test('ok response passes validation; extra request options stay same-origin and 
 test('HTTP errors, network errors, bad JSON and wrong schema are controlled results', async () => {
   const run = (fetchImpl) => Data.createLabSource({ api, now: () => NOW, fetchImpl }).loadOverview();
   const http = await run(async () => response(503, 'down', { 'Retry-After': '120' }));
-  assert.deepEqual(http, { kind: 'error', reason: 'http', status: 503, retryAfterMs: 120_000 });
+  assert.deepEqual(http, { kind: 'error', reason: 'http', status: 503, code: null, retryAfterMs: 120_000 });
   assert.deepEqual(await run(async () => { throw new TypeError('Failed to fetch'); }), { kind: 'error', reason: 'network' });
   assert.deepEqual(await run(async () => response(200, '<html>')), { kind: 'malformed', reason: 'json' });
   assert.deepEqual(await run(async () => response(200, { ...good, schemaVersion: 9 })), { kind: 'malformed', reason: 'schema' });
@@ -129,4 +130,19 @@ test('fixture source never touches the network', async () => {
   assert.equal((await source.loadOverview()).kind, 'ok');
   assert.deepEqual(await source.loadEndpoint('1.1.1.1:2408'), { kind: 'error', reason: 'http', status: 404 });
   assert.equal(calls, 0);
+});
+
+test('API error codes from /api/lab are read from a short JSON body; anything else is ignored', async () => {
+  const run = (status, body) => Data.createLabSource({
+    api, now: () => NOW, fetchImpl: async () => response(status, body, { 'Retry-After': '60' }),
+  }).loadOverview();
+  assert.deepEqual(await run(503, { success: false, code: 'lab_not_available' }),
+    { kind: 'error', reason: 'http', status: 503, code: 'lab_not_available', retryAfterMs: 60_000 });
+  assert.equal((await run(503, { code: 'lab_malformed' })).code, 'lab_malformed');
+  assert.equal((await run(503, { code: '<script>' })).code, null);
+  assert.equal((await run(502, '<html>bad gateway</html>')).code, null);
+  assert.equal((await run(503, `{"code":"lab_not_available","pad":"${'x'.repeat(2000)}"}`)).code, null, 'long bodies are not parsed');
+  const detail = await Data.createLabSource({ api, now: () => NOW, fetchImpl: async () => response(404, { code: 'endpoint_not_found' }) })
+    .loadEndpoint('162.159.192.18:2408');
+  assert.equal(detail.code, 'endpoint_not_found');
 });

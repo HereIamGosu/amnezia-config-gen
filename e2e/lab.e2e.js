@@ -3,14 +3,20 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { test } = require('node:test');
 const { e2eSuite } = require('./lib/harness');
 
 const labState = () => document.getElementById('labMain').dataset.labState;
 
 e2eSuite('Endpoint Lab page', (openPage) => {
-  test('without a Lab API: honest "not available" state, no fake numbers, no API requests', async () => {
+  test('without Lab data: /api/lab answers 503, honest "not available" state, no fake numbers', async () => {
+    // Empty public directory = what Vercel, forks and a server without the Lab mount see.
+    const labDir = process.env.E2E_LAB_DIR;
+    if (labDir) for (const name of fs.readdirSync(labDir)) fs.rmSync(path.join(labDir, name), { recursive: true, force: true });
     const page = await openPage();
+    page.allowErrors(/status of 503/);
     await page.goto('/lab', { app: false });
     await page.waitFor(() => document.getElementById('labMain').dataset.labState === 'not-connected', { message: 'not-connected state' });
     const info = await page.evaluate(() => ({
@@ -23,7 +29,8 @@ e2eSuite('Endpoint Lab page', (openPage) => {
     assert.equal(info.active, '—', 'no invented counts in production mode');
     assert.equal(info.rows, 0);
     assert.equal(info.badge, false);
-    assert.deepEqual(page.apiCalls.map((c) => new URL(c.url).pathname), [], 'nothing is fetched from /api');
+    assert.deepEqual([...new Set(page.apiCalls.map((c) => new URL(c.url).pathname))], ['/api/lab'], 'only the Lab API, read-only');
+    assert.ok(page.apiCalls.every((c) => c.method === 'GET'));
     await page.assertClean('/lab');
   });
 
