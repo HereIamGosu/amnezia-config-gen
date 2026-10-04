@@ -1649,7 +1649,7 @@ class Lab:
             if len(plan) >= budget:
                 break
             if (r["state"] == DISCOVERED and r["last_probe_at"] is None and not r["manual_blacklist"]
-                    and r["source"] != SRC_NEGATIVE):
+                    and r["source"] not in (SRC_NEGATIVE, SRC_CF_ONE)):  # Cloudflare One: trickle budget only
                 plan.append(r["endpoint_id"])
         dead = [r for r in rows if r["state"] == DEAD and not r["manual_blacklist"]
                 and (r["last_probe_at"] or 0) <= now - DEAD_RESURRECT_AFTER_S]

@@ -434,7 +434,9 @@ class SchedulerTests(LabFixture):
         self.assertIn(eid, runner.discovery_plan(NOW + lab.DEAD_RESURRECT_AFTER_S)[0])
 
     def test_cloudflare_one_trickle(self):
+        seeded = self.add("162.159.193.8", source=lab.SRC_CF_ONE)  # legacy seed in the Cloudflare One range
         runner = self.make_lab(FakeProbeEngine())
+        self.assertNotIn(seeded, runner.discovery_plan(NOW)[0])  # never bulk-probed as a seed
         plan, info = runner.discovery_plan(NOW)
         self.assertTrue(info["cf_one"].startswith("162.159.193."))
         with self.store.transaction():
