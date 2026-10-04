@@ -1138,7 +1138,8 @@ class AcceleratedLifecycleTests(LabFixture):
         healthy, flaky, dead = self.world()
         H = self.HOUR
         windows = {"targets": (6 * H, 6.5 * H), "uplink": (12 * H, 12.25 * H), "identity": (15 * H, 15.1 * H),
-                   "wg": (18 * H, 18.05 * H), "pause": (20 * H, 20.5 * H)}
+                   "wg": (18 * H, 18 * H + 600), "pause": (20 * H, 20.5 * H)}
+        checked = {name: 0 for name in ("targets", "uplink", "identity", "wg")}
 
         def within(name, t, margin=0):
             a, b = windows[name]
@@ -1189,17 +1190,20 @@ class AcceleratedLifecycleTests(LabFixture):
                     fresh = lab.validate_snapshot(snap, t)
                     self.assertEqual(len(fresh), snap["active_count"])            # only fresh ACTIVE are published
                     self.assertLessEqual(snap["active_count"], lab.ACTIVE_HIGH)    # working set respected
-                    if any(within(w, t, 120) for w in ("targets", "uplink", "identity", "wg")):
-                        self.assertEqual(self.failures(), before, f"penalty during a Lab/global failure at +{(t - NOW) / H:.2f} h")
+                    for w in checked:
+                        if within(w, t):  # every tick inside the window, including the very first one
+                            checked[w] += 1
+                            self.assertEqual(self.failures(), before, f"penalty during {w} at +{(t - NOW) / H:.3f} h")
                 step += 1
                 self.clock_value += 60
         self.assertTrue(stale_checked)
+        self.assertTrue(all(n > 0 for n in checked.values()), checked)  # no window may be checked vacuously
         c = self.store.conn
         # no endpoint was punished inside any Lab/global failure window (transitions to failure states)
         for name in ("targets", "uplink", "identity", "wg"):
             a, b = windows[name]
             n = c.execute("SELECT count(*) FROM transition WHERE ts >= ? AND ts < ? AND to_state IN ('SUSPECT','QUARANTINE','DEAD')",
-                          (NOW + a + 120, NOW + b - 120)).fetchone()[0]
+                          (NOW + a, NOW + b)).fetchone()[0]
             self.assertEqual(n, 0, name)
         # dead endpoints end DEAD after bounded quarantine, then are only re-probed every >= 6 h
         for eid in dead:
@@ -1208,7 +1212,14 @@ class AcceleratedLifecycleTests(LabFixture):
             probes = [r[0] for r in c.execute("SELECT timestamp FROM observation WHERE endpoint_id=? AND probe_type='handshake'"
                                               " AND timestamp > ? ORDER BY timestamp", (eid, entered))]
             self.assertTrue(all(b - a >= lab.DEAD_RESURRECT_AFTER_S for a, b in zip(probes, probes[1:])), eid)
-        # every quarantine cooldown came from the bounded backoff table
+        # every quarantine was respected: the next probe of that endpoint never came before the shortest cooldown
+        entries = c.execute("SELECT endpoint_id, ts FROM transition WHERE to_state='QUARANTINE'").fetchall()
+        self.assertGreater(len(entries), 0)  # the flaky endpoints guarantee quarantines
+        for eid, ts in entries:
+            nxt = c.execute("SELECT min(timestamp) FROM observation WHERE endpoint_id=? AND probe_type='handshake'"
+                            " AND timestamp > ?", (eid, ts)).fetchone()[0]
+            if nxt is not None:
+                self.assertGreaterEqual(nxt - ts, min(lab.QUARANTINE_BACKOFF_S), eid)
         for eid, until, err in c.execute("SELECT endpoint_id, quarantine_until, last_error_at FROM endpoint"
                                          " WHERE state='QUARANTINE' AND quarantine_kind='auto'"):
             self.assertIn(until - err, lab.QUARANTINE_BACKOFF_S, eid)
