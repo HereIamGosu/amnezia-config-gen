@@ -899,6 +899,11 @@ class LinuxWireGuardProbeEngine(ProbeEngine):
             if latest is None:
                 _, rx1, tx1 = self._wg_counters(ns, ifname)
                 evidence.update(rx_before=rx0, tx_before=tx0, rx_after=rx1, tx_after=tx1)
+                if tx1 == tx0:
+                    # Not a single initiation left the host (e.g. the trigger could not send): our fault.
+                    return ProbeResult(False, error_code=LOCAL_RESOURCE_ERROR,
+                                       message="trigger produced no tunnel traffic; no handshake initiation sent",
+                                       probe_completion_ms=waited_ms, evidence=evidence)
                 return ProbeResult(False, error_code=HANDSHAKE_NO_RESPONSE,
                                    message=f"no handshake within {timeout_s:g}s", probe_completion_ms=waited_ms,
                                    traffic_bytes=(rx1 - rx0) + (tx1 - tx0), evidence=evidence)

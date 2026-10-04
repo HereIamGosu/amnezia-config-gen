@@ -721,6 +721,17 @@ class LinuxEngineTests(unittest.TestCase):
         self.assertEqual(res.target_results[0], ("cf-1111", False, lab.HTTPS_TIMEOUT))
         self.assertEqual(len(res.target_results), 2)  # cf-1001/cf-www skipped in the dead first session
 
+    def test_no_initiation_sent_is_a_lab_failure(self):
+        class Mute(FakeRunner):  # the trigger cannot send (e.g. CAP_NET_RAW missing): tx never moves
+            def run(self, argv, input_text=None, check=True, timeout=lab.COMMAND_TIMEOUT_S):
+                if "ping" in argv:
+                    self.calls.append(argv)
+                    return lab.CommandResult(2, "", "ping: socket: Operation not permitted")
+                return super().run(argv, input_text, check, timeout)
+        res = self.verify(Mute(handshake_after=None))
+        self.assertEqual(res.error_code, lab.LOCAL_RESOURCE_ERROR)
+        self.assertTrue(res.lab_failure)  # never booked against the endpoint
+
     def test_handshake_failure_gets_no_second_session(self):
         runner = FakeRunner(handshake_after=None)
         res = self.verify(runner)
