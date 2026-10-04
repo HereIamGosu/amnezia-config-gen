@@ -63,7 +63,7 @@ function collectVersionedAssetUrls(html) {
 }
 
 // Every page that loads static/* assets: each needs ?v=<package version> on all of them.
-const HTML_ENTRY_POINTS = ['public/index.html', 'public/en/index.html', 'public/status.html', 'public/404.html'];
+const HTML_ENTRY_POINTS = ['public/index.html', 'public/en/index.html', 'public/status.html', 'public/404.html', 'public/lab/index.html', 'public/en/lab/index.html'];
 
 function checkManifestIconVersions(manifest, packageVersion) {
   const failures = [];

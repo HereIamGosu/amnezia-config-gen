@@ -44,7 +44,7 @@ test('release checker rejects a requested target version drift', () => {
 
 test('release checker covers the cache keys of every HTML entry point', () => {
   const { checkHtmlAssetVersions, HTML_ENTRY_POINTS } = require('../scripts/check-release-consistency');
-  assert.deepEqual(HTML_ENTRY_POINTS, ['public/index.html', 'public/en/index.html', 'public/status.html', 'public/404.html']);
+  assert.deepEqual(HTML_ENTRY_POINTS, ['public/index.html', 'public/en/index.html', 'public/status.html', 'public/404.html', 'public/lab/index.html', 'public/en/lab/index.html']);
   const ok = '<script src="static/live-status.js?v=9.9.9"></script>';
   assert.deepEqual(checkHtmlAssetVersions({ 'public/status.html': ok }, '9.9.9'), []);
   assert.deepEqual(
