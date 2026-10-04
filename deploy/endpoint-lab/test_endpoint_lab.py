@@ -284,6 +284,40 @@ class CircuitBreakerTests(LabFixture):
         self.assertEqual(self.store.get(target)["last_error_code"], lab.TRAFFIC_FAILED)
         self.assertEqual(out.lab_health, lab.LAB_OK)
 
+    def test_inconclusive_control_one_is_booked_when_control_two_passes(self):
+        ids = self.pool(6)
+        c1, c2 = self.make_lab(FakeProbeEngine()).select_controls(NOW)
+        target = next(i for i in ids if i not in (c1, c2))
+        engine = FakeProbeEngine({target: inconclusive, c1: [ok, inconclusive]})
+        out = self.make_lab(engine).run_batch(ids, "refresh")
+        self.assertTrue(out.control.global_ok)
+        self.assertEqual(self.states()[c1], lab.SUSPECT)
+        self.assertEqual(self.store.get(c1)["last_error_code"], lab.TRAFFIC_FAILED)
+
+    def test_targets_dying_mid_batch_after_a_passing_control_never_mass_penalise(self):
+        ids = self.pool(6)
+        c1, c2 = self.make_lab(FakeProbeEngine()).select_controls(NOW)
+        others = [i for i in ids if i not in (c1, c2)]
+        order = [others[0], c1, c2] + others[1:]
+        before = self.failures()
+        # early inconclusive -> control #1 passes; afterwards every target is dead, controls included
+        engine = FakeProbeEngine({c1: [ok, inconclusive], c2: [inconclusive]}, default=inconclusive)
+        out = self.make_lab(engine).run_batch(order, "refresh")
+        self.assertEqual(self.failures(), before)
+        self.assertEqual(set(self.states().values()), {lab.ACTIVE})
+        self.assertFalse(out.control.global_ok)
+        self.assertEqual(out.lab_health, lab.LAB_UNAVAILABLE)
+
+    def test_control_is_never_booked_twice_in_one_batch(self):
+        ids = self.pool(6)
+        c1, c2 = self.make_lab(FakeProbeEngine()).select_controls(NOW)
+        others = [i for i in ids if i not in (c1, c2)]
+        # two control checks in one batch; control #1 fails in both, control #2 passes in both
+        engine = FakeProbeEngine({others[0]: inconclusive, others[1]: [ok, inconclusive], c1: no_hs})
+        self.make_lab(engine).run_batch([others[0], others[1]] + others[2:] + [c1, c2], "refresh")
+        self.assertEqual(self.store.get(c1)["consecutive_failures"], 1)
+        self.assertEqual(self.states()[c1], lab.SUSPECT)
+
     def test_both_controls_fail_alike_no_penalty(self):
         ids = self.pool(6)
         c1, c2 = self.make_lab(FakeProbeEngine()).select_controls(NOW)
@@ -348,8 +382,8 @@ class CircuitBreakerTests(LabFixture):
         self.assertNotEqual(self.store.get(c1)["ip"], self.store.get(c2)["ip"])
         self.assertNotEqual(self.store.get(c1)["port"], self.store.get(c2)["port"])
         with self.store.transaction():
-            self.store.conn.execute("UPDATE endpoint SET state='SUSPECT' WHERE endpoint_id=?", (c1,))
-        new = runner.select_controls(NOW)
+            self.store.conn.execute("UPDATE endpoint SET expires_at=? WHERE endpoint_id=?", (NOW - 1, c1))
+        new = runner.select_controls(NOW)  # ACTIVE but expired is not a usable control
         self.assertNotIn(c1, new)
         self.assertIn(c2, new)
         self.assertEqual(len(new), 2)
@@ -424,6 +458,24 @@ class SchedulerTests(LabFixture):
         with self.store.transaction():
             self.store.set_meta("lab_health", lab.LAB_UNAVAILABLE)
         self.assertIn("UNAVAILABLE", runner.discovery(lab.Resources(10 ** 6, 0, 0.1, 2, 10 ** 10)))
+
+    def test_inconclusive_discovery_probe_is_not_booked(self):
+        eid = self.add("188.114.99.1", source=lab.SRC_LEGACY)
+        runner = self.make_lab(FakeProbeEngine({eid: inconclusive}, default=no_hs))
+        runner.run_batch([eid], "discovery", breaker=False)
+        row = self.store.get(eid)
+        self.assertEqual((row["state"], row["consecutive_failures"], row["last_error_code"]), (lab.DISCOVERED, 0, None))
+
+    @unittest.skipUnless(lab.fcntl, "flock is Linux-only")
+    def test_discovery_yields_to_a_held_lock(self):
+        path = os.path.join(self.tmp.name, "lock")
+        with lab.global_lock(path):
+            self.assertIsNone(lab.job_lock("discovery", path))
+            with self.assertRaises(lab.LabError):
+                lab.job_lock("verify", path)
+        held = lab.job_lock("discovery", path)
+        self.assertIsNotNone(held)
+        held.__exit__(None, None, None)
 
     def test_dead_resurrection_after_delay(self):
         eid = self.add("162.159.192.200", state=lab.DEAD)
@@ -828,6 +880,21 @@ class StoreTests(LabFixture):
                                         " VALUES (?,?,?,?,?)", (eid, ts, "handshake", "ok", "op"))
             self.store.prune(NOW)
         self.assertEqual(self.store.conn.execute("SELECT count(*) FROM observation").fetchone()[0], 1)
+
+    def test_corrupt_db_stops_the_job_without_touching_it(self):
+        eid = self.add("162.159.192.1", state=lab.ACTIVE)
+        with open(self.db, "rb") as fh:
+            before = fh.read()
+        with mock.patch.object(lab.Store, "quick_check", return_value=False):
+            with self.assertRaises(lab.LabError) as ctx:
+                lab.ensure_db_healthy(self.store, NOW)
+        self.assertIn("DB_CORRUPT", str(ctx.exception))
+        with open(self.db, "rb") as fh:
+            self.assertEqual(fh.read(), before)  # nothing written, nothing deleted
+        self.assertFalse(os.path.exists(os.path.join(self.public, lab.SNAPSHOT_FILE)))  # snapshot only ages out
+        self.assertEqual(self.store.get(eid)["state"], lab.ACTIVE)
+        self.assertTrue(lab.ensure_db_healthy(self.store, NOW))      # a healthy DB passes and is remembered
+        self.assertFalse(lab.ensure_db_healthy(self.store, NOW + 60))  # daily, not every job
 
     def test_maintenance_is_rate_limited(self):
         runner = self.make_lab(FakeProbeEngine())

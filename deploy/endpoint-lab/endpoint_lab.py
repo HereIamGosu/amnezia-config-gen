@@ -1446,8 +1446,7 @@ class Lab:
 
         def usable(eid: str) -> bool:
             r = rows.get(eid)
-            return (r is not None and r["state"] == ACTIVE and not r["manual_blacklist"]
-                    and r["source"] != SRC_NEGATIVE)
+            return r is not None and r["source"] != SRC_NEGATIVE and is_eligible(Store.to_row(r), now)
 
         meta = self.store.meta()
         current = [c for c in json.loads(meta.get("controls", "[]")) if usable(c)][:2]
@@ -1511,7 +1510,9 @@ class Lab:
         cpu0, _ = usage_snapshot()
         before = {eid: Store.to_row(self.store.get(eid)) for eid in endpoint_ids}
         results: list = []          # [(eid, result, finished_at)]
-        verdict: ControlVerdict | None = None
+        verdict: ControlVerdict | None = None   # the latest, decisive control check
+        control_runs: list = []                 # every control check of this batch, in order
+        verdict_at = -1                         # len(results) when `verdict` was taken
         aborted = False
         try:
             identity = self.identity_loader()
@@ -1519,6 +1520,12 @@ class Lab:
             fail = ProbeResult(False, error_code=exc.code, message=str(exc))
             results = [(eid, fail, self.clock()) for eid in endpoint_ids]
             identity = None
+
+        def check() -> None:
+            nonlocal verdict, verdict_at
+            verdict = self.control_check(identity, self.clock())
+            verdict_at = len(results)
+            control_runs.append(verdict)
         if identity is not None:
             bad_streak = 0
             for eid in endpoint_ids:
@@ -1534,7 +1541,7 @@ class Lab:
                 elif was_active and (res.endpoint_failure or res.inconclusive):
                     bad_streak += 1
                 if breaker and verdict is None and (res.inconclusive or bad_streak >= EARLY_CONTROL_STREAK):
-                    verdict = self.control_check(identity, self.clock())
+                    check()
                     if verdict.global_ok is False:
                         aborted = True  # the Lab cannot prove anything right now: stop spending probes
                         break
@@ -1545,44 +1552,61 @@ class Lab:
         any_inconclusive = any(r.inconclusive for _, r, _ in results)
         mass_failure = (len(results) >= ANOMALY_MIN and all(r.endpoint_failure or r.inconclusive
                                                              for _, r, _ in results))
-        if breaker and identity is not None and verdict is None and (anomaly or any_inconclusive or mass_failure):
-            verdict = self.control_check(identity, self.clock())
+        if breaker and identity is not None and (anomaly or any_inconclusive or mass_failure):
+            # A verdict is valid only for results obtained before it: anything bad that came later
+            # (e.g. targets dying mid-batch) needs a fresh control check before it can be booked.
+            bad_after = any(i >= verdict_at and (r.inconclusive or (before[e].state == ACTIVE and r.endpoint_failure))
+                            for i, (e, r, _) in enumerate(results))
+            if verdict is None or (verdict.global_ok is not False and bad_after):
+                check()
         global_ok = verdict.global_ok if verdict else True
         if breaker and identity is not None and verdict and global_ok is True and anomaly:
             # The path works again: re-verify the mass failure once instead of booking a transient blip.
-            redo = [e for e in failed_prev if e not in verdict.results]
+            controlled = {c for run in control_runs for c in run.results}
+            redo = [e for e in failed_prev if e not in controlled]
             index = {e: i for i, (e, _, _) in enumerate(results)}
             for eid in redo:
                 res = self.engine.deep_verify(parse_endpoint_id(eid), identity, timeout_s, self.targets)
                 results[index[eid]] = (eid, res, self.clock())
+            if any(results[index[e]][1].inconclusive for e in redo):
+                check()  # the re-check itself may have hit a fresh outage
+                global_ok = verdict.global_ok
         lab_failures = [r for _, r, _ in results if r.lab_failure]
         no_controls_mass = breaker and mass_failure and verdict is not None and verdict.global_ok is None
         recorded = []
         now = self.clock()
         try:
             with self.store.transaction():
+                controlled = {c for run in control_runs for c in run.results}
                 for eid, res, ts in results:
                     apply = True
-                    if verdict and eid in verdict.results:
+                    if eid in controlled:
                         apply = False                       # its later control probe decides, never twice
                     elif res.ok or res.lab_failure:
                         pass
                     elif global_ok is False or no_controls_mass:
                         apply = False                       # Lab/global failure: no endpoint penalty
                     elif res.inconclusive:
-                        if global_ok is True:
+                        if breaker and global_ok is True:
                             res = replace(res, error_code=TRAFFIC_FAILED,
                                           message="targets failed here while a control endpoint passed")
                         else:
-                            apply = False                   # nobody can prove the targets work
+                            apply = False                   # nobody proved the targets work (or discovery)
                     self.store.record(eid, res, True, ts, operation_id, apply_transition=apply, run_kind=kind)
                     recorded.append((eid, res))
-                if verdict:
-                    for cid, (res, ts) in verdict.results.items():
-                        if res.lab_failure or (not res.ok and verdict.global_ok is not True):
-                            apply = res.ok
-                        else:
-                            apply = True
+                last_check = {cid: n for n, run in enumerate(control_runs) for cid in run.results}
+                for n, run in enumerate(control_runs):
+                    for cid, (res, ts) in run.results.items():
+                        apply = last_check[cid] == n        # one transition per control endpoint per batch
+                        if res.lab_failure:
+                            apply = False
+                        elif not res.ok:
+                            if run.global_ok is True:       # another control passed in that same check
+                                if res.inconclusive:
+                                    res = replace(res, error_code=TRAFFIC_FAILED,
+                                                  message="control: targets failed here while the other control passed")
+                            else:
+                                apply = False
                         self.store.record(cid, res, True, ts, operation_id, apply_transition=apply, run_kind="control")
                 health, reason = self._classify(results, verdict, anomaly, no_controls_mass, lab_failures)
                 if breaker or (results and len(lab_failures) == len(results)):
@@ -1867,6 +1891,19 @@ def baseline_report(store: Store, hours: float) -> dict:
     }
 
 
+def ensure_db_healthy(store: Store, now: int) -> bool:
+    """Daily PRAGMA quick_check before scheduled jobs. A corrupt DB stops the job: it is left untouched,
+    nothing is written and the snapshot ages out. Returns True when a check ran."""
+    if now - int(store.meta().get("last_quick_check_at", "0")) < QUICK_CHECK_INTERVAL_S:
+        return False
+    if not store.quick_check():
+        raise LabError(LOCAL_RESOURCE_ERROR, "DB_CORRUPT: quick_check failed; DB left untouched, snapshot ages out")
+    with store.transaction():
+        store.set_meta("last_quick_check_at", now)
+        store.set_meta("last_quick_check", "ok")
+    return True
+
+
 # --- revision -----------------------------------------------------------------------------------------------------
 def code_revision() -> dict:
     info: dict = {}
@@ -1900,6 +1937,18 @@ def global_lock(path: str = LOCK_FILE, wait_s: float = 0):
         yield
     finally:
         os.close(fd)
+
+
+def job_lock(cmd: str, path: str = LOCK_FILE):
+    """A held lock (call __exit__ to release), or None when discovery should yield to a running job."""
+    lock = global_lock(path, REFRESH_LOCK_WAIT_S if cmd == "refresh" else 0)
+    try:
+        lock.__enter__()
+    except LabError:
+        if cmd == "discovery":
+            return None
+        raise
+    return lock
 
 
 def ensure_dirs() -> None:
@@ -2037,28 +2086,16 @@ def main(argv: list[str] | None = None) -> int:
         ensure_dirs()
         with contextlib.suppress(FileNotFoundError):
             os.chmod(os.path.join(STATE_DIR, DB_FILE), 0o600)
-        wait = REFRESH_LOCK_WAIT_S if args.cmd == "refresh" else 0
-        try:
-            lock = global_lock(wait_s=wait)
-            lock.__enter__()
-        except LabError:
-            if args.cmd == "discovery":  # refresh has priority: discovery simply yields
-                print("discovery skipped: another run holds the lock")
-                return 0
-            raise
+        lock = job_lock(args.cmd)
+        if lock is None:  # refresh has priority: discovery simply yields
+            print("discovery skipped: another run holds the lock")
+            return 0
         try:
             runner = CommandRunner()
             cleanup_stale(runner, min_age_s=STALE_RESOURCE_AGE_S)
             store = Store(os.path.join(STATE_DIR, DB_FILE))
             if args.cmd in ("refresh", "discovery", "maintenance"):
-                meta = store.meta()
-                if store.clock() - int(meta.get("last_quick_check_at", "0")) >= QUICK_CHECK_INTERVAL_S:
-                    ok = store.quick_check()
-                    if not ok:
-                        raise LabError(LOCAL_RESOURCE_ERROR, "DB_CORRUPT: quick_check failed; DB left untouched")
-                    with store.transaction():
-                        store.set_meta("last_quick_check_at", store.clock())
-                        store.set_meta("last_quick_check", "ok")
+                ensure_db_healthy(store, store.clock())
             lab = Lab(store, LinuxWireGuardProbeEngine(runner), config=load_config(), api=WarpApi())
             return _dispatch(args, store, lab, runner)
         finally:
