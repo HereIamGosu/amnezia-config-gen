@@ -151,6 +151,9 @@ ACTIVE_HIGH = 28                    # hot working set: above this, park down to 
 MAX_REFRESH_ENDPOINTS = 32
 REFRESH_WALL_S = 45
 REFRESH_LOCK_WAIT_S = 50
+# Rolling refresh holds the lock ~15-25% of the time; without waiting, discovery lost whole 30-min slots
+# (host, 2026-10-04 18:32Z). It waits briefly; refresh still wins (it waits longer than discovery's wall budget).
+DISCOVERY_LOCK_WAIT_S = 40
 DISCOVERY_WALL_S = (40, 60)         # normal, elevated (pool below the soft floor)
 DISCOVERY_MAX_FAILURES = 24
 DEAD_RESURRECT_PER_RUN = 2
@@ -2014,7 +2017,8 @@ def global_lock(path: str = LOCK_FILE, wait_s: float = 0):
 
 def job_lock(cmd: str, path: str = LOCK_FILE):
     """A held lock (call __exit__ to release), or None when discovery should yield to a running job."""
-    lock = global_lock(path, REFRESH_LOCK_WAIT_S if cmd == "refresh" else 0)
+    wait = {"refresh": REFRESH_LOCK_WAIT_S, "discovery": DISCOVERY_LOCK_WAIT_S}.get(cmd, 0)
+    lock = global_lock(path, wait)
     try:
         lock.__enter__()
     except LabError:
@@ -2184,8 +2188,8 @@ def main(argv: list[str] | None = None) -> int:
         with contextlib.suppress(FileNotFoundError):
             os.chmod(os.path.join(STATE_DIR, DB_FILE), 0o600)
         lock = job_lock(args.cmd)
-        if lock is None:  # refresh has priority: discovery simply yields
-            print("discovery skipped: another run holds the lock")
+        if lock is None:  # refresh has priority: discovery yields after a short wait
+            print(f"discovery skipped: another run held the lock for {DISCOVERY_LOCK_WAIT_S} s")
             return 0
         try:
             runner = CommandRunner()

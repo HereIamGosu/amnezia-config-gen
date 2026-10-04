@@ -221,8 +221,10 @@ cannot prove anything, endpoints keep their history and only age out by TTL.
 
 ## Scheduler
 
-systemd oneshot services + timers, no daemon. Both jobs share one `flock`. Refresh waits up to 130 s
-for it; discovery skips when it is held, so refresh always wins.
+systemd oneshot services + timers, no daemon. Both jobs share one `flock`. Refresh waits up to 50 s
+for it; discovery waits up to 40 s and then skips its slot. Refresh always wins, because it waits longer
+than discovery's own 40 s wall budget. (Without that wait, discovery lost whole 30-minute slots to the
+rolling refresh.)
 
 | Job | Timer | Budget | Probes |
 | --- | --- | --- | --- |

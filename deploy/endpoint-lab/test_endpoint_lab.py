@@ -516,8 +516,8 @@ class SchedulerTests(LabFixture):
     @unittest.skipUnless(lab.fcntl, "flock is Linux-only")
     def test_discovery_yields_to_a_held_lock(self):
         path = os.path.join(self.tmp.name, "lock")
-        with lab.global_lock(path):
-            self.assertIsNone(lab.job_lock("discovery", path))
+        with lab.global_lock(path), mock.patch.object(lab, "DISCOVERY_LOCK_WAIT_S", 1):
+            self.assertIsNone(lab.job_lock("discovery", path))  # waits briefly, then yields
             with self.assertRaises(lab.LabError):
                 lab.job_lock("verify", path)
         held = lab.job_lock("discovery", path)
