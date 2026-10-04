@@ -97,12 +97,12 @@ e2eSuite('stacked dialogs', (openPage) => {
     await direct.assertClean('/#faq');
   });
 
-  test('status links in the header and inside the FAQ open the status dialog, no navigation', async () => {
+  test('the status panel and the FAQ link open the status dialog, no navigation', async () => {
     const page = await openPage();
     await page.goto('/');
     const before = { navigations: page.navigations.length, url: await page.evaluate(() => location.href) };
 
-    await page.click('.site-nav [data-status-link]');
+    await page.click('#statusModalBtn');
     await page.waitFor(isOpen, { args: ['statusModal'] });
     await page.waitFor(() => document.querySelectorAll('#statusModalContent .status-card').length === 4,
       { message: 'four status cards in the dialog' });

@@ -80,7 +80,6 @@ e2eSuite('mobile layout', (openPage) => {
     for (const [link, modal] of [
       ['.site-nav a[data-open-modal="faqModal"]', 'faqModal'],
       ['.site-nav a[data-open-modal="instructionModal"]', 'instructionModal'],
-      ['.site-nav [data-status-link]', 'statusModal'],
       ['#historyModalBtn', 'historyModal'],
     ]) {
       await page.tap('#menuToggle');

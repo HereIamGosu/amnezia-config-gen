@@ -34,6 +34,7 @@ test('semantic structure: landmarks, one h1, table semantics, Lab is the active 
   assert.match(html, /<a class="site-nav__link site-nav__link--active" href="\/lab"[^>]*aria-current="page"/);
   assert.match(html, /<a class="site-nav__link" href="\/" data-href-en="\/en" data-i18n="nav_generator">/, 'way back to the generator');
   assert.match(enHtml, /href="\/en" data-href-en="\/en" data-i18n="nav_generator">Generator</);
+  assert.doesNotMatch(/<nav class="site-nav"[\s\S]*?<\/nav>/.exec(html)[0], /nav_status|status\.html/, 'header has no Status item, like the generator');
   for (const id of ['labStatus', 'labMetrics', 'labChartFrame', 'labActivityList', 'labTableBody', 'labCards', 'labEndpointModal', 'labHistoryModal', 'labInfoModal']) {
     assert.match(html, new RegExp(`id="${id}"`), id);
   }

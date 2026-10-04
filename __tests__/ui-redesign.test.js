@@ -188,8 +188,11 @@ test('a dialog opened from another dialog stacks on top and returns to it on clo
 });
 
 test('header items open dialogs on the page instead of leaving it; no duplicate controls', () => {
-  assert.match(html, /<a class="site-nav__link" href="status\.html" data-status-link data-i18n="nav_status">/);
-  assert.match(script, /closest\('\[data-status-link\]'\)/, 'status links (header, FAQ answer) open the status dialog');
+  // «Статус» убран из шапки: окно статуса открывает кнопка «Подробнее» панели статуса и ссылка в FAQ.
+  const nav = /<nav class="site-nav"[\s\S]*?<\/nav>/.exec(html)[0];
+  assert.doesNotMatch(nav, /nav_status|data-status-link|status\.html/, 'no Status item in the header');
+  assert.match(html, /id="statusModalBtn"/, 'the status panel still opens the status dialog');
+  assert.match(script, /closest\('\[data-status-link\]'\)/, 'the FAQ status link opens the status dialog');
   assert.match(en.faq_a5, /data-status-link/, 'the FAQ status link opens the dialog too');
   assert.match(html, /<a class="site-nav__link" href="#instructions" data-open-modal="instructionModal"/);
   assert.doesNotMatch(html, /id="settingsToggle"/, 'step 2 chips already open the settings');
