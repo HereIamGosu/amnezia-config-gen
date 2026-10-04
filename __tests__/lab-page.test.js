@@ -132,6 +132,13 @@ test('honest copy: the Lab never promises availability from the visitor network'
   assert.match(en.lab_disclaimer, /does not guarantee/);
   assert.match(ru.lab_info_note, /не гарантирует/);
   assert.equal(en.lab_disclaimer, 'Verification is performed from the project server and does not guarantee availability from your network.');
+  // Пока Lab не подключён и генератор не переключён, тексты не утверждают, что генератор берёт адреса из Lab.
+  const { LAB_API } = require('../public/lab/lab-data.js');
+  if (LAB_API.overview === null) {
+    for (const [lang, dict, re] of [['ru', ru, /используются генератором|доступн\S* генератор/i], ['en', en, /used by the generator|available to the generator/i]]) {
+      for (const [k, v] of Object.entries(dict)) if (k.startsWith('lab_')) assert.doesNotMatch(v, re, `${lang}.json ${k}`);
+    }
+  }
 });
 
 test('mobile layout switches to cards at the same breakpoint in JS and CSS', () => {

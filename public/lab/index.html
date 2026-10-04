@@ -163,7 +163,7 @@
             <div class="lab-metric__body">
               <p class="lab-metric__value"><span class="lab-skel" data-value>—</span></p>
               <span class="tag tag--green lab-metric__tag">ACTIVE</span>
-              <p class="lab-metric__label" data-label data-i18n="lab_metric_active">Свежие endpoint'ы, доступные генератору</p>
+              <p class="lab-metric__label" data-label data-i18n="lab_metric_active">Свежие проверенные endpoint'ы</p>
             </div>
           </article>
           <article class="card lab-metric" data-metric="verified">
@@ -324,7 +324,7 @@
           <img class="lab-how__art" src="/lab/lab-astronaut.webp" width="104" height="116" alt="" loading="lazy" decoding="async" />
           <div class="lab-how__copy">
             <h2 class="lab-panel__title lab-panel__title--lg" id="labHowTitle" data-i18n="lab_how_title">Как это работает</h2>
-            <p class="lab-how__text" data-i18n="lab_how_text">Мы проверяем кандидаты из разных источников через реальный WireGuard-туннель и HTTPS-трафик. Рабочие endpoint'ы попадают в пул и автоматически используются генератором.</p>
+            <p class="lab-how__text" data-i18n="lab_how_text">Мы проверяем кандидаты из разных источников через реальный WireGuard-туннель и HTTPS-трафик. Рабочие endpoint'ы попадают в пул свежих адресов (ACTIVE).</p>
           </div>
           <ol class="lab-pipeline">
             <li class="lab-pipeline__step">
@@ -384,7 +384,7 @@
           <span class="lab-state-card__icon" aria-hidden="true"><svg class="icon icon--lg"><use href="#i-info"/></svg></span>
           <div class="lab-state-card__body">
             <h2 class="lab-state-card__title" id="labInfoHeading" data-i18n="lab_info_title">О Endpoint Lab</h2>
-            <p class="lab-state-card__text" data-i18n="lab_info_text">Endpoint Lab проверяет реальные WARP endpoint'ы через WireGuard-туннель и HTTPS-трафик. Только свежие и успешно проверенные endpoint'ы используются генератором.</p>
+            <p class="lab-state-card__text" data-i18n="lab_info_text">Endpoint Lab проверяет реальные WARP endpoint'ы через WireGuard-туннель и HTTPS-трафик. В пул ACTIVE попадают только свежие и успешно проверенные endpoint'ы.</p>
             <p class="lab-state-card__note"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-info"/></svg><span data-i18n="lab_info_note">Проверка выполняется с сервера проекта и подтверждает работоспособность endpoint'а в Lab, но не гарантирует его доступность в вашей сети.</span></p>
           </div>
           <div class="lab-state-card__actions">
