@@ -1,12 +1,13 @@
-# Installed disabled; enabled only after the manual hardening tests. Cadence: ~3 min (ACTIVE TTL 7 min).
+# Installed disabled; enabled only after the manual hardening tests. Rolling refresh: every ~60 s a third
+# of the hot pool is re-verified (each ACTIVE about every 3 min; ACTIVE TTL 7 min).
 [Unit]
 Description=Endpoint Lab refresh schedule
 
 [Timer]
-OnBootSec=3min
-OnUnitActiveSec=3min
-RandomizedDelaySec=20s
-AccuracySec=5s
+OnBootSec=2min
+OnUnitActiveSec=60s
+RandomizedDelaySec=10s
+AccuracySec=1s
 
 [Install]
 WantedBy=timers.target

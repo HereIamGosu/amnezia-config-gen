@@ -133,18 +133,23 @@ VERIFICATION_TARGETS = (
 UNREACHABLE_TARGET = Target("simulated-unreachable", "https://192.0.2.1/cdn-cgi/trace")  # config test knob
 
 ACTIVE_TTL_S = 7 * 60               # ACTIVE expires 7 min after the last successful deep verify
-REFRESH_INTERVAL_S = 180            # timer cadence (documentation + snapshot TTL)
-SNAPSHOT_TTL_S = 300                # top-level expiry: shortly after the next expected refresh
+# B1b (2026-10-04): rolling refresh. The B1a monolithic 3-min batch over ~48 endpoints took 108-162 s of every
+# 180 s; a 60 s timer verifying the least-recently verified third of the pool spreads the same probe rate evenly.
+REFRESH_INTERVAL_S = 60             # timer cadence (documentation + snapshot TTL)
+ROLLING_SLICE_MIN, ROLLING_SLICE_MAX = 4, 12   # ACTIVE endpoints per run: ceil(ACTIVE / 3) within these bounds
+REFRESH_SUSPECT_MAX, REFRESH_VERIFYING_MAX, REFRESH_QUARANTINE_MAX, REFRESH_PROMOTE_MAX = 8, 4, 4, 8
+SNAPSHOT_TTL_S = 180                # top-level expiry: shortly after the next expected refresh
 QUARANTINE_BACKOFF_S = (15 * 60, 30 * 60, 60 * 60)   # bounded, never unbounded exponential
 QUARANTINE_TO_DEAD_FAILURES = 10    # further consecutive failures after entering QUARANTINE (unchanged)
 DEAD_RESURRECT_AFTER_S = 6 * 3600
 MANUAL_QUARANTINE_DEFAULT_S = 3600
 MANUAL_QUARANTINE_MAX_S = 7 * 24 * 3600
 TARGET_ACTIVE, SOFT_FLOOR, MAX_ACTIVE = 24, 12, 48
-MAX_REFRESH_ENDPOINTS = 64
-REFRESH_WALL_S = 150
-REFRESH_LOCK_WAIT_S = 130
-DISCOVERY_WALL_S = (60, 120)        # normal, elevated (pool below the soft floor)
+ACTIVE_HIGH = 28                    # hot working set: above this, park down to TARGET_ACTIVE (VERIFIED reserve)
+MAX_REFRESH_ENDPOINTS = 32
+REFRESH_WALL_S = 45
+REFRESH_LOCK_WAIT_S = 50
+DISCOVERY_WALL_S = (40, 60)         # normal, elevated (pool below the soft floor)
 DISCOVERY_MAX_FAILURES = 24
 DEAD_RESURRECT_PER_RUN = 2
 CF_ONE_EVERY_N_RUNS = 4             # one Cloudflare One observation per N discovery runs
@@ -1143,8 +1148,16 @@ ROW_FIELDS = tuple(EndpointRow.__dataclass_fields__)
 
 
 class Store:
-    def __init__(self, path: str, clock=now_s):
+    def __init__(self, path: str, clock=now_s, read_only: bool = False):
         self.path, self.clock = path, clock
+        if read_only:  # status/list/stats/report: no lock, no migration, no writes (WAL allows concurrent readers)
+            self.conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=10, isolation_level=None)
+            self.conn.row_factory = sqlite3.Row
+            version = self.conn.execute("PRAGMA user_version").fetchone()[0]
+            if version != SCHEMA_VERSION:
+                self.conn.close()
+                raise LabError(LOCAL_RESOURCE_ERROR, f"database schema {version} != {SCHEMA_VERSION}: let a job migrate it first")
+            return
         self.conn = sqlite3.connect(path, timeout=10, isolation_level=None)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
@@ -1252,9 +1265,9 @@ class Store:
                 t_outcome = "ok" if result.traffic_ok else "fail"
             self.conn.execute(
                 "INSERT INTO observation (endpoint_id, timestamp, probe_type, result, duration_ms, error_code, operation_id,"
-                " run_kind) VALUES (?,?,?,?,?,?,?,?)",
+                " run_kind, sessions) VALUES (?,?,?,?,?,?,?,?,?)",
                 (endpoint_id, now, "traffic", t_outcome, result.traffic_total_ms,
-                 None if result.traffic_ok else result.error_code, operation_id, run_kind))
+                 None if result.traffic_ok else result.error_code, operation_id, run_kind, result.sessions))
         for name, ok, err in result.target_results:
             self.conn.execute("INSERT INTO target_result (ts, endpoint_id, target, ok, error_code, operation_id)"
                               " VALUES (?,?,?,?,?,?)", (now, endpoint_id, name, int(ok), err, operation_id))
@@ -1635,13 +1648,14 @@ class Lab:
         return BatchOutcome(recorded, health, reason, verdict, aborted, snapshot_ok)
 
     def _enforce_cap(self, now: int, operation_id: str) -> int:
-        """Hard cap: beyond MAX_ACTIVE the least stable eligible endpoints are parked as VERIFIED
-        (verified, waiting for a slot): not refreshed, not published. Controls are never parked."""
+        """Hot working set: above ACTIVE_HIGH the least stable eligible endpoints are parked as VERIFIED
+        (verified, waiting for a slot) down to TARGET_ACTIVE: not refreshed, not published. Controls are never
+        parked. MAX_ACTIVE stays the absolute ceiling for discovery."""
         controls = set(json.loads(self.store.meta().get("controls", "[]")))
         eligible = [r for r in self.store.all() if r["source"] != SRC_NEGATIVE and is_eligible(Store.to_row(r), now)]
-        excess = len(eligible) - MAX_ACTIVE
-        if excess <= 0:
+        if len(eligible) <= ACTIVE_HIGH:
             return 0
+        excess = len(eligible) - TARGET_ACTIVE
         ranked = sorted((r for r in eligible if r["endpoint_id"] not in controls),
                         key=lambda r: (r["consecutive_successes"], -(r["active_since"] or now), r["endpoint_id"]))
         for r in ranked[:excess]:
@@ -1702,23 +1716,37 @@ class Lab:
         return True
 
     # -- scheduled runs
+    def refresh_plan(self, now: int, res: Resources) -> list[str]:
+        """Rolling slice: the ceil(ACTIVE/3) least-recently verified ACTIVE endpoints (controls included,
+        no extra probes for them), every SUSPECT (accelerated recheck), a few VERIFYING and due QUARANTINE,
+        and parked VERIFIED endpoints when the pool is below target. Each ACTIVE is re-verified about every
+        3 timer ticks, well inside its 7-minute TTL."""
+        rows = [r for r in self.store.all() if due_for_refresh(Store.to_row(r), r["source"], now)]
+        by_state: dict = {}
+        for r in rows:
+            by_state.setdefault(r["state"], []).append(r)
+        oldest = lambda r: (r["last_traffic_ok_at"] or 0, r["endpoint_id"])  # noqa: E731
+        active = sorted(by_state.get(ACTIVE, []), key=oldest)
+        slice_n = max(ROLLING_SLICE_MIN, min(ROLLING_SLICE_MAX, math.ceil(len(active) / 3)))
+        plan = active[:slice_n]
+        if not refresh_reduced(res):
+            plan += sorted(by_state.get(SUSPECT, []), key=oldest)[:REFRESH_SUSPECT_MAX]
+            eligible = sum(is_eligible(Store.to_row(r), now) for r in self.store.all() if r["source"] != SRC_NEGATIVE)
+            if eligible < TARGET_ACTIVE:
+                parked = [r for r in self.store.all() if r["state"] == VERIFIED and not r["manual_blacklist"]
+                          and r["source"] != SRC_NEGATIVE]
+                parked.sort(key=lambda r: (-r["consecutive_successes"], -(r["last_traffic_ok_at"] or 0), r["endpoint_id"]))
+                plan += parked[:min(REFRESH_PROMOTE_MAX, TARGET_ACTIVE - eligible)]
+            plan += sorted(by_state.get(VERIFYING, []), key=oldest)[:REFRESH_VERIFYING_MAX]
+            plan += sorted(by_state.get(QUARANTINE, []), key=lambda r: (r["quarantine_until"] or 0, r["endpoint_id"]))[
+                :REFRESH_QUARANTINE_MAX]
+        return [r["endpoint_id"] for r in plan[:MAX_REFRESH_ENDPOINTS]]
+
     def refresh(self, resources: Resources | None = None) -> BatchOutcome:
         now = self.clock()
         res = resources or read_resources(os.path.dirname(self.store.path) or ".")
-        rows = [r for r in self.store.all() if due_for_refresh(Store.to_row(r), r["source"], now)]
-        if refresh_reduced(res):
-            rows = [r for r in rows if r["state"] == ACTIVE]
-        rank = {ACTIVE: 0, SUSPECT: 1, VERIFYING: 2, QUARANTINE: 3, VERIFIED: 4}
-        eligible = sum(is_eligible(Store.to_row(r), now) for r in self.store.all() if r["source"] != SRC_NEGATIVE)
-        if eligible < TARGET_ACTIVE and not refresh_reduced(res):
-            # below target: parked VERIFIED endpoints get their slot back after a fresh verification
-            parked = [r for r in self.store.all() if r["state"] == VERIFIED and not r["manual_blacklist"]
-                      and r["source"] != SRC_NEGATIVE]
-            parked.sort(key=lambda r: (-r["consecutive_successes"], -(r["last_traffic_ok_at"] or 0), r["endpoint_id"]))
-            rows += parked[:TARGET_ACTIVE - eligible]
-        rows.sort(key=lambda r: (rank.get(r["state"], 9), r["expires_at"] or 0, r["endpoint_id"]))
-        ids = [r["endpoint_id"] for r in rows[:MAX_REFRESH_ENDPOINTS]]
-        return self.run_batch(ids, "refresh", REFRESH_HANDSHAKE_TIMEOUT_S, REFRESH_WALL_S, breaker=True)
+        return self.run_batch(self.refresh_plan(now, res), "refresh", REFRESH_HANDSHAKE_TIMEOUT_S, REFRESH_WALL_S,
+                              breaker=True)
 
     def discovery_plan(self, now: int) -> tuple[list[str], dict]:
         """Seeds first, then DEAD resurrection, then the next /24 cursor slice; budget follows the pool."""
@@ -1842,6 +1870,16 @@ def window_stats(store: Store, since: int) -> dict:
             "transitions": {f"{a}->{b}": n for a, b, n in transitions}}
 
 
+def session_split(store: Store, since: int) -> dict:
+    """Deep probes whose tunnel handshook: first session carried traffic / second session rescued it /
+    both sessions failed. A final success never hides a rescue."""
+    row = store.conn.execute(
+        "SELECT sum(sessions=1 AND result='ok'), sum(sessions=2 AND result='ok'),"
+        " sum(sessions=2 AND result!='ok' AND error_code IS NOT NULL) FROM observation"
+        " WHERE probe_type='traffic' AND timestamp>=?", (since,)).fetchone()
+    return {"first_session_ok": row[0] or 0, "second_session_rescued": row[1] or 0, "both_sessions_failed": row[2] or 0}
+
+
 def yield_by(store: Store, since: int, column: str) -> dict:
     """Per source class or per port: candidates, probes, handshake/traffic ok, became/currently active."""
     assert column in ("source", "port")
@@ -1895,6 +1933,7 @@ def baseline_report(store: Store, hours: float) -> dict:
                         (since,)).fetchall()
     sess = c.execute("SELECT count(*), sum(sessions=2), sum(duration_ms>=?) FROM observation WHERE probe_type='handshake'"
                      " AND result IN ('ok','suppressed') AND timestamp>=?", (SLOW_HANDSHAKE_MS, since)).fetchone()
+    split = session_split(store, since)
     return {
         "window_hours": hours, "refresh_runs": len(runs),
         "active": ({"min": min(active), "median": statistics.median(active), "max": max(active)} if active else {}),
@@ -1909,7 +1948,7 @@ def baseline_report(store: Store, hours: float) -> dict:
                       "min_mem_available_kb": res[3], "swap_used_kb_min": res[4], "swap_used_kb_max": res[5]},
         "skipped_runs": {n or "": k for n, k in skipped},
         "sessions": {"handshaken_probes": sess[0], "needed_second_session": sess[1] or 0,
-                     "slow_handshakes": sess[2] or 0},
+                     "slow_handshakes": sess[2] or 0, **split},
         "db_bytes": store.db_bytes(),
     }
 
@@ -2076,6 +2115,9 @@ def _known(store: Store, endpoint_id: str) -> str:
     return eid
 
 
+READ_ONLY_COMMANDS = ("status", "list", "stats", "report")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="endpoint-lab", description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -2106,6 +2148,8 @@ def main(argv: list[str] | None = None) -> int:
         if os.name != "posix" or os.geteuid() != 0:
             raise LabError(LOCAL_RESOURCE_ERROR, "endpoint-lab must run as root on the Lab host")
         os.umask(0o077)  # lab.db and its WAL files root-only; the snapshot is chmod-ed 0644 explicitly
+        if args.cmd in READ_ONLY_COMMANDS:
+            return _dispatch(args, Store(os.path.join(STATE_DIR, DB_FILE), read_only=True), None, None)
         ensure_dirs()
         with contextlib.suppress(FileNotFoundError):
             os.chmod(os.path.join(STATE_DIR, DB_FILE), 0o600)
@@ -2217,7 +2261,8 @@ def _dispatch(args, store: Store, lab: Lab, runner: CommandRunner) -> int:
     elif args.cmd == "status":
         print(json.dumps(status_report(store), indent=2))
     elif args.cmd == "stats":
-        out = {label: window_stats(store, now - secs) for label, secs in (("15m", 900), ("1h", 3600), ("24h", 86400))}
+        out = {label: window_stats(store, now - secs) | {"sessions": session_split(store, now - secs)}
+               for label, secs in (("15m", 900), ("1h", 3600), ("24h", 86400))}
         out["source_yield_24h"] = yield_by(store, now - 86400, "source")
         out["port_yield_24h"] = yield_by(store, now - 86400, "port")
         print(json.dumps(out, indent=2))

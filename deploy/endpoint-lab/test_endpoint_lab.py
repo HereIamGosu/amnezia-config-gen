@@ -414,14 +414,36 @@ class SchedulerTests(LabFixture):
             self.store.set_meta("controls", json.dumps([ids[0], controls[0]]))
         runner.run_batch(ids[:3], "refresh")
         st = self.states()
-        self.assertEqual(sum(s == lab.ACTIVE for s in st.values()), lab.MAX_ACTIVE)
+        # B1b working set: above ACTIVE_HIGH the pool is parked down to TARGET_ACTIVE (VERIFIED reserve)
+        self.assertEqual(sum(s == lab.ACTIVE for s in st.values()), lab.TARGET_ACTIVE)
         parked = sorted((e for e, s in st.items() if s == lab.VERIFIED), key=lambda e: int(e.split(".")[3].split(":")[0]))
-        self.assertEqual(len(parked), 52 - lab.MAX_ACTIVE)
+        self.assertEqual(len(parked), 52 - lab.TARGET_ACTIVE)
         self.assertNotIn(ids[0], parked)                # control kept although least stable
-        self.assertEqual(parked, ids[1:5])              # next least stable are parked
-        self.assertEqual(self.snapshot()["active_count"], lab.MAX_ACTIVE)
+        self.assertEqual(parked, ids[1:1 + 52 - lab.TARGET_ACTIVE])  # next least stable are parked
+        self.assertEqual(self.snapshot()["active_count"], lab.TARGET_ACTIVE)
         cause = self.store.conn.execute("SELECT DISTINCT cause FROM transition WHERE to_state='VERIFIED'").fetchall()
         self.assertEqual([c[0] for c in cause], ["pool_cap"])
+
+    def test_working_set_has_hysteresis(self):
+        ids = [self.add(f"162.159.192.{i}", lab.OFFICIAL_PORTS[i % 4], lab.ACTIVE, successes=i)
+               for i in range(1, lab.ACTIVE_HIGH + 1)]
+        self.make_lab(FakeProbeEngine()).run_batch(ids[:2], "refresh")
+        self.assertEqual(sum(s == lab.ACTIVE for s in self.states().values()), lab.ACTIVE_HIGH)  # 28: nothing parked
+
+    def test_rolling_plan_takes_oldest_third_and_bounds_extras(self):
+        active = [self.add(f"162.159.192.{i}", lab.OFFICIAL_PORTS[i % 4], lab.ACTIVE) for i in range(1, 31)]
+        with self.store.transaction():
+            for n, eid in enumerate(active):  # verification age: .1 oldest ... .30 newest
+                self.store.conn.execute("UPDATE endpoint SET last_traffic_ok_at=? WHERE endpoint_id=?", (NOW - 400 + n, eid))
+        suspects = [self.add(f"188.114.96.{i}", state=lab.SUSPECT, source=lab.SRC_LEGACY) for i in range(1, 11)]
+        plan = self.make_lab(FakeProbeEngine()).refresh_plan(NOW, lab.Resources(10 ** 6, 0, 0.1, 2, 10 ** 10))
+        self.assertEqual(plan[:10], active[:10])            # ceil(30/3) = 10 least-recently verified ACTIVE
+        self.assertEqual(len([p for p in plan if p in suspects]), lab.REFRESH_SUSPECT_MAX)
+        self.assertLessEqual(len(plan), lab.MAX_REFRESH_ENDPOINTS)
+        few = self.make_lab(FakeProbeEngine())
+        with self.store.transaction():
+            self.store.conn.execute("DELETE FROM endpoint WHERE endpoint_id NOT IN (?, ?)", (active[0], active[1]))
+        self.assertEqual(few.refresh_plan(NOW, lab.Resources(10 ** 6, 0, 0.1, 2, 10 ** 10)), active[:2])
 
     def test_refresh_promotes_parked_endpoints_below_target(self):
         a = self.add("162.159.192.1", state=lab.ACTIVE)
@@ -1049,6 +1071,26 @@ class SnapshotTests(LabFixture):
 
 
 class ReportTests(LabFixture):
+    def test_session_split_never_hides_a_rescue(self):
+        a, b, c = (self.add(f"162.159.192.{i}", state=lab.VERIFYING) for i in (1, 2, 3))
+        rescued = lambda: replace(ok(), sessions=2)  # noqa: E731
+        both_failed = lambda: replace(inconclusive(), sessions=2)  # noqa: E731
+        self.make_lab(FakeProbeEngine({b: rescued, c: both_failed})).run_batch([a, b, c], "refresh")
+        self.assertEqual(lab.session_split(self.store, NOW - 60),
+                         {"first_session_ok": 1, "second_session_rescued": 1, "both_sessions_failed": 1})
+        self.assertEqual(lab.baseline_report(self.store, 1)["sessions"]["second_session_rescued"], 1)
+
+    def test_read_only_store_never_writes_or_migrates(self):
+        ro = lab.Store(self.db, read_only=True)
+        self.assertEqual(len(ro.all()), 0)
+        with self.assertRaises(sqlite3.OperationalError):
+            ro.conn.execute("INSERT INTO lab_meta (key, value) VALUES ('x', 'y')")
+        ro.conn.close()
+        with self.store.transaction():
+            self.store.conn.execute("PRAGMA user_version=2")
+        with self.assertRaises(lab.LabError):
+            lab.Store(self.db, read_only=True)
+
     def test_stats_and_report_carry_sample_sizes(self):
         ids = [self.add(f"162.159.192.{i}", lab.OFFICIAL_PORTS[i % 4], state=lab.VERIFYING) for i in range(1, 5)]
         runner = self.make_lab(FakeProbeEngine({ids[0]: no_hs}))

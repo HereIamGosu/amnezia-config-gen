@@ -99,7 +99,7 @@ snapshot. Anything key-shaped in error text is redacted before it is printed or 
 ## Commands
 
 ```text
-endpoint-lab status | list | stats | report [--hours 24]
+endpoint-lab status | list | stats | report [--hours 24]   # read-only: no lock, no migration (WAL readers)
 endpoint-lab refresh                      # timer: re-verify the pool (circuit breaker), snapshot
 endpoint-lab discovery                    # timer: bounded candidate checks; yields to refresh
 endpoint-lab maintenance                  # retention + WAL checkpoint (also run after each timer job)
@@ -172,12 +172,13 @@ VERIFYING (Phase A rows, unblacklisted, unquarantined): ok → ACTIVE, fail → 
   success makes it `ACTIVE` again.
 - Never-verified candidates that fail just count failures and stay `DISCOVERED`. Discovery revisits
   them on its next pass.
-- **Hard cap:** after every run, eligible endpoints beyond `MAX_ACTIVE` (48) are parked as `VERIFIED`
-  ("verified, waiting for a slot"; cause `pool_cap`), least stable first. Control endpoints are never parked.
-  Parked endpoints are neither refreshed nor published. When the pool falls below `TARGET_ACTIVE` (24),
-  refresh re-verifies the best parked endpoints, and a success makes them `ACTIVE` again. (First timer
-  hour, 2026-10-04: one elevated discovery run found 31 working addresses in `162.159.192.0/24`, the pool
-  reached 58, and refresh then filled its 150 s budget. This rule caps that.)
+- **Hot working set + warm reserve (B1b):** after every run, if more than `ACTIVE_HIGH` (28) endpoints are
+  eligible, the least stable are parked as `VERIFIED` ("verified, waiting for a slot"; cause `pool_cap`)
+  down to `TARGET_ACTIVE` (24). Control endpoints are never parked. Parked endpoints are neither refreshed
+  nor published. When the pool falls below 24, refresh re-verifies the best parked endpoints (at most 8 per
+  run), and a success makes them `ACTIVE` again. `MAX_ACTIVE` (48) remains the absolute ceiling for
+  discovery. (B1a, first timer hour 2026-10-04: one elevated discovery run found 31 working addresses in
+  `162.159.192.0/24`, the pool reached 58, and the 3-minute batch then used 108–162 s of every 180 s.)
 - A handshake-only `probe` advances only `DISCOVERED`.
 - `manual_blacklist` outranks everything. Blacklisted endpoints are never probed by the scheduler, are
   refused by `verify`, and leave the snapshot immediately. An operator `quarantine` is never lifted by a
@@ -223,12 +224,20 @@ for it; discovery skips when it is held, so refresh always wins.
 
 | Job | Timer | Budget | Probes |
 | --- | --- | --- | --- |
-| refresh | every 3 min ± 20 s | 150 s wall, ≤ 64 endpoints | `ACTIVE`, `SUSPECT`, `VERIFYING`, due `QUARANTINE`; 8 s handshake timeout |
-| discovery | every 30 min ± 5 min | 60 s wall (120 s below the soft floor) | seeds, DEAD resurrection, the /24 cursor; 3 s handshake timeout |
+| refresh | every 60 s ± 10 s | 45 s wall, ≤ 32 endpoints | rolling slice (below); 8 s handshake timeout |
+| discovery | every 30 min ± 5 min | 40 s wall (60 s below the soft floor) | seeds, DEAD resurrection, the /24 cursor; 3 s handshake timeout |
 
-Freshness model: one full deep verify of the pool per refresh (model B). Measured on the host: a
-successful deep verify costs ~0.4–0.6 s wall and ~0.14 s CPU. A pool of ~30 endpoints refreshes in
-~50 s. A separate handshake-only loop would add complexity without saving anything.
+**Rolling refresh (B1b).** Each run re-verifies the `ceil(ACTIVE / 3)` least-recently verified `ACTIVE`
+endpoints, bounded to 4–12. Controls are included in this rotation and get no extra probes unless the
+circuit breaker needs them. Each run also takes every `SUSPECT` (accelerated recheck, at most 8), parked
+`VERIFIED` endpoints when the pool is below target (at most 8), up to 4 `VERIFYING` and up to 4 due
+`QUARANTINE`. With 24 `ACTIVE`, each endpoint is re-verified about every 3 minutes, which is the same probe
+rate as the B1a batch, spread evenly over time. The 7-minute TTL is unchanged. B1a showed why: the
+monolithic 3-minute batch over ~48 endpoints took median 127 s, p95 162 s of every 180 s. The B1b target
+is refresh p95 < 30 s.
+
+Session metrics are split per deep probe: `first_session_ok`, `second_session_rescued`,
+`both_sessions_failed` (`stats`, `report`). A final success never hides a rescue.
 
 Discovery budget follows the pool: `ACTIVE ≥ 48` → none, `≥ 24` → 4 endpoints (one IP × 4 ports),
 `≥ 12` → 16, below 12 → 32 (still bounded). Order:
@@ -272,8 +281,8 @@ the snapshot).
 ```
 
 The snapshot is built only from committed DB state, as temp file → fsync → `os.replace` → directory
-fsync. Top-level `expires_at` = min(now + 5 min, earliest endpoint expiry): a stopped timer makes the file
-stale even before endpoints expire. A consumer must check both expiries and fail closed (`validate_snapshot`):
+fsync. Top-level `expires_at` = min(now + 3 min, earliest endpoint expiry): a stopped timer makes the file
+stale within 3 minutes, even before endpoints expire. A consumer must check both expiries and fail closed (`validate_snapshot`):
 unknown schema, future `generated_at`, unexpected top-level or endpoint fields, unknown `lab_status`,
 `active_count` ≠ number of endpoints, or an invalid endpoint → reject the file.
 
@@ -331,7 +340,7 @@ Peak RSS ~34 MB per job.
 | SQLite corrupt / newer schema | job refuses, DB untouched | — | snapshot ages out | timer failed | restore from `backups/` |
 | Disk full | DB write fails, no snapshot | — | snapshot ages out | stale snapshot | free disk |
 | Snapshot write fails | DB committed | `DEGRADED: SNAPSHOT_WRITE_FAILED` | old snapshot ages out | stale snapshot | automatic |
-| Timer stops | unchanged | unchanged | snapshot stale in ≤ 5 min | timer stopped | operator |
+| Timer stops | unchanged | unchanged | snapshot stale in ≤ 3 min | timer stopped | operator |
 | VPS loses Internet | unchanged | `UNAVAILABLE` | pool drains | Lab unavailable | automatic |
 | `awg0` fine, Lab broken | — | independent: the Lab never reads or changes `awg0` | — | — | — |
 
@@ -340,8 +349,9 @@ Peak RSS ~34 MB per job.
 `wireguard-tools` persists. The `wireguard` module is loaded on demand (`modprobe` in every preflight,
 `CAP_SYS_MODULE` kept for it, no `/etc/modules` entry). Credentials, DB and snapshot are on persistent
 paths. Probe namespaces cannot survive a reboot, and the startup sweep removes leftover names. Timers are
-`WantedBy=timers.target`. Refresh first runs 3 min after boot, discovery after 10 min. Until the first
-refresh, the old snapshot is already stale (top-level TTL 5 min).
+`WantedBy=timers.target`. Refresh first runs 2 min after boot, discovery after 10 min. Until the first
+refresh, the old snapshot is already stale (top-level TTL 3 min). After any pause longer than the TTL,
+the pool has expired and is rebuilt from scratch; the next discovery may run with the elevated budget.
 
 ## Install, upgrade and rollback
 
