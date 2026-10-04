@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 - A 404 page in both languages (served with status 404 and `noindex`), `/.well-known/security.txt` (RFC 9116) and `/llms.txt` for AI search.
 - Favicons in PNG (16, 32, 192 px) and an Apple touch icon are declared in `<head>`; social preview gains `og:image:type`, `og:locale:alternate` and `twitter:image:alt`.
 - IndexNow: the key file is served from the site root and `npm run indexnow` submits the sitemap URLs to Bing, Yandex, Seznam, Naver and Yep. It can wait until production serves a given commit (`X-App-Revision`) and skip releases that change nothing under `public/`; the release process runs it after a deploy.
-- A visible "Frequently asked questions" section (7 questions, Russian and English, native `<details>`): what AmneziaWG and WARP are, which AWG profile to pick, how to import the config, what to do when it does not connect, what happens to the keys, split routing. The text is in the HTML from the start, so search engines index it on both `/` and `/en`.
+- A "Frequently asked questions" dialog on the shared modal shell, opened from the header ("FAQ"), the footer and the `/#faq` deep link (7 questions, Russian and English, native `<details>`): what AmneziaWG and WARP are, which AWG profile to pick, how to import the config, what to do when it does not connect, what happens to the keys, split routing. The text is in the HTML from the start, so search engines index it on both `/` and `/en`.
 - `/favicon.ico` in the site root and a 120×120 PNG favicon on every page, as Yandex requires for search results.
 
 ### Changed

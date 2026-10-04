@@ -3813,28 +3813,9 @@ html.is-modal-open {
 
 /* ───────────────────────── Частые вопросы ───────────────────────── */
 
-.faq {
-  margin-bottom: 36px;
-  scroll-margin-top: calc(var(--header-h) + 16px);
-}
-
-.faq__title {
-  margin: 0 0 4px;
-  font-size: 24px;
-  font-weight: 700;
-}
-
-.faq__lead {
-  margin: 0 0 16px;
-  color: var(--color-text-2);
-  font-size: 14px;
-}
-
 .faq__list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
-  gap: 10px 14px;
+  gap: 8px;
 }
 
 .faq__item {
@@ -3896,14 +3877,4 @@ html.is-modal-open {
   background: var(--color-surface-3);
   color: var(--color-text);
   font-size: 0.92em;
-}
-
-@media (max-width: 720px) {
-  .faq__list {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .faq__title {
-    font-size: 20px;
-  }
 }

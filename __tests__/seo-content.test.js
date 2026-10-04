@@ -23,12 +23,13 @@ const pngSize = (file) => {
   return `${png.readUInt32BE(16)}x${png.readUInt32BE(20)}`;
 };
 
-test('FAQ is visible page text, not a modal: in the DOM on load and translated on /en', () => {
-  const start = html.indexOf('<section class="container faq" id="faq"');
-  assert.ok(start > 0, 'FAQ section exists');
-  assert.ok(start < html.indexOf('</main>'), 'FAQ is part of the main content');
-  const faq = html.slice(start, html.indexOf('</section>', start));
-  assert.doesNotMatch(faq, /class="modal/, 'FAQ is not hidden in a modal');
+// FAQ живёт в модалке (страница не должна разрастаться), но его текст есть в HTML с самого начала:
+// поисковики индексируют его без JavaScript, а /#faq открывает окно сразу.
+test('FAQ text is in the HTML on load (modal from the header), translated on /en', () => {
+  const start = html.indexOf('<div id="faqModal" class="modal"');
+  assert.ok(start > 0, 'FAQ modal exists');
+  const faq = html.slice(start, html.indexOf('<!-- Конфиденциальность -->', start));
+  assert.match(faq, /aria-labelledby="faqModalHeading"/);
   const questions = [...faq.matchAll(/<summary class="faq__q" data-i18n="(faq_q\d+)">/g)].map((m) => m[1]);
   const answers = [...faq.matchAll(/<div class="faq__a" data-i18n-html="(faq_a\d+)">/g)].map((m) => m[1]);
   assert.ok(questions.length >= 6, 'at least six questions');
@@ -38,7 +39,10 @@ test('FAQ is visible page text, not a modal: in the DOM on load and translated o
     assert.notEqual(ru[key], en[key], `${key} is translated`);
   }
   assert.ok(enHtml.includes(`data-i18n="faq_q1">${en.faq_q1}<`), '/en serves the English FAQ without JavaScript');
-  assert.match(html, /<a class="link-btn" href="#faq" data-i18n="footer_faq">/, 'footer links to the FAQ');
+  assert.match(html, /<a class="site-nav__link" href="#faq" data-open-modal="faqModal" data-i18n="nav_faq">/, 'header opens the FAQ');
+  assert.match(html, /<a class="link-btn" href="#faq" data-open-modal="faqModal" data-i18n="footer_faq">/, 'footer opens the FAQ');
+  assert.match(read('public/static/ui-shell.js'), /const openFromHash = \(\) =>/, '/#faq deep links open the modal');
+  assert.doesNotMatch(html, /<section class="container faq"/, 'no long FAQ block on the page itself');
 });
 
 test('snippets: title and description fit search results and carry the main queries', () => {

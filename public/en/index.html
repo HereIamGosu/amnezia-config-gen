@@ -305,6 +305,7 @@
           <a class="site-nav__link site-nav__link--active" href="#generator" data-i18n="nav_generator">Generator</a>
           <a class="site-nav__link" href="status.html" data-i18n="nav_status">Status</a>
           <a class="site-nav__link" href="#instructions" data-i18n="nav_instructions">Guide</a>
+          <a class="site-nav__link" href="#faq" data-open-modal="faqModal" data-i18n="nav_faq">FAQ</a>
           <button type="button" class="site-nav__link" id="historyModalBtn" aria-label="Generation history" data-i18n-aria-label="history_btn_aria">
             <span data-i18n="nav_history">History</span>
             <span id="historyCount" class="count-badge"></span>
@@ -795,41 +796,6 @@
           </div>
         </article>
       </section>
-      <!-- ── Частые вопросы (видимый текст для людей и поисковиков) ── -->
-      <section class="container faq" id="faq" aria-labelledby="faqTitle">
-        <h2 class="faq__title" id="faqTitle" data-i18n="faq_title">Frequently asked questions</h2>
-        <p class="faq__lead" data-i18n="faq_lead">How the generator works and what to do if the tunnel does not come up.</p>
-        <div class="faq__list">
-          <details class="faq__item" open>
-            <summary class="faq__q" data-i18n="faq_q1">What is AmneziaWG and how is it different from WireGuard?</summary>
-            <div class="faq__a" data-i18n-html="faq_a1">AmneziaWG is a WireGuard fork by the Amnezia team. Encryption and keys are the same as in WireGuard, but the protocol adds obfuscation: junk packets before the handshake (Jc, Jmin, Jmax), CPS imitation packets (I1–I5) and, from AWG 2.0 on, header and padding parameters. This makes AmneziaWG traffic harder to identify by the WireGuard signature.</div>
-          </details>
-          <details class="faq__item">
-            <summary class="faq__q" data-i18n="faq_q2">What is Cloudflare WARP and do I need my own server?</summary>
-            <div class="faq__a" data-i18n-html="faq_a2">WARP is a free Cloudflare service built on WireGuard. The generator registers a new device through the official WARP API and builds a ready config from the result, so no server of your own is needed. The Cloudflare server stays a standard WireGuard peer, which is why some AmneziaWG parameters are intentionally fixed for it: S1–S4 = 0, H1–H4 = 1–4, MTU 1280.</div>
-          </details>
-          <details class="faq__item">
-            <summary class="faq__q" data-i18n="faq_q3">Which profile should I choose: AWG 1.5, 2.0, 3.0 or 3.1?</summary>
-            <div class="faq__a" data-i18n-html="faq_a3">Start with AWG 2.0: it is the default and imports into current AmneziaWG and AmneziaVPN. AWG 1.5 is for older clients. AWG 3.0 and 3.1 add client-side features of newer versions such as timing randomization; 3.1 needs AmneziaVPN 5.0.1.5+ or a compatible client. If the import fails, go back to AWG 2.0.</div>
-          </details>
-          <details class="faq__item">
-            <summary class="faq__q" data-i18n="faq_q4">How do I import the config into AmneziaWG or AmneziaVPN?</summary>
-            <div class="faq__a" data-i18n-html="faq_a4">On Windows, install the AmneziaWG client and add a tunnel from the downloaded <code>.conf</code> file. On Android and iOS, use AmneziaVPN or AmneziaWG: import the <code>.conf</code> file or paste the <code>vpn://</code> link if it is available for the chosen profile. For routers (Keenetic, OpenWrt, MikroTik, GL.iNet), turn on "Router mode" in settings before generating.</div>
-          </details>
-          <details class="faq__item">
-            <summary class="faq__q" data-i18n="faq_q5">The config imports but does not connect. What should I do?</summary>
-            <div class="faq__a" data-i18n-html="faq_a5">Try another UDP port (2408, 500, 1701) and an endpoint IP address instead of the hostname — both are in the settings of step 2. On mobile networks, turn on the mobile profile. Make sure your client version supports the chosen AWG profile. If it connects but sites do not open, check DNS and routes. The current service state is on the <a href="status.html">Status</a> page.</div>
-          </details>
-          <details class="faq__item">
-            <summary class="faq__q" data-i18n="faq_q6">Is it free? What happens to the keys?</summary>
-            <div class="faq__a" data-i18n-html="faq_a6">The generator is free and needs no sign-up. Keys are created during generation and handed straight to you — the server does not store them. Generation history is kept only in your browser and can be cleared. The source code is open under the AGPL-3.0 license.</div>
-          </details>
-          <details class="faq__item">
-            <summary class="faq__q" data-i18n="faq_q7">Can I route only some sites through WARP?</summary>
-            <div class="faq__a" data-i18n-html="faq_a7">Yes. In settings, choose split routing and tick the services you need: only their IPv4 subnets go into AllowedIPs, and other traffic goes directly. To keep the config reliable on phones and routers, the generator limits the list to 1000 IPv4 subnets.</div>
-          </details>
-        </div>
-      </section>
     </main>
 
     <footer class="site-footer">
@@ -842,7 +808,7 @@
           </div>
         </div>
         <div class="site-footer__links">
-          <a class="link-btn" href="#faq" data-i18n="footer_faq">FAQ</a>
+          <a class="link-btn" href="#faq" data-open-modal="faqModal" data-i18n="footer_faq">FAQ</a>
           <button type="button" class="link-btn" data-open-modal="privacyModal" data-i18n="footer_privacy">Privacy</button>
           <button type="button" class="link-btn" data-open-modal="disclaimerModal" data-i18n="footer_disclaimer">Disclaimer</button>
           <a
@@ -1065,6 +1031,52 @@
               <p class="onboarding__note" data-i18n="onboarding_no_guarantee">The generator reduces manual configuration, but it does not guarantee connectivity in every network or client.</p>
             </div>
           </details>
+        </div>
+      </div>
+    </div>
+
+    <!-- Частые вопросы: текст в HTML страницы, поэтому индексируется и в модалке -->
+    <div id="faqModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="faqModalHeading" aria-hidden="true">
+      <div class="modal__dialog">
+        <header class="modal__header">
+          <span class="modal__icon"><svg class="icon" aria-hidden="true"><use href="#i-help"/></svg></span>
+          <div class="modal__titles">
+            <h2 id="faqModalHeading" class="modal__title" data-i18n="faq_title">Frequently asked questions</h2>
+            <p class="modal__subtitle" data-i18n="faq_lead">How the generator works and what to do if the tunnel does not come up.</p>
+          </div>
+          <button type="button" class="modal__close" data-close-modal aria-label="Close" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </header>
+        <div class="modal__body">
+          <div class="faq__list">
+            <details class="faq__item" open>
+              <summary class="faq__q" data-i18n="faq_q1">What is AmneziaWG and how is it different from WireGuard?</summary>
+              <div class="faq__a" data-i18n-html="faq_a1">AmneziaWG is a WireGuard fork by the Amnezia team. Encryption and keys are the same as in WireGuard, but the protocol adds obfuscation: junk packets before the handshake (Jc, Jmin, Jmax), CPS imitation packets (I1–I5) and, from AWG 2.0 on, header and padding parameters. This makes AmneziaWG traffic harder to identify by the WireGuard signature.</div>
+            </details>
+            <details class="faq__item">
+              <summary class="faq__q" data-i18n="faq_q2">What is Cloudflare WARP and do I need my own server?</summary>
+              <div class="faq__a" data-i18n-html="faq_a2">WARP is a free Cloudflare service built on WireGuard. The generator registers a new device through the official WARP API and builds a ready config from the result, so no server of your own is needed. The Cloudflare server stays a standard WireGuard peer, which is why some AmneziaWG parameters are intentionally fixed for it: S1–S4 = 0, H1–H4 = 1–4, MTU 1280.</div>
+            </details>
+            <details class="faq__item">
+              <summary class="faq__q" data-i18n="faq_q3">Which profile should I choose: AWG 1.5, 2.0, 3.0 or 3.1?</summary>
+              <div class="faq__a" data-i18n-html="faq_a3">Start with AWG 2.0: it is the default and imports into current AmneziaWG and AmneziaVPN. AWG 1.5 is for older clients. AWG 3.0 and 3.1 add client-side features of newer versions such as timing randomization; 3.1 needs AmneziaVPN 5.0.1.5+ or a compatible client. If the import fails, go back to AWG 2.0.</div>
+            </details>
+            <details class="faq__item">
+              <summary class="faq__q" data-i18n="faq_q4">How do I import the config into AmneziaWG or AmneziaVPN?</summary>
+              <div class="faq__a" data-i18n-html="faq_a4">On Windows, install the AmneziaWG client and add a tunnel from the downloaded <code>.conf</code> file. On Android and iOS, use AmneziaVPN or AmneziaWG: import the <code>.conf</code> file or paste the <code>vpn://</code> link if it is available for the chosen profile. For routers (Keenetic, OpenWrt, MikroTik, GL.iNet), turn on "Router mode" in settings before generating.</div>
+            </details>
+            <details class="faq__item">
+              <summary class="faq__q" data-i18n="faq_q5">The config imports but does not connect. What should I do?</summary>
+              <div class="faq__a" data-i18n-html="faq_a5">Try another UDP port (2408, 500, 1701) and an endpoint IP address instead of the hostname — both are in the settings of step 2. On mobile networks, turn on the mobile profile. Make sure your client version supports the chosen AWG profile. If it connects but sites do not open, check DNS and routes. The current service state is on the <a href="status.html">Status</a> page.</div>
+            </details>
+            <details class="faq__item">
+              <summary class="faq__q" data-i18n="faq_q6">Is it free? What happens to the keys?</summary>
+              <div class="faq__a" data-i18n-html="faq_a6">The generator is free and needs no sign-up. Keys are created during generation and handed straight to you — the server does not store them. Generation history is kept only in your browser and can be cleared. The source code is open under the AGPL-3.0 license.</div>
+            </details>
+            <details class="faq__item">
+              <summary class="faq__q" data-i18n="faq_q7">Can I route only some sites through WARP?</summary>
+              <div class="faq__a" data-i18n-html="faq_a7">Yes. In settings, choose split routing and tick the services you need: only their IPv4 subnets go into AllowedIPs, and other traffic goes directly. To keep the config reliable on phones and routers, the generator limits the list to 1000 IPv4 subnets.</div>
+            </details>
+          </div>
         </div>
       </div>
     </div>

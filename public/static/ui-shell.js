@@ -289,5 +289,16 @@
     toastTimer = setTimeout(() => { el.hidden = true; }, 2600);
   };
 
+  // ── Прямые ссылки на модалки (например, /#faq из выдачи) ─────────
+
+  const openFromHash = () => {
+    const hash = globalScope.location.hash;
+    if (!hash) return;
+    const trigger = Array.from(doc.querySelectorAll('[data-open-modal]')).find((el) => el.getAttribute('href') === hash);
+    if (trigger) openModal(trigger.getAttribute('data-open-modal'), trigger);
+  };
+  openFromHash();
+  globalScope.addEventListener('hashchange', openFromHash);
+
   globalScope.UiShell = { openModal, closeModal, isOpen, selectTab, toast };
 })(window);
