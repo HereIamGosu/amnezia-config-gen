@@ -59,6 +59,8 @@ PUBLIC_DIR = "/var/lib/amnezia-endpoint-lab/public"  # 0755: active-pool.json (0
 DB_FILE = "lab.db"
 DB_BACKUP_DIR = "backups"                         # inside STATE_DIR: copies taken before migrations
 SNAPSHOT_FILE = "active-pool.json"
+STATUS_FILE = "lab-status.json"                   # public, secret-free, IP-free status for monitoring (0644)
+STATUS_SCHEMA_VERSION = 1
 LOCK_FILE = "/run/amnezia-endpoint-lab.lock"
 REVISION_FILE = "/usr/local/share/amnezia-endpoint-lab/REVISION"  # written by install.sh
 
@@ -1151,9 +1153,13 @@ class Store:
     def __init__(self, path: str, clock=now_s, read_only: bool = False):
         self.path, self.clock = path, clock
         if read_only:  # status/list/stats/report: no lock, no migration, no writes (WAL allows concurrent readers)
-            self.conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=10, isolation_level=None)
-            self.conn.row_factory = sqlite3.Row
-            version = self.conn.execute("PRAGMA user_version").fetchone()[0]
+            try:
+                self.conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=10, isolation_level=None)
+                self.conn.row_factory = sqlite3.Row
+                version = self.conn.execute("PRAGMA user_version").fetchone()[0]
+            except sqlite3.Error as exc:  # e.g. WAL without -shm on a read-only filesystem
+                raise LabError(LOCAL_RESOURCE_ERROR, f"database not readable read-only: {exc}; "
+                                                     f"monitoring should read {STATUS_FILE} instead") from None
             if version != SCHEMA_VERSION:
                 self.conn.close()
                 raise LabError(LOCAL_RESOURCE_ERROR, f"database schema {version} != {SCHEMA_VERSION}: let a job migrate it first")
@@ -1713,6 +1719,11 @@ class Lab:
                 self.store.set_meta("snapshot_generated_at", now)
                 self.store.set_meta("snapshot_expires_at", parse_iso(snapshot["expires_at"]))
                 self.store.set_meta("snapshot_active_count", snapshot["active_count"])
+        try:  # monitoring reads this file, never the DB; a failure here never fails the job
+            _atomic_write(os.path.join(self.public_dir, STATUS_FILE),
+                          (json.dumps(public_status(self.store), indent=2) + "\n").encode(), 0o644)
+        except (OSError, sqlite3.Error, LabError) as exc:
+            log(f"endpoint-lab: {STATUS_FILE} not written: {type(exc).__name__}")
         return True
 
     # -- scheduled runs
@@ -2097,6 +2108,25 @@ def status_report(store: Store) -> dict:
         "db": {"bytes_incl_wal": store.db_bytes(), "schema": store.conn.execute("PRAGMA user_version").fetchone()[0],
                "last_quick_check": ts("last_quick_check_at"), "quick_check": meta.get("last_quick_check")},
         "code": code_revision(),
+    }
+
+
+def public_status(store: Store) -> dict:
+    """status + 15-minute stats for monitoring: no credentials, no endpoint IPs (control ids dropped)."""
+    st = status_report(store)
+    now = store.clock()
+    return {
+        "schema_version": STATUS_SCHEMA_VERSION,
+        "generated_at": iso(now),
+        "lab": st["lab"],
+        "identity": st["identity"],
+        "pool": st["pool"],
+        "freshness": st["freshness"],
+        "controls": {"count": len(st["controls"]["ids"]), "selected_at": st["controls"]["selected_at"]},
+        "scheduler": st["scheduler"],
+        "db": st["db"],
+        "code": {"commit": st["code"].get("commit"), "matches_install": st["code"].get("matches_install")},
+        "stats_15m": window_stats(store, now - 900) | {"sessions": session_split(store, now - 900)},
     }
 
 

@@ -87,6 +87,7 @@ with "Peer netns reference is invalid". When the service ends, the namespace dis
 | `/var/lib/amnezia-endpoint-lab/lab.db` (+`-wal`, `-shm`) | 0600 | SQLite (WAL), no secrets |
 | `/var/lib/amnezia-endpoint-lab/backups/` | 0700 | DB copies taken automatically before each migration |
 | `/var/lib/amnezia-endpoint-lab/public/active-pool.json` | 0644 | snapshot for the future read-only mount |
+| `/var/lib/amnezia-endpoint-lab/public/lab-status.json` | 0644 | status + 15-min stats for monitoring (no IPs, no secrets); rewritten after every job |
 
 `/var/lib/amnezia-endpoint-lab` is 0700 and `public/` is 0755. A future bind mount of `public/` alone
 works, because the mount source is resolved by root (dockerd). The DB never becomes readable for it.
@@ -99,7 +100,8 @@ snapshot. Anything key-shaped in error text is redacted before it is printed or 
 ## Commands
 
 ```text
-endpoint-lab status | list | stats | report [--hours 24]   # read-only: no lock, no migration (WAL readers)
+endpoint-lab status | list | stats | report [--hours 24]   # read-only: no lock, no migration (WAL readers;
+                                          # needs a writable dir for -shm: monitoring reads lab-status.json)
 endpoint-lab refresh                      # timer: re-verify the pool (circuit breaker), snapshot
 endpoint-lab discovery                    # timer: bounded candidate checks; yields to refresh
 endpoint-lab maintenance                  # retention + WAL checkpoint (also run after each timer job)

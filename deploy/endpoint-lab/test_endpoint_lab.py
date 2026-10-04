@@ -1041,6 +1041,21 @@ class SnapshotTests(LabFixture):
             self.assertTrue(json.load(fh)["old"])
         self.assertEqual(os.listdir(self.public), [lab.SNAPSHOT_FILE])
 
+    def test_public_status_file_is_written_and_ip_free(self):
+        ids = [self.add(f"162.159.192.{i}", lab.OFFICIAL_PORTS[i % 4], state=lab.VERIFYING) for i in range(1, 5)]
+        self.make_lab(FakeProbeEngine()).run_batch(ids, "refresh")
+        with open(os.path.join(self.public, lab.STATUS_FILE), encoding="utf-8") as fh:
+            text = fh.read()
+        doc = json.loads(text)
+        self.assertEqual(doc["schema_version"], lab.STATUS_SCHEMA_VERSION)
+        self.assertEqual(doc["pool"]["eligible_active"], 4)
+        self.assertIsInstance(doc["controls"]["count"], int)  # controls are chosen lazily, by the breaker
+        self.assertIn("(n=4)", doc["stats_15m"]["handshake_success"])
+        self.assertEqual(doc["stats_15m"]["sessions"]["first_session_ok"], 4)
+        self.assertIsNone(re.search(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", text))  # no endpoint addresses at all
+        self.assertIsNone(lab.SECRET_LIKE_RE.search(text))
+        self.assertNotIn("token", text)
+
     def test_snapshot_write_failure_is_recorded(self):
         eid = self.add("162.159.192.1", state=lab.VERIFYING)
         with mock.patch.object(lab, "write_snapshot", side_effect=OSError(28, "No space left on device")):
