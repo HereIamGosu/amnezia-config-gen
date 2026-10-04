@@ -223,13 +223,13 @@ cannot prove anything, endpoints keep their history and only age out by TTL.
 
 systemd oneshot services + timers, no daemon. Both jobs share one `flock`. Refresh waits up to 50 s
 for it; discovery waits up to 40 s and then skips its slot. Refresh always wins, because it waits longer
-than discovery's own 40 s wall budget. (Without that wait, discovery lost whole 30-minute slots to the
+than discovery's wall budget (40 s, or 45 s below the soft floor). (Without that wait, discovery lost whole 30-minute slots to the
 rolling refresh.)
 
 | Job | Timer | Budget | Probes |
 | --- | --- | --- | --- |
 | refresh | every 60 s ± 10 s | 45 s wall, ≤ 32 endpoints | rolling slice (below); 8 s handshake timeout |
-| discovery | every 30 min ± 5 min | 40 s wall (60 s below the soft floor) | seeds, DEAD resurrection, the /24 cursor; 3 s handshake timeout |
+| discovery | every 30 min ± 5 min | 40 s wall (45 s below the soft floor) | seeds, DEAD resurrection, the /24 cursor; 3 s handshake timeout |
 
 **Rolling refresh (B1b).** Each run re-verifies the `ceil(ACTIVE / 3)` least-recently verified `ACTIVE`
 endpoints, bounded to 4–12. Controls are included in this rotation and get no extra probes unless the

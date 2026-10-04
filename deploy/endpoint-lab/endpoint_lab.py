@@ -154,7 +154,7 @@ REFRESH_LOCK_WAIT_S = 50
 # Rolling refresh holds the lock ~15-25% of the time; without waiting, discovery lost whole 30-min slots
 # (host, 2026-10-04 18:32Z). It waits briefly; refresh still wins (it waits longer than discovery's wall budget).
 DISCOVERY_LOCK_WAIT_S = 40
-DISCOVERY_WALL_S = (40, 60)         # normal, elevated (pool below the soft floor)
+DISCOVERY_WALL_S = (40, 45)         # normal, elevated; both below REFRESH_LOCK_WAIT_S so refresh always wins
 DISCOVERY_MAX_FAILURES = 24
 DEAD_RESURRECT_PER_RUN = 2
 CF_ONE_EVERY_N_RUNS = 4             # one Cloudflare One observation per N discovery runs
