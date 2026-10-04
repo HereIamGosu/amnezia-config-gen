@@ -40,7 +40,7 @@ e2eSuite('generation (stubbed /api/warp)', (openPage) => {
     await page.goto('/');
     const requests = stubWarp(page, (u) => ({ json: fixtures.warpSuccess({ mode: u.searchParams.get('mode'), count: 2 }) }));
 
-    await page.click('.param-chip[data-settings-tab="routes"]');
+    await page.click('#paramSummary');
     await page.click('#tab-extra');
     await page.click('label.radio-label:has(input[name="configCount"][value="2"])');
     await page.press('Escape');

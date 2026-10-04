@@ -467,44 +467,48 @@
               </button>
             </div>
             <div class="step__body" id="stepParamsBody">
-              <div class="param-grid">
-                <button type="button" class="param-chip" data-settings-tab="routes" aria-haspopup="dialog">
-                  <svg class="icon param-chip__icon" aria-hidden="true"><use href="#i-route"/></svg>
-                  <span class="param-chip__label" data-i18n="routing_mode_title">Маршрутизация</span>
-                  <svg class="icon icon--sm param-chip__chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
-                  <span class="param-chip__value" id="chipRouting" data-i18n="routing_mode_full">Полный туннель</span>
-                </button>
-                <button type="button" class="param-chip" data-settings-tab="dnscps" aria-haspopup="dialog">
-                  <svg class="icon param-chip__icon" aria-hidden="true"><use href="#i-globe"/></svg>
-                  <span class="param-chip__label">DNS</span>
-                  <svg class="icon icon--sm param-chip__chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
-                  <span class="param-chip__value" id="chipDns">Cloudflare</span>
-                </button>
-                <button type="button" class="param-chip" data-settings-tab="extra" data-settings-focus="warpEndpointSelect" aria-haspopup="dialog">
-                  <svg class="icon param-chip__icon" aria-hidden="true"><use href="#i-pin"/></svg>
-                  <span class="param-chip__label">Endpoint</span>
-                  <svg class="icon icon--sm param-chip__chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
-                  <span class="param-chip__value param-chip__value--accent" id="chipEndpoint" data-i18n="chip_endpoint_auto">Автовыбор</span>
-                </button>
-                <button type="button" class="param-chip" data-settings-tab="extra" data-settings-focus="warpPortSelect" aria-haspopup="dialog">
-                  <svg class="icon param-chip__icon" aria-hidden="true"><use href="#i-plug"/></svg>
-                  <span class="param-chip__label" data-i18n="chip_port">Порт WARP</span>
-                  <svg class="icon icon--sm param-chip__chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
-                  <span class="param-chip__value" id="chipPort">4500</span>
-                </button>
-                <button type="button" class="param-chip" data-settings-tab="extra" data-settings-focus="ipv6Toggle" aria-haspopup="dialog">
-                  <svg class="icon param-chip__icon" aria-hidden="true"><use href="#i-network"/></svg>
-                  <span class="param-chip__label">IPv6</span>
-                  <svg class="icon icon--sm param-chip__chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
-                  <span class="param-chip__value" id="chipIpv6" data-i18n="chip_off">Выключен</span>
-                </button>
-                <button type="button" class="param-chip" data-settings-tab="extra" data-settings-focus="mobileModeToggle" aria-haspopup="dialog">
-                  <svg class="icon param-chip__icon" aria-hidden="true"><use href="#i-laptop"/></svg>
-                  <span class="param-chip__label" data-i18n="chip_device">Устройство</span>
-                  <svg class="icon icon--sm param-chip__chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
-                  <span class="param-chip__value" id="chipDevice" data-i18n="device_universal">Универсальный</span>
-                </button>
-              </div>
+              <!-- Одна точка входа в настройки: сводка текущих значений, изменённые выделены -->
+              <button type="button" class="param-summary" id="paramSummary" aria-haspopup="dialog" aria-labelledby="paramSummaryEdit" aria-describedby="paramSummaryList paramSummaryState">
+                <span class="param-summary__list" id="paramSummaryList">
+                  <span class="param-summary__item" data-param="routing">
+                    <svg class="icon param-summary__icon" aria-hidden="true"><use href="#i-route"/></svg>
+                    <span class="param-summary__label" data-i18n="routing_mode_title">Маршрутизация</span>
+                    <span class="param-summary__value" id="chipRouting" data-i18n="routing_mode_full">Полный туннель</span>
+                  </span>
+                  <span class="param-summary__item" data-param="dns">
+                    <svg class="icon param-summary__icon" aria-hidden="true"><use href="#i-globe"/></svg>
+                    <span class="param-summary__label">DNS</span>
+                    <span class="param-summary__value" id="chipDns">Cloudflare</span>
+                  </span>
+                  <span class="param-summary__item" data-param="endpoint">
+                    <svg class="icon param-summary__icon" aria-hidden="true"><use href="#i-pin"/></svg>
+                    <span class="param-summary__label">Endpoint</span>
+                    <span class="param-summary__value" id="chipEndpoint" data-i18n="chip_endpoint_auto">Автовыбор</span>
+                  </span>
+                  <span class="param-summary__item" data-param="port">
+                    <svg class="icon param-summary__icon" aria-hidden="true"><use href="#i-plug"/></svg>
+                    <span class="param-summary__label" data-i18n="chip_port">Порт WARP</span>
+                    <span class="param-summary__value" id="chipPort">4500</span>
+                  </span>
+                  <span class="param-summary__item" data-param="ipv6">
+                    <svg class="icon param-summary__icon" aria-hidden="true"><use href="#i-network"/></svg>
+                    <span class="param-summary__label">IPv6</span>
+                    <span class="param-summary__value" id="chipIpv6" data-i18n="chip_off">Выключен</span>
+                  </span>
+                  <span class="param-summary__item" data-param="device">
+                    <svg class="icon param-summary__icon" aria-hidden="true"><use href="#i-laptop"/></svg>
+                    <span class="param-summary__label" data-i18n="chip_device">Устройство</span>
+                    <span class="param-summary__value" id="chipDevice" data-i18n="device_universal">Универсальный</span>
+                  </span>
+                </span>
+                <span class="param-summary__foot">
+                  <span class="param-summary__state" id="paramSummaryState" data-i18n="params_state_default">Все параметры по умолчанию</span>
+                  <span class="param-summary__edit">
+                    <svg class="icon icon--sm" aria-hidden="true"><use href="#i-gear"/></svg>
+                    <span id="paramSummaryEdit" data-i18n="params_edit">Изменить параметры</span>
+                  </span>
+                </span>
+              </button>
             </div>
           </section>
 

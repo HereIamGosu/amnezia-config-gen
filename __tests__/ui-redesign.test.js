@@ -138,6 +138,20 @@ test('parameter chips start from the real defaults, not from mockup values', () 
   assert.match(settings, /const updateParamChips = \(\) =>/);
 });
 
+test('step 2 is one summary button: a single entry into the settings, changes named in words', () => {
+  const step = html.slice(html.indexOf('id="stepParamsBody"'), html.indexOf('<!-- Шаг 3'));
+  assert.equal((step.match(/<button\b/g) || []).length, 1, 'one entry point into the settings, not one per value');
+  assert.match(step, /<button type="button" class="param-summary" id="paramSummary" aria-haspopup="dialog" aria-labelledby="paramSummaryEdit" aria-describedby="paramSummaryList paramSummaryState">/);
+  assert.doesNotMatch(html, /data-settings-tab=/, 'no per-value shortcuts into settings tabs');
+  assert.match(step, /id="paramSummaryState" data-i18n="params_state_default"/);
+  assert.match(settings, /PARAM_DEFAULTS = \(window\.ShareLink && window\.ShareLink\.DEFAULTS\)/, 'same defaults as the settings link');
+  assert.match(settings, /param-summary__item--changed/, 'changed values are highlighted');
+  assert.match(settings, /params_state_changed/, 'and named in the state line (not colour only)');
+  for (const key of ['params_edit', 'params_state_default', 'params_state_changed', 'params_count']) {
+    assert.ok(ru[key] && en[key], `${key} in both locales`);
+  }
+});
+
 test('recent changes start with the current release', () => {
   const { version } = JSON.parse(read('package.json'));
   const versions = [...html.matchAll(/<li data-version="([^"]+)">/g)].map((m) => m[1]);
@@ -192,7 +206,7 @@ test('header items open dialogs on the page instead of leaving it; no duplicate 
   assert.match(script, /closest\('\[data-status-link\]'\)/, 'status links (header, FAQ answer) open the status dialog');
   assert.match(en.faq_a5, /data-status-link/, 'the FAQ status link opens the dialog too');
   assert.match(html, /<a class="site-nav__link" href="#instructions" data-open-modal="instructionModal"/);
-  assert.doesNotMatch(html, /id="settingsToggle"/, 'step 2 chips already open the settings');
+  assert.doesNotMatch(html, /id="settingsToggle"/, 'the step 2 summary already opens the settings');
   assert.doesNotMatch(html, /data-result-action="regenerate"/, 'the generate button is right above the result');
   assert.doesNotMatch(html, /class="result__links"/, 'the compatibility card is right below the result');
 });
@@ -279,6 +293,6 @@ test('mobile tap targets are at least 40 px and narrow phones get compact contro
   const narrow = mediaBlock('(max-width: 400px)');
   assert.match(narrow, /#settingsModalReset,\s*#resultCopyCode \{\s*width: 40px;/, 'icon-only buttons keep their text for screen readers');
   assert.match(narrow, /\.btn--generate \{[^}]*white-space: normal;/);
-  assert.match(mediaBlock('(max-width: 440px)'), /\.param-grid \{\s*grid-template-columns: minmax\(0, 1fr\);/);
+  assert.match(mediaBlock('(max-width: 440px)'), /\.param-summary__list \{\s*grid-template-columns: minmax\(0, 1fr\);/);
   assert.match(mediaBlock('(max-width: 480px)'), /\.hero__feature \{[^}]*white-space: normal;/);
 });

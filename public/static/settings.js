@@ -138,46 +138,63 @@ const clearAllRouteTileHosts = () => {
 const getSelectedRouteIds = () =>
   Array.from(document.querySelectorAll(ROUTE_CHECKBOX_SELECTOR)).map((el) => el.value);
 
-const SETTINGS_TABS = { routes: 'tab-routes', dnscps: 'tab-dnscps', extra: 'tab-extra' };
-
-/**
- * Открывает настройки на нужной вкладке (чипы шага 2 ведут каждый в свой раздел).
- * @param {{ tab?: string, focusId?: string, opener?: Element }} [options]
- */
-const openSettingsModal = ({ tab = 'routes', focusId = null, opener = null } = {}) => {
-  if (uiShell) uiShell.selectTab(SETTINGS_TABS[tab] || SETTINGS_TABS.routes);
+/** Открывает настройки на первой вкладке: вход в них один — карточка-сводка шага 2. */
+const openSettingsModal = ({ opener = null } = {}) => {
+  if (uiShell) uiShell.selectTab('tab-routes');
   openModal('settingsModal', opener);
-  const target = focusId && document.getElementById(focusId);
-  if (target) {
-    target.scrollIntoView({ block: 'center' });
-    if (!target.disabled) target.focus({ preventScroll: true });
-  }
 };
 
-/** Значения чипов шага 2 — всегда фактическое состояние cfgState, а не картинка из макета. */
+/** Умолчания те же, что у ссылки с настройками (share-link.js загружается раньше). */
+const PARAM_DEFAULTS = (window.ShareLink && window.ShareLink.DEFAULTS)
+  || { device: 'universal', cps: 'auto', cps5: false, port: 4500, endpoint: 'hostname', ipv6: false, count: 1 };
+
+/**
+ * Сводка шага 2 — всегда фактическое состояние cfgState, а не картинка из макета. Значения, отличные
+ * от умолчаний, выделены, а строка состояния называет их словами (статус не только цветом), включая
+ * параметры, которых нет в сводке (CPS, I2–I5, число конфигов).
+ */
 const updateParamChips = () => {
-  const setChip = (id, text, modifier) => {
+  const changed = [];
+  const setItem = (id, text, isChanged, label) => {
     const el = document.getElementById(id);
     if (!el) return;
     delete el.dataset.i18n;
     el.textContent = text;
     el.title = text;
-    el.classList.toggle('param-chip__value--on', modifier === 'on');
-    el.classList.toggle('param-chip__value--accent', modifier === 'accent');
+    el.closest('.param-summary__item')?.classList.toggle('param-summary__item--changed', isChanged);
+    if (isChanged) changed.push(label);
   };
+  const device = window.ShareLink
+    ? window.ShareLink.deviceOf(cfgState.mobileMode, cfgState.routerMode)
+    : (cfgState.mobileMode || cfgState.routerMode ? 'custom' : 'universal');
+  const dnsKey = getSelectedDnsKey() || cfgState.dnsDefault;
 
-  const selectedCount = getSelectedRouteIds().length;
-  setChip('chipRouting', cfgState.routeMode === ROUTE_MODES.SPLIT
-    ? `${t('routing_mode_split', 'Выборочная')} · ${selectedCount}`
-    : t('routing_mode_full', 'Полный туннель'));
-  setChip('chipDns', getDnsLabel(getSelectedDnsKey() || cfgState.dnsDefault));
-  setChip('chipEndpoint', cfgState.warpEndpoint === 'hostname'
+  const split = cfgState.routeMode === ROUTE_MODES.SPLIT;
+  setItem('chipRouting', split
+    ? `${t('routing_mode_split', 'Выборочная')} · ${getSelectedRouteIds().length}`
+    : t('routing_mode_full', 'Полный туннель'), split, t('routing_mode_title', 'Маршрутизация'));
+  setItem('chipDns', getDnsLabel(dnsKey), Boolean(cfgState.dnsDefault) && dnsKey !== cfgState.dnsDefault, 'DNS');
+  setItem('chipEndpoint', cfgState.warpEndpoint === 'hostname'
     ? t('chip_endpoint_auto', 'Автовыбор')
-    : cfgState.warpEndpoint, 'accent');
-  setChip('chipPort', String(cfgState.port));
-  setChip('chipIpv6', cfgState.includeIpv6 ? t('chip_on', 'Включён') : t('chip_off', 'Выключен'),
-    cfgState.includeIpv6 ? 'on' : null);
-  setChip('chipDevice', getDeviceLabel(cfgState.mobileMode, cfgState.routerMode));
+    : cfgState.warpEndpoint, cfgState.warpEndpoint !== PARAM_DEFAULTS.endpoint, 'Endpoint');
+  setItem('chipPort', String(cfgState.port), Number(cfgState.port) !== PARAM_DEFAULTS.port, t('chip_port', 'Порт WARP'));
+  setItem('chipIpv6', cfgState.includeIpv6 ? t('chip_on', 'Включён') : t('chip_off', 'Выключен'),
+    cfgState.includeIpv6 !== PARAM_DEFAULTS.ipv6, 'IPv6');
+  setItem('chipDevice', getDeviceLabel(cfgState.mobileMode, cfgState.routerMode),
+    device !== PARAM_DEFAULTS.device, t('chip_device', 'Устройство'));
+
+  if (cfgState.cpsProtocol !== PARAM_DEFAULTS.cps) changed.push('CPS');
+  if (cfgState.extraCps !== PARAM_DEFAULTS.cps5) changed.push('I2–I5');
+  if (cfgState.configCount !== PARAM_DEFAULTS.count) changed.push(t('params_count', 'Число конфигов'));
+
+  const state = document.getElementById('paramSummaryState');
+  if (state) {
+    delete state.dataset.i18n;
+    state.textContent = changed.length
+      ? `${t('params_state_changed', 'Изменено:')} ${changed.join(', ')}`
+      : t('params_state_default', 'Все параметры по умолчанию');
+    state.classList.toggle('param-summary__state--changed', changed.length > 0);
+  }
 };
 
 /**
@@ -523,16 +540,11 @@ const initSettingsPanel = async () => {
   const dnsHost = document.getElementById('dnsTiles');
   const settingsModal = document.getElementById('settingsModal');
 
-  document.querySelectorAll('[data-settings-tab]').forEach((chip) => {
-    chip.addEventListener('click', () => openSettingsModal({
-      tab: chip.dataset.settingsTab,
-      focusId: chip.dataset.settingsFocus || null,
-      opener: chip,
-    }));
-  });
+  const summary = document.getElementById('paramSummary');
+  summary?.addEventListener('click', () => openSettingsModal({ opener: summary }));
   if (settingsModal) {
     settingsModal.addEventListener('modal:close', updateParamChips);
-    // Любая правка внутри настроек сразу видна на чипах шага 2 (обработчики ниже меняют cfgState
+    // Любая правка внутри настроек сразу видна в сводке шага 2 (обработчики ниже меняют cfgState
     // синхронно, а этот слушатель на всплытии срабатывает после них).
     settingsModal.addEventListener('change', updateParamChips);
     settingsModal.addEventListener('click', (ev) => {

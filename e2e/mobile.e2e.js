@@ -46,7 +46,7 @@ e2eSuite('mobile layout', (openPage) => {
 
         await page.tap('#stepParams [data-step-toggle]');
         await page.waitFor(() => !document.getElementById('stepParams').classList.contains('is-collapsed'));
-        await page.tap('.param-chip[data-settings-tab="routes"]');
+        await page.tap('#paramSummary');
         await page.waitFor(isOpen, { args: ['settingsModal'] });
         for (const tab of ['tab-routes', 'tab-dnscps', 'tab-extra']) {
           await page.tap(`#${tab}`);
