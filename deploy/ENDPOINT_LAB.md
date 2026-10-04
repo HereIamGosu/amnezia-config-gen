@@ -221,9 +221,14 @@ cannot prove anything, endpoints keep their history and only age out by TTL.
 
 ## Scheduler
 
-systemd oneshot services + timers, no daemon. Both jobs share one `flock`. Refresh waits up to 50 s
-for it; discovery waits up to 40 s and then skips its slot. Refresh always wins, because it waits longer
-than discovery's wall budget (40 s, or 45 s below the soft floor). (Without that wait, discovery lost whole 30-minute slots to the
+systemd oneshot services + timers, no daemon. Both jobs share one `flock`. Refresh waits up to 90 s
+for it; discovery waits up to 40 s and then skips its slot. The wall budget is checked before each probe,
+so a job can overrun it by one worst-case probe (`worst_case_probe_s`: handshake timeout + 2 sessions ×
+(setup + 3 targets × 4 s) + 1 s, i.e. 32 s for discovery and 37 s for refresh). Discovery therefore holds
+the lock for at most 45 + 32 + 10 s slack = 87 s, less than refresh's 90 s wait, so refresh always wins. A
+refresh that waited the full 90 s and then overran takes at most 90 + 45 + 37 + 10 = 182 s, inside its
+`TimeoutStartSec=200`. `test_lock_timing_invariants_hold` checks both sums, reading the timeouts from the unit
+files. (Without that wait, discovery lost whole 30-minute slots to the
 rolling refresh.)
 
 | Job | Timer | Budget | Probes |

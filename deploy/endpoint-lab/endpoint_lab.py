@@ -150,7 +150,13 @@ TARGET_ACTIVE, SOFT_FLOOR, MAX_ACTIVE = 24, 12, 48
 ACTIVE_HIGH = 28                    # hot working set: above this, park down to TARGET_ACTIVE (VERIFIED reserve)
 MAX_REFRESH_ENDPOINTS = 32
 REFRESH_WALL_S = 45
-REFRESH_LOCK_WAIT_S = 50
+# Lock timing invariants (a unit test checks them, including the unit file's TimeoutStartSec):
+#   discovery holds the lock at most max(DISCOVERY_WALL_S) + worst_case_probe_s(discovery) + slack
+#   < REFRESH_LOCK_WAIT_S, and REFRESH_LOCK_WAIT_S + REFRESH_WALL_S + worst_case_probe_s(refresh) + slack
+#   < the refresh unit's TimeoutStartSec. The wall budget is checked before each probe, so the last probe
+#   may overrun it by up to one worst-case probe.
+REFRESH_LOCK_WAIT_S = 90
+JOB_SLACK_S = 10                    # startup, cleanup sweep, commit, snapshot
 # Rolling refresh holds the lock ~15-25% of the time; without waiting, discovery lost whole 30-min slots
 # (host, 2026-10-04 18:32Z). It waits briefly; refresh still wins (it waits longer than discovery's wall budget).
 DISCOVERY_LOCK_WAIT_S = 40
@@ -980,6 +986,13 @@ class EndpointRow:
     quarantine_failures: int = 0            # failures since entering QUARANTINE (DEAD rule)
     active_since: int | None = None
     first_active_at: int | None = None
+
+
+def worst_case_probe_s(handshake_timeout_s: float, targets: int = len(VERIFICATION_TARGETS)) -> float:
+    """Upper bound of one deep probe: a silent handshake costs at most the timeout; a second session only
+    follows a handshake, and every session tries each target once (TARGET_MAX_TIME_S), plus setup/teardown."""
+    setup_s = 2.0
+    return handshake_timeout_s + MAX_SESSIONS_PER_PROBE * (setup_s + targets * TARGET_MAX_TIME_S) + TRIGGER_INTERVAL_S
 
 
 def manual_quarantine_active(row: EndpointRow, now: int) -> bool:

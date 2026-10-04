@@ -8,7 +8,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/endpoint-lab refresh
-TimeoutStartSec=120
+TimeoutStartSec=200
 Nice=10
 UMask=0077
 NoNewPrivileges=yes
