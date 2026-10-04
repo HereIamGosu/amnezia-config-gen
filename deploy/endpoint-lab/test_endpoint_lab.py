@@ -1106,6 +1106,152 @@ class ReportTests(LabFixture):
         self.assertIn("VERIFYING->ACTIVE", report["transitions"])
 
 
+class SimEngine(FakeProbeEngine):
+    """Time-dependent world for the accelerated lifecycle: outcome(eid, now) decides every probe."""
+
+    def __init__(self, outcome):
+        super().__init__()
+        self.outcome = outcome
+
+    def _next(self, eid):
+        return self.outcome(eid)
+
+
+class AcceleratedLifecycleTests(LabFixture):
+    """A simulated day (refresh every 60 s, discovery every 30 min) in seconds, with Lab/global failure windows.
+    Real time is only needed for network behaviour; every temporal rule of the state machine is checked here."""
+
+    HOUR = 3600
+
+    def world(self):
+        healthy = [f"162.159.192.{i}:{lab.OFFICIAL_PORTS[i % 4]}" for i in range(1, 31)]
+        flaky = [f"188.114.96.{i}:2408" for i in range(1, 7)]
+        dead = [f"188.114.97.{i}:500" for i in range(1, 5)]
+        for eid in healthy + flaky + dead:
+            ip, port = eid.rsplit(":", 1)
+            self.add(ip, int(port), state=lab.VERIFYING, source=lab.SRC_PHASE_A if eid in healthy else lab.SRC_LEGACY)
+        return healthy, flaky, dead
+
+    def test_simulated_day_with_failure_windows(self):
+        import random
+        rng = random.Random(20261004)
+        healthy, flaky, dead = self.world()
+        H = self.HOUR
+        windows = {"targets": (6 * H, 6.5 * H), "uplink": (12 * H, 12.25 * H), "identity": (15 * H, 15.1 * H),
+                   "wg": (18 * H, 18.05 * H), "pause": (20 * H, 20.5 * H)}
+
+        def within(name, t, margin=0):
+            a, b = windows[name]
+            return NOW + a + margin <= t < NOW + b - margin
+
+        def outcome(eid):
+            t = self.clock_value
+            if within("wg", t):
+                return local()
+            if within("uplink", t):
+                return no_hs()
+            if within("targets", t):
+                return inconclusive()
+            if eid in dead:
+                return no_hs()
+            if eid in flaky:
+                return no_hs() if rng.random() < 0.5 else ok()
+            if eid in healthy:
+                r = rng.random()
+                return no_hs() if r < 0.03 else (replace(inconclusive(), sessions=2) if r < 0.05 else ok())
+            last = int(eid.split(".")[3].split(":")[0])  # discovery candidates: 3 of 4 addresses work
+            return no_hs() if last % 4 == 0 else ok()
+
+        def identity_loader():
+            if within("identity", self.clock_value):
+                raise lab.LabError(lab.PROBE_IDENTITY_INVALID, "revoked in the simulation")
+            return identity(self.tmp.name)
+
+        runner = lab.Lab(self.store, SimEngine(outcome), identity_loader=identity_loader,
+                         clock=lambda: self.clock_value, public_dir=self.public)
+        res = lab.Resources(10 ** 6, 0, 0.1, 2, 10 ** 10)
+        stale_checked = False
+        with mock.patch.object(lab.os, "fsync"):  # speed: durability is tested elsewhere
+            step = 0
+            while self.clock_value < NOW + 24 * H:
+                t = self.clock_value
+                if within("pause", t):
+                    if not stale_checked and t >= NOW + windows["pause"][0] + lab.SNAPSHOT_TTL_S + 1:
+                        self.assertEqual(lab.validate_snapshot(self.snapshot(), t), [])  # stopped Lab => stale file
+                        stale_checked = True
+                else:
+                    before = self.failures()
+                    runner.targets = lab.active_targets(lab.LabConfig())
+                    runner.refresh(res)
+                    if step % 30 == 0:
+                        runner.discovery(res)
+                    snap = self.snapshot()
+                    fresh = lab.validate_snapshot(snap, t)
+                    self.assertEqual(len(fresh), snap["active_count"])            # only fresh ACTIVE are published
+                    self.assertLessEqual(snap["active_count"], lab.ACTIVE_HIGH)    # working set respected
+                    if any(within(w, t, 120) for w in ("targets", "uplink", "identity", "wg")):
+                        self.assertEqual(self.failures(), before, f"penalty during a Lab/global failure at +{(t - NOW) / H:.2f} h")
+                step += 1
+                self.clock_value += 60
+        self.assertTrue(stale_checked)
+        c = self.store.conn
+        # no endpoint was punished inside any Lab/global failure window (transitions to failure states)
+        for name in ("targets", "uplink", "identity", "wg"):
+            a, b = windows[name]
+            n = c.execute("SELECT count(*) FROM transition WHERE ts >= ? AND ts < ? AND to_state IN ('SUSPECT','QUARANTINE','DEAD')",
+                          (NOW + a + 120, NOW + b - 120)).fetchone()[0]
+            self.assertEqual(n, 0, name)
+        # dead endpoints end DEAD after bounded quarantine, then are only re-probed every >= 6 h
+        for eid in dead:
+            self.assertEqual(self.store.get(eid)["state"], lab.DEAD, eid)
+            entered = c.execute("SELECT min(ts) FROM transition WHERE endpoint_id=? AND to_state='DEAD'", (eid,)).fetchone()[0]
+            probes = [r[0] for r in c.execute("SELECT timestamp FROM observation WHERE endpoint_id=? AND probe_type='handshake'"
+                                              " AND timestamp > ? ORDER BY timestamp", (eid, entered))]
+            self.assertTrue(all(b - a >= lab.DEAD_RESURRECT_AFTER_S for a, b in zip(probes, probes[1:])), eid)
+        # every quarantine cooldown came from the bounded backoff table
+        for eid, until, err in c.execute("SELECT endpoint_id, quarantine_until, last_error_at FROM endpoint"
+                                         " WHERE state='QUARANTINE' AND quarantine_kind='auto'"):
+            self.assertIn(until - err, lab.QUARANTINE_BACKOFF_S, eid)
+        # the hot pool recovered after every window and stays near target
+        final = sum(lab.is_eligible(lab.Store.to_row(r), self.clock_value - 60) for r in self.store.all())
+        self.assertGreaterEqual(final, lab.SOFT_FLOOR)
+        self.assertGreater(c.execute("SELECT count(*) FROM transition WHERE cause='pool_cap'").fetchone()[0], 0)
+        self.assertGreater(c.execute("SELECT count(*) FROM endpoint WHERE state='VERIFIED'").fetchone()[0], 0)
+        health = {r[0] for r in c.execute("SELECT DISTINCT lab_reason FROM run WHERE lab_health='UNAVAILABLE'")}
+        self.assertTrue({"VERIFICATION_TARGETS_UNAVAILABLE", "CONTROLS_SILENT", lab.PROBE_IDENTITY_INVALID,
+                         lab.LOCAL_RESOURCE_ERROR} <= health, health)
+
+    def test_pause_longer_than_ttl_drains_and_rebuilds(self):
+        healthy, _, _ = self.world()
+        runner = lab.Lab(self.store, SimEngine(lambda eid: ok() if eid in healthy else no_hs()),
+                         identity_loader=lambda: identity(self.tmp.name), clock=lambda: self.clock_value,
+                         public_dir=self.public)
+        res = lab.Resources(10 ** 6, 0, 0.1, 2, 10 ** 10)
+        with mock.patch.object(lab.os, "fsync"):
+            for _ in range(10):
+                runner.refresh(res)
+                self.clock_value += 60
+            self.assertGreaterEqual(self.snapshot()["active_count"], lab.SOFT_FLOOR)
+            self.clock_value += lab.ACTIVE_TTL_S + 60     # the timer was stopped for longer than the TTL
+            runner.publish()
+            self.assertEqual(self.snapshot()["active_count"], 0)  # nothing stale survives a pause
+            for _ in range(5):
+                runner.refresh(res)
+                self.clock_value += 60
+            self.assertGreaterEqual(self.snapshot()["active_count"], lab.ROLLING_SLICE_MIN)
+
+    def test_db_locked_and_disk_full_never_publish_unrecorded_state(self):
+        eid = self.add("162.159.192.1", state=lab.VERIFYING)
+        runner = self.make_lab(FakeProbeEngine())
+        for err in (sqlite3.OperationalError("database is locked"), sqlite3.OperationalError("database or disk is full")):
+            with self.subTest(err=str(err)), mock.patch.object(lab.Store, "record", side_effect=err):
+                with self.assertRaises(lab.LabError) as ctx:
+                    runner.run_batch([eid], "refresh")
+                self.assertIn("DB_WRITE_FAILED", str(ctx.exception))
+                self.assertFalse(os.path.exists(os.path.join(self.public, lab.SNAPSHOT_FILE)))
+        self.assertEqual(self.store.get(eid)["state"], lab.VERIFYING)
+
+
 class SecretHandlingTests(unittest.TestCase):
     def test_redaction(self):
         self.assertNotIn(PRIVATE, lab.redact(f"key={PRIVATE} end"))
