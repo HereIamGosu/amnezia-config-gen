@@ -74,6 +74,15 @@ the constraint check rejects any other mount, a writable one, or another source.
 on the next container start (next deploy); removing it and redeploying turns shadow mode off. Shadow
 mode never changes responses (see `deploy/ENDPOINT_LAB.md` on the Endpoint Lab branch).
 
+Shadow runbook. The installed controller is not updated by a merge: copy `deploy/controller/amnezia_deploy.py`
+to `/usr/local/sbin/amnezia-deploy` between `amnezia-deploy pause` and `amnezia-deploy resume` (back up the old
+file first; `install.sh` would also disable the CD timer) and check `grep -c ENDPOINT_SHADOW_FLAG` on it. Then
+`touch /etc/amnezia-deploy/endpoint-shadow`; the next deploy of a new digest starts the slot with the mount. Check
+on the active slot: exactly one mount, `RW=false`, the same `CapDrop`/`ReadonlyRootfs`/`User`, and
+`[endpoint-shadow]` lines in `docker logs` every 10 minutes. To turn it off quickly: `rm` the flag, then
+`amnezia-deploy rollback`; the previous release comes up without the mount (its container predates the flag, or
+it is recreated while the flag is absent). Any later deploy without the flag starts slots without it.
+
 `/etc/nginx/sites-available/amnezia-web` includes `/etc/nginx/amnezia-deploy/upstream.conf`
 (`upstream amnezia_backend { server 127.0.0.1:<port>; }`). That file is the only nginx file the
 controller writes: tmp → fsync → rename, `nginx -t`, `systemctl reload nginx`. If the test fails,
