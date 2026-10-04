@@ -1,14 +1,60 @@
 # ============================================================
+# Secrets & real VPN material — NEVER commit
+# ============================================================
+# Environment files (keep only the template, if one ever appears)
+.env
+.env.*
+!.env.example
+
+# Keys and certificates
+*.key
+*.pem
+*.crt
+*.cert
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+
+# Generated WireGuard / AmneziaWG configs contain private keys.
+# Only the nginx templates in deploy/ are tracked.
+*.conf
+!/deploy/**/*.conf
+
+# Local working VPN configs with real keys
+Рабочие_конфиги/
+
+# ============================================================
 # Node.js
 # ============================================================
 node_modules/
+.npm/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .pnpm-store/
+.node_repl_history
+*.tgz
+
+# npm is the package manager of record (package-lock.json is tracked)
 yarn.lock
 pnpm-lock.yaml
+
+# Tooling caches & test output
+.eslintcache
+.cache/
+coverage/
+.nyc_output/
+
+# ============================================================
+# Python (deploy/controller tests)
+# ============================================================
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
 
 # ============================================================
 # Build & output
@@ -16,8 +62,6 @@ pnpm-lock.yaml
 /dist/
 /build/
 /.output/
-/.nuxt/
-/.next/
 
 # ============================================================
 # Vercel
@@ -25,24 +69,19 @@ pnpm-lock.yaml
 .vercel/
 
 # ============================================================
-# Environment & secrets
-# ============================================================
-.env
-.env.local
-.env.development
-.env.production
-.env.test
-.env.*.local
-*.pem
-*.key
-*.cert
-
-# ============================================================
-# Logs
+# Logs & temporary files
 # ============================================================
 *.log
 *.log.*
 logs/
+/.tmp/
+/tmp/
+*.tmp
+*.bak
+*.swp
+*.swo
+*.orig
+*.rej
 
 # ============================================================
 # OS generated files
@@ -60,6 +99,7 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+*.lnk
 
 # Linux
 .trash/
@@ -70,33 +110,15 @@ $RECYCLE.BIN/
 # ============================================================
 .idea/
 .vscode/
+.history/
+.fleet/
+*.code-workspace
 *.sublime-workspace
 *.sublime-project
 
 # ============================================================
-# Temporary & misc
-# ============================================================
-*.tmp
-*.bak
-*.swp
-*.swo
-*.orig
-
-# ============================================================
-# TypeScript
-# ============================================================
-*.tsbuildinfo
-
-# ============================================================
-# Dependency dirs (legacy)
-# ============================================================
-jspm_packages/
-bower_components/
-
-# ============================================================
 # AI assistants & agents — local state, context, config
 # ============================================================
-
 # Claude / Anthropic
 .claude/
 CLAUDE.md
@@ -105,7 +127,8 @@ CLAUDE.md
 # Cursor
 .cursor/
 .cursorignore
-.cursorules
+.cursorrules
+*.cursorrules
 
 # GitHub Copilot
 .github/copilot-instructions.md
@@ -121,50 +144,46 @@ GEMINI.md
 
 # Aider
 .aider*
-.aider.conf.yml
-.aider.model.settings.yml
-.aider.model.metadata.json
 
 # Continue.dev
 .continue/
 
-# Cline / RooCode / Windsurf
+# Cline / RooCode / Windsurf / Kilo Code
 .cline/
 .roo/
+.windsurf/
 .windsurfignore
 .windsurfrules
+.kilo/
+.kilocode/
 
 # Supermaven / Tabnine / Codeium
 .supermaven/
 .tabnine*
 .codeium/
 
-# Devin / SWE-agent / OpenHands
+# Devin / OpenHands
 .devin/
 .openhands/
 
-# CodeGraph (local index)
+# CodeGraph / Understand-Anything (local indexes)
 .codegraph/
+.understand-anything/
 
-# OMX / ruv-swarm / claude-flow
+# OMX / ruv-swarm / claude-flow / Superpowers
 .omx/
 .ruv-swarm/
 .claude-flow/
-memory/
-swarm-state/
-
-# Superpowers plugin runtime data
 .superpowers/
+/memory/
+/swarm-state/
 
-# Generic AI config files
-*.cursorrules
+# Generic AI context files
 .ai-context*
 ai-instructions*
 
-# ============================================================
-# AI agent runtime data (databases, caches, streams)
-# ============================================================
-data/
+# Agent runtime data (databases, caches, streams)
+/data/
 *.db
 *.db-shm
 *.db-wal
@@ -172,26 +191,15 @@ data/
 # ============================================================
 # Project-specific (private docs and local artefacts)
 # ============================================================
-PRD.md
-DEV_CHECKLIST.md
-# docs/ intentionally tracked — GitHub Pages landing
-docs/SEO_KEYWORD_MAP.md
-docs/srs/
-docs/superpowers/
+/PRD.md
+/DEV_CHECKLIST.md
+# docs/ is tracked (GitHub Pages landing); only private notes are excluded
+/docs/SEO_KEYWORD_MAP.md
+/docs/srs/
+/docs/superpowers/
 
-# Empty/suspicious filename previously seen in tree
-p.key
+# Logo/brand design workspace (concepts, renders, full-size sources)
+/branding/
 
-# Local working VPN configs with real keys — NEVER commit
-Рабочие_конфиги/
-
-# struc.py — legacy local helper script
-struc.py
-
-# Spurious shell artifact (brace expansion gone wrong)
-{,
-.vercel
-.understand-anything/
-
-# Python bytecode (deploy/controller tests)
-__pycache__/
+# Legacy local helper script
+/struc.py
