@@ -1202,6 +1202,38 @@ class WebExportTests(LabFixture):
                          (0.5, 0.25, 0.25, "15m", 4))
         self.assertAlmostEqual(s["firstSession"] + s["retryRescued"] + s["failed"], 1.0)
 
+    def test_sessions_ignore_negative_control_addresses_under_any_source_label(self):
+        a = self.add("162.159.192.1", state=lab.VERIFYING)
+        n = self.add("192.0.2.7", state=lab.VERIFYING, source=lab.SRC_CONSUMER)  # mislabelled control
+        self.probe(a, ok, NOW - 60)
+        self.probe(n, traffic_fail, NOW - 50)
+        self.export()
+        s = self.overview()["sessions"]
+        self.assertEqual((s["firstSession"], s["failed"], s["samples"]), (1.0, 0.0, 1))
+
+    def test_discovery_beyond_the_first_hundred_events_is_counted_in_full(self):
+        eid = self.add("162.159.192.1", state=lab.VERIFYING)
+        others = [self.add(f"162.159.192.{i}", state=lab.VERIFYING) for i in range(10, 15)]
+        with self.store.transaction():
+            self.store.conn.execute("INSERT INTO run (operation_id, kind, started_at, finished_at, status)"
+                                    " VALUES ('disc', 'discovery', ?, ?, 'completed')", (NOW - 5000, NOW - 4990))
+            for o in others:
+                self.store.conn.execute("INSERT INTO transition (ts, endpoint_id, from_state, to_state, cause, operation_id)"
+                                        " VALUES (?,?,?,?,?,?)", (NOW - 4995, o, lab.HANDSHAKE_OK, lab.ACTIVE, "verified", "disc"))
+            for k in range(130):  # newer events push the discovery run past the first 100
+                self.store.conn.execute("INSERT INTO transition (ts, endpoint_id, from_state, to_state, cause, operation_id)"
+                                        " VALUES (?,?,?,?,?,?)", (NOW - 10 - k, eid, lab.ACTIVE, lab.SUSPECT, "TIMEOUT", f"r{k}"))
+        self.export()
+        events = self.overview()["events"]
+        self.assertEqual(len(events), lab.WEB_MAX_EVENTS)
+        self.assertNotIn("discovery", [e["type"] for e in events], "older than the 100 newest events")
+        self.assertEqual(lab.WebModel(self.store, NOW).events()[-1]["type"], "suspect")
+        with self.store.transaction():
+            self.store.conn.execute("DELETE FROM transition WHERE operation_id LIKE 'r%' AND ts < ?", (NOW - 50,))
+        self.export()
+        disc = [e for e in self.overview()["events"] if e["type"] == "discovery"]
+        self.assertEqual(disc, [{"type": "discovery", "count": 5, "at": lab.iso(NOW - 4990)}])
+
     def test_endpoint_session_https_and_reliability(self):
         a, b, c, d = (self.add(f"162.159.192.{i}", state=lab.VERIFYING) for i in (1, 2, 3, 4))
         for k, res in enumerate((ok, ok, retry_ok)):

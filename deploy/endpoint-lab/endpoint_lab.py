@@ -1551,9 +1551,12 @@ class WebModel:
 
     def sessions(self) -> dict | None:
         first, retry, failed = self.store.conn.execute(
-            "SELECT sum(o.result='ok' AND o.sessions=1), sum(o.result='ok' AND o.sessions=2), sum(o.result='fail')"
-            " FROM observation o JOIN endpoint e USING(endpoint_id) WHERE o.probe_type='traffic' AND o.timestamp>=?"
-            " AND e.source<>? AND e.manual_blacklist=0", (self.now - WEB_SESSIONS_WINDOW_S, SRC_NEGATIVE)).fetchone()
+            # same split as the history buckets: an ok without a sessions count reads as first
+            "SELECT sum(o.result='ok' AND coalesce(o.sessions,1)<>2), sum(o.result='ok' AND o.sessions=2),"
+            " sum(o.result='fail') FROM observation o JOIN endpoint e USING(endpoint_id)"
+            " WHERE o.probe_type='traffic' AND o.timestamp>=? AND e.source<>? AND e.manual_blacklist=0"
+            " AND e.ip NOT LIKE '192.0.2.%'",  # NEGATIVE_CONTROL_PREFIX, whatever the source label says
+            (self.now - WEB_SESSIONS_WINDOW_S, SRC_NEGATIVE)).fetchone()
         first, retry, failed = first or 0, retry or 0, failed or 0
         n = first + retry + failed
         if n == 0:
@@ -1587,9 +1590,8 @@ class WebModel:
             if kind in ("promoted", "restored") and t["operation_id"] in discovery:
                 found[t["operation_id"]] = found.get(t["operation_id"], 0) + 1  # one discovery event per run
                 continue
+            # read the whole 24 h window: discovery runs further back must still be counted in full
             out.append({"type": kind, "endpoint": t["endpoint_id"], "at": _web_iso(t["ts"]), "_ts": t["ts"]})
-            if len(out) >= WEB_MAX_EVENTS:
-                break
         for op, n in found.items():
             out.append({"type": "discovery", "count": n, "at": _web_iso(discovery[op]), "_ts": discovery[op]})
         out.sort(key=lambda e: e["_ts"], reverse=True)
