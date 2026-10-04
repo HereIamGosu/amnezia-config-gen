@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "candidates": [
+    { "ip": "162.159.192.1", "source": "engage_dns" },
+    { "ip": "162.159.192.8", "source": "project_seed" },
+    { "ip": "162.159.192.2", "source": "consumer_range" },
+    { "ip": "192.0.2.1", "ports": [2408], "source": "negative_control" }
+  ]
+}

@@ -1,0 +1,18 @@
+# Phase B template — NOT installed in Phase A. Each hardening option below must be proven on the
+# host (namespaces, wg, curl inside the namespace) before the unit is installed or enabled.
+[Unit]
+Description=Endpoint Lab: deep-verify known WARP endpoints and publish active-pool.json
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/endpoint-lab verify-all
+TimeoutStartSec=15min
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/amnezia-endpoint-lab /run
+MemoryMax=128M
+Nice=10

@@ -45,6 +45,9 @@ jobs:
       - name: Deployment controller tests
         run: python3 -m unittest discover -s deploy/controller -p 'test_*.py' -v
 
+      - name: Endpoint Lab tests
+        run: python3 -m unittest discover -s deploy/endpoint-lab -p 'test_*.py' -v
+
       - name: Protocol evidence check
         run: npm run evidence:check
 

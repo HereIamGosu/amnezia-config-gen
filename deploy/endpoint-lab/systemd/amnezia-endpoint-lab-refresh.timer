@@ -1,0 +1,11 @@
+# Phase B template — NOT installed or enabled in Phase A. Interval is a baseline to calibrate.
+[Unit]
+Description=Endpoint Lab refresh schedule
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+
+[Install]
+WantedBy=timers.target
