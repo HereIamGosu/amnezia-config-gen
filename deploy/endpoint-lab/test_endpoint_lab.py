@@ -595,8 +595,10 @@ def reg_response():
 class FakeRunner(lab.CommandRunner):
     """Simulates ip/wg/ping/curl. failing_urls: curl exit code per URL substring."""
 
-    def __init__(self, handshake_after=1, failing_urls=None, extra_route=False, fail_on=None, http_code=200):
+    def __init__(self, handshake_after=1, failing_urls=None, extra_route=False, fail_on=None, http_code=200,
+                 fail_first_curls=0):
         self.calls, self.inputs = [], []
+        self.fail_first_curls = fail_first_curls
         self.handshake_after, self.failing_urls = handshake_after, failing_urls or {}
         self.extra_route, self.fail_on, self.http_code = extra_route, fail_on, http_code
         self.hs_polls, self.rx, self.tx = 0, 0, 0
@@ -615,6 +617,8 @@ class FakeRunner(lab.CommandRunner):
             out = "1: lo: <LOOPBACK,UP>\n7: aelabcdef: <POINTOPOINT,NOARP,UP>\n"
         elif argv[-3:] == ["-4", "route", "show"]:
             out = "default dev aelabcdef scope link\n" + ("default via 10.0.0.1 dev eth9\n" if self.extra_route else "")
+        elif argv[:3] == ["ip", "netns", "add"]:
+            self.hs_polls = 0  # every session is a fresh interface
         elif "latest-handshakes" in argv:
             self.hs_polls += 1
             ts = NOW if self.handshake_after is not None and self.hs_polls > self.handshake_after else 0
@@ -629,6 +633,9 @@ class FakeRunner(lab.CommandRunner):
         elif "curl" in argv:
             url = argv[-1]
             code = next((c for frag, c in self.failing_urls.items() if frag in url), 0)
+            if self.fail_first_curls > 0:
+                self.fail_first_curls -= 1
+                code = 28
             if code == 0:
                 self.tx += 600
                 self.rx += 2000
@@ -687,13 +694,38 @@ class LinuxEngineTests(unittest.TestCase):
         self.assertEqual([(n, o) for n, o, _ in res.target_results], [("cf-1111", False), ("cf-1001", True)])
         self.assertEqual(res.target_results[0][2], lab.HTTPS_TIMEOUT)
 
-    def test_all_targets_failing_is_inconclusive(self):
-        res = self.verify(FakeRunner(failing_urls={"https://": 60}))
+    def test_all_targets_failing_in_both_sessions_is_inconclusive(self):
+        runner = FakeRunner(failing_urls={"https://": 60})
+        res = self.verify(runner)
         self.assertTrue(res.handshake_ok)
         self.assertTrue(res.inconclusive)
         self.assertFalse(res.endpoint_failure)
+        self.assertEqual(res.sessions, lab.MAX_SESSIONS_PER_PROBE)
         self.assertEqual({e for _, _, e in res.target_results}, {lab.HTTPS_TLS_FAILED})
-        self.assertEqual(len(res.target_results), len(lab.VERIFICATION_TARGETS))
+        self.assertEqual(len(res.target_results), 2 * len(lab.VERIFICATION_TARGETS))
+        self.assertEqual(sum(c[:3] == ["ip", "netns", "add"] for c in runner.calls), 2)
+        self.assertEqual(sum(c[:3] == ["ip", "netns", "delete"] for c in runner.calls), 2)  # both torn down
+
+    def test_second_session_rescues_a_dead_first_session(self):
+        runner = FakeRunner(fail_first_curls=len(lab.VERIFICATION_TARGETS))
+        res = self.verify(runner)
+        self.assertTrue(res.ok)
+        self.assertEqual(res.sessions, 2)
+        self.assertEqual([o for _, o, _ in res.target_results], [False, False, False, True])
+
+    def test_slow_handshake_session_is_abandoned_after_first_timeout(self):
+        runner = FakeRunner(handshake_after=5, fail_first_curls=1)  # handshake seen after ~1.25 s
+        res = self.verify(runner)
+        self.assertTrue(res.ok)
+        self.assertEqual(res.sessions, 2)
+        self.assertEqual(res.target_results[0], ("cf-1111", False, lab.HTTPS_TIMEOUT))
+        self.assertEqual(len(res.target_results), 2)  # cf-1001/cf-www skipped in the dead first session
+
+    def test_handshake_failure_gets_no_second_session(self):
+        runner = FakeRunner(handshake_after=None)
+        res = self.verify(runner)
+        self.assertEqual((res.sessions, res.error_code), (1, lab.HANDSHAKE_NO_RESPONSE))
+        self.assertEqual(sum(c[:3] == ["ip", "netns", "add"] for c in runner.calls), 1)
 
     def test_private_key_never_in_argv_and_dump_never_used(self):
         runner = FakeRunner()
@@ -819,7 +851,7 @@ class MigrationTests(unittest.TestCase):
             self.make_v1(path)
             store = lab.Store(path, clock=lambda: NOW)
             rows = {r["endpoint_id"]: r for r in store.all()}
-            self.assertEqual(store.conn.execute("PRAGMA user_version").fetchone()[0], 2)
+            self.assertEqual(store.conn.execute("PRAGMA user_version").fetchone()[0], lab.SCHEMA_VERSION)
             self.assertEqual(rows["162.159.192.1:2408"]["state"], lab.VERIFYING)   # not ACTIVE because it once was
             self.assertEqual(rows["162.159.192.1:2408"]["source"], lab.SRC_PHASE_A)
             self.assertEqual(rows["162.159.192.1:2408"]["source_first"], "engage_dns")
@@ -834,7 +866,7 @@ class MigrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "lab.db")
             self.make_v1(path)
-            with mock.patch.dict(lab.MIGRATIONS, {2: lab.SCHEMA_V2 + ";SELECT * FROM missing_table"}):
+            with mock.patch.dict(lab.MIGRATIONS, {3: lab.SCHEMA_V3 + ";SELECT * FROM missing_table"}):
                 with self.assertRaises(lab.LabError):
                     lab.Store(path, clock=lambda: NOW)
             conn = sqlite3.connect(path)

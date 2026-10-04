@@ -105,7 +105,13 @@ TRIGGER_INTERVAL_S = 1.0
 REFRESH_HANDSHAKE_TIMEOUT_S = 8.0
 DISCOVERY_HANDSHAKE_TIMEOUT_S = 3.0
 TRIGGER_TARGET = "1.1.1.1"
-TARGET_MAX_TIME_S = 6
+TARGET_MAX_TIME_S = 4   # healthy sessions answer in 30-100 ms; 4 s bounds the cost of a dead session
+# Host data 2026-10-04 evening: ~30% of tunnel sessions handshook (often only after ~1 s) yet carried no
+# traffic to any target, while a fresh session to the same endpoint worked. A deep probe therefore uses up
+# to two sessions; the second one only when the first handshook but carried nothing. A first session whose
+# handshake was slow and whose first target timed out is abandoned at once (the rest would time out too).
+MAX_SESSIONS_PER_PROBE = 2
+SLOW_HANDSHAKE_MS = 900
 HTTPS_MAX_BYTES = 8192
 COMMAND_TIMEOUT_S = 20
 
@@ -156,7 +162,7 @@ DISCOVERY_MIN_MEM_KB, REFRESH_MIN_MEM_KB = 200 * 1024, 100 * 1024
 DISCOVERY_MAX_LOAD_PER_CPU = 2.0
 MIN_DISK_FREE = 512 * 1024 * 1024
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 SNAPSHOT_SCHEMA_VERSION = 2
 
 NS_PREFIX = "ael-"
@@ -691,6 +697,7 @@ class ProbeResult:
     traffic_bytes: int | None = None         # WireGuard rx+tx bytes during the probe
     target_results: list = field(default_factory=list)  # [(target name, ok, error code)]
     evidence: dict = field(default_factory=dict)
+    sessions: int = 1                        # tunnel sessions this probe needed
 
     @property
     def ok(self) -> bool:
@@ -831,7 +838,8 @@ class LinuxWireGuardProbeEngine(ProbeEngine):
         self.runner.run(["ip", "netns", "delete", ns], check=False)       # destroys the moved interface
         self.runner.run(["ip", "link", "delete", "dev", ifname], check=False)  # if it never moved
 
-    def _verify_traffic(self, ns: str, ifname: str, targets: list, result: ProbeResult) -> None:
+    def _verify_traffic(self, ns: str, ifname: str, targets: list, result: ProbeResult,
+                        give_up_on_timeout: bool = False) -> None:
         """Any-one quorum over the verification targets; each target is tried at most once."""
         for target in targets:
             _, rx0, tx0 = self._wg_counters(ns, ifname)
@@ -850,6 +858,8 @@ class LinuxWireGuardProbeEngine(ProbeEngine):
             else:
                 err = None
             result.target_results.append((target.name, err is None, err))
+            if err == HTTPS_TIMEOUT and give_up_on_timeout:
+                break  # a slow-handshake session that times out is dead: let a fresh session decide
             if err is None:
                 trace = dict(line.split("=", 1) for line in body.splitlines() if "=" in line)
                 result.traffic_ok = True
@@ -863,6 +873,21 @@ class LinuxWireGuardProbeEngine(ProbeEngine):
 
     def _run(self, endpoint: Endpoint, identity: Identity, deep: bool, timeout_s: float,
              targets: list | None) -> ProbeResult:
+        """A deep probe gets a second, fresh session only when the first one handshook but no target
+        answered; a real endpoint fault fails both. Handshake failures are never retried here."""
+        earlier: list = []
+        last = MAX_SESSIONS_PER_PROBE if deep else 1
+        for session in range(1, last + 1):
+            result = self._session(endpoint, identity, deep, timeout_s, targets, may_give_up=session < last)
+            result.sessions = session
+            result.target_results = earlier + result.target_results
+            if not result.inconclusive:
+                return result
+            earlier = result.target_results
+        return result
+
+    def _session(self, endpoint: Endpoint, identity: Identity, deep: bool, timeout_s: float,
+                 targets: list | None, may_give_up: bool = False) -> ProbeResult:
         ns, ifname = self.new_names()
         evidence: dict = {"namespace": ns}
         try:
@@ -879,7 +904,8 @@ class LinuxWireGuardProbeEngine(ProbeEngine):
                                    traffic_bytes=(rx1 - rx0) + (tx1 - tx0), evidence=evidence)
             result = ProbeResult(True, handshake_observed_at=latest, probe_completion_ms=waited_ms, evidence=evidence)
             if deep:
-                self._verify_traffic(ns, ifname, list(targets or VERIFICATION_TARGETS), result)
+                self._verify_traffic(ns, ifname, list(targets or VERIFICATION_TARGETS), result,
+                                     give_up_on_timeout=may_give_up and waited_ms >= SLOW_HANDSHAKE_MS)
             _, rx1, tx1 = self._wg_counters(ns, ifname)
             evidence.update(rx_before=rx0, tx_before=tx0, rx_after=rx1, tx_after=tx1)
             result.traffic_bytes = (rx1 - rx0) + (tx1 - tx0)
@@ -1104,7 +1130,9 @@ UPDATE endpoint SET state = '{VERIFYING}', expires_at = NULL
   WHERE state IN ('{ACTIVE}', '{SUSPECT}', '{VERIFIED}') AND source <> '{SRC_NEGATIVE}';
 UPDATE endpoint SET quarantine_kind = 'auto' WHERE state = '{QUARANTINE}'
 """
-MIGRATIONS = {1: SCHEMA_V1, 2: SCHEMA_V2}
+# v3: how many tunnel sessions a probe needed (second-chance session statistics)
+SCHEMA_V3 = "ALTER TABLE observation ADD COLUMN sessions INTEGER"
+MIGRATIONS = {1: SCHEMA_V1, 2: SCHEMA_V2, 3: SCHEMA_V3}
 
 ROW_FIELDS = tuple(EndpointRow.__dataclass_fields__)
 
@@ -1206,9 +1234,10 @@ class Store:
             hs_outcome = "ok" if result.handshake_ok else "fail"
         self.conn.execute(
             "INSERT INTO observation (endpoint_id, timestamp, probe_type, result, duration_ms, error_code, operation_id,"
-            " bytes, run_kind) VALUES (?,?,?,?,?,?,?,?,?)",
+            " bytes, run_kind, sessions) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (endpoint_id, now, "handshake", hs_outcome, result.probe_completion_ms,
-             None if result.handshake_ok else result.error_code, operation_id, result.traffic_bytes, run_kind))
+             None if result.handshake_ok else result.error_code, operation_id, result.traffic_bytes, run_kind,
+             result.sessions))
         if deep and result.handshake_ok:
             if result.inconclusive:
                 t_outcome = "inconclusive" if apply_transition else "suppressed"
@@ -1812,6 +1841,8 @@ def baseline_report(store: Store, hours: float) -> dict:
                     " max(swap_used_kb) FROM run WHERE started_at>=?", (since,)).fetchone()
     skipped = c.execute("SELECT note, count(*) FROM run WHERE status='skipped' AND started_at>=? GROUP BY 1",
                         (since,)).fetchall()
+    sess = c.execute("SELECT count(*), sum(sessions=2), sum(duration_ms>=?) FROM observation WHERE probe_type='handshake'"
+                     " AND result IN ('ok','suppressed') AND timestamp>=?", (SLOW_HANDSHAKE_MS, since)).fetchone()
     return {
         "window_hours": hours, "refresh_runs": len(runs),
         "active": ({"min": min(active), "median": statistics.median(active), "max": max(active)} if active else {}),
@@ -1825,6 +1856,8 @@ def baseline_report(store: Store, hours: float) -> dict:
         "resources": {"peak_rss_kb": res[0], "cpu_ms_total": res[1], "tunnel_bytes_total": res[2],
                       "min_mem_available_kb": res[3], "swap_used_kb_min": res[4], "swap_used_kb_max": res[5]},
         "skipped_runs": {n or "": k for n, k in skipped},
+        "sessions": {"handshaken_probes": sess[0], "needed_second_session": sess[1] or 0,
+                     "slow_handshakes": sess[2] or 0},
         "db_bytes": store.db_bytes(),
     }
 
@@ -1889,8 +1922,8 @@ def format_result(eid: str, res: ProbeResult) -> str:
                      f" target={ev.get('target')}")
     if "trace_warp" in ev:
         parts.append(f"warp={ev.get('trace_warp')} colo={ev.get('trace_colo')}")
-    if res.target_results and not res.traffic_ok:
-        parts.append("targets=" + ",".join(f"{n}:{e}" for n, _, e in res.target_results))
+    if res.target_results and (not res.traffic_ok or res.sessions > 1):
+        parts.append(f"sessions={res.sessions} targets=" + ",".join(f"{n}:{e or 'ok'}" for n, _, e in res.target_results))
     if res.message and res.error_code:
         parts.append(f"({res.message})")
     return redact("  ".join(parts))
