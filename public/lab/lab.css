@@ -926,6 +926,20 @@
   cursor: not-allowed;
 }
 
+.lab-coverage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  color: var(--color-text-2);
+  font-size: 13px;
+}
+
+.lab-last-error--unknown {
+  color: var(--color-text-2);
+  font-weight: 500;
+}
+
 .lab-table-wrap {
   /* Контейнер для скрытых подписей ячеек: иначе они «вылезают» из прокрутки и расширяют страницу */
   position: relative;

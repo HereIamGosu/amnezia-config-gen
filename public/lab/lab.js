@@ -344,10 +344,12 @@
 
   // ── График ACTIVE (SVG, без библиотек) ─────────────────────────
 
+  /** Верх шкалы = 4 целых «круглых» шага (1, 2, 3, 5 × 10ⁿ) с запасом над максимумом: подписи без дробей. */
   const niceMax = (value) => {
-    if (value <= 4) return 4;
-    const step = value <= 20 ? 5 : value <= 60 ? 10 : value <= 200 ? 50 : 10 ** Math.ceil(Math.log10(value)) / 4;
-    return Math.ceil((value + 1) / step) * step;
+    const raw = Math.max(1, value + 1) / 4;
+    const mag = 10 ** Math.floor(Math.log10(raw));
+    const step = [1, 2, 3, 5, 10].map((k) => k * mag).find((s) => s >= raw && Number.isInteger(s)) || Math.ceil(raw);
+    return step * 4;
   };
 
   const TICK_STEP = { '1h': 10 * 60e3, '6h': 3600e3, '24h': 4 * 3600e3 };
@@ -703,6 +705,12 @@
     });
   };
 
+  /** Код ошибки проверки → подпись словаря; незнакомый код показывается как есть (это уже чистый текст). */
+  const errorText = (code) => {
+    if (!code) return t('lab_hist_event_fail_unknown');
+    return Object.prototype.hasOwnProperty.call(strings, `lab_error_${code}`) ? t(`lab_error_${code}`) : code;
+  };
+
   const renderEndpoints = () => {
     const tbody = $('labTableBody');
     const cards = $('labCards');
@@ -734,6 +742,8 @@
       }
     }
     empty.hidden = !emptyKey;
+    // Режим совместимости API: в списке только ACTIVE — не создаём впечатление полного списка.
+    $('labCoverageNote').hidden = !(view && view.coverage === 'active-only' && !emptyKey);
 
     const target = ui.mobile ? cards : tbody;
     const other = ui.mobile ? tbody : cards;
@@ -969,8 +979,9 @@
     body.appendChild(timelineBlock(dv.timeline));
 
     body.appendChild(el('h3', 'lab-section-title', t('lab_details_last_error')));
-    const err = el('p', `lab-last-error lab-last-error--${dv.lastError ? 'yes' : 'no'}`);
-    if (!dv.lastError) err.textContent = t('lab_last_error_none');
+    const err = el('p', `lab-last-error lab-last-error--${!dv.lastErrorKnown ? 'unknown' : dv.lastError ? 'yes' : 'no'}`);
+    if (!dv.lastErrorKnown) err.textContent = t('lab_last_error_unknown');
+    else if (!dv.lastError) err.textContent = t('lab_last_error_none');
     else {
       const known = dv.lastError.code && Object.prototype.hasOwnProperty.call(strings, `lab_error_${dv.lastError.code}`);
       err.appendChild(el('span', null, known ? t(`lab_error_${dv.lastError.code}`) : (dv.lastError.message || dv.lastError.code)));
@@ -996,7 +1007,10 @@
       ui.detailsError = null;
     } else if (!quiet || !ui.detailsView) {
       ui.detailsView = null;
-      ui.detailsError = result.kind === 'not-connected' ? 'lab_details_unavailable' : result.kind === 'malformed' ? 'lab_details_malformed' : 'lab_details_error';
+      const gone = result.kind === 'error' && (result.code === 'endpoint_not_found' || result.status === 404);
+      ui.detailsError = gone ? 'lab_details_gone'
+        : result.kind === 'not-connected' || result.code === 'lab_not_available' ? 'lab_details_unavailable'
+          : result.kind === 'malformed' || result.code === 'lab_malformed' ? 'lab_details_malformed' : 'lab_details_error';
     }
     renderDetailsBody();
   };
@@ -1147,7 +1161,7 @@
       li.appendChild(time);
       const text = el('div');
       text.appendChild(el('p', 'lab-checklog__title', t(ok ? 'lab_hist_event_ok' : 'lab_hist_event_fail')));
-      text.appendChild(el('p', 'lab-checklog__sub', ok ? t(`lab_session_long_${e.result === 'retry' ? 'retry' : 'first'}`) : (e.error || t('lab_hist_event_fail_unknown'))));
+      text.appendChild(el('p', 'lab-checklog__sub', ok ? t(`lab_session_long_${e.result === 'retry' ? 'retry' : 'first'}`) : errorText(e.error)));
       li.appendChild(text);
       list.appendChild(li);
     });
@@ -1208,6 +1222,9 @@
   const resultState = (r) => {
     if (r.kind === 'not-connected') return 'not-connected';
     if (r.kind === 'malformed') return 'malformed';
+    // 503 lab_not_available: публичных файлов Lab нет (Vercel, форк, Lab не смонтирован) — как «не подключено».
+    if (r.kind === 'error' && r.code === 'lab_not_available') return 'not-connected';
+    if (r.kind === 'error' && r.code === 'lab_malformed') return 'malformed';
     if (r.kind === 'error') return 'error';
     return 'nodata';
   };

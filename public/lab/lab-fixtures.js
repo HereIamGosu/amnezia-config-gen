@@ -275,7 +275,7 @@
     for (let i = 0; i < 14; i += 1) {
       const roll = rand();
       const result = roll < (ok ? 0.08 : 0.45) ? 'fail' : roll < 0.3 ? 'retry' : 'first';
-      events.push({ at: iso(t), result, error: result === 'fail' ? (rand() < 0.7 ? 'Handshake timeout' : 'HTTPS check failed') : null });
+      events.push({ at: iso(t), result, error: result === 'fail' ? (rand() < 0.7 ? 'handshake_no_response' : 'https_timeout') : null });
       t -= (15 + rand() * 30) * MIN;
     }
     const timeline = [];
@@ -289,7 +289,7 @@
       checks: { handshake: check(6), tunnel: check(2), https: check(0) },
       stability: { h1: ok ? 0.992 : 0.41, h24: ok ? 0.988 : 0.57, observations: 120 + Math.floor(rand() * 200) },
       timeline,
-      lastError: ok ? null : { code: 'handshake_timeout', message: 'Handshake timeout', at: iso(now - 26 * MIN) },
+      lastError: ok ? null : { code: 'handshake_no_response', at: iso(now - 26 * MIN) },
       history: { range, buckets, events },
     };
     if (name === 'mixed' && item.state === 'MYSTERY_STATE') {

@@ -253,6 +253,8 @@
         events: section('events', normalizeEvents(raw.events, now)),
         endpoints: endpoints ? endpoints.list : null,
         retryAfterSec: isInt(raw.retryAfterSec, 1, 3600) ? raw.retryAfterSec : null,
+        // active-only: режим совместимости API — список содержит только ACTIVE (нет истории и событий).
+        coverage: raw.coverage === 'active-only' ? 'active-only' : 'full',
       },
     };
   };
@@ -329,6 +331,8 @@
         stability,
         timeline,
         lastError,
+        // Нет поля — неизвестно (режим совместимости); null — ошибок не было.
+        lastErrorKnown: raw.lastError !== undefined,
         history: raw.history === undefined ? null : normalizeHistory(raw.history, now),
       },
     };

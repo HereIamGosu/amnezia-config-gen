@@ -4,20 +4,22 @@
 // Retry-After, проверка ответа (LabCore.normalize*) и фикстуры для локальной разработки.
 // Компоненты страницы получают только результат { kind, view } и не знают, откуда пришли данные.
 //
-// Публичного HTTP API у Lab пока нет: LAB_API.overview = null, и адаптер сразу отвечает
-// { kind: 'not-connected' }, не делая запросов. Подключение — заполнить LAB_API (см.
-// docs/specs/endpoint-lab-frontend.md). Классический скрипт: window.LabData в браузере, module.exports в node.
+// Данные отдаёт same-origin /api/lab (api/lab.js): он читает публичный экспорт хоста Lab и сам базу не видит.
+// Без адресов в LAB_API адаптер отвечал бы { kind: 'not-connected' } без запросов (так ведут себя тесты).
+// Контракт — docs/specs/endpoint-lab-frontend.md. Классический скрипт: window.LabData в браузере, module.exports в node.
 
 'use strict';
 
 (function initLabData(root) {
   const Core = typeof module === 'object' && module.exports ? require('./lab-core.js') : root.LabCore;
 
-  // Адреса будущего публичного API (same-origin, CSP connect-src 'self'). null — не подключено.
+  // Публичный API Lab (same-origin, CSP connect-src 'self'): api/lab.js отдаёт экспорт хоста Lab.
   const LAB_API = Object.freeze({
-    overview: null, // например '/api/lab'
-    endpoint: null, // например (id, range) => `/api/lab?endpoint=${encodeURIComponent(id)}&range=${range}`
+    overview: '/api/lab',
+    endpoint: (id, range) => `/api/lab?endpoint=${encodeURIComponent(id)}&range=${encodeURIComponent(range)}`,
   });
+  // Коды ошибок /api/lab, которые страница различает; остальное — общая ошибка загрузки.
+  const API_ERROR_CODES = ['lab_not_available', 'lab_malformed', 'endpoint_not_found', 'endpoint_invalid', 'range_invalid'];
 
   // Lab пересчитывает пул раз в минуту: чаще 30 с опрашивать незачем.
   const POLL_INTERVAL_MS = 30_000;
@@ -59,7 +61,18 @@
         signal: controller ? controller.signal : undefined,
       });
       const retryAfterMs = parseRetryAfter(res.headers && res.headers.get ? res.headers.get('Retry-After') : null, now);
-      if (!res.ok) return { kind: 'error', reason: 'http', status: res.status, retryAfterMs };
+      if (!res.ok) {
+        // Тело ошибки — короткий JSON { code }; берём только известный код, остальное игнорируем.
+        let code = null;
+        try {
+          const body = await res.text();
+          const parsed = body.length <= 1024 ? JSON.parse(body) : null;
+          if (parsed && API_ERROR_CODES.includes(parsed.code)) code = parsed.code;
+        } catch {
+          code = null;
+        }
+        return { kind: 'error', reason: 'http', status: res.status, code, retryAfterMs };
+      }
       const text = await res.text();
       if (text.length > MAX_RESPONSE_CHARS) return { kind: 'malformed', reason: 'too-large' };
       try {
