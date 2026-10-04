@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Added
 - Every response carries `X-App-Revision: <commit sha>` (from the image's `APP_REVISION`), so deployment checks can prove which release answers publicly.
+- English version of the site at `/en` with its own title, description, social preview and structured data. Both versions are linked with `hreflang` (`x-default` → `/en`) and listed in `sitemap.xml`. The page is generated from `public/index.html` and `en.json` (`npm run seo:en`); a test fails when it is out of date.
+- A 404 page in both languages (served with status 404 and `noindex`), `/.well-known/security.txt` (RFC 9116) and `/llms.txt` for AI search.
+- Favicons in PNG (16, 32, 192 px) and an Apple touch icon are declared in `<head>`; social preview gains `og:image:type`, `og:locale:alternate` and `twitter:image:alt`.
+- IndexNow: the key file is served from the site root and `npm run indexnow` submits the sitemap URLs to Bing, Yandex, Seznam, Naver and Yep. It can wait until production serves a given commit (`X-App-Revision`) and skip releases that change nothing under `public/`; the release process runs it after a deploy.
+
+### Changed
+- The interface language now follows the address (`/` is Russian, `/en` is English) instead of the browser language. The RU/EN buttons open the other address and remember the choice; a remembered choice redirects there on the next visit. Search engine crawlers therefore see the language that matches the URL.
+- Icons, the web app manifest icons and the social preview image carry `?v=<version>` cache keys, so browsers and social networks pick up the new images.
+- Structured data: `UtilitiesApplication` category, `softwareVersion`, preview image, both languages; `release:check` keeps the version, the sitemap `lastmod`, manifest icon keys and the `security.txt` expiry current.
+- `robots.txt`: drop `Crawl-delay` (ignored by Yandex and Google), add Yandex `Clean-param` for ad and analytics tags, document why `/static/`, `/locales/` and `/status.html` stay crawlable.
+- Remaining hard-coded Russian strings in the settings (WARP endpoint, UDP port, number of configs), the logo `alt` and several `aria-label`s are now translated.
+- nginx site snippet: `gzip_vary on` (compressed responses carry `Vary: Accept-Encoding`, so shared caches never serve gzip to a client that did not ask for it), `gzip_comp_level 5`, and `favicon.ico` is compressed too. Takes effect only when the snippet is reinstalled on the server.
+
+### Fixed
+- The inline SVG filter used a wrong XML namespace (`/1000/svg`).
 
 ## [2.7.4] - 2026-10-03
 

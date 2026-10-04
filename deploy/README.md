@@ -90,8 +90,9 @@ Nothing application-specific lives only on the server except the TLS key (re-iss
 1. DNS `A` record → VPS IP.
 2. Change `server_name` and certificate paths in `nginx-amnezia.conf` (and the host in `deploy.sh`).
 3. Issue the certificate (step 4 above), install the vhost, `nginx -t && systemctl reload nginx`.
-4. Update absolute URLs: `public/index.html` (canonical, og:url, og:image, JSON-LD),
-   `public/sitemap.xml`, `public/robots.txt`, `package.json` `homepage`, README links.
+4. Update absolute URLs: `public/index.html` (canonical, hreflang, og:url, og:image, JSON-LD) and
+   `SITE` in `scripts/build-en-page.js`, then `npm run seo:en`; `public/sitemap.xml`, `public/robots.txt`,
+   `public/llms.txt`, `public/.well-known/security.txt`, `package.json` `homepage`, README links.
 5. Optionally keep the sslip.io host as a 301 redirect to the new domain.
 
 ## Local run

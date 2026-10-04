@@ -1,12 +1,13 @@
 <!doctype html>
-<html lang="ru">
+<!-- Generated from public/index.html and public/locales/en.json by scripts/build-en-page.js. Do not edit: run npm run seo:en -->
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Генератор AmneziaWG для Cloudflare WARP — AWG 1.5, 2.0, 3.0 и 3.1</title>
+    <title>AmneziaWG Config Generator for Cloudflare WARP — AWG 1.5, 2.0, 3.0 and 3.1</title>
     <meta
       name="description"
-      content="Создайте WARP-safe .conf для AmneziaWG 1.5, 2.0, 3.0 и 3.1. AWG 3.x использует только клиентские возможности, совместимые со стандартным WireGuard peer Cloudflare."
+      content="Create a WARP-safe .conf for AmneziaWG 1.5, 2.0, 3.0 and 3.1. AWG 3.x uses only client-side features that are compatible with the standard Cloudflare WireGuard peer."
     />
     <meta
       name="robots"
@@ -21,11 +22,11 @@
     <meta name="author" content="HereIamGosu" />
     <meta name="copyright" content="HereIamGosu" />
     <!-- Иконки: ?v= сбрасывает годовой immutable-кэш /static/ при каждом релизе -->
-    <link rel="icon" href="static/favicon.ico?v=2.7.4" sizes="16x16 32x32 48x48" />
-    <link rel="icon" href="static/favicon-32x32.png?v=2.7.4" type="image/png" sizes="32x32" />
-    <link rel="icon" href="static/favicon-16x16.png?v=2.7.4" type="image/png" sizes="16x16" />
-    <link rel="icon" href="static/icon-192.png?v=2.7.4" type="image/png" sizes="192x192" />
-    <link rel="apple-touch-icon" href="static/apple-touch-icon.png?v=2.7.4" sizes="180x180" />
+    <link rel="icon" href="/static/favicon.ico?v=2.7.4" sizes="16x16 32x32 48x48" />
+    <link rel="icon" href="/static/favicon-32x32.png?v=2.7.4" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/static/favicon-16x16.png?v=2.7.4" type="image/png" sizes="16x16" />
+    <link rel="icon" href="/static/icon-192.png?v=2.7.4" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png?v=2.7.4" sizes="180x180" />
     <!-- Press Start 2P: прямой stylesheet (без preload+onload — иначе шрифт может не подгрузиться при CSP / без инлайн-скриптов) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -34,12 +35,12 @@
       href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
     />
     <!-- Подключение CSS -->
-    <link rel="stylesheet" href="static/styles.css?v=2.7.4" />
+    <link rel="stylesheet" href="/static/styles.css?v=2.7.4" />
     <!-- Подключение JavaScript -->
-    <script defer src="static/analytics.js?v=2.7.4"></script>
-    <script defer src="static/result-explanation.js?v=2.7.4"></script>
-    <script defer src="static/live-status.js?v=2.7.4"></script>
-    <script defer src="static/script.js?v=2.7.4"></script>
+    <script defer src="/static/analytics.js?v=2.7.4"></script>
+    <script defer src="/static/result-explanation.js?v=2.7.4"></script>
+    <script defer src="/static/live-status.js?v=2.7.4"></script>
+    <script defer src="/static/script.js?v=2.7.4"></script>
     <!-- Yandex.Metrika counter -->
     <script type="text/javascript">
       (function (m, e, t, r, i, k, a) {
@@ -87,18 +88,18 @@
     <!-- /Yandex.Metrika counter -->
     <!-- Open Graph для социальных сетей -->
     <meta property="og:type" content="website" />
-    <meta property="og:locale" content="ru_RU" />
-    <meta property="og:locale:alternate" content="en_US" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="ru_RU" />
     <meta property="og:site_name" content="AmneziaWG Config Generator" />
     <meta
       property="og:title"
-      content="Генератор конфигов AmneziaWG для Cloudflare WARP"
+      content="AmneziaWG Config Generator for Cloudflare WARP"
     />
     <meta
       property="og:description"
-      content="WARP-safe .conf для AmneziaWG 1.5, 2.0, 3.0 и 3.1; Cloudflare остаётся стандартным WireGuard peer."
+      content="WARP-safe .conf for AmneziaWG 1.5, 2.0, 3.0 and 3.1; Cloudflare stays a standard WireGuard peer."
     />
-    <meta property="og:url" content="https://awgconfig.com/" />
+    <meta property="og:url" content="https://awgconfig.com/en" />
     <meta
       property="og:image"
       content="https://awgconfig.com/static/og-amneziawg-config-generator.png?v=2.7.4"
@@ -108,17 +109,17 @@
     <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="Генератор конфигов AmneziaWG для Cloudflare WARP"
+      content="AmneziaWG Config Generator for Cloudflare WARP"
     />
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta
       name="twitter:title"
-      content="Генератор конфигов AmneziaWG для Cloudflare WARP"
+      content="AmneziaWG Config Generator for Cloudflare WARP"
     />
     <meta
       name="twitter:description"
-      content="Создайте WARP-safe .conf для AWG 1.5, 2.0, 3.0 и 3.1 без ручной правки конфига."
+      content="Create a WARP-safe .conf for AWG 1.5, 2.0, 3.0 and 3.1 without editing the config by hand."
     />
     <meta
       name="twitter:image"
@@ -126,12 +127,12 @@
     />
     <meta
       name="twitter:image:alt"
-      content="Генератор конфигов AmneziaWG для Cloudflare WARP"
+      content="AmneziaWG Config Generator for Cloudflare WARP"
     />
     <!-- Манифест для PWA -->
     <link rel="manifest" href="/site.webmanifest" />
     <!-- Canonical URL и языковые версии (английская генерируется: npm run seo:en) -->
-    <link rel="canonical" href="https://awgconfig.com/" />
+    <link rel="canonical" href="https://awgconfig.com/en" />
     <link rel="alternate" hreflang="ru" href="https://awgconfig.com/" />
     <link rel="alternate" hreflang="en" href="https://awgconfig.com/en" />
     <link rel="alternate" hreflang="x-default" href="https://awgconfig.com/en" />
@@ -155,10 +156,10 @@
           },
           {
             "@type": "WebPage",
-            "@id": "https://awgconfig.com/#webpage",
-            "url": "https://awgconfig.com/",
-            "name": "Генератор AmneziaWG для Cloudflare WARP — AWG 1.5, 2.0, 3.0 и 3.1",
-            "description": "Создайте WARP-safe .conf для AmneziaWG 1.5, 2.0, 3.0 и 3.1. AWG 3.x использует только клиентские возможности, совместимые со стандартным WireGuard peer Cloudflare.",
+            "@id": "https://awgconfig.com/en#webpage",
+            "url": "https://awgconfig.com/en",
+            "name": "AmneziaWG Config Generator for Cloudflare WARP — AWG 1.5, 2.0, 3.0 and 3.1",
+            "description": "Create a WARP-safe .conf for AmneziaWG 1.5, 2.0, 3.0 and 3.1. AWG 3.x uses only client-side features that are compatible with the standard Cloudflare WireGuard peer.",
             "isPartOf": {
               "@id": "https://awgconfig.com/#website"
             },
@@ -166,7 +167,7 @@
               "@id": "https://awgconfig.com/#app"
             },
             "primaryImageOfPage": "https://awgconfig.com/static/og-amneziawg-config-generator.png?v=2.7.4",
-            "inLanguage": "ru-RU"
+            "inLanguage": "en-US"
           },
           {
             "@type": "WebApplication",
@@ -189,7 +190,7 @@
               "en-US"
             ],
             "isAccessibleForFree": true,
-            "description": "Веб-инструмент для генерации WARP-safe .conf-файлов AmneziaWG 1.5, 2.0, 3.0 и 3.1 для стандартного WireGuard peer Cloudflare.",
+            "description": "Web tool that generates WARP-safe AmneziaWG 1.5, 2.0, 3.0 and 3.1 .conf files for the standard Cloudflare WireGuard peer.",
             "offers": {
               "@type": "Offer",
               "price": "0",
@@ -199,16 +200,16 @@
               "@id": "https://github.com/HereIamGosu#person"
             },
             "featureList": [
-              "Генерация .conf для AmneziaWG",
-              "Регистрация устройства Cloudflare WARP",
-              "Режим AWG 1.5 Legacy",
-              "Режим AWG 2.0",
-              "AWG 3.0 с WARP-safe клиентскими возможностями",
-              "AWG 3.1 с WARP-safe клиентскими возможностями",
-              "Пресеты маршрутов AllowedIPs",
-              "Пресеты DNS",
-              "Выбор CPS-пакетов",
-              "Выбор порта WARP endpoint"
+              "AmneziaWG .conf generation",
+              "Cloudflare WARP device registration",
+              "AWG 1.5 Legacy mode",
+              "AWG 2.0 mode",
+              "AWG 3.0 with WARP-safe client features",
+              "AWG 3.1 with WARP-safe client features",
+              "AllowedIPs route presets",
+              "DNS presets",
+              "CPS payload selection",
+              "WARP endpoint port selection"
             ],
             "sameAs": [
               "https://github.com/HereIamGosu/amnezia-config-gen",
@@ -231,7 +232,7 @@
   </head>
   <body>
     <noscript>
-      <p data-i18n="noscript_text">AmneziaWG Config Generator — бесплатный веб-инструмент для генерации .conf-файлов AmneziaWG и Cloudflare WARP. Поддерживает AWG 1.5, 2.0, 3.0 и 3.1; AWG 3.x использует WARP-safe клиентские возможности для стандартного WireGuard peer Cloudflare. Для работы генератора необходим JavaScript.</p>
+      <p data-i18n="noscript_text">AmneziaWG Config Generator is a free web tool that generates AmneziaWG .conf files for Cloudflare WARP. It supports AWG 1.5, 2.0, 3.0 and 3.1; AWG 3.x uses WARP-safe client features for the standard Cloudflare WireGuard peer. The generator requires JavaScript.</p>
     </noscript>
     <script>
       window.va =
@@ -265,12 +266,12 @@
       <!-- Заголовок окна с кнопками управления -->
       <div class="window-header">
         <!-- Заголовок окна -->
-        <h1 class="window-title" data-i18n="window_title">Генератор конфигураций AmneziaWG</h1>
+        <h1 class="window-title" data-i18n="window_title">AmneziaWG Config Generator</h1>
 
         <!-- F-03: Переключатель языка -->
         <div class="lang-switcher" aria-label="Language / Язык">
-          <button class="lang-btn lang-btn--active" data-lang="ru" type="button">RU</button>
-          <button class="lang-btn" data-lang="en" type="button">EN</button>
+          <button class="lang-btn" data-lang="ru" type="button">RU</button>
+          <button class="lang-btn lang-btn--active" data-lang="en" type="button">EN</button>
         </div>
 
         <!-- Панель управления окном (кнопки закрытия и сворачивания) -->
@@ -278,14 +279,14 @@
           <!-- Кнопка закрытия окна -->
           <button
             class="window-button close-button"
-            aria-label="Закрыть"
+            aria-label="Close"
             data-i18n-aria-label="close_btn_aria"
           ></button>
 
           <!-- Кнопка сворачивания окна -->
           <button
             class="window-button minimize-button"
-            aria-label="Свернуть"
+            aria-label="Minimize"
             data-i18n-aria-label="minimize_btn_aria"
           ></button>
         </div>
@@ -300,8 +301,8 @@
             <header>
               <img
                 class="hero-logo"
-                src="static/among-us-imposter.gif"
-                alt="Генератор конфигов AmneziaWG — логотип" data-i18n-alt="logo_alt"
+                src="/static/among-us-imposter.gif"
+                alt="AmneziaWG Config Generator logo" data-i18n-alt="logo_alt"
                 width="498"
                 height="410"
                 fetchpriority="high"
@@ -335,20 +336,20 @@
                   <!-- Legacy slot: кнопка генерации → после успеха заменяется на тройку кнопок -->
                   <div class="gen-slot">
                     <button id="generateButton" class="button" type="button">
-                      <span class="button__text" data-i18n="btn_gen_legacy">Сгенерировать AWG 1.5</span>
+                      <span class="button__text" data-i18n="btn_gen_legacy">Generate AWG 1.5</span>
                     </button>
                     <div id="postGenLegacy" class="post-gen-row" hidden>
                       <button type="button" class="button post-gen-row__download">
-                        <span class="button__text" data-i18n="ready_download_legacy">Скачать AmneziaWarp.conf</span>
+                        <span class="button__text" data-i18n="ready_download_legacy">Download AmneziaWarp.conf</span>
                       </button>
-                      <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию" data-i18n-title="preview_btn_title">
+                      <button type="button" class="button button--icon-sq post-gen-row__preview" title="Preview configuration" data-i18n-title="preview_btn_title">
                         <span aria-hidden="true">&#128065;</span>
                       </button>
-                      <button type="button" class="button button--icon-sq post-gen-row__info" title="Подробнее о конфиге" data-i18n-title="result_info_btn_title" hidden>
+                      <button type="button" class="button button--icon-sq post-gen-row__info" title="Config details" data-i18n-title="result_info_btn_title" hidden>
                         <span aria-hidden="true">&#8505;</span>
                       </button>
-                      <button type="button" class="button button--secondary post-gen-row__copy-vpn-link" title="Скопировать vpn://-ссылку для AmneziaVPN" data-i18n-title="copy_vpn_link_title" hidden>
-                        <span class="button__text" data-i18n="copy_vpn_link">📋 Скопировать vpn://</span>
+                      <button type="button" class="button button--secondary post-gen-row__copy-vpn-link" title="Copy vpn:// link for AmneziaVPN" data-i18n-title="copy_vpn_link_title" hidden>
+                        <span class="button__text" data-i18n="copy_vpn_link">📋 Copy vpn:// link</span>
                       </button>
                     </div>
                   </div>
@@ -357,21 +358,21 @@
                   <div class="gen-slot">
                     <!-- AWG 2.0 disclaimer (2.7.0) вынесен в тултип на кнопке:
                          AWG 2.0 = клиентская конфигурация, а не поддержка на стороне Cloudflare peer. -->
-                    <button id="generateButtonAwg2" class="button" type="button" title="AWG 2.0 здесь означает формат и параметры клиентской конфигурации. Cloudflare WARP peer остаётся стандартным WireGuard peer, поэтому часть параметров для WARP фиксирована намеренно." data-i18n-title="compat_awg2_disclaimer">
-                      <span class="button__text" data-i18n="btn_gen_awg2">Сгенерировать AWG 2.0</span>
+                    <button id="generateButtonAwg2" class="button" type="button" title="AWG 2.0 here means the client-side configuration format and parameters. The Cloudflare WARP peer remains a standard WireGuard peer, so some WARP parameters are intentionally fixed." data-i18n-title="compat_awg2_disclaimer">
+                      <span class="button__text" data-i18n="btn_gen_awg2">Generate AWG 2.0</span>
                     </button>
                     <div id="postGenAwg2" class="post-gen-row" hidden>
                       <button type="button" class="button post-gen-row__download">
-                        <span class="button__text" data-i18n="ready_download_awg2">Скачать AmneziaWarp-AWG2.conf</span>
+                        <span class="button__text" data-i18n="ready_download_awg2">Download AmneziaWarp-AWG2.conf</span>
                       </button>
-                      <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию" data-i18n-title="preview_btn_title">
+                      <button type="button" class="button button--icon-sq post-gen-row__preview" title="Preview configuration" data-i18n-title="preview_btn_title">
                         <span aria-hidden="true">&#128065;</span>
                       </button>
-                      <button type="button" class="button button--icon-sq post-gen-row__info" title="Подробнее о конфиге" data-i18n-title="result_info_btn_title" hidden>
+                      <button type="button" class="button button--icon-sq post-gen-row__info" title="Config details" data-i18n-title="result_info_btn_title" hidden>
                         <span aria-hidden="true">&#8505;</span>
                       </button>
-                      <button type="button" class="button button--secondary post-gen-row__copy-vpn-link" title="Скопировать vpn://-ссылку для AmneziaVPN" data-i18n-title="copy_vpn_link_title" hidden>
-                        <span class="button__text" data-i18n="copy_vpn_link">📋 Скопировать vpn://</span>
+                      <button type="button" class="button button--secondary post-gen-row__copy-vpn-link" title="Copy vpn:// link for AmneziaVPN" data-i18n-title="copy_vpn_link_title" hidden>
+                        <span class="button__text" data-i18n="copy_vpn_link">📋 Copy vpn:// link</span>
                       </button>
                     </div>
                   </div>
@@ -379,20 +380,20 @@
                   <!-- AWG3 slot -->
                   <div class="gen-slot">
                     <button id="generateButtonAwg3" class="button" type="button" title="AWG 3.0 here means the client configuration format and parameters. The Cloudflare WARP peer remains a standard WireGuard peer, so some WARP parameters are intentionally fixed." data-i18n-title="compat_awg3_disclaimer">
-                      <span class="button__text" data-i18n="btn_gen_awg3">Сгенерировать AWG 3.0</span>
+                      <span class="button__text" data-i18n="btn_gen_awg3">Generate AWG 3.0</span>
                     </button>
                     <div id="postGenAwg3" class="post-gen-row" hidden>
                       <button type="button" class="button post-gen-row__download">
-                        <span class="button__text" data-i18n="ready_download_awg3">Скачать AmneziaWarp-AWG3.0.conf</span>
+                        <span class="button__text" data-i18n="ready_download_awg3">Download AmneziaWarp-AWG3.0.conf</span>
                       </button>
-                      <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию" data-i18n-title="preview_btn_title">
+                      <button type="button" class="button button--icon-sq post-gen-row__preview" title="Preview configuration" data-i18n-title="preview_btn_title">
                         <span aria-hidden="true">&#128065;</span>
                       </button>
-                      <button type="button" class="button button--icon-sq post-gen-row__info" title="Подробнее о конфиге" data-i18n-title="result_info_btn_title" hidden>
+                      <button type="button" class="button button--icon-sq post-gen-row__info" title="Config details" data-i18n-title="result_info_btn_title" hidden>
                         <span aria-hidden="true">&#8505;</span>
                       </button>
-                      <button type="button" class="button button--secondary post-gen-row__copy-vpn-link" title="Скопировать vpn://-ссылку для AmneziaVPN" data-i18n-title="copy_vpn_link_title" hidden>
-                        <span class="button__text" data-i18n="copy_vpn_link">📋 Скопировать vpn://</span>
+                      <button type="button" class="button button--secondary post-gen-row__copy-vpn-link" title="Copy vpn:// link for AmneziaVPN" data-i18n-title="copy_vpn_link_title" hidden>
+                        <span class="button__text" data-i18n="copy_vpn_link">📋 Copy vpn:// link</span>
                       </button>
                     </div>
                   </div>
@@ -400,27 +401,25 @@
                   <!-- AWG3.1 slot -->
                   <div class="gen-slot">
                     <button id="generateButtonAwg31" class="button" type="button" title="AWG 3.1 here means the client configuration format and parameters. The Cloudflare WARP peer remains a standard WireGuard peer, so some WARP parameters are intentionally fixed." data-i18n-title="compat_awg31_disclaimer">
-                      <span class="button__text" data-i18n="btn_gen_awg31">Сгенерировать AWG 3.1</span>
+                      <span class="button__text" data-i18n="btn_gen_awg31">Generate AWG 3.1</span>
                     </button>
                     <div id="postGenAwg31" class="post-gen-row" hidden>
                       <button type="button" class="button post-gen-row__download">
-                        <span class="button__text" data-i18n="ready_download_awg31">Скачать AmneziaWarp-AWG3.1.conf</span>
+                        <span class="button__text" data-i18n="ready_download_awg31">Download AmneziaWarp-AWG3.1.conf</span>
                       </button>
-                      <button type="button" class="button button--icon-sq post-gen-row__preview" title="Просмотреть конфигурацию" data-i18n-title="preview_btn_title">
+                      <button type="button" class="button button--icon-sq post-gen-row__preview" title="Preview configuration" data-i18n-title="preview_btn_title">
                         <span aria-hidden="true">&#128065;</span>
                       </button>
-                      <button type="button" class="button button--icon-sq post-gen-row__info" title="Подробнее о конфиге" data-i18n-title="result_info_btn_title" hidden>
+                      <button type="button" class="button button--icon-sq post-gen-row__info" title="Config details" data-i18n-title="result_info_btn_title" hidden>
                         <span aria-hidden="true">&#8505;</span>
                       </button>
-                      <button type="button" class="button button--secondary post-gen-row__copy-vpn-link" title="Скопировать vpn://-ссылку для AmneziaVPN" data-i18n-title="copy_vpn_link_title" hidden>
-                        <span class="button__text" data-i18n="copy_vpn_link">📋 Скопировать vpn://</span>
+                      <button type="button" class="button button--secondary post-gen-row__copy-vpn-link" title="Copy vpn:// link for AmneziaVPN" data-i18n-title="copy_vpn_link_title" hidden>
+                        <span class="button__text" data-i18n="copy_vpn_link">📋 Copy vpn:// link</span>
                       </button>
                     </div>
                   </div>
 
-                  <p class="awg3-warp-safe-note" data-i18n="awg3_warp_safe_help">
-                    ℹ Cloudflare остаётся стандартным WireGuard peer. Генератор включает только AWG 3.x параметры, которые не требуют поддержки со стороны Cloudflare.
-                  </p>
+                  <p class="awg3-warp-safe-note" data-i18n="awg3_warp_safe_help">ℹ Cloudflare remains a standard WireGuard peer. The generator enables only AWG 3.x parameters that do not require Cloudflare-side support.</p>
 
                 </div>
                 <button
@@ -429,58 +428,54 @@
                   class="settings-toggle"
                   aria-expanded="false"
                   aria-controls="settingsModal"
-                  title="Настройки конфигурации"
+                  title="Config settings"
                   data-i18n-title="settings_toggle_title"
                 >
                   ⚙
                 </button>
               </div>
 
-              <button type="button" id="infoLink" class="info-link" data-i18n="btn_info">
-                Дополнительная информация
-              </button>
+              <button type="button" id="infoLink" class="info-link" data-i18n="btn_info">Additional Info</button>
 
               <button
                 type="button"
                 id="historyModalBtn"
                 class="button button--history-open"
-                aria-label="История генераций"
+                aria-label="Generation history"
                 data-i18n-aria-label="history_btn_aria"
                 hidden
               >
-                <span class="button__text" data-i18n="btn_history">🕐 История</span>
+                <span class="button__text" data-i18n="btn_history">🕐 History</span>
                 <span id="historyCount" class="history-count-badge"></span>
               </button>
             </div>
 
             <!-- CTA: Telegram-канал — появляется после первой генерации -->
             <div id="tgChannelCta" class="tg-channel-cta" hidden>
-              <p class="tg-channel-cta__text" data-i18n-html="tg_cta_text">
-                Если хотите понимать, почему один и тот же .conf может работать по-разному в LTE, Wi-Fi, на телефоне, Windows или роутере, — в Telegram-канале <strong>Amnezia Config</strong> выходят разборы по AmneziaWG, AllowedIPs, endpoint, DNS, UDP, mobile profile и обновлениям генератора.
-              </p>
+              <p class="tg-channel-cta__text" data-i18n-html="tg_cta_text">If you want to understand why the same .conf may behave differently on LTE, Wi-Fi, a phone, Windows, or a router — the <strong>Amnezia Config</strong> Telegram channel publishes breakdowns on AmneziaWG, AllowedIPs, endpoint, DNS, UDP, mobile profile, and generator updates.</p>
               <a
                 href="#"
                 class="button tg-channel-cta__btn"
                 target="_blank"
                 rel="noopener noreferrer"
                 data-i18n="tg_cta_btn"
-              >Подписаться на канал</a>
+              >Subscribe to the channel</a>
             </div>
 
             <!-- Карточка совместимости — заполняется после генерации (2.7.0) -->
             <section id="compatibilityCard" class="compat-card" aria-live="polite" hidden>
-              <h2 class="compat-card__title" data-i18n="compat_title">Совместимость</h2>
+              <h2 class="compat-card__title" data-i18n="compat_title">Compatibility</h2>
               <div id="compatFormat" class="compat-card__format"></div>
               <div id="compatRecommended" class="compat-card__group" hidden>
-                <h3 class="compat-card__group-title" data-i18n="compat_recommended">Подходит для импорта</h3>
+                <h3 class="compat-card__group-title" data-i18n="compat_recommended">Recommended for import</h3>
                 <ul id="compatRecommendedList" class="compat-card__list"></ul>
               </div>
               <div id="compatExperimental" class="compat-card__group" hidden>
-                <h3 class="compat-card__group-title" data-i18n="compat_experimental">Можно попробовать</h3>
+                <h3 class="compat-card__group-title" data-i18n="compat_experimental">Can be tried</h3>
                 <ul id="compatExperimentalList" class="compat-card__list"></ul>
               </div>
               <div id="compatNotRecommended" class="compat-card__group" hidden>
-                <h3 class="compat-card__group-title" data-i18n="compat_not_recommended">Не подходит напрямую</h3>
+                <h3 class="compat-card__group-title" data-i18n="compat_not_recommended">Not directly supported</h3>
                 <ul id="compatNotRecommendedList" class="compat-card__list"></ul>
               </div>
               <div id="compatWarnings" class="compat-card__warnings" hidden></div>
@@ -493,72 +488,35 @@
             <div class="right-section__intro">
               <!-- Сообщение о конфигурации -->
               <div class="info-message">
-                <p data-i18n-html="info_message_p1">
-                  Конфигурацию можно сгенерировать для любых устройств. По
-                  умолчанию весь трафик идёт через туннель. Пресеты маршрутов и
-                  DNS можно задать в модальном окне по кнопке
-                  <strong>⚙</strong> рядом с кнопками генерации.
-                </p>
+                <p data-i18n-html="info_message_p1">Config can be generated for any device. By default, all traffic goes through the tunnel. Route and DNS presets can be configured in the modal window via the <strong>⚙</strong> button next to the generate buttons.</p>
               </div>
 
               <!-- Onboarding «Что это?» — компактный коллапсируемый вводный блок (2.7.0) -->
               <details id="onboardingBlock" class="onboarding">
-                <summary class="onboarding__summary" data-i18n="onboarding_title">Что это?</summary>
+                <summary class="onboarding__summary" data-i18n="onboarding_title">What is this?</summary>
                 <div class="onboarding__body">
-                  <p data-i18n="onboarding_body">Генератор создаёт готовый AmneziaWG/WARP-профиль для импорта в VPN-клиент. Можно скачать .conf или скопировать vpn://, если клиент поддерживает быстрый импорт. Полный туннель направляет весь поддерживаемый трафик через WARP, выборочная маршрутизация — только выбранные направления. Работоспособность зависит от клиента, сети, endpoint, DNS и маршрутов.</p>
-                  <p class="onboarding__note" data-i18n="onboarding_no_guarantee">Генератор снижает количество ручной настройки, но не гарантирует работу в любой сети и любом клиенте.</p>
+                  <p data-i18n="onboarding_body">The generator creates a ready AmneziaWG/WARP profile for import into a VPN client. You can download a .conf file or copy vpn:// if your client supports quick import. Full tunnel routes all supported traffic through WARP, while split tunnel routes only selected destinations. Connectivity depends on the client, network, endpoint, DNS, and routes.</p>
+                  <p class="onboarding__note" data-i18n="onboarding_no_guarantee">The generator reduces manual configuration, but it does not guarantee connectivity in every network or client.</p>
                 </div>
               </details>
             </div>
 
             <!-- Инструкция по установке и настройке -->
             <aside class="instruction">
-              <h2 data-i18n="instruction_title">Инструкция по установке и настройке</h2>
+              <h2 data-i18n="instruction_title">Installation &amp; Setup Guide</h2>
               <ol>
                 <!-- Шаг 1: Скачивание и установка -->
-                <li data-i18n-html="instruction_step1">
-                  <strong>Скачивание и установка AmneziaWG:</strong><br />
-                  Перейдите по
-                  <a
-                    href="https://github.com/amnezia-vpn/amneziawg-windows-client/releases/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    ссылке для скачивания
-                  </a>
-                  и загрузите установочный файл для Windows. Установите по
-                  стандартному пути "C:\Program Files\...".
-                </li>
+                <li data-i18n-html="instruction_step1"><strong>Download and install AmneziaWG:</strong><br />Follow the <a href="https://github.com/amnezia-vpn/amneziawg-windows-client/releases/" target="_blank" rel="noopener noreferrer">download link</a> and get the installer for Windows. Install to the default path "C:\Program Files\...".</li>
 
                 <!-- Шаг 2: Генерация конфигурационного файла -->
-                <li data-i18n-html="instruction_step2">
-                  <strong>Генерация конфигурационного файла:</strong><br />
-                  Выберите AWG 1.5, 2.0, 3.0 или 3.1 по поддержке клиента,
-                  скачайте конфигурацию и импортируйте файл <code>.conf</code>
-                  в AmneziaWG или совместимый клиент.
-                </li>
+                <li data-i18n-html="instruction_step2"><strong>Generate and import the config file:</strong><br />Choose AWG 1.5, 2.0, 3.0, or 3.1 according to client support. AWG 3.x uses a WARP-safe client profile; AWG 3.1 is recommended with AmneziaVPN 5.0.1.5+ or a compatible client. Download the configuration and import the <code>.conf</code> file into the client.</li>
               </ol>
-              <p data-i18n-html="instruction_conclusion">
-                После импорта включите туннель в клиенте. Дальнейшее
-                восстановление его состояния при запуске Windows выполняет сам
-                клиент.
-              </p>
+              <p data-i18n-html="instruction_conclusion">After importing, enable the tunnel in the client. The client restores its state when Windows starts.</p>
             </aside>
 
-            <section class="thank-you" aria-label="Сообщение автора" data-i18n-aria-label="thank_you_aria">
+            <section class="thank-you" aria-label="Message from the author" data-i18n-aria-label="thank_you_aria">
               <div class="thank-you-content">
-                <p data-i18n-html="thank_you_text">
-                  Чуваки, а особенно сетевики, я очень рад, что моя поделка
-                  пользуется спросом. Я часто не понимаю, работает ли это; мир
-                  слишком переменчив. Всегда буду рад дружбе с вами, приходите в
-                  гости -
-                  <a
-                    href="https://t.me/amnezia_config"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    >Telegram-канал</a
-                  >.
-                </p>
+                <p data-i18n-html="thank_you_text">Guys, and especially network engineers, I'm really glad my little tool is getting some use. I often don't know if it still works; the world changes too fast. Always happy to make friends — come visit: <a href="https://t.me/amnezia_config" target="_blank" rel="noopener noreferrer">Telegram channel</a>.</p>
               </div>
             </section>
 
@@ -575,13 +533,13 @@
                       class="discord-link"
                     >
                       <img
-                        src="static/discord-icon.png"
+                        src="/static/discord-icon.png"
                         alt="Discord"
                         class="discord-icon"
                         width="32"
                         height="32"
                       />
-                      <span data-i18n="discord_link_text">Присоединиться к серверу</span>
+                      <span data-i18n="discord_link_text">Join the server</span>
                     </a>
                     <a
                       href="https://t.me/amnezia_config"
@@ -591,13 +549,13 @@
                       class="web-link"
                     >
                       <img
-                        src="static/globe-icon.png"
+                        src="/static/globe-icon.png"
                         alt="Globe"
                         class="globe-icon"
                         width="32"
                         height="32"
                       />
-                      <span data-i18n="web_link_text">Telegram-канал</span>
+                      <span data-i18n="web_link_text">Telegram channel</span>
                     </a>
                   </div>
                   <!-- F-07: кнопка статуса открывает модальное окно -->
@@ -606,7 +564,7 @@
                     id="statusModalBtn"
                     class="status-modal-btn"
                     data-i18n="status_link"
-                  >📡 Статус сервисов</button>
+                  >📡 Service Status</button>
                 </div>
 
                 <div class="donate-section">
@@ -616,15 +574,13 @@
                       target="_blank"
                       rel="noopener noreferrer"
                       class="donate-link"
-                      aria-label="Поддержать проект через CloudTips"
+                      aria-label="Support the project via CloudTips"
                       data-i18n-aria-label="donate_aria"
                     >
                       <span class="donate-link__icon" aria-hidden="true">₽</span>
-                      <span class="donate-link__text" data-i18n="donate_button">Поддержать проект</span>
+                      <span class="donate-link__text" data-i18n="donate_button">Support the project</span>
                     </a>
-                    <div class="donate-text" data-i18n-html="donate_text">
-                      Поддержите автора <br />и выразите благодарность
-                    </div>
+                    <div class="donate-text" data-i18n-html="donate_text">Support the author <br/>and show appreciation</div>
                   </div>
                 </div>
               </div>
@@ -638,15 +594,15 @@
     <div id="configPreviewModal" class="modal" role="dialog" aria-modal="true"
          aria-labelledby="previewModalHeading" aria-hidden="true">
       <div class="modal-content modal-content--preview">
-        <h2 id="previewModalHeading" class="modal-heading" data-i18n="config_preview_title">Предпросмотр конфигурации</h2>
+        <h2 id="previewModalHeading" class="modal-heading" data-i18n="config_preview_title">Config Preview</h2>
         <textarea
           id="configPreviewTextModal"
           class="config-preview-textarea"
           readonly
-          aria-label="Текст конфигурации"
+          aria-label="Configuration text"
           data-i18n-aria-label="config_preview_textarea_aria"
         ></textarea>
-        <button type="button" id="copyConfigBtnModal" class="button button--sm" data-i18n="btn_copy">Копировать</button>
+        <button type="button" id="copyConfigBtnModal" class="button button--sm" data-i18n="btn_copy">Copy</button>
       </div>
     </div>
 
@@ -655,28 +611,18 @@
          aria-labelledby="resultInfoModalHeading" aria-hidden="true">
       <div class="modal-content modal-content--result-info">
         <div class="result-info-modal__header">
-          <h2 id="resultInfoModalHeading" class="modal-heading" data-i18n="result_summary_title">Как собран конфиг</h2>
-          <button type="button" class="modal-close-btn" id="resultInfoModalClose" aria-label="Закрыть" data-i18n-aria-label="close_btn_aria">×</button>
+          <h2 id="resultInfoModalHeading" class="modal-heading" data-i18n="result_summary_title">How this config was built</h2>
+          <button type="button" class="modal-close-btn" id="resultInfoModalClose" aria-label="Close" data-i18n-aria-label="close_btn_aria">×</button>
         </div>
         <dl id="resultSummaryFields" class="result-summary-card__fields"></dl>
         <div id="resultRiskLabels" class="result-risk-list" aria-live="polite"></div>
         <aside class="diagnostics-card">
-          <h2 class="diagnostics-card__title" data-i18n="diagnostics_title">
-            Что проверить, если не работает
-          </h2>
+          <h2 class="diagnostics-card__title" data-i18n="diagnostics_title">What to check if it does not work</h2>
           <ul class="diagnostics-card__list">
-            <li data-i18n="diagnostics_no_handshake">
-              Если не подключается: проверьте endpoint, порт, доступность UDP, режим AWG и версию клиента.
-            </li>
-            <li data-i18n="diagnostics_connected_no_sites">
-              Если подключается, но сайты не открываются: проверьте DNS, AllowedIPs, IPv6 и MTU.
-            </li>
-            <li data-i18n="diagnostics_wifi_vs_mobile">
-              Если работает в Wi-Fi, но не работает в мобильной сети: попробуйте другой порт, hostname вместо IP или другой endpoint-режим.
-            </li>
-            <li data-i18n="diagnostics_import_failed">
-              Если импорт не проходит: проверьте режим AWG, версию parser клиента, формат и способ импорта. vpn:// для AWG 3.0 намеренно недоступен.
-            </li>
+            <li data-i18n="diagnostics_no_handshake">If it does not connect: check endpoint, port, UDP availability, AWG mode, and client version.</li>
+            <li data-i18n="diagnostics_connected_no_sites">If it connects but websites do not open: check DNS, AllowedIPs, IPv6, and MTU.</li>
+            <li data-i18n="diagnostics_wifi_vs_mobile">If it works on Wi-Fi but not on mobile network: try another port, hostname instead of IP, or another endpoint mode.</li>
+            <li data-i18n="diagnostics_import_failed">If import fails: check the AWG mode, client parser version, profile format, and import method. AWG 3.0 vpn:// is intentionally unavailable.</li>
           </ul>
           <a
             class="diagnostics-card__link"
@@ -684,7 +630,7 @@
             target="_blank"
             rel="noopener noreferrer"
             data-i18n="diagnostics_open_troubleshooting"
-          >Открыть диагностику</a>
+          >Open troubleshooting</a>
         </aside>
       </div>
     </div>
@@ -693,7 +639,7 @@
     <div id="statusModal" class="modal" role="dialog" aria-modal="true"
          aria-labelledby="statusModalHeading" aria-hidden="true">
       <div class="modal-content modal-content--status">
-        <h2 id="statusModalHeading" class="modal-heading" data-i18n="status_modal_heading">📡 Статус сервисов</h2>
+        <h2 id="statusModalHeading" class="modal-heading" data-i18n="status_modal_heading">📡 Service Status</h2>
         <div id="statusModalContent" class="status-loading-msg">Загрузка...</div>
         <div id="statusModalLastChecked" class="status-last-checked" hidden></div>
       </div>
@@ -704,15 +650,15 @@
          aria-labelledby="historyModalHeading" aria-hidden="true">
       <div class="modal-content history-modal__dialog">
         <div class="history-modal__titlebar">
-          <h2 id="historyModalHeading" class="history-modal__title" data-i18n="history_modal_title">🕐 История генераций</h2>
-          <button type="button" class="history-modal__close" id="historyModalClose" aria-label="Закрыть" data-i18n-aria-label="close_btn_aria">×</button>
+          <h2 id="historyModalHeading" class="history-modal__title" data-i18n="history_modal_title">🕐 Generation History</h2>
+          <button type="button" class="history-modal__close" id="historyModalClose" aria-label="Close" data-i18n-aria-label="close_btn_aria">×</button>
         </div>
         <div class="history-modal__body">
-          <div id="historyEmptyMsg" class="history-empty-msg" data-i18n="history_empty">Нет сохранённых генераций</div>
+          <div id="historyEmptyMsg" class="history-empty-msg" data-i18n="history_empty">No saved generations</div>
           <div id="historyList" class="history-list"></div>
         </div>
         <div class="history-modal__footer">
-          <button type="button" id="historyClearBtn" class="button button--sm button--danger" data-i18n="history_clear_all">Очистить историю</button>
+          <button type="button" id="historyClearBtn" class="button button--sm button--danger" data-i18n="history_clear_all">Clear history</button>
         </div>
       </div>
     </div>
@@ -727,53 +673,28 @@
       aria-hidden="true"
     >
       <div class="modal-content modal-content--info">
-        <h2 id="modalHeading" class="modal-heading" data-i18n="info_modal_heading">
-          Дополнительная информация
-        </h2>
+        <h2 id="modalHeading" class="modal-heading" data-i18n="info_modal_heading">Additional Information</h2>
 
         <!-- Секция 1: AllowedIPs и маршруты -->
         <div class="info-section">
-          <h3 class="info-section__title" data-i18n="info_s1_title">&#x1F310; Маршруты и AllowedIPs</h3>
-          <p data-i18n-html="info_s1_p1">
-            По умолчанию весь трафик идёт через туннель (<strong
-              >AllowedIPs = 0.0.0.0/0, ::/0</strong
-            >). В настройках (кнопка ⚙) можно выбрать DNS-сервер и пресеты —
-            тогда через туннель пойдут только нужные IPv4-подсети. IPv6 можно
-            включить опционально, но это увеличивает число маршрутов в 2–3 раза
-            и может вызывать сбои на роутерах и мобильных клиентах. Безопасный
-            лимит — <strong>1000 IPv4 CIDR</strong>.
-          </p>
-          <p data-i18n-html="info_s1_p2">
-            IP-диапазоны можно заменить вручную. Актуальные списки — на
-            <a
-              href="https://iplist.opencck.org/ru"
-              target="_blank"
-              rel="noopener noreferrer"
-              >opencck.org</a
-            >
-            и
-            <a
-              href="https://rockblack.pro/vpn/dopolnitelno/diapazon-ip-adresov"
-              target="_blank"
-              rel="noopener noreferrer"
-              >rockblack.pro</a
-            >.
-          </p>
+          <h3 class="info-section__title" data-i18n="info_s1_title">🌐 Routes and AllowedIPs</h3>
+          <p data-i18n-html="info_s1_p1">By default, all traffic goes through the tunnel (<strong>AllowedIPs = 0.0.0.0/0, ::/0</strong>). In settings (⚙ button) you can choose a DNS server and presets — only the required IPv4 subnets will be routed through the tunnel. IPv6 can be enabled optionally, but it increases the route count 2–3× and may cause issues on routers and mobile clients. Safe limit — <strong>1000 IPv4 CIDR</strong>.</p>
+          <p data-i18n-html="info_s1_p2">IP ranges can be replaced manually. Up-to-date lists at <a href="https://iplist.opencck.org/ru" target="_blank" rel="noopener noreferrer">opencck.org</a> and <a href="https://rockblack.pro/vpn/dopolnitelno/diapazon-ip-adresov" target="_blank" rel="noopener noreferrer">rockblack.pro</a>.</p>
         </div>
 
         <!-- Секция 2: версии AWG и Cloudflare WARP -->
         <div class="info-section">
-          <h3 class="info-section__title" data-i18n="info_s2_title">&#x2139; Версии AWG и Cloudflare WARP</h3>
+          <h3 class="info-section__title" data-i18n="info_s2_title">ℹ AWG versions and Cloudflare WARP</h3>
           <div class="info-compare">
             <div class="info-compare__col">
               <div class="info-compare__label info-compare__label--legacy">
                 AWG 1.5 (Legacy)
               </div>
               <ul class="info-list">
-                <li data-i18n="info_legacy_li1">Статические параметры обфускации (Jc, S1–S4, H1–H4)</li>
-                <li data-i18n="info_legacy_li2">Маскирует только начало соединения</li>
-                <li data-i18n="info_legacy_li3">Работает с Cloudflare WARP без сервера</li>
-                <li data-i18n="info_legacy_li4">Совместим со старыми клиентами</li>
+                <li data-i18n="info_legacy_li1">Static obfuscation parameters (Jc, S1–S4, H1–H4)</li>
+                <li data-i18n="info_legacy_li2">Masks only the start of the connection</li>
+                <li data-i18n="info_legacy_li3">Works with Cloudflare WARP without a server</li>
+                <li data-i18n="info_legacy_li4">Compatible with older clients</li>
               </ul>
             </div>
             <div class="info-compare__col">
@@ -781,12 +702,10 @@
                 AWG 2.0
               </div>
               <ul class="info-list">
-                <li data-i18n="info_awg2_li1">
-                  Динамические заголовки + случайный padding во всех пакетах
-                </li>
-                <li data-i18n="info_awg2_li2">Имитирует QUIC/DNS на протяжении всей сессии</li>
-                <li data-i18n="info_awg2_li3">Сложнее для эвристического DPI-анализа</li>
-                <li data-i18n="info_awg2_li4">Требует клиент ≥ 4.8.12.9 (Amnezia)</li>
+                <li data-i18n="info_awg2_li1">Dynamic headers + random padding in all packets</li>
+                <li data-i18n="info_awg2_li2">Mimics QUIC/DNS throughout the entire session</li>
+                <li data-i18n="info_awg2_li3">Harder to detect with heuristic DPI analysis</li>
+                <li data-i18n="info_awg2_li4">Requires client ≥ 4.8.12.9 (Amnezia)</li>
               </ul>
             </div>
           </div>
@@ -794,27 +713,9 @@
 
         <!-- Секция 3: Нужен ли сервер для AWG 2.0 -->
         <div class="info-section">
-          <h3 class="info-section__title" data-i18n="info_s3_title">
-            &#x26A0; Нужен ли сервер для AWG 2.0?
-          </h3>
-          <p data-i18n-html="info_s3_p1">
-            <strong>Для Cloudflare WARP — нет.</strong> Конфиги этого генератора
-            работают с публичным сервером Cloudflare без каких-либо настроек на
-            стороне сервера.
-          </p>
-          <p data-i18n-html="info_s3_p2">
-            <strong>Для своего сервера — да.</strong> Самостоятельный AWG 2.0
-            требует обновлённого ядра/модуля
-            <code>amneziawg-linux-kernel-module</code> на сервере и новых
-            конфигов клиентов (старые конфиги AWG 1.5 становятся несовместимы).
-            Подробнее — в
-            <a
-              href="https://docs.amnezia.org/documentation/instructions/new-amneziawg-selfhosted/"
-              target="_blank"
-              rel="noopener noreferrer"
-              >официальной документации</a
-            >.
-          </p>
+          <h3 class="info-section__title" data-i18n="info_s3_title">⚠ Is a server required for AWG 2.0?</h3>
+          <p data-i18n-html="info_s3_p1"><strong>For Cloudflare WARP — no.</strong> Configs from this generator work with Cloudflare's public server without any server-side configuration.</p>
+          <p data-i18n-html="info_s3_p2"><strong>For your own server — yes.</strong> Self-hosted AWG 2.0 requires an updated kernel/module <code>amneziawg-linux-kernel-module</code> on the server and new client configs (old AWG 1.5 configs become incompatible). See the <a href="https://docs.amnezia.org/documentation/instructions/new-amneziawg-selfhosted/" target="_blank" rel="noopener noreferrer">official documentation</a> for details.</p>
         </div>
       </div>
     </div>
@@ -829,22 +730,20 @@
     >
       <div class="modal-content settings-modal__dialog">
         <div class="settings-modal__titlebar">
-          <h2 id="settingsModalTitle" class="settings-modal__title" data-i18n="settings_modal_title">
-            Настройки конфигурации
-          </h2>
+          <h2 id="settingsModalTitle" class="settings-modal__title" data-i18n="settings_modal_title">Config Settings</h2>
           <button
             type="button"
             class="settings-modal__reset"
             id="settingsModalReset"
             data-i18n="settings_reset_btn"
-            title="Сбросить все настройки к значениям по умолчанию"
+            title="Reset all settings to defaults"
             data-i18n-title="settings_reset_title"
-          >↺ Сброс</button>
+          >↺ Reset</button>
           <button
             type="button"
             class="settings-modal__close"
             id="settingsModalClose"
-            aria-label="Закрыть"
+            aria-label="Close"
             data-i18n-aria-label="settings_close_aria"
           >
             ×
@@ -862,9 +761,9 @@
 
             <!-- Tab bar -->
             <div class="tabs-win95__bar" role="tablist">
-              <label for="tab-routes" class="tabs-win95__tab" role="tab" data-i18n="tab_routes">📋 Маршруты</label>
+              <label for="tab-routes" class="tabs-win95__tab" role="tab" data-i18n="tab_routes">📋 Routes</label>
               <label for="tab-dnscps" class="tabs-win95__tab" role="tab" data-i18n="tab_dnscps">🔒 DNS &amp; CPS</label>
-              <label for="tab-extra"  class="tabs-win95__tab" role="tab" data-i18n="tab_extra">⚙ Дополнительно</label>
+              <label for="tab-extra"  class="tabs-win95__tab" role="tab" data-i18n="tab_extra">⚙ Advanced</label>
             </div>
 
             <!-- Tab content wrapper -->
@@ -875,75 +774,73 @@
                 <!-- Route Mode Toggle (2.6.0) -->
                 <div class="route-mode-block">
                   <div class="route-mode-toggle" role="group" aria-labelledby="routeModeLabel">
-                    <span id="routeModeLabel" class="route-mode-toggle__label" data-i18n="routing_mode_title">Маршрутизация</span>
+                    <span id="routeModeLabel" class="route-mode-toggle__label" data-i18n="routing_mode_title">Routing</span>
                     <div class="route-mode-toggle__buttons">
                       <button type="button" class="route-mode-btn route-mode-btn--active"
-                              id="routeModeFull" data-i18n="routing_mode_full">Полный туннель</button>
+                              id="routeModeFull" data-i18n="routing_mode_full">Full tunnel</button>
                       <button type="button" class="route-mode-btn"
-                              id="routeModeSplit" data-i18n="routing_mode_split">Выборочная</button>
+                              id="routeModeSplit" data-i18n="routing_mode_split">Split tunnel</button>
                     </div>
                   </div>
                   <p id="routeModeDescription" class="route-mode-description" aria-live="polite"></p>
                   <p id="presetsIgnoredNotice" class="route-mode-notice route-mode-notice--info" hidden
-                     data-i18n="routing_presets_ignored_in_full">
-                    Вы выбрали полный туннель. Presets не будут ограничивать маршруты в этом режиме.
-                  </p>
+                     data-i18n="routing_presets_ignored_in_full">Full tunnel is selected. Presets will not limit routes in this mode.</p>
                 </div>
                 <!-- AllowedIPs explanation (2.6.0) -->
                 <div id="allowedIpsExplanation" class="allowed-ips-explanation" aria-live="polite"></div>
                 <div class="cfg-tiles-actions">
-                  <button type="button" class="cfg-tiles-action" id="presetRfPopular" data-i18n="preset_btn_popular">Основной набор</button>
-                  <button type="button" class="cfg-tiles-action" id="presetClear" data-i18n="preset_btn_clear">Снять всё</button>
+                  <button type="button" class="cfg-tiles-action" id="presetRfPopular" data-i18n="preset_btn_popular">Popular Presets</button>
+                  <button type="button" class="cfg-tiles-action" id="presetClear" data-i18n="preset_btn_clear">Clear All</button>
                 </div>
                 <div id="cidrCounterMini" class="cidr-counter-mini" aria-live="polite"></div>
                 <p id="presetStats" class="preset-stats" aria-live="polite"></p>
-                <h3 class="settings-modal__subsection" data-i18n="section_social">Социальные сети и мессенджеры</h3>
+                <h3 class="settings-modal__subsection" data-i18n="section_social">Social Networks &amp; Messengers</h3>
                 <div id="routeTilesSocial" class="cfg-tiles cfg-tiles--routes"></div>
-                <h3 class="settings-modal__subsection" data-i18n="section_gaming">Игровые платформы</h3>
+                <h3 class="settings-modal__subsection" data-i18n="section_gaming">Gaming Platforms</h3>
                 <div id="routeTilesGaming" class="cfg-tiles cfg-tiles--routes"></div>
-                <h3 class="settings-modal__subsection" data-i18n="section_torrent">Торрент-трекеры</h3>
+                <h3 class="settings-modal__subsection" data-i18n="section_torrent">Torrent Trackers</h3>
                 <div id="routeTilesTorrent" class="cfg-tiles cfg-tiles--routes"></div>
-                <h3 class="settings-modal__subsection" data-i18n="section_more">Дополнительно</h3>
+                <h3 class="settings-modal__subsection" data-i18n="section_more">More</h3>
                 <div id="routeTilesMore" class="cfg-tiles cfg-tiles--routes"></div>
               </div>
 
               <!-- ── Tab 2: DNS & CPS ── -->
               <div class="tab-panel" id="panel-dnscps" role="tabpanel">
-                <h3 class="settings-modal__subsection" style="margin-top:0" data-i18n="dns_legend">DNS-сервер</h3>
+                <h3 class="settings-modal__subsection" style="margin-top:0" data-i18n="dns_legend">DNS Server</h3>
                 <div id="dnsTiles" class="cfg-tiles"></div>
 
-                <h3 class="settings-modal__subsection" data-i18n="cps_section_title">CPS-протокол (I1)</h3>
-                <p class="settings-panel__hint" data-i18n="cps_section_hint">Auto выбирает только стабильные режимы. Экспериментальные режимы доступны только явно.</p>
+                <h3 class="settings-modal__subsection" data-i18n="cps_section_title">CPS Protocol (I1)</h3>
+                <p class="settings-panel__hint" data-i18n="cps_section_hint">Auto picks only stable modes. Experimental modes require an explicit choice.</p>
                 <div class="cps-radio-group">
-                  <label class="cps-radio-tile cps-radio-tile--recommended" title="Случайный стабильный протокол при каждой генерации" data-i18n-title="cps_auto_title">
+                  <label class="cps-radio-tile cps-radio-tile--recommended" title="Random stable protocol on each generation" data-i18n-title="cps_auto_title">
                     <input type="radio" name="cpsProtocol" value="auto" checked />
                     <span class="cps-radio-tile__name" data-i18n="cps_auto">Auto</span>
                     <span class="cps-radio-tile__badge">★</span>
                   </label>
-                  <label class="cps-radio-tile" title="Защищённый CPS в форме QUIC v1 Initial (экспериментальный)" data-i18n-title="cps_quic_title">
+                  <label class="cps-radio-tile" title="Protected QUIC v1 Initial-shaped CPS (experimental)" data-i18n-title="cps_quic_title">
                     <input type="radio" name="cpsProtocol" value="quic" />
                     <span class="cps-radio-tile__name">QUIC</span>
-                    <span class="cps-radio-tile__badge" data-i18n="cps_experimental">эксп.</span>
+                    <span class="cps-radio-tile__badge" data-i18n="cps_experimental">exp.</span>
                   </label>
-                  <label class="cps-radio-tile" title="CPS в форме DNS response (экспериментальный)" data-i18n-title="cps_dns_title">
+                  <label class="cps-radio-tile" title="DNS response-shaped CPS with runtime Transaction ID (experimental)" data-i18n-title="cps_dns_title">
                     <input type="radio" name="cpsProtocol" value="dns" />
                     <span class="cps-radio-tile__name">DNS</span>
-                    <span class="cps-radio-tile__badge" data-i18n="cps_experimental">эксп.</span>
+                    <span class="cps-radio-tile__badge" data-i18n="cps_experimental">exp.</span>
                   </label>
-                  <label class="cps-radio-tile" title="STUN Binding Request с CRC32" data-i18n-title="cps_stun_title">
+                  <label class="cps-radio-tile" title="STUN Binding Request with CRC32 fingerprint" data-i18n-title="cps_stun_title">
                     <input type="radio" name="cpsProtocol" value="stun" />
                     <span class="cps-radio-tile__name">STUN</span>
                   </label>
-                  <label class="cps-radio-tile" title="DTLS 1.2 ClientHello" data-i18n-title="cps_dtls_title">
+                  <label class="cps-radio-tile" title="DTLS 1.2 ClientHello-shaped CPS (experimental)" data-i18n-title="cps_dtls_title">
                     <input type="radio" name="cpsProtocol" value="dtls" />
                     <span class="cps-radio-tile__name">DTLS</span>
-                    <span class="cps-radio-tile__badge" data-i18n="cps_experimental">эксп.</span>
+                    <span class="cps-radio-tile__badge" data-i18n="cps_experimental">exp.</span>
                   </label>
-                  <label class="cps-radio-tile" title="SIP INVITE (случайный Call-ID)" data-i18n-title="cps_sip_title">
+                  <label class="cps-radio-tile" title="SIP INVITE (random Call-ID)" data-i18n-title="cps_sip_title">
                     <input type="radio" name="cpsProtocol" value="sip" />
                     <span class="cps-radio-tile__name">SIP</span>
                   </label>
-                  <label class="cps-radio-tile" title="Статичные бинарные пэйлоады (3 варианта)" data-i18n-title="cps_static_title">
+                  <label class="cps-radio-tile" title="Static binary payloads (3 variants)" data-i18n-title="cps_static_title">
                     <input type="radio" name="cpsProtocol" value="static" />
                     <span class="cps-radio-tile__name" data-i18n="cps_static">Static</span>
                   </label>
@@ -953,71 +850,71 @@
               <!-- ── Tab 3: Дополнительно ── -->
               <div class="tab-panel" id="panel-extra" role="tabpanel">
                 <div class="extra-options">
-                  <div id="cidrCounter" class="cidr-counter" data-i18n="cidr_counter_initial">IPv4 маршруты: 0 / 1000</div>
+                  <div id="cidrCounter" class="cidr-counter" data-i18n="cidr_counter_initial">IPv4 routes: 0 / 1000</div>
                   <label
                     class="extra-option-row"
-                    title="IPv6 маршруты увеличивают число записей в 2–3 раза. Включайте только если клиент поддерживает IPv6 и ваш роутер справляется с большим количеством маршрутов."
+                    title="IPv6 routes increase the number of entries 2–3×. Enable only if your client supports IPv6 and your router can handle a large number of routes."
                     data-i18n-title="ipv6_toggle_title"
                   >
                     <input type="checkbox" id="ipv6Toggle" />
                     <div class="extra-option-row__text">
-                      <span class="extra-option-row__label" data-i18n="ipv6_toggle_label">+ IPv6 маршруты</span>
-                      <span class="extra-option-row__hint" data-i18n="ipv6_toggle_hint">Включает IPv6 CIDR — увеличивает число маршрутов в 2–3 раза</span>
+                      <span class="extra-option-row__label" data-i18n="ipv6_toggle_label">+ IPv6 routes</span>
+                      <span class="extra-option-row__hint" data-i18n="ipv6_toggle_hint">Adds IPv6 CIDRs — increases route count by 2–3×</span>
                     </div>
                   </label>
                   <label
                     class="extra-option-row"
-                    title="Снимает блокировку выбора пресетов при превышении лимита. Используйте на свой страх и риск — слишком большое число маршрутов может вызвать сбои на роутерах и мобильных клиентах."
+                    title="Removes the preset selection block when the limit is exceeded. Use at your own risk — too many routes may cause issues on routers and mobile clients."
                     data-i18n-title="ignore_limit_title"
                   >
                     <input type="checkbox" id="ignoreLimitToggle" />
                     <div class="extra-option-row__text">
-                      <span class="extra-option-row__label" data-i18n="ignore_limit_label">Без лимита</span>
-                      <span class="extra-option-row__hint" data-i18n="ignore_limit_hint">Снимает ограничение в 1000 CIDR — используйте осторожно</span>
+                      <span class="extra-option-row__label" data-i18n="ignore_limit_label">No limit</span>
+                      <span class="extra-option-row__hint" data-i18n="ignore_limit_hint">Removes the 1000 CIDR limit — use with caution</span>
                     </div>
                   </label>
                   <label
                     class="extra-option-row"
-                    title="Уменьшает параметры junk-трейна (Jc ≤ 2, Jmin/Jmax ≤ 128 байт) для совместимости с роутерами MikroTik, GL.iNet, Keenetic и OpenWrt с ограниченной памятью."
+                    title="Reduces junk-train parameters (Jc ≤ 2, Jmin/Jmax ≤ 128 bytes) for compatibility with MikroTik, GL.iNet, Keenetic and OpenWrt routers with limited memory."
                     data-i18n-title="router_mode_title"
                   >
                     <input type="checkbox" id="routerModeToggle" />
                     <div class="extra-option-row__text">
-                      <span class="extra-option-row__label" data-i18n="router_mode_label">Режим роутера</span>
-                      <span class="extra-option-row__hint" data-i18n="router_mode_hint">Малые Jc/Jmin/Jmax для MikroTik, GL.iNet, Keenetic, OpenWrt</span>
+                      <span class="extra-option-row__label" data-i18n="router_mode_label">Router mode</span>
+                      <span class="extra-option-row__hint" data-i18n="router_mode_hint">Small Jc/Jmin/Jmax for MikroTik, GL.iNet, Keenetic, OpenWrt</span>
                     </div>
                   </label>
                   <label
                     class="extra-option-row"
-                    title="Только для AmneziaWG 2.0. Добавляет 4 случайных пакета мимикрии (I2-I5) перед handshake — усиливает обход DPI."
+                    title="AmneziaWG 2.0 only. Adds 4 random mimicry packets (I2-I5) before handshake — strengthens DPI evasion."
                     data-i18n-title="cps5_title"
                   >
                     <input type="checkbox" id="cps5Toggle" />
                     <div class="extra-option-row__text">
-                      <span class="extra-option-row__label" data-i18n="cps5_label">Усиленная маскировка (I2-I5)</span>
-                      <span class="extra-option-row__hint" data-i18n="cps5_hint">Только для AWG 2.0. 4 случайных пакета перед handshake.</span>
+                      <span class="extra-option-row__label" data-i18n="cps5_label">Enhanced mimicry (I2-I5)</span>
+                      <span class="extra-option-row__hint" data-i18n="cps5_hint">AWG 2.0 only. 4 random packets before handshake.</span>
                     </div>
                   </label>
                   <label
                     class="extra-option-row"
-                    title="Профиль для смартфонов и нестабильных сетей: низкие Jc/Jmax, MTU 1280, только IPv4. Помогает на 4G/5G с DPI операторов и снижает нагрузку на iOS routing-table."
+                    title="Profile for smartphones and unstable networks: low Jc/Jmax, MTU 1280, IPv4-only. Helps on 4G/5G with carrier DPI and reduces iOS routing-table load."
                     data-i18n-title="mobile_mode_title"
                   >
                     <input type="checkbox" id="mobileModeToggle" />
                     <div class="extra-option-row__text">
-                      <span class="extra-option-row__label" data-i18n="mobile_mode_label">📱 Мобильный профиль</span>
-                      <span class="extra-option-row__hint" data-i18n="mobile_mode_hint">Низкие Jc/Jmax, MTU 1280, только IPv4 — для смартфонов</span>
+                      <span class="extra-option-row__label" data-i18n="mobile_mode_label">📱 Mobile profile</span>
+                      <span class="extra-option-row__hint" data-i18n="mobile_mode_hint">Low Jc/Jmax, MTU 1280, IPv4-only — for smartphones</span>
                     </div>
                   </label>
 
                   <!-- Endpoint selector -->
                   <div class="extra-option-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
                     <div class="extra-option-row__text">
-                      <span class="extra-option-row__label" data-i18n="endpoint_label">Endpoint WARP</span>
-                      <span class="extra-option-row__hint" data-i18n="endpoint_hint">IP вместо hostname — если DNS заблокирован</span>
+                      <span class="extra-option-row__label" data-i18n="endpoint_label">WARP endpoint</span>
+                      <span class="extra-option-row__hint" data-i18n="endpoint_hint">IP instead of hostname — if DNS is blocked</span>
                     </div>
-                    <select id="warpEndpointSelect" class="endpoint-select" aria-label="Endpoint WARP" data-i18n-aria-label="endpoint_label">
-                      <option value="hostname" data-i18n="endpoint_option_hostname">engage.cloudflareclient.com (рекомендуется)</option>
+                    <select id="warpEndpointSelect" class="endpoint-select" aria-label="WARP endpoint" data-i18n-aria-label="endpoint_label">
+                      <option value="hostname" data-i18n="endpoint_option_hostname">engage.cloudflareclient.com (recommended)</option>
                       <option value="162.159.192.1">162.159.192.1</option>
                       <option value="162.159.195.1">162.159.195.1</option>
                       <option value="188.114.97.1">188.114.97.1</option>
@@ -1028,11 +925,11 @@
                   <!-- Endpoint port selector -->
                   <div class="extra-option-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
                     <div class="extra-option-row__text">
-                      <span class="extra-option-row__label" data-i18n="port_label">UDP-порт WARP</span>
-                      <span class="extra-option-row__hint" data-i18n="port_hint">Если туннель не поднимается — попробуйте другой порт</span>
+                      <span class="extra-option-row__label" data-i18n="port_label">WARP UDP port</span>
+                      <span class="extra-option-row__hint" data-i18n="port_hint">If the tunnel does not come up, try another port</span>
                     </div>
-                    <select id="warpPortSelect" class="endpoint-select" aria-label="UDP-порт WARP" data-i18n-aria-label="port_label">
-                      <option value="4500" data-i18n="port_option_default">4500 (по умолчанию)</option>
+                    <select id="warpPortSelect" class="endpoint-select" aria-label="WARP UDP port" data-i18n-aria-label="port_label">
+                      <option value="4500" data-i18n="port_option_default">4500 (default)</option>
                       <option value="2408">2408 (wgcf default)</option>
                       <option value="500">500 (IKE/IPsec)</option>
                       <option value="1701">1701 (L2TP)</option>
@@ -1044,10 +941,10 @@
                   <!-- Config count selector -->
                   <div class="extra-option-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
                     <div class="extra-option-row__text">
-                      <span class="extra-option-row__label" data-i18n="config_count_label">Количество конфигов</span>
-                      <span class="extra-option-row__hint" data-i18n="config_count_hint">Генерировать 1–3 варианта с разными endpoint'ами</span>
+                      <span class="extra-option-row__label" data-i18n="config_count_label">Number of configs</span>
+                      <span class="extra-option-row__hint" data-i18n="config_count_hint">Generate 1–3 variants with different endpoints</span>
                     </div>
-                    <div class="radio-group" role="radiogroup" aria-label="Количество конфигов" data-i18n-aria-label="config_count_label">
+                    <div class="radio-group" role="radiogroup" aria-label="Number of configs" data-i18n-aria-label="config_count_label">
                       <label class="radio-label"><input type="radio" name="configCount" value="1" checked> 1</label>
                       <label class="radio-label"><input type="radio" name="configCount" value="2"> 2</label>
                       <label class="radio-label"><input type="radio" name="configCount" value="3"> 3</label>

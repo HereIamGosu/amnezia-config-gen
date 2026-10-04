@@ -101,8 +101,15 @@ test('asset cache keys use the package version', () => {
   const html = read('public/index.html');
   const { version } = JSON.parse(read('package.json'));
   assert.match(html, /AWG 1\.5, 2\.0, 3\.0 (?:и|and) 3\.1/);
-  assert.equal(html.split(`?v=${version}"`).length - 1, 5);
-  assert.equal((html.match(/\?v=/g) || []).length, 5, 'no asset with a stale cache key');
+  for (const asset of [
+    'styles.css', 'analytics.js', 'result-explanation.js', 'live-status.js', 'script.js',
+    'favicon.ico', 'favicon-32x32.png', 'favicon-16x16.png', 'icon-192.png', 'apple-touch-icon.png',
+    'og-amneziawg-config-generator.png',
+  ]) {
+    assert.ok(html.includes(`static/${asset}?v=${version}"`), `${asset} carries the ?v=${version} cache key`);
+  }
+  const keys = html.match(/\?v=[^"&\s]+/g) || [];
+  assert.deepEqual(keys.filter((key) => key !== `?v=${version}`), [], 'no asset with a stale cache key');
   assert.doesNotMatch(html, /\?v=2\.5\.0/);
 });
 

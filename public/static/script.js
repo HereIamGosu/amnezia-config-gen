@@ -4,7 +4,12 @@
 // F-03: Локализация (i18n)
 // ─────────────────────────────────────────────────────────────
 
-const _i18n = { locale: 'ru', strings: {} };
+// Языковые версии страницы; язык текущей задан атрибутом <html lang> (en/index.html генерируется).
+const LANG_PATHS = { ru: '/', en: '/en' };
+const isKnownLang = (lang) => Object.prototype.hasOwnProperty.call(LANG_PATHS, lang);
+const PAGE_LANG = document.documentElement.lang === 'en' ? 'en' : 'ru';
+
+const _i18n = { locale: PAGE_LANG, strings: {} };
 const resultExplanation = window.ResultExplanation || null;
 let lastResultSummary = null;
 let lastCompatibility = null;
@@ -73,6 +78,11 @@ const applyTranslations = () => {
     const val = _i18n.strings[key];
     if (val !== undefined) el.setAttribute('aria-label', val);
   });
+  document.querySelectorAll('[data-i18n-alt]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-alt');
+    const val = _i18n.strings[key];
+    if (val !== undefined) el.setAttribute('alt', val);
+  });
 };
 
 /**
@@ -86,6 +96,8 @@ const loadLocale = async (lang) => {
     _i18n.strings = await res.json();
     _i18n.locale = lang;
     applyTranslations();
+    // data-i18n дал счётчику только заготовку: перерисовываем его на текущем языке с реальным числом
+    updateCidrCounter(cfgState.routeMode === ROUTE_MODES.FULL ? 0 : cfgState.cidrCount4);
     if (lastResultSummary) renderResultExplanation(lastResultSummary);
     if (lastCompatibility) renderCompatibilityCard(lastCompatibility);
   } catch {
@@ -169,21 +181,46 @@ const fetchServiceStatus = async () => {
   }
 };
 
-/**
- * Инициализирует i18n: определяет язык (localStorage → navigator.language → 'ru').
- * Вызывается один раз при DOMContentLoaded.
- */
-const initI18n = () => {
-  const saved = localStorage.getItem('lang');
-  const nav = (navigator.language || '').toLowerCase().startsWith('ru') ? 'ru' : 'en';
-  const lang = saved || nav;
-  loadLocale(lang);
+const readSavedLang = () => {
+  try {
+    const saved = localStorage.getItem('lang');
+    return isKnownLang(saved) ? saved : null;
+  } catch {
+    return null;
+  }
 };
 
-/** Переключает язык и сохраняет выбор в localStorage. */
+const navigateToLang = (lang) => {
+  window.location.assign(LANG_PATHS[lang] + window.location.search + window.location.hash);
+};
+
+/**
+ * Инициализирует i18n. Язык задаёт адрес страницы (/ — ru, /en — en), а не язык браузера:
+ * поисковый робот всегда видит язык адреса. Явный выбор посетителя из localStorage
+ * переводит его на адрес нужного языка. Вызывается один раз при DOMContentLoaded.
+ */
+const initI18n = () => {
+  const saved = readSavedLang();
+  if (saved && saved !== PAGE_LANG) {
+    navigateToLang(saved);
+    return;
+  }
+  loadLocale(PAGE_LANG);
+};
+
+/** Переключает язык: сохраняет выбор и открывает адрес выбранного языка. */
 const switchLang = (lang) => {
-  localStorage.setItem('lang', lang);
-  loadLocale(lang);
+  if (!isKnownLang(lang)) return;
+  try {
+    localStorage.setItem('lang', lang);
+  } catch {
+    // Без localStorage выбор просто не запомнится
+  }
+  if (lang === PAGE_LANG) {
+    loadLocale(lang);
+    return;
+  }
+  navigateToLang(lang);
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -922,7 +959,7 @@ const getPresetsFallbackUrl = () => {
       /* ignore */
     }
   }
-  return new URL('static/presets-fallback.json', window.location.href).href;
+  return new URL('/static/presets-fallback.json', window.location.href).href;
 };
 
 /**

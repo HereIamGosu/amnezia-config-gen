@@ -17,7 +17,11 @@ Use this process for patch and minor releases. It requires only Git, Node/npm, a
    npm version X.Y.Z --no-git-tag-version
    ```
 
-3. Update release notes, source audit, changelog, release ledger, and current frontend asset cache keys.
+3. Update release notes, source audit, changelog, release ledger, and current frontend asset cache keys
+   (`?v=` in `public/index.html`, `public/status.html`, `public/404.html` and the icons of
+   `public/site.webmanifest`), the JSON-LD `softwareVersion` in `public/index.html`, and `<lastmod>` in
+   `public/sitemap.xml` (not older than the release date). Then regenerate the English page with
+   `npm run seo:en`. `release:check` also fails when `public/.well-known/security.txt` expires within 30 days.
 
 4. Install and verify:
 
@@ -63,6 +67,13 @@ Use this process for patch and minor releases. It requires only Git, Node/npm, a
 10. Create the GitHub Release from the checked-in release notes. Do not rely on generated notes for protocol policy.
 
 11. Verify deployed asset versions after deployment by checking that static asset URLs use `?v=X.Y.Z`.
+
+12. Notify search engines through IndexNow (Bing, Yandex, Seznam, Naver, Yep). The command waits until
+    production serves the release commit and skips the request when nothing under `public/` changed:
+
+   ```bash
+   npm run indexnow -- --wait-revision "$(git rev-parse HEAD)" --since vPREVIOUS
+   ```
 
 ## Historical metadata repair
 

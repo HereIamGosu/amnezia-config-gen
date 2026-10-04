@@ -282,5 +282,26 @@
   "compat_unsupported_exporter_warning": "This format does not have a stable exporter yet. It is shown as experimental or research-only.",
   "compat_reason_no_exporter": "Direct export is not implemented yet.",
   "compat_reason_research": "Research or documentation target only.",
-  "compat_reason_no_path": "No direct import path for this profile format."
+  "compat_reason_no_path": "No direct import path for this profile format.",
+
+  "meta_title": "AmneziaWG Config Generator for Cloudflare WARP — AWG 1.5, 2.0, 3.0 and 3.1",
+  "meta_description": "Create a WARP-safe .conf for AmneziaWG 1.5, 2.0, 3.0 and 3.1. AWG 3.x uses only client-side features that are compatible with the standard Cloudflare WireGuard peer.",
+  "og_title": "AmneziaWG Config Generator for Cloudflare WARP",
+  "og_description": "WARP-safe .conf for AmneziaWG 1.5, 2.0, 3.0 and 3.1; Cloudflare stays a standard WireGuard peer.",
+  "twitter_description": "Create a WARP-safe .conf for AWG 1.5, 2.0, 3.0 and 3.1 without editing the config by hand.",
+  "ld_app_description": "Web tool that generates WARP-safe AmneziaWG 1.5, 2.0, 3.0 and 3.1 .conf files for the standard Cloudflare WireGuard peer.",
+  "ld_app_features": "AmneziaWG .conf generation; Cloudflare WARP device registration; AWG 1.5 Legacy mode; AWG 2.0 mode; AWG 3.0 with WARP-safe client features; AWG 3.1 with WARP-safe client features; AllowedIPs route presets; DNS presets; CPS payload selection; WARP endpoint port selection",
+  "noscript_text": "AmneziaWG Config Generator is a free web tool that generates AmneziaWG .conf files for Cloudflare WARP. It supports AWG 1.5, 2.0, 3.0 and 3.1; AWG 3.x uses WARP-safe client features for the standard Cloudflare WireGuard peer. The generator requires JavaScript.",
+
+  "logo_alt": "AmneziaWG Config Generator logo",
+  "thank_you_aria": "Message from the author",
+  "endpoint_label": "WARP endpoint",
+  "endpoint_hint": "IP instead of hostname — if DNS is blocked",
+  "endpoint_option_hostname": "engage.cloudflareclient.com (recommended)",
+  "port_label": "WARP UDP port",
+  "port_hint": "If the tunnel does not come up, try another port",
+  "port_option_default": "4500 (default)",
+  "config_count_label": "Number of configs",
+  "config_count_hint": "Generate 1–3 variants with different endpoints",
+  "cidr_counter_initial": "IPv4 routes: 0 / 1000"
 }

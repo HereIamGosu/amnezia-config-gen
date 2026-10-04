@@ -44,7 +44,7 @@ test('release checker rejects a requested target version drift', () => {
 
 test('release checker covers the cache keys of every HTML entry point', () => {
   const { checkHtmlAssetVersions, HTML_ENTRY_POINTS } = require('../scripts/check-release-consistency');
-  assert.deepEqual(HTML_ENTRY_POINTS, ['public/index.html', 'public/status.html']);
+  assert.deepEqual(HTML_ENTRY_POINTS, ['public/index.html', 'public/en/index.html', 'public/status.html', 'public/404.html']);
   const ok = '<script src="static/live-status.js?v=9.9.9"></script>';
   assert.deepEqual(checkHtmlAssetVersions({ 'public/status.html': ok }, '9.9.9'), []);
   assert.deepEqual(
@@ -53,4 +53,38 @@ test('release checker covers the cache keys of every HTML entry point', () => {
   );
   assert.deepEqual(checkHtmlAssetVersions({ 'public/status.html': '<p>no assets</p>' }, '9.9.9'),
     ['public/status.html has no versioned static assets']);
+});
+
+test('release checker sees root-relative and absolute cache keys too', () => {
+  const { collectVersionedAssetUrls } = require('../scripts/check-release-consistency');
+  const html = [
+    '<link rel="icon" href="/static/favicon.ico?v=1.0.0" />',
+    '<meta property="og:image" content="https://awgconfig.com/static/og.png?v=1.0.1" />',
+    '"image": "https://awgconfig.com/static/og.png?v=1.0.2"',
+    '<a href="https://example.com/static/x.js?v=9">foreign host is ignored</a>',
+  ].join('\n');
+  assert.deepEqual(collectVersionedAssetUrls(html).map((asset) => asset.version), ['1.0.0', '1.0.1', '1.0.2']);
+});
+
+test('release checker covers manifest icons, JSON-LD version, sitemap date and security.txt expiry', () => {
+  const {
+    checkManifestIconVersions, checkSoftwareVersion, checkSitemapFreshness, checkSecurityTxtExpiry, releaseDateOf,
+  } = require('../scripts/check-release-consistency');
+
+  assert.deepEqual(checkManifestIconVersions({ icons: [{ src: '/static/i.png?v=9.9.9' }] }, '9.9.9'), []);
+  assert.equal(checkManifestIconVersions({ icons: [{ src: '/static/i.png' }] }, '9.9.9').length, 1);
+
+  assert.deepEqual(checkSoftwareVersion('"softwareVersion": "9.9.9"', '9.9.9'), []);
+  assert.match(checkSoftwareVersion('"softwareVersion": "9.9.8"', '9.9.9')[0], /expected 9\.9\.9/);
+  assert.match(checkSoftwareVersion('no json-ld', '9.9.9')[0], /exactly one/);
+
+  assert.equal(releaseDateOf('## [9.9.9] - 2030-01-02\n', '9.9.9'), '2030-01-02');
+  assert.deepEqual(checkSitemapFreshness('<lastmod>2030-01-02</lastmod>', '2030-01-02'), []);
+  assert.match(checkSitemapFreshness('<lastmod>2030-01-01</lastmod>', '2030-01-02')[0], /older than the release date/);
+  assert.match(checkSitemapFreshness('<urlset/>', '2030-01-02')[0], /no <lastmod>/);
+
+  const now = new Date('2030-01-01T00:00:00Z');
+  assert.deepEqual(checkSecurityTxtExpiry('Expires: 2030-06-01T00:00:00.000Z\n', now), []);
+  assert.match(checkSecurityTxtExpiry('Expires: 2030-01-15T00:00:00.000Z\n', now)[0], /renew Expires/);
+  assert.match(checkSecurityTxtExpiry('Contact: x\n', now)[0], /no valid Expires/);
 });

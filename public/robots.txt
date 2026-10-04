@@ -1,9 +1,20 @@
-User-agent: *
-Disallow: /api/
-Allow: /
+# robots.txt для https://awgconfig.com/
+#
+# /api/ закрыт: это служебные эндпоинты (регистрация устройства WARP, генерация
+# конфигов), а не страницы. /static/ и /locales/ открыты намеренно: без CSS, JS и
+# переводов поисковик не сможет отрисовать страницу. /status.html не закрываем:
+# его исключает из индекса meta noindex, а робот должен иметь доступ, чтобы её увидеть.
 
-User-agent: Yandex
+User-agent: *
+Allow: /
 Disallow: /api/
-Crawl-delay: 1
+
+# Яндекс читает только свою группу, поэтому правила повторены.
+# Clean-param убирает дубли главной с метками рекламы и аналитики.
+User-agent: Yandex
+Allow: /
+Disallow: /api/
+Clean-param: utm_source&utm_medium&utm_campaign&utm_term&utm_content&utm_id
+Clean-param: yclid&ysclid&gclid&gbraid&wbraid&fbclid&msclkid&_openstat&from&ref
 
 Sitemap: https://awgconfig.com/sitemap.xml

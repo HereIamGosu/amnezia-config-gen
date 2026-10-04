@@ -34,6 +34,9 @@
     "evidence:check": "node scripts/generate-protocol-evidence.js --check",
     "release:check": "node scripts/check-release-consistency.js",
     "presets:fallback": "node scripts/dump-presets-fallback.js",
+    "seo:en": "node scripts/build-en-page.js",
+    "seo:check": "node scripts/build-en-page.js --check",
+    "indexnow": "node scripts/indexnow.js",
     "lint": "eslint . --max-warnings 0",
     "test": "node --test \"__tests__/**/*.test.js\"",
     "test:coverage": "node --test --experimental-test-coverage \"__tests__/**/*.test.js\""

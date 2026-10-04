@@ -282,5 +282,26 @@
   "compat_unsupported_exporter_warning": "Для этого формата пока нет стабильного экспортера. Он показан как экспериментальный или исследовательский вариант.",
   "compat_reason_no_exporter": "Прямой экспорт пока не реализован.",
   "compat_reason_research": "Только исследовательский или документационный вариант.",
-  "compat_reason_no_path": "Нет прямого пути импорта для этого формата профиля."
+  "compat_reason_no_path": "Нет прямого пути импорта для этого формата профиля.",
+
+  "meta_title": "Генератор AmneziaWG для Cloudflare WARP — AWG 1.5, 2.0, 3.0 и 3.1",
+  "meta_description": "Создайте WARP-safe .conf для AmneziaWG 1.5, 2.0, 3.0 и 3.1. AWG 3.x использует только клиентские возможности, совместимые со стандартным WireGuard peer Cloudflare.",
+  "og_title": "Генератор конфигов AmneziaWG для Cloudflare WARP",
+  "og_description": "WARP-safe .conf для AmneziaWG 1.5, 2.0, 3.0 и 3.1; Cloudflare остаётся стандартным WireGuard peer.",
+  "twitter_description": "Создайте WARP-safe .conf для AWG 1.5, 2.0, 3.0 и 3.1 без ручной правки конфига.",
+  "ld_app_description": "Веб-инструмент для генерации WARP-safe .conf-файлов AmneziaWG 1.5, 2.0, 3.0 и 3.1 для стандартного WireGuard peer Cloudflare.",
+  "ld_app_features": "Генерация .conf для AmneziaWG; Регистрация устройства Cloudflare WARP; Режим AWG 1.5 Legacy; Режим AWG 2.0; AWG 3.0 с WARP-safe клиентскими возможностями; AWG 3.1 с WARP-safe клиентскими возможностями; Пресеты маршрутов AllowedIPs; Пресеты DNS; Выбор CPS-пакетов; Выбор порта WARP endpoint",
+  "noscript_text": "AmneziaWG Config Generator — бесплатный веб-инструмент для генерации .conf-файлов AmneziaWG и Cloudflare WARP. Поддерживает AWG 1.5, 2.0, 3.0 и 3.1; AWG 3.x использует WARP-safe клиентские возможности для стандартного WireGuard peer Cloudflare. Для работы генератора необходим JavaScript.",
+
+  "logo_alt": "Генератор конфигов AmneziaWG — логотип",
+  "thank_you_aria": "Сообщение автора",
+  "endpoint_label": "Endpoint WARP",
+  "endpoint_hint": "IP вместо hostname — если DNS заблокирован",
+  "endpoint_option_hostname": "engage.cloudflareclient.com (рекомендуется)",
+  "port_label": "UDP-порт WARP",
+  "port_hint": "Если туннель не поднимается — попробуйте другой порт",
+  "port_option_default": "4500 (по умолчанию)",
+  "config_count_label": "Количество конфигов",
+  "config_count_hint": "Генерировать 1–3 варианта с разными endpoint'ами",
+  "cidr_counter_initial": "IPv4 маршруты: 0 / 1000"
 }
