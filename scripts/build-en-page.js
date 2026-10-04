@@ -207,6 +207,8 @@ function localizeChrome(html) {
     '<button class="lang-btn lang-btn--active" data-lang="en"', 'EN language button');
   // Root-relative asset paths keep working at /en and any deeper path.
   out = out.replace(/(\s(?:href|src)=")static\//g, '$1/static/');
+  // Links to pages with their own English version: href="/lab" data-href-en="/en/lab".
+  out = out.replace(/(\shref=")[^"]*("[^>]*?\sdata-href-en=")([^"]*)(")/g, (_, open, middle, en, close) => `${open}${en}${middle}${en}${close}`);
   return replaceOnce(out, /^<!doctype html>\n/gi, (doctype) => `${doctype}${GENERATED_NOTE}\n`, 'doctype');
 }
 
