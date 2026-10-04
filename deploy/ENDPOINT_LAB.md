@@ -172,6 +172,12 @@ VERIFYING (Phase A rows, unblacklisted, unquarantined): ok → ACTIVE, fail → 
   success makes it `ACTIVE` again.
 - Never-verified candidates that fail just count failures and stay `DISCOVERED`. Discovery revisits
   them on its next pass.
+- **Hard cap:** after every run, eligible endpoints beyond `MAX_ACTIVE` (48) are parked as `VERIFIED`
+  ("verified, waiting for a slot"; cause `pool_cap`), least stable first. Control endpoints are never parked.
+  Parked endpoints are neither refreshed nor published. When the pool falls below `TARGET_ACTIVE` (24),
+  refresh re-verifies the best parked endpoints, and a success makes them `ACTIVE` again. (First timer
+  hour, 2026-10-04: one elevated discovery run found 31 working addresses in `162.159.192.0/24`, the pool
+  reached 58, and refresh then filled its 150 s budget. This rule caps that.)
 - A handshake-only `probe` advances only `DISCOVERED`.
 - `manual_blacklist` outranks everything. Blacklisted endpoints are never probed by the scheduler, are
   refused by `verify`, and leave the snapshot immediately. An operator `quarantine` is never lifted by a

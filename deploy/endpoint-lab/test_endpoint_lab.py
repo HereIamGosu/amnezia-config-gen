@@ -406,6 +406,31 @@ class SchedulerTests(LabFixture):
         self.assertNotIn(n, probed)
         self.assertEqual({c[2] for c in engine.calls}, {lab.REFRESH_HANDSHAKE_TIMEOUT_S})
 
+    def test_hard_cap_parks_least_stable_and_keeps_controls(self):
+        ids = [self.add(f"162.159.192.{i}", lab.OFFICIAL_PORTS[i % 4], lab.ACTIVE, successes=i) for i in range(1, 53)]
+        runner = self.make_lab(FakeProbeEngine())
+        controls = runner.select_controls(NOW)
+        with self.store.transaction():  # make the weakest endpoint a control: it must survive the cap
+            self.store.set_meta("controls", json.dumps([ids[0], controls[0]]))
+        runner.run_batch(ids[:3], "refresh")
+        st = self.states()
+        self.assertEqual(sum(s == lab.ACTIVE for s in st.values()), lab.MAX_ACTIVE)
+        parked = sorted((e for e, s in st.items() if s == lab.VERIFIED), key=lambda e: int(e.split(".")[3].split(":")[0]))
+        self.assertEqual(len(parked), 52 - lab.MAX_ACTIVE)
+        self.assertNotIn(ids[0], parked)                # control kept although least stable
+        self.assertEqual(parked, ids[1:5])              # next least stable are parked
+        self.assertEqual(self.snapshot()["active_count"], lab.MAX_ACTIVE)
+        cause = self.store.conn.execute("SELECT DISTINCT cause FROM transition WHERE to_state='VERIFIED'").fetchall()
+        self.assertEqual([c[0] for c in cause], ["pool_cap"])
+
+    def test_refresh_promotes_parked_endpoints_below_target(self):
+        a = self.add("162.159.192.1", state=lab.ACTIVE)
+        p = self.add("162.159.192.2", state=lab.VERIFIED)
+        engine = FakeProbeEngine()
+        self.make_lab(engine).refresh(lab.Resources(10 ** 6, 0, 0.1, 2, 10 ** 10))
+        self.assertEqual([c[1] for c in engine.calls], [a, p])
+        self.assertEqual(self.states()[p], lab.ACTIVE)
+
     def test_refresh_reduced_mode_under_memory_pressure(self):
         a = self.add("162.159.192.1", state=lab.ACTIVE)
         self.add("162.159.192.2", state=lab.SUSPECT)

@@ -1611,6 +1611,7 @@ class Lab:
                 health, reason = self._classify(results, verdict, anomaly, no_controls_mass, lab_failures)
                 if breaker or (results and len(lab_failures) == len(results)):
                     self._set_health(health, reason, now)  # pool refreshes own the Lab health; discovery reports only
+                self._enforce_cap(now, operation_id)
                 cpu1, rss = usage_snapshot()
                 res_now = read_resources(os.path.dirname(self.store.path) or ".")
                 active_after = sum(is_eligible(Store.to_row(r), now) for r in self.store.all()
@@ -1632,6 +1633,21 @@ class Lab:
             raise LabError(LOCAL_RESOURCE_ERROR, f"DB_WRITE_FAILED: {exc}") from None
         snapshot_ok = self.publish()
         return BatchOutcome(recorded, health, reason, verdict, aborted, snapshot_ok)
+
+    def _enforce_cap(self, now: int, operation_id: str) -> int:
+        """Hard cap: beyond MAX_ACTIVE the least stable eligible endpoints are parked as VERIFIED
+        (verified, waiting for a slot): not refreshed, not published. Controls are never parked."""
+        controls = set(json.loads(self.store.meta().get("controls", "[]")))
+        eligible = [r for r in self.store.all() if r["source"] != SRC_NEGATIVE and is_eligible(Store.to_row(r), now)]
+        excess = len(eligible) - MAX_ACTIVE
+        if excess <= 0:
+            return 0
+        ranked = sorted((r for r in eligible if r["endpoint_id"] not in controls),
+                        key=lambda r: (r["consecutive_successes"], -(r["active_since"] or now), r["endpoint_id"]))
+        for r in ranked[:excess]:
+            self.store.set_state(r["endpoint_id"], VERIFIED, "pool_cap", operation_id, now,
+                                 expires_at=None, active_since=None)
+        return min(excess, len(ranked))
 
     def _classify(self, results, verdict, anomaly, no_controls_mass, lab_failures) -> tuple[str, str]:
         if results and len(lab_failures) == len(results):
@@ -1692,7 +1708,14 @@ class Lab:
         rows = [r for r in self.store.all() if due_for_refresh(Store.to_row(r), r["source"], now)]
         if refresh_reduced(res):
             rows = [r for r in rows if r["state"] == ACTIVE]
-        rank = {ACTIVE: 0, SUSPECT: 1, VERIFYING: 2, QUARANTINE: 3}
+        rank = {ACTIVE: 0, SUSPECT: 1, VERIFYING: 2, QUARANTINE: 3, VERIFIED: 4}
+        eligible = sum(is_eligible(Store.to_row(r), now) for r in self.store.all() if r["source"] != SRC_NEGATIVE)
+        if eligible < TARGET_ACTIVE and not refresh_reduced(res):
+            # below target: parked VERIFIED endpoints get their slot back after a fresh verification
+            parked = [r for r in self.store.all() if r["state"] == VERIFIED and not r["manual_blacklist"]
+                      and r["source"] != SRC_NEGATIVE]
+            parked.sort(key=lambda r: (-r["consecutive_successes"], -(r["last_traffic_ok_at"] or 0), r["endpoint_id"]))
+            rows += parked[:TARGET_ACTIVE - eligible]
         rows.sort(key=lambda r: (rank.get(r["state"], 9), r["expires_at"] or 0, r["endpoint_id"]))
         ids = [r["endpoint_id"] for r in rows[:MAX_REFRESH_ENDPOINTS]]
         return self.run_batch(ids, "refresh", REFRESH_HANDSHAKE_TIMEOUT_S, REFRESH_WALL_S, breaker=True)
