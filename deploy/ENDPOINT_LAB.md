@@ -130,6 +130,20 @@ Metrics: `probe_completion_ms` is "trigger → the Lab saw a handshake" (the ker
 1-second resolution), **not** a protocol RTT. `traffic_total_ms` is curl's `time_total` over the tunnel
 (TLS + HTTP included). Both are RTT from the VPS, not from users.
 
+## Level of evidence
+
+The Lab records observations about exact endpoints and never extrapolates them to a range.
+
+- Cloudflare's documentation separates consumer WARP (`162.159.192.0/24`) from Cloudflare One WireGuard
+  ingress (`162.159.193.0/24`). That boundary comes from the documentation, not from the Lab.
+- Phase A (2026-10-04): the single endpoint `162.159.193.1:2408` did not answer the consumer probe
+  identity. This is one observation of one endpoint. It says nothing about the rest of that /24.
+- Phase A: specific addresses outside the documented consumer range (`162.159.195.1`, `188.114.97.1`)
+  passed full verification. "Not documented as consumer" does not mean "does not work", and "documented"
+  does not mean "works". Both questions are decided per endpoint by observation.
+- The Phase A candidate set was hand-picked (24/24 passed), so it does not estimate the real yield of
+  any range.
+
 ## Snapshot contract
 
 ```json
