@@ -1382,6 +1382,8 @@ class WebExportTests(LabFixture):
         """Deterministic sample of the real exporter output; the website tests serve it through /api/lab."""
         ids = [self.add(f"162.159.192.{i}", lab.OFFICIAL_PORTS[i % 4], state=lab.VERIFYING) for i in range(1, 9)]
         quarantined = self.add("162.159.193.20", 2408, state=lab.VERIFYING, source=lab.SRC_CF_ONE)
+        with self.store.transaction():  # known before the simulated hour, as on a real host
+            self.store.conn.execute("UPDATE endpoint SET first_seen_at=?", (NOW - 2 * 86400,))
         engine = SimEngine(lambda eid: (no_hs() if eid == quarantined and self.clock_value > NOW - 1800 else
                                         retry_ok() if (self.clock_value // 100) % 5 == 0 else ok()))
         runner = self.make_lab(engine)
