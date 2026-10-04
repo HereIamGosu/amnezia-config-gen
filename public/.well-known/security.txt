@@ -1,0 +1,9 @@
+# Security contact for https://awgconfig.com/ (RFC 9116).
+# Please do not open public GitHub issues for security reports.
+
+Contact: https://github.com/HereIamGosu/amnezia-config-gen/security/advisories/new
+Contact: https://discord.gg/XGNtYyGbmM
+Expires: 2027-10-04T00:00:00.000Z
+Preferred-Languages: ru, en
+Canonical: https://awgconfig.com/.well-known/security.txt
+Policy: https://github.com/HereIamGosu/amnezia-config-gen/blob/main/SECURITY.md

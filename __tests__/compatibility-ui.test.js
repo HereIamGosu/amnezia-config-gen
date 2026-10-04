@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
+const { APP_SCRIPTS, readAppScript } = require('./helpers/frontend-scripts');
 
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -20,89 +21,89 @@ test('index.html has the onboarding block as a collapsible <details>', () => {
   assert.match(html, /data-i18n="onboarding_no_guarantee"/);
 });
 
-test('configuration summary and onboarding lead the right column', () => {
+test('onboarding lives in the installation guide modal, after the setup steps', () => {
   const html = read('public/index.html');
   const styles = read('public/static/styles.css');
-  const rightSection = html.indexOf('<div class="right-section">');
-  const intro = html.indexOf('<div class="right-section__intro">');
-  const infoMessage = html.indexOf('<div class="info-message">');
-  const onboarding = html.indexOf('<details id="onboardingBlock"');
-  const instruction = html.indexOf('<aside class="instruction">');
+  const modal = html.indexOf('<div id="instructionModal" class="modal"');
+  const steps = html.indexOf('data-i18n-html="instruction_step1"', modal);
+  const onboarding = html.indexOf('<details id="onboardingBlock"', modal);
+  const modalEnd = html.indexOf('<!-- Конфиденциальность -->', modal);
 
-  assert.ok(rightSection < intro, 'intro must be inside the right column');
-  assert.ok(intro < infoMessage, 'configuration summary must be inside the intro group');
-  assert.ok(infoMessage < onboarding, 'onboarding must follow the configuration summary');
-  assert.ok(onboarding < instruction, 'intro group must appear before the installation instructions');
-  assert.match(styles, /\.right-section__intro \.onboarding__summary\s*\{[^}]*display:\s*block;[^}]*width:\s*fit-content;[^}]*margin-inline:\s*auto;/s);
-  assert.match(styles, /\.right-section__intro \.onboarding__body\s*\{[^}]*text-align:\s*left;/s);
+  assert.ok(modal > 0, 'installation guide modal must exist');
+  assert.ok(steps > modal && steps < onboarding, 'onboarding follows the installation steps');
+  assert.ok(onboarding < modalEnd, 'onboarding stays inside the guide modal');
+  assert.match(html, /data-open-modal="instructionModal"/, 'the guide is reachable from the page');
+  assert.match(styles, /\.onboarding__summary\s*\{[^}]*cursor:\s*pointer;/s);
 });
 
-test('AWG 2.0 disclaimer is a hover tooltip on the AWG2 generate button', () => {
+// Профили выбираются карточками-радиокнопками; дисклеймер про WARP peer остаётся
+// локализуемой подсказкой на карточке AWG 2.0 (раньше — на кнопке генерации).
+const profileCard = (html, value) => {
+  const input = html.indexOf(`name="awgProfile" value="${value}"`);
+  assert.ok(input > 0, `profile ${value} must exist`);
+  const start = html.lastIndexOf('<label class="profile-card"', input);
+  return html.slice(start, html.indexOf('</label>', input));
+};
+
+test('AWG 2.0 disclaimer is a hover tooltip on the AWG 2.0 profile card', () => {
   const html = read('public/index.html');
-  // The AWG2 button carries the disclaimer as a localizable title attribute.
-  const btnMatch = html.match(/<button id="generateButtonAwg2"[^>]*>/);
-  assert.ok(btnMatch, 'AWG2 generate button must exist');
-  assert.match(btnMatch[0], /title="AWG 2\.0[^"]*Cloudflare WARP peer[^"]*"/);
-  assert.match(btnMatch[0], /data-i18n-title="compat_awg2_disclaimer"/);
+  const card = profileCard(html, 'awg2');
+  assert.match(card, /title="AWG 2\.0[^"]*Cloudflare WARP peer[^"]*"/);
+  assert.match(card, /data-i18n-title="compat_awg2_disclaimer"/);
   // The old inline disclaimer element must be gone.
   assert.doesNotMatch(html, /id="awg2Disclaimer"/);
 });
 
 test('AWG 3.0 and 3.1 controls include mandatory WARP-safe guidance', () => {
   const html = read('public/index.html');
-  for (const [id, key] of [
-    ['generateButtonAwg3', 'compat_awg3_disclaimer'],
-    ['generateButtonAwg31', 'compat_awg31_disclaimer'],
+  for (const [value, key] of [
+    ['awg3', 'compat_awg3_disclaimer'],
+    ['awg31', 'compat_awg31_disclaimer'],
   ]) {
-    const button = html.match(new RegExp(`<button id="${id}"[^>]*>`));
-    assert.ok(button, `${id} must exist`);
-    assert.match(button[0], new RegExp(`data-i18n-title="${key}"`));
+    assert.match(profileCard(html, value), new RegExp(`data-i18n-title="${key}"`));
   }
+  assert.match(profileCard(html, 'awg31'), /data-i18n="profile_awg31_note"/, 'AWG 3.1 states the client requirement');
   assert.match(html, /class="awg3-warp-safe-note" data-i18n="awg3_warp_safe_help"/);
   assert.match(html, /Cloudflare остаётся стандартным WireGuard peer/);
 });
 
-test('generation controls are arranged as a two-by-two grid', () => {
+test('four profiles in generation order, AWG 2.0 preselected, one generate button', () => {
   const html = read('public/index.html');
   const styles = read('public/static/styles.css');
-  const buttonIds = [
-    'generateButton',
-    'generateButtonAwg2',
-    'generateButtonAwg3',
-    'generateButtonAwg31',
-  ];
-  const positions = buttonIds.map((id) => html.indexOf(`id="${id}"`));
-
-  assert.ok(positions.every((position) => position >= 0), 'all four generation buttons must exist');
-  assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
-  assert.match(
-    styles,
-    /\.buttons__gen-stack\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s,
-  );
-  assert.match(styles, /\.awg3-warp-safe-note\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/s);
+  const values = [...html.matchAll(/name="awgProfile" value="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(values, ['legacy', 'awg2', 'awg3', 'awg31']);
+  assert.match(html, /name="awgProfile" value="awg2" id="profileAwg2" checked/, 'AWG 2.0 is the default profile');
+  assert.equal((html.match(/name="awgProfile"[^>]*\bchecked\b/g) || []).length, 1, 'exactly one default profile');
+  assert.equal((html.match(/id="generateButton[^"]*"/g) || []).length, 1, 'a single generate button');
+  assert.doesNotMatch(html, /generateButtonAwg/, 'per-profile generate buttons are gone');
+  assert.match(styles, /\.profile-grid\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/s);
 });
 
-test('AWG 3.x frontend wiring is unique and uses centralized mode helpers', () => {
-  const script = read('public/static/script.js');
-  for (const declaration of [
-    'const generateButtonAwg3 =',
-    'const generateButtonAwg31 =',
-    'const awg3Options =',
-    'const awg31Options =',
-  ]) {
-    assert.equal(script.split(declaration).length - 1, 1, `${declaration} must be declared once`);
-  }
-  assert.match(script, /const getModeFilename =/);
-  assert.match(script, /const getModeLoadingLabel =/);
-  assert.match(script, /const getModeSuccessLabel =/);
+test('AWG profile wiring is centralized and uses the mode helpers', () => {
+  const script = readAppScript('script.js');
+  assert.match(script, /const PROFILE_MODES = \['legacy', 'awg2', 'awg3', 'awg31'\];/);
+  assert.match(script, /const DEFAULT_PROFILE = 'awg2';/);
+  assert.equal(script.split('const generateConfig =').length - 1, 1, 'generateConfig must be declared once');
+  const body = script.slice(script.indexOf('const generateConfig ='), script.indexOf('document.addEventListener(\'DOMContentLoaded\''));
+  assert.match(body, /const mode = getSelectedProfile\(\);/);
+  assert.match(body, /const filename = getModeFilename\(mode\);/);
+  assert.match(body, /getModeLoadingLabel\(mode\)/);
+  assert.match(body, /getModeSuccessLabel\(mode\)/);
 });
 
 test('asset cache keys use the package version', () => {
   const html = read('public/index.html');
   const { version } = JSON.parse(read('package.json'));
   assert.match(html, /AWG 1\.5, 2\.0, 3\.0 (?:и|and) 3\.1/);
-  assert.equal(html.split(`?v=${version}"`).length - 1, 5);
-  assert.equal((html.match(/\?v=/g) || []).length, 5, 'no asset with a stale cache key');
+  for (const asset of [
+    'styles.css', 'analytics.js', 'result-explanation.js', 'live-status.js', ...APP_SCRIPTS,
+    'favicon.ico', 'favicon-32x32.png', 'favicon-16x16.png', 'icon-192.png', 'apple-touch-icon.png',
+    'og-amneziawg-config-generator.png',
+  ]) {
+    assert.ok(html.includes(`static/${asset}?v=${version}"`), `${asset} carries the ?v=${version} cache key`);
+  }
+  const keys = html.match(/\?v=[^"&\s]+/g) || [];
+  assert.deepEqual(keys.filter((key) => key !== `?v=${version}`), [], 'no asset with a stale cache key');
   assert.doesNotMatch(html, /\?v=2\.5\.0/);
 });
 
@@ -116,21 +117,26 @@ test('index.html has the compatibility card with all sections, hidden by default
   assert.match(html, /data-i18n="compat_title"/);
 });
 
-test('script.js renders and can hide the compatibility card', () => {
-  const script = read('public/static/script.js');
-  assert.match(script, /const renderCompatibilityCard =/);
+test('the result panel renders and can hide the compatibility card', () => {
+  // Карточку рисует result.js, данные ответа ей передаёт генерация в script.js.
+  const result = readAppScript('result.js');
+  const script = readAppScript('script.js');
+  assert.match(result, /const renderCompatibilityCard =/);
   assert.match(script, /renderCompatibilityCard\(lastCompatibility\)/);
   // Fallback: card hidden when compatibility summary is missing/invalid.
-  assert.match(script, /card\.hidden = true;/);
+  assert.match(result, /card\.hidden = true;/);
   // Card is driven by the API response, not hardcoded client lists.
   assert.match(script, /data\.compatibility \|\| null/);
 });
 
 test('script.js does not break existing result actions', () => {
   const html = read('public/index.html');
-  assert.match(html, /post-gen-row__download/);
-  assert.match(html, /post-gen-row__preview/);
-  assert.match(html, /post-gen-row__copy-vpn-link/);
+  for (const id of ['resultDownload', 'resultCopyLink', 'resultMoreBtn', 'resultCopyCode']) {
+    assert.match(html, new RegExp(`id="${id}"`), `${id} must exist`);
+  }
+  for (const action of ['preview', 'explain', 'compat']) {
+    assert.match(html, new RegExp(`data-result-action="${action}"`), `${action} action must exist`);
+  }
 });
 
 test('styles.css uses a flat card style without drop shadows', () => {

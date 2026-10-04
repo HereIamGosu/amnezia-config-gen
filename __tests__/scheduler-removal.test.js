@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { readAllAppScripts } = require('./helpers/frontend-scripts');
 
 const root = path.join(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
@@ -14,7 +15,7 @@ test('Windows scheduler assets and client entry points are absent', () => {
 
   const clientSurface = [
     read('public/index.html'),
-    read('public/static/script.js'),
+    readAllAppScripts(),
     read('public/static/styles.css'),
     read('public/locales/ru.json'),
     read('public/locales/en.json'),

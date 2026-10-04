@@ -1,0 +1,69 @@
+name: IndexNow
+
+# Tells IndexNow engines (Bing, Yandex, Seznam, Naver, Yep) that public pages changed.
+# Separate from CI on purpose: it waits for production to serve the pushed commit, so a slow
+# deploy can fail this workflow but never the CI checks. The IndexNow key is public by protocol
+# design (public/<key>.txt), so no secrets are needed. Manual fallback: npm run indexnow.
+on:
+  push:
+    branches: [main]
+    paths: ['public/**']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print the request instead of sending it
+        type: boolean
+        default: false
+
+# Nothing by default; the job asks for exactly what it needs.
+permissions: {}
+
+# A newer push supersedes a waiting run: the new run submits the same sitemap URLs.
+concurrency:
+  group: indexnow
+  cancel-in-progress: true
+
+jobs:
+  submit:
+    name: Submit changed pages to IndexNow
+    runs-on: ubuntu-24.04
+    # CI (~10 min) + deploy timer (minutes) fit inside the script's 35-minute wait.
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Full history: --since compares the previous main commit with this one.
+          fetch-depth: 0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      # scripts/indexnow.js uses Node built-ins only: no npm install needed.
+      - name: Wait for production, then submit
+        if: github.event_name == 'push'
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          args=(--wait-revision "$GITHUB_SHA" --timeout-minutes 35)
+          if [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != 0000000000000000000000000000000000000000 ]; then
+            args+=(--since "$BEFORE_SHA")
+          else
+            echo 'No previous commit for this push: submitting every sitemap URL.'
+          fi
+          npm run indexnow -- "${args[@]}"
+
+      - name: Submit every sitemap URL (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = true ]; then
+            npm run indexnow -- --dry-run
+          else
+            npm run indexnow
+          fi

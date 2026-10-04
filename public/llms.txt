@@ -1,0 +1,31 @@
+# AmneziaWG Config Generator
+
+> Free web tool at https://awgconfig.com/ that builds ready-to-import AmneziaWG `.conf` files on top of a freshly registered Cloudflare WARP device. It supports AWG 1.5 (Legacy), 2.0, 3.0 and 3.1. Cloudflare stays a standard WireGuard peer, so the generator only enables client-side AWG features that the WARP peer does not need to understand ("WARP-safe").
+
+Also known as: Amnezia WG config generator. Former name of the site: Valokda Access.
+
+Key facts:
+
+- The generated `.conf` is what AmneziaWG clients import as a "tunnel" (Add Tunnel → import from file); AmneziaVPN also accepts the `vpn://` link. The clients themselves come from the official sources: AmneziaWG for Windows at https://github.com/amnezia-vpn/amneziawg-windows-client/releases, AmneziaVPN and mobile apps at https://amnezia.org/downloads.
+- No account, server or `.env` is needed: the tool registers a WARP device through Cloudflare's public API and returns the keys with the tunnel parameters.
+- Routing: full tunnel (all traffic) or split tunnel, where selected domain presets become IPv4 CIDRs in `AllowedIPs`. IPv6 routes are added only when explicitly enabled.
+- Extras: DNS presets, CPS obfuscation packets (I1, optional I2–I5 for AWG 2.0), router and mobile profiles, WARP endpoint and UDP port selection, `vpn://` links for AmneziaVPN import.
+- For WARP, S1–S4 are always 0, H1–H4 are 1–4 and MTU is 1280: non-zero values break the tunnel with the stock WireGuard peer.
+- Connectivity is not guaranteed in every network: it depends on the client, ISP, endpoint, DNS and routes.
+- Open source under AGPL-3.0.
+
+## Pages
+
+- [Generator (Russian)](https://awgconfig.com/): main page, Russian interface
+- [Generator (English)](https://awgconfig.com/en): the same tool with an English interface
+- [Service status](https://awgconfig.com/status.html): live state of the generator API and WARP endpoints
+
+## Project
+
+- [Source code and README](https://github.com/HereIamGosu/amnezia-config-gen): features, HTTP API parameters, self-hosting
+- [Changelog](https://github.com/HereIamGosu/amnezia-config-gen/blob/main/CHANGELOG.md): release history
+- [Telegram channel](https://t.me/amnezia_config): updates and troubleshooting notes (Russian)
+
+## Optional
+
+- [Security policy](https://github.com/HereIamGosu/amnezia-config-gen/blob/main/SECURITY.md)

@@ -18,7 +18,7 @@ Production state records both `source_sha` and `image_digest`.
 | Job | Trigger | Permissions | Does |
 | --- | --- | --- | --- |
 | `ci` | push to `main`, tags `v*`, PRs to `main`, manual | `contents: read` | `npm ci`, lint, tests, protocol evidence, release consistency (+ tag check), presets drift, coverage summary |
-| `image` | after `ci` | `contents: read` | builds `deploy/Dockerfile` once (`APP_REVISION=<sha>`), records the image ID, runs `scripts/ci/smoke-image.sh` against it, and on `main` uploads the tested image as an artifact |
+| `image` | after `ci` | `contents: read` | builds `deploy/Dockerfile` once (`APP_REVISION=<sha>`; the builder stage minifies and precompresses `public/`), records the image ID, runs `scripts/ci/smoke-image.sh` and the built-assets check against it, and on `main` uploads the tested image as an artifact |
 | `publish` | after `image`, push to `main` only | `contents: read`, `packages: write` | downloads the tested archive, proves it is the tested image, pushes it to GHCR (`scripts/ci/publish-image.sh`), records `release.json` |
 
 - Workflow-level `permissions: {}`; `ci` and `image` ask only for `contents: read`. The only write
@@ -46,6 +46,52 @@ Runs the image with the production hardening from `deploy/docker-compose.yml` (r
 
 It needs only docker, curl and python3 on the host, and makes no outbound calls of its own (`/api/healthcheck` probes Cloudflare/iplist from the
 runner; its result does not fail the smoke, only the HTTP contract does).
+
+### Production assets (builder stage of `deploy/Dockerfile`)
+
+The Dockerfile has two stages on the same pinned base image. The `builder` stage runs `npm ci`
+(dev dependencies included: `esbuild`, pinned exactly) and `node scripts/build-assets.js public` on
+its copy of `public/`:
+
+- every `public/static/**/*.js` and `*.css` is minified with esbuild `transform` (no bundling, no
+  IIFE wrapper, identifiers not renamed, no tree shaking): the frontend scripts are classic
+  `<script>` files that share top-level names with each other and with inline scripts. Each built
+  script is compiled once as a classic script, so a broken result fails the build;
+- every text asset under `public/` (`js`, `css`, `json`, `svg`, `html`, `txt`, `xml`,
+  `webmanifest`) gets precompressed siblings `<file>.br` (Brotli q11) and `<file>.gz` (gzip -9),
+  written only when smaller than the file.
+
+The runtime stage copies the built `public/` from the builder and still installs with
+`npm ci --omit=dev`, so esbuild never reaches the image. Sources in git stay readable; the script
+refuses to run on a directory inside a git work tree (`--force` overrides). The size report
+(raw / gzip / brotli, before → after) is printed in the build log.
+
+The `image` job's step "Check built assets in the image" runs inside the tested image without
+network: `node --check` and a minification heuristic for every shipped script, `.br`/`.gz` siblings
+for scripts, `styles.css` and both HTML pages, and `Content-Encoding: br` / `gzip` from `server.js`.
+Unit coverage: `__tests__/build-assets.test.js`, `__tests__/server-precompressed.test.js`.
+
+## IndexNow (`.github/workflows/indexnow.yml`)
+
+A separate workflow, so a slow deploy never fails CI. Triggers: push to `main` that touches
+`public/**`, and manual `workflow_dispatch` (optional dry run). Permissions: `contents: read` only;
+no secrets — the IndexNow key is public by protocol design (`public/<key>.txt`).
+
+- Push: `npm run indexnow -- --wait-revision "$GITHUB_SHA" --since "<github.event.before>"
+  --timeout-minutes 35`. The script polls `X-App-Revision` on production until it serves the
+  pushed commit or a later commit that contains it (CI → GHCR → `amnezia-deploy` timer), then
+  submits the sitemap URLs unless nothing under `public/` changed. On the first push of a branch
+  (no `before`) `--since` is omitted.
+- A quick follow-up push is fine: when production goes straight to a later commit (for example one
+  that did not touch `public/`, so it starts no IndexNow run of its own), that revision counts as
+  deployed if `git merge-base --is-ancestor <pushed> <live>` holds; a live commit missing from the
+  checkout is fetched once. Git is consulted only after the live revision has changed.
+- The run fails ("Production did not reach …; nothing submitted") only when production serves
+  neither the pushed commit nor a descendant within `--timeout-minutes`. Fallback: run the
+  workflow manually or `npm run indexnow` locally.
+- Manual run: submits every sitemap URL immediately.
+- Job timeout 45 min; concurrency group `indexnow` cancels a waiting run when a newer push
+  arrives (the newer run submits the same sitemap URLs).
 
 ## Identity
 

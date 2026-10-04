@@ -30,12 +30,17 @@
   "scripts": {
     "start": "vercel dev",
     "build": "echo \"No build step required\"",
+    "assets:build": "node scripts/build-assets.js",
     "evidence:generate": "node scripts/generate-protocol-evidence.js",
     "evidence:check": "node scripts/generate-protocol-evidence.js --check",
     "release:check": "node scripts/check-release-consistency.js",
     "presets:fallback": "node scripts/dump-presets-fallback.js",
+    "seo:en": "node scripts/build-en-page.js && node scripts/build-lab-page.js",
+    "seo:check": "node scripts/build-en-page.js --check && node scripts/build-lab-page.js --check",
+    "indexnow": "node scripts/indexnow.js",
     "lint": "eslint . --max-warnings 0",
     "test": "node --test \"__tests__/**/*.test.js\"",
+    "test:e2e": "node e2e/run.js",
     "test:coverage": "node --test --experimental-test-coverage \"__tests__/**/*.test.js\""
   },
   "dependencies": {
@@ -43,6 +48,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "esbuild": "0.28.2",
     "eslint": "^8.57.1",
     "globals": "^15.14.0"
   }

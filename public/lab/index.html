@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Endpoint Lab — AmneziaWG Config Generator</title>
+    <meta name="description" content="Публичная проверка endpoint'ов Cloudflare WARP: WireGuard-туннель и HTTPS-трафик с сервера проекта." />
+    <meta name="robots" content="noindex,follow" />
+    <meta name="theme-color" content="#07090c" />
+    <link rel="icon" href="/static/favicon.ico?v=2.7.4" sizes="16x16 32x32 48x48" />
+    <link rel="icon" href="/static/favicon-32x32.png?v=2.7.4" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/static/favicon-16x16.png?v=2.7.4" type="image/png" sizes="16x16" />
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png?v=2.7.4" sizes="180x180" />
+    <link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/static/fonts/inter-cyrillic.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- Общая дизайн-система сайта (только чтение) + стили Lab (вне /static: без годового immutable-кэша) -->
+    <link rel="stylesheet" href="/static/styles.css?v=2.7.4" />
+    <link rel="stylesheet" href="/lab/lab.css" />
+    <!-- Только внешние скрипты: CSP script-src без 'unsafe-inline' -->
+    <script defer src="/static/ui-shell.js?v=2.7.4"></script>
+    <script defer src="/lab/lab-core.js"></script>
+    <script defer src="/lab/lab-data.js"></script>
+    <script defer src="/lab/lab.js"></script>
+  </head>
+  <body class="lab-page">
+    <noscript>
+      <p class="lab-noscript" data-i18n="lab_noscript">Для показа данных Endpoint Lab нужен JavaScript.</p>
+    </noscript>
+
+    <!-- Спрайт иконок (линейные — по мотивам Lucide, ISC) -->
+    <svg xmlns="http://www.w3.org/2000/svg" style="display: none" aria-hidden="true">
+      <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+      <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+      <symbol id="i-x-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol>
+      <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+      <symbol id="i-arrow-down-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="m8 12 4 4 4-4"/></symbol>
+      <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
+      <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+      <symbol id="i-bug" viewBox="0 0 24 24"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3 3 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+      <symbol id="i-timer" viewBox="0 0 24 24"><path d="M10 2h4"/><path d="m12 14 3-3"/><circle cx="12" cy="14" r="8"/></symbol>
+      <symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="m9.5 13.5 2.5 2.5 2.5-2.5"/><path d="M12 11v5"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+      <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+      <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+      <symbol id="i-tag" viewBox="0 0 24 24"><path d="M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.42l8.7 8.7a2.43 2.43 0 0 0 3.42 0l6.58-6.58a2.43 2.43 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1"/></symbol>
+      <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+      <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-clipboard" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h6"/></symbol>
+      <symbol id="i-handshake" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m14.31 8 5.74 9.94"/><path d="M9.69 8h11.48"/><path d="m7.38 12 5.74-9.94"/><path d="M9.69 16 3.95 6.06"/><path d="M14.31 16H2.83"/><path d="m16.62 12-5.74 9.94"/></symbol>
+      <symbol id="i-tunnel" viewBox="0 0 24 24"><path d="M2 21h20"/><path d="M4 21v-9a8 8 0 0 1 16 0v9"/><path d="M9 21v-6a3 3 0 0 1 6 0v6"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+      <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-1.96c-3.2.7-3.87-1.54-3.87-1.54-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.68.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z"/></symbol>
+    </svg>
+
+    <a class="skip-link" href="#labMain" data-i18n="lab_skip_to_main">К содержимому</a>
+
+    <!-- Шапка — та же, что у генератора; Lab — активный пункт -->
+    <header class="site-header" id="siteHeader">
+      <div class="container site-header__inner">
+        <a class="brand" href="/" data-href-en="/en">
+          <img class="brand__logo" src="/static/logo-80.webp?v=2.7.4" alt="" width="40" height="40" />
+          <span class="brand__text">
+            <span class="brand__name">AmneziaWG</span>
+            <span class="brand__sub">Config Generator</span>
+          </span>
+          <span class="visually-hidden" data-i18n="window_title">Генератор конфигураций AmneziaWG</span>
+        </a>
+
+        <nav class="site-nav" id="siteNav" aria-label="Основная навигация" data-i18n-aria-label="nav_aria">
+          <a class="site-nav__link" href="/" data-href-en="/en" data-i18n="nav_generator">Генератор</a>
+          <a class="site-nav__link site-nav__link--active" href="/lab" data-href-en="/en/lab" aria-current="page" data-i18n="nav_lab">Lab</a>
+          <a class="site-nav__link" href="/#instructions" data-href-en="/en#instructions" data-i18n="nav_instructions">Инструкции</a>
+          <a class="site-nav__link" href="/#faq" data-href-en="/en#faq" data-i18n="nav_faq">FAQ</a>
+          <a class="site-nav__link" href="/" data-href-en="/en" id="labHistoryLink">
+            <span data-i18n="nav_history">История</span>
+            <span id="historyCount" class="count-badge"></span>
+          </a>
+          <a class="site-nav__link" href="https://github.com/HereIamGosu/amnezia-config-gen" target="_blank" rel="noopener noreferrer">GitHub</a>
+        </nav>
+
+        <div class="site-header__actions">
+          <div class="lang-switcher" aria-label="Language / Язык">
+            <button class="lang-btn lang-btn--active" data-lang="ru" type="button">RU</button>
+            <button class="lang-btn" data-lang="en" type="button">EN</button>
+          </div>
+          <a class="header-icon-link" href="https://github.com/HereIamGosu/amnezia-config-gen" target="_blank" rel="noopener noreferrer" aria-label="GitHub">
+            <svg class="icon icon--fill icon--lg" aria-hidden="true"><use href="#i-github"/></svg>
+          </a>
+          <button type="button" class="menu-toggle" id="menuToggle" aria-expanded="false" aria-controls="siteNav" aria-label="Меню" data-i18n-aria-label="menu_aria">
+            <svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main id="labMain" class="lab" data-lab-state="loading" aria-busy="true">
+      <!-- ── Hero ── -->
+      <section class="container lab-hero" aria-labelledby="labTitle">
+        <div class="lab-hero__copy">
+          <p class="hero__eyebrow" data-i18n="lab_eyebrow">Публичная проверка endpoint'ов Cloudflare WARP</p>
+          <h1 class="lab-hero__title" id="labTitle"><span>Endpoint</span> <span class="text-orange">Lab</span></h1>
+          <p class="lab-hero__lead" data-i18n="lab_lead">Проверяем реальные WARP endpoint'ы через WireGuard-туннель и HTTPS-трафик, чтобы поддерживать актуальный пул рабочих адресов для генератора.</p>
+        </div>
+
+        <div class="lab-hero__art" aria-hidden="true">
+          <img class="lab-hero__img" src="/lab/lab-hero.webp" width="194" height="220" alt="" decoding="async" />
+          <div class="lab-art-panel">
+            <div class="lab-art-panel__head">
+              <span class="lab-art-panel__bars"><i></i><i></i><i></i></span>
+              <span class="lab-art-panel__title">WARP<br /><b>Endpoints</b></span>
+            </div>
+            <ul class="lab-art-panel__checks">
+              <li><span class="lab-check-dot"><svg class="icon"><use href="#i-check"/></svg></span>WireGuard</li>
+              <li><span class="lab-check-dot"><svg class="icon"><use href="#i-check"/></svg></span>Tunnel</li>
+              <li><span class="lab-check-dot"><svg class="icon"><use href="#i-check"/></svg></span>HTTPS</li>
+            </ul>
+          </div>
+        </div>
+
+        <aside class="card lab-status" id="labStatus" aria-labelledby="labStatusTitle">
+          <div class="lab-status__head">
+            <span class="lab-status__icon" id="labStatusIcon" aria-hidden="true"><span class="dot dot--loading"></span></span>
+            <div class="lab-status__titles">
+              <h2 class="lab-status__title" id="labStatusTitle" data-i18n="lab_state_loading_title">Загружаем данные Lab…</h2>
+              <p class="lab-status__text" id="labStatusText"></p>
+              <p class="lab-status__updated" id="labStatusUpdated"></p>
+            </div>
+          </div>
+          <div class="lab-status__note" id="labStatusNote" hidden>
+            <span class="lab-status__note-icon" aria-hidden="true"><svg class="icon"><use href="#i-arrow-down-circle"/></svg></span>
+            <div>
+              <p class="lab-status__note-title" id="labStatusNoteTitle"></p>
+              <p class="lab-status__note-text" id="labStatusNoteText"></p>
+            </div>
+          </div>
+          <div class="lab-status__actions" id="labStatusActions" hidden>
+            <button type="button" class="btn btn--blue btn--sm" id="labRetryBtn" aria-label="Обновить данные страницы" data-i18n-aria-label="lab_refresh_aria">
+              <svg class="icon icon--sm" aria-hidden="true"><use href="#i-refresh"/></svg>
+              <span data-i18n="lab_refresh">Обновить</span>
+            </button>
+          </div>
+        </aside>
+      </section>
+
+      <p class="container lab-alert" id="labAlert" role="status" hidden></p>
+
+      <!-- ── Сводка пула ── -->
+      <section class="container lab-summary" aria-labelledby="labSummaryTitle">
+        <h2 class="visually-hidden" id="labSummaryTitle" data-i18n="lab_summary_title">Сводка пула</h2>
+        <div class="lab-metrics" id="labMetrics">
+          <article class="card lab-metric lab-metric--active" data-metric="active">
+            <span class="lab-metric__icon lab-metric__icon--green" aria-hidden="true"><svg class="icon"><use href="#i-layers"/></svg></span>
+            <div class="lab-metric__body">
+              <p class="lab-metric__value"><span class="lab-skel" data-value>—</span></p>
+              <span class="tag tag--green lab-metric__tag">ACTIVE</span>
+              <p class="lab-metric__label" data-label data-i18n="lab_metric_active">Свежие проверенные endpoint'ы</p>
+            </div>
+          </article>
+          <article class="card lab-metric" data-metric="verified">
+            <span class="lab-metric__icon lab-metric__icon--blue" aria-hidden="true"><svg class="icon"><use href="#i-database"/></svg></span>
+            <p class="lab-metric__value"><span class="lab-skel" data-value>—</span></p>
+            <p class="lab-metric__label" data-label data-i18n="lab_metric_verified">в резерве</p>
+          </article>
+          <article class="card lab-metric" data-metric="suspect">
+            <span class="lab-metric__icon lab-metric__icon--yellow" aria-hidden="true"><svg class="icon"><use href="#i-database"/></svg></span>
+            <p class="lab-metric__value"><span class="lab-skel" data-value>—</span></p>
+            <p class="lab-metric__label" data-label data-i18n="lab_metric_suspect">на перепроверке</p>
+          </article>
+          <article class="card lab-metric" data-metric="quarantine">
+            <span class="lab-metric__icon lab-metric__icon--red" aria-hidden="true"><svg class="icon"><use href="#i-bug"/></svg></span>
+            <p class="lab-metric__value"><span class="lab-skel" data-value>—</span></p>
+            <p class="lab-metric__label" data-label data-i18n="lab_metric_quarantine">временно исключены</p>
+          </article>
+        </div>
+
+        <section class="card lab-panel lab-fresh" aria-labelledby="labFreshTitle">
+          <h3 class="lab-panel__title" id="labFreshTitle" data-i18n="lab_fresh_title">Свежесть пула</h3>
+          <dl class="lab-fresh__list">
+            <div class="lab-fresh__row">
+              <dt><svg class="icon icon--sm" aria-hidden="true"><use href="#i-clock"/></svg><span data-i18n="lab_fresh_last_success">Последняя успешная проверка</span></dt>
+              <dd id="labFreshLast"><span class="lab-skel">—</span></dd>
+            </div>
+            <div class="lab-fresh__row">
+              <dt><svg class="icon icon--sm" aria-hidden="true"><use href="#i-archive"/></svg><span data-i18n="lab_fresh_oldest">Самый старый в ACTIVE</span></dt>
+              <dd id="labFreshOldest"><span class="lab-skel">—</span></dd>
+            </div>
+            <div class="lab-fresh__row">
+              <dt><svg class="icon icon--sm" aria-hidden="true"><use href="#i-refresh"/></svg><span data-i18n="lab_fresh_window">Окно актуальности</span></dt>
+              <dd id="labFreshWindow"><span class="lab-skel">—</span></dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="card lab-panel lab-quality" aria-labelledby="labQualityTitle">
+          <div class="lab-panel__head">
+            <h3 class="lab-panel__title" id="labQualityTitle" data-i18n="lab_quality_title">Качество проверок</h3>
+            <p class="lab-quality__final"><span data-i18n="lab_quality_final">Итоговый успех:</span> <strong id="labQualityFinal">—</strong></p>
+          </div>
+          <div class="lab-stack" id="labQualityBar" role="img" aria-label="Нет данных" data-i18n-aria-label="lab_no_data">
+            <span class="lab-stack__seg lab-stack__seg--first"></span><span class="lab-stack__seg lab-stack__seg--retry"></span><span class="lab-stack__seg lab-stack__seg--fail"></span>
+          </div>
+          <ul class="lab-legend" id="labQualityLegend">
+            <li class="lab-legend__item"><span class="lab-legend__dot lab-legend__dot--first" aria-hidden="true"></span><strong data-q="first">—</strong><span data-i18n="lab_quality_first">с первой сессии</span></li>
+            <li class="lab-legend__item"><span class="lab-legend__dot lab-legend__dot--retry" aria-hidden="true"></span><strong data-q="retry">—</strong><span data-i18n="lab_quality_retry">после retry</span></li>
+            <li class="lab-legend__item"><span class="lab-legend__dot lab-legend__dot--fail" aria-hidden="true"></span><strong data-q="fail">—</strong><span data-i18n="lab_quality_fail">не прошли</span></li>
+          </ul>
+        </section>
+      </section>
+
+      <!-- ── График ACTIVE и недавняя активность ── -->
+      <div class="container lab-row">
+        <section class="card lab-panel lab-chart" aria-labelledby="labChartTitle">
+          <div class="lab-panel__head">
+            <div>
+              <h2 class="lab-panel__title lab-panel__title--lg" id="labChartTitle" data-i18n="lab_chart_title">Активные endpoint'ы</h2>
+              <p class="lab-panel__sub" id="labChartSub" data-i18n="lab_chart_sub_6h">Изменение количества доступных endpoint'ов в ACTIVE за последние 6 часов.</p>
+            </div>
+            <div class="seg lab-seg" id="labChartRange" role="group" aria-label="Период графика" data-i18n-aria-label="lab_chart_range_aria">
+              <button type="button" class="seg__btn" data-range="1h" aria-pressed="false" data-i18n="lab_range_1h">1ч</button>
+              <button type="button" class="seg__btn" data-range="6h" aria-pressed="true" data-i18n="lab_range_6h">6ч</button>
+              <button type="button" class="seg__btn" data-range="24h" aria-pressed="false" data-i18n="lab_range_24h">24ч</button>
+            </div>
+          </div>
+          <div class="lab-chart__frame" id="labChartFrame">
+            <div class="lab-skel-block" aria-hidden="true"></div>
+          </div>
+          <p class="visually-hidden" id="labChartSummary" aria-live="polite"></p>
+        </section>
+
+        <section class="card lab-panel lab-activity" aria-labelledby="labActivityTitle">
+          <div class="lab-panel__head">
+            <h2 class="lab-panel__title lab-panel__title--lg" id="labActivityTitle" data-i18n="lab_activity_title">Недавняя активность</h2>
+            <button type="button" class="btn btn--sm lab-btn-quiet" id="labEventsBtn" data-i18n="lab_activity_all" disabled>Все события</button>
+          </div>
+          <ol class="lab-events" id="labActivityList">
+            <li class="lab-skel-line" aria-hidden="true"></li>
+            <li class="lab-skel-line" aria-hidden="true"></li>
+            <li class="lab-skel-line" aria-hidden="true"></li>
+          </ol>
+          <p class="lab-empty" id="labActivityEmpty" hidden></p>
+        </section>
+      </div>
+
+      <!-- ── Проверенные endpoint'ы ── -->
+      <section class="container" aria-labelledby="labEndpointsTitle">
+        <div class="card lab-panel lab-endpoints">
+          <div class="lab-endpoints__head">
+            <h2 class="lab-panel__title lab-panel__title--lg" id="labEndpointsTitle" data-i18n="lab_endpoints_title">Проверенные endpoint'ы</h2>
+            <form class="lab-filters" id="labFilters" role="search" aria-label="Фильтры списка" data-i18n-aria-label="lab_filters_aria">
+              <label class="lab-search">
+                <svg class="icon icon--sm" aria-hidden="true"><use href="#i-search"/></svg>
+                <span class="visually-hidden" data-i18n="lab_search_label">Поиск по IP или порту</span>
+                <input type="search" id="labSearch" name="q" autocomplete="off" spellcheck="false" maxlength="60" placeholder="Поиск по IP или порту…" data-i18n-placeholder="lab_search_placeholder" />
+              </label>
+              <label class="lab-select">
+                <span class="visually-hidden" data-i18n="lab_filter_state_label">Состояние</span>
+                <select id="labFilterState" name="state">
+                  <option value="all" data-i18n="lab_filter_state_all">Все состояния</option>
+                </select>
+                <svg class="icon icon--sm" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+              </label>
+              <label class="lab-select">
+                <span class="visually-hidden" data-i18n="lab_filter_port_label">Порт</span>
+                <select id="labFilterPort" name="port">
+                  <option value="all" data-i18n="lab_filter_port_all">Все порты</option>
+                </select>
+                <svg class="icon icon--sm" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+              </label>
+              <label class="lab-select">
+                <span class="visually-hidden" data-i18n="lab_filter_source_label">Источник</span>
+                <select id="labFilterSource" name="source">
+                  <option value="all" data-i18n="lab_filter_source_all">Все источники</option>
+                </select>
+                <svg class="icon icon--sm" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+              </label>
+            </form>
+          </div>
+
+          <div class="lab-table-wrap" id="labTableWrap">
+            <table class="lab-table" id="labTable">
+              <caption class="visually-hidden" id="labTableCaption" data-i18n="lab_table_caption">Проверенные endpoint'ы Cloudflare WARP</caption>
+              <thead>
+                <tr>
+                  <th scope="col" aria-sort="none" data-sort="endpoint"><button type="button" class="lab-th-btn"><span data-i18n="lab_col_endpoint">Endpoint</span><svg class="icon icon--sm" aria-hidden="true"><use href="#i-chevron-down"/></svg></button></th>
+                  <th scope="col" aria-sort="none" data-sort="state"><button type="button" class="lab-th-btn"><span data-i18n="lab_col_state">Состояние</span><svg class="icon icon--sm" aria-hidden="true"><use href="#i-chevron-down"/></svg></button></th>
+                  <th scope="col" aria-sort="none" data-sort="checked"><button type="button" class="lab-th-btn"><span data-i18n="lab_col_checked">Проверен</span><svg class="icon icon--sm" aria-hidden="true"><use href="#i-chevron-down"/></svg></button></th>
+                  <th scope="col" data-i18n="lab_col_session">Сессия</th>
+                  <th scope="col" class="lab-col-center" data-i18n="lab_col_https">HTTPS</th>
+                  <th scope="col" aria-sort="none" data-sort="reliability"><button type="button" class="lab-th-btn"><span data-i18n="lab_col_reliability">Надёжность</span><svg class="icon icon--sm" aria-hidden="true"><use href="#i-chevron-down"/></svg></button></th>
+                  <th scope="col" class="lab-col-source" data-i18n="lab_col_source">Источник</th>
+                  <th scope="col" class="lab-col-menu"><span class="visually-hidden" data-i18n="lab_col_actions">Действия</span></th>
+                </tr>
+              </thead>
+              <tbody id="labTableBody">
+                <tr class="lab-skel-row" aria-hidden="true"><td colspan="8"><span class="lab-skel-line"></span></td></tr>
+                <tr class="lab-skel-row" aria-hidden="true"><td colspan="8"><span class="lab-skel-line"></span></td></tr>
+                <tr class="lab-skel-row" aria-hidden="true"><td colspan="8"><span class="lab-skel-line"></span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <ul class="lab-cards" id="labCards" aria-labelledby="labEndpointsTitle" hidden></ul>
+
+          <p class="lab-empty" id="labEndpointsEmpty" hidden></p>
+          <div class="lab-endpoints__foot" id="labEndpointsFoot" hidden>
+            <p class="lab-endpoints__count" id="labEndpointsCount" aria-live="polite"></p>
+            <button type="button" class="btn btn--sm" id="labMoreBtn" data-i18n="lab_show_more" hidden>Показать ещё</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Как это работает ── -->
+      <section class="container" aria-labelledby="labHowTitle">
+        <div class="card lab-how">
+          <img class="lab-how__art" src="/lab/lab-astronaut.webp" width="104" height="116" alt="" loading="lazy" decoding="async" />
+          <div class="lab-how__copy">
+            <h2 class="lab-panel__title lab-panel__title--lg" id="labHowTitle" data-i18n="lab_how_title">Как это работает</h2>
+            <p class="lab-how__text" data-i18n="lab_how_text">Мы проверяем кандидаты из разных источников через реальный WireGuard-туннель и HTTPS-трафик. Рабочие endpoint'ы попадают в пул свежих адресов (ACTIVE).</p>
+          </div>
+          <ol class="lab-pipeline">
+            <li class="lab-pipeline__step">
+              <span class="lab-pipeline__icon" aria-hidden="true"><svg class="icon"><use href="#i-clipboard"/></svg></span>
+              <span class="lab-pipeline__text"><b data-i18n="lab_step_candidate">Кандидат</b><span data-i18n="lab_step_candidate_sub">IP:Port из источников</span></span>
+            </li>
+            <li class="lab-pipeline__step">
+              <span class="lab-pipeline__icon" aria-hidden="true"><svg class="icon"><use href="#i-handshake"/></svg></span>
+              <span class="lab-pipeline__text"><b data-i18n="lab_step_handshake">WireGuard handshake</b><span data-i18n="lab_step_handshake_sub">Проверка соединения</span></span>
+            </li>
+            <li class="lab-pipeline__step">
+              <span class="lab-pipeline__icon" aria-hidden="true"><svg class="icon"><use href="#i-tunnel"/></svg></span>
+              <span class="lab-pipeline__text"><b data-i18n="lab_step_tunnel">Tunnel WARP</b><span data-i18n="lab_step_tunnel_sub">Установка туннеля</span></span>
+            </li>
+            <li class="lab-pipeline__step">
+              <span class="lab-pipeline__icon" aria-hidden="true"><svg class="icon"><use href="#i-lock"/></svg></span>
+              <span class="lab-pipeline__text"><b data-i18n="lab_step_https">HTTPS traffic</b><span data-i18n="lab_step_https_sub">Проверка доступа</span></span>
+            </li>
+            <li class="lab-pipeline__step lab-pipeline__step--done">
+              <span class="lab-pipeline__icon" aria-hidden="true"><svg class="icon"><use href="#i-check"/></svg></span>
+              <span class="lab-pipeline__text"><b>ACTIVE</b><span data-i18n="lab_step_active_sub">Добавляется в пул</span></span>
+            </li>
+          </ol>
+          <p class="lab-disclaimer">
+            <button type="button" class="lab-disclaimer__btn" data-open-modal="labInfoModal" aria-label="О Endpoint Lab" data-i18n-aria-label="lab_info_open_aria">
+              <svg class="icon icon--sm" aria-hidden="true"><use href="#i-info"/></svg>
+            </button>
+            <span data-i18n="lab_disclaimer">Проверка выполняется с сервера проекта и не гарантирует доступность endpoint'а из вашей сети.</span>
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container site-footer__inner">
+        <div class="site-footer__brand">
+          <img src="/static/logo-80.webp?v=2.7.4" alt="" width="32" height="32" loading="lazy" />
+          <div>
+            <strong>AmneziaWG Config Generator</strong><br />
+            <span data-i18n="lab_footer_tagline">Endpoint Lab — только чтение, данные обновляются автоматически.</span>
+          </div>
+        </div>
+        <div class="site-footer__links">
+          <a class="link-btn" href="/" data-href-en="/en" data-i18n="nav_generator">Генератор</a>
+          <a class="link-btn" href="/status.html" data-i18n="nav_status">Статус</a>
+          <a class="link-btn" href="https://github.com/HereIamGosu/amnezia-config-gen" target="_blank" rel="noopener noreferrer">GitHub</a>
+        </div>
+      </div>
+    </footer>
+
+    <!-- ═══════════════ Модальные окна (общий каркас ui-shell) ═══════════════ -->
+
+    <!-- О Endpoint Lab -->
+    <div id="labInfoModal" class="modal lab-modal" role="dialog" aria-modal="true" aria-labelledby="labInfoHeading" aria-hidden="true">
+      <div class="modal__dialog lab-modal__dialog lab-modal__dialog--sm">
+        <div class="lab-state-card lab-state-card--info">
+          <span class="lab-state-card__icon" aria-hidden="true"><svg class="icon icon--lg"><use href="#i-info"/></svg></span>
+          <div class="lab-state-card__body">
+            <h2 class="lab-state-card__title" id="labInfoHeading" data-i18n="lab_info_title">О Endpoint Lab</h2>
+            <p class="lab-state-card__text" data-i18n="lab_info_text">Endpoint Lab проверяет реальные WARP endpoint'ы через WireGuard-туннель и HTTPS-трафик. В пул ACTIVE попадают только свежие и успешно проверенные endpoint'ы.</p>
+            <p class="lab-state-card__note"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-info"/></svg><span data-i18n="lab_info_note">Проверка выполняется с сервера проекта и подтверждает работоспособность endpoint'а в Lab, но не гарантирует его доступность в вашей сети.</span></p>
+          </div>
+          <div class="lab-state-card__actions">
+            <button type="button" class="btn btn--blue" data-close-modal data-autofocus data-i18n="lab_ok">Понятно</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Подробности endpoint'а -->
+    <div id="labEndpointModal" class="modal lab-modal" role="dialog" aria-modal="true" aria-labelledby="labEpHeading" aria-hidden="true">
+      <div class="modal__dialog lab-modal__dialog">
+        <header class="modal__header lab-modal__header">
+          <div class="modal__titles">
+            <h2 id="labEpHeading" class="modal__title lab-mono">—</h2>
+            <div class="lab-chips" id="labEpChips"></div>
+          </div>
+          <button type="button" class="modal__close" data-close-modal aria-label="Закрыть" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </header>
+        <div class="modal__body lab-modal__body" id="labEpBody" aria-live="polite"></div>
+        <footer class="modal__footer">
+          <button type="button" class="btn btn--sm" id="labEpCopy">
+            <svg class="icon icon--sm" aria-hidden="true"><use href="#i-copy"/></svg><span data-i18n="lab_copy_endpoint">Копировать адрес</span>
+          </button>
+          <button type="button" class="btn btn--sm btn--blue" id="labEpHistoryBtn">
+            <svg class="icon icon--sm" aria-hidden="true"><use href="#i-history"/></svg><span data-i18n="lab_history_open">История проверок</span>
+          </button>
+        </footer>
+      </div>
+    </div>
+
+    <!-- История проверок endpoint'а -->
+    <div id="labHistoryModal" class="modal lab-modal" role="dialog" aria-modal="true" aria-labelledby="labHistHeading" aria-hidden="true">
+      <div class="modal__dialog lab-modal__dialog">
+        <header class="modal__header lab-modal__header">
+          <div class="modal__titles">
+            <h2 id="labHistHeading" class="modal__title" data-i18n="lab_history_title">История проверок</h2>
+            <p class="lab-modal__subtitle lab-mono" id="labHistEndpoint">—</p>
+          </div>
+          <button type="button" class="modal__close" data-close-modal aria-label="Закрыть" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </header>
+        <div class="modal__body lab-modal__body">
+          <div class="lab-tabs" id="labHistRange" role="group" aria-label="Период истории" data-i18n-aria-label="lab_history_range_aria">
+            <button type="button" class="lab-tabs__btn" data-range="all" aria-pressed="true" data-i18n="lab_range_all">Все</button>
+            <button type="button" class="lab-tabs__btn" data-range="24h" aria-pressed="false" data-i18n="lab_range_24h">24ч</button>
+            <button type="button" class="lab-tabs__btn" data-range="7d" aria-pressed="false" data-i18n="lab_range_7d">7д</button>
+            <button type="button" class="lab-tabs__btn" data-range="30d" aria-pressed="false" data-i18n="lab_range_30d">30д</button>
+          </div>
+          <h3 class="lab-section-title" data-i18n="lab_history_results">Результаты проверок</h3>
+          <div class="lab-hist-chart" id="labHistChart"></div>
+          <p class="visually-hidden" id="labHistSummary"></p>
+          <ul class="lab-legend lab-legend--inline">
+            <li class="lab-legend__item"><span class="lab-legend__dot lab-legend__dot--first" aria-hidden="true"></span><span data-i18n="lab_hist_first">Успешная</span></li>
+            <li class="lab-legend__item"><span class="lab-legend__dot lab-legend__dot--retry" aria-hidden="true"></span><span data-i18n="lab_hist_retry">Повторная сессия</span></li>
+            <li class="lab-legend__item"><span class="lab-legend__dot lab-legend__dot--fail" aria-hidden="true"></span><span data-i18n="lab_hist_fail">Неудачная</span></li>
+          </ul>
+          <h3 class="lab-section-title" data-i18n="lab_history_events">Последние события</h3>
+          <ol class="lab-checklog" id="labHistEvents"></ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Все события -->
+    <div id="labEventsModal" class="modal lab-modal" role="dialog" aria-modal="true" aria-labelledby="labEventsHeading" aria-hidden="true">
+      <div class="modal__dialog lab-modal__dialog">
+        <header class="modal__header lab-modal__header">
+          <div class="modal__titles">
+            <h2 id="labEventsHeading" class="modal__title" data-i18n="lab_events_title">Все события</h2>
+            <p class="lab-modal__subtitle" data-i18n="lab_events_sub">Изменения пула за последние 24 часа</p>
+          </div>
+          <button type="button" class="modal__close" data-close-modal aria-label="Закрыть" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </header>
+        <div class="modal__body lab-modal__body">
+          <ol class="lab-events lab-events--full" id="labEventsFull"></ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Меню строки: один экземпляр, переносится к нажатой кнопке -->
+    <div class="lab-rowmenu" id="labRowMenu" role="menu" aria-label="Действия с endpoint'ом" data-i18n-aria-label="lab_row_menu_aria" hidden>
+      <button type="button" role="menuitem" data-action="details"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-eye"/></svg><span data-i18n="lab_menu_details">Подробнее</span></button>
+      <button type="button" role="menuitem" data-action="history"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-history"/></svg><span data-i18n="lab_history_open">История проверок</span></button>
+      <button type="button" role="menuitem" data-action="copy"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-copy"/></svg><span data-i18n="lab_copy_endpoint">Копировать адрес</span></button>
+    </div>
+  </body>
+</html>

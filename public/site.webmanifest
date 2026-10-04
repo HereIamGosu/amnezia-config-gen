@@ -1,21 +1,31 @@
 {
+  "id": "/",
   "name": "AmneziaWG Config Generator",
   "short_name": "AWG Config",
-  "description": "Генератор конфигов AmneziaWG для Cloudflare WARP",
+  "description": "WARP-safe .conf для AmneziaWG 1.5, 2.0, 3.0 и 3.1 поверх Cloudflare WARP: пресеты маршрутов, DNS и CPS-обфускация.",
+  "lang": "ru",
+  "dir": "ltr",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#0077FF",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#07090c",
+  "theme_color": "#07090c",
+  "categories": ["utilities", "productivity"],
   "icons": [
     {
-      "src": "/static/icon-192.png",
+      "src": "/static/icon-192.png?v=2.7.4",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "/static/icon-512.png",
+      "src": "/static/icon-512.png?v=2.7.4",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     }
-  ]
+  ],
+  "prefer_related_applications": false
 }

@@ -4,6 +4,7 @@ const path = require('node:path');
 const { test } = require('node:test');
 
 const LiveStatus = require('../public/static/live-status.js');
+const { readAppScript, readAllAppScripts } = require('./helpers/frontend-scripts');
 
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -677,17 +678,23 @@ test('reopening after the minimum gap clears the old render and fetches again', 
 });
 
 test('status UI uses the live API and no committed or GitHub-hosted snapshot', () => {
-  const script = read('public/static/script.js');
+  // Опрос статуса живёт в status.js; запрет снимков проверяется во всех скриптах генератора.
+  const statusScript = readAppScript('status.js');
   const statusPage = read('public/status.html');
+  // Скрипт status.html вынесен из inline (CSP без 'unsafe-inline') — запреты действуют и на него.
+  const statusPageScript = read('public/static/status-page.js');
   const html = read('public/index.html');
-  for (const source of [script, statusPage]) {
+  assert.match(statusPage, /static\/status-page\.js/);
+  assert.match(statusPageScript, /LiveStatus\.createPoller/, 'status.html polls the live API');
+  for (const source of [readAllAppScripts(), statusPage, statusPageScript]) {
     assert.doesNotMatch(source, /status\.json/);
     assert.doesNotMatch(source, /raw\.githubusercontent\.com/);
     assert.doesNotMatch(source, /healthcheck-snapshots/);
   }
   assert.match(statusPage, /static\/live-status\.js/);
-  assert.match(script, /LiveStatus\.createPoller/);
-  assert.match(script, /statusPoller\.stop\(\)/);
+  assert.match(statusScript, /LiveStatus\.createPoller/);
+  assert.match(statusScript, /statusPoller\.stop\(\)/);
+  assert.ok(html.indexOf('static/live-status.js') < html.indexOf('static/status.js'));
   assert.ok(html.indexOf('static/live-status.js') < html.indexOf('static/script.js'));
   assert.match(html, /<div id="statusModalContent" class="status-loading-msg">/, 'i18n must not overwrite a rendered status');
 });

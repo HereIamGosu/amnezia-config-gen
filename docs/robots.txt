@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://hereiamgosu.github.io/amnezia-config-gen/sitemap.xml

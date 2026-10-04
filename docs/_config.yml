@@ -1,0 +1,13 @@
+# GitHub Pages (main → /docs) публикует только index.html — редирект на https://awgconfig.com/.
+# Внутренняя документация проекта не должна попадать на github.io и в поисковую выдачу как отдельный сайт.
+exclude:
+  - README.md
+  - SEO_KEYWORD_MAP.md
+  - protocol-evidence.md
+  - manual-checks
+  - plans
+  - releases
+  - research
+  - specs
+  - srs
+  - superpowers

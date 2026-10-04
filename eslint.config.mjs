@@ -54,6 +54,24 @@ export default [
     },
   },
   {
+    // Generator UI: classic deferred scripts that share one global lexical scope (load order in
+    // public/index.html). Each file lists what it uses from the others in /* global */ and what it
+    // provides to them in /* exported */ — both directives need sourceType 'script'.
+    files: [
+      'public/static/i18n.js',
+      'public/static/common.js',
+      'public/static/status.js',
+      'public/static/result.js',
+      'public/static/settings.js',
+      'public/static/settings-link.js',
+      'public/static/history.js',
+      'public/static/script.js',
+    ],
+    languageOptions: {
+      sourceType: 'script',
+    },
+  },
+  {
     files: ['__tests__/**/*.js', '__tests__/**/*.test.js'],
     languageOptions: {
       globals: {

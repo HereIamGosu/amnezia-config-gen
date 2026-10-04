@@ -1,18 +1,31 @@
 // public/static/script.js
+//
+// Точка входа генератора: выбор профиля AWG, запрос /api/warp и телеметрия генерации, затем
+// подключение всех частей интерфейса по DOMContentLoaded. Загружается последним.
+//
+// Классический скрипт (defer), не модуль: верхнеуровневые const/let/функции всех скриптов генератора
+// живут в одной глобальной лексической области. Порядок загрузки — в public/index.html:
+// i18n.js → common.js → status.js → result.js → settings.js → settings-link.js → history.js →
+// script.js. При загрузке файл вызывает только своё и уже загруженное;
+// остальное — из обработчиков после DOMContentLoaded. /* global */ — что файл берёт у других,
+// /* exported */ — что отдаёт им (проверяют ESLint и __tests__/frontend-scripts.test.js).
 
-// ─────────────────────────────────────────────────────────────
-// F-03: Локализация (i18n)
-// ─────────────────────────────────────────────────────────────
+/* global t, setI18nText, initI18n, switchLang, restoreLangHandoff -- i18n.js */
+/* global telemetry, parseJsonResponse, downloadFile, openModal, previewConfigText, copyText, toast -- common.js */
+/* global initHeroStatus, fetchServiceStatus, openStatusModal, refreshHeroStatus -- status.js */
+/* global
+   getModeFilename, getModeLoadingLabel, showResultLoading, resultExplanation, lastResultSummary:writable,
+   renderResultExplanation, lastCompatibility:writable, renderCompatibilityCard, showResult, getModeSuccessLabel,
+   showResultError, initResultPanel -- result.js */
+/* global
+   cfgState, getSelectedRouteIds, ROUTE_MODES, getSelectedDnsKey, getResultStateSnapshot, initSettingsPanel -- settings.js */
+/* global shareLink -- settings-link.js */
+/* global saveToHistory, renderHistoryPanel, HISTORY_KEY -- history.js */
+/* exported getSelectedProfile */
 
-const _i18n = { locale: 'ru', strings: {} };
-const resultExplanation = window.ResultExplanation || null;
-let lastResultSummary = null;
-let lastCompatibility = null;
-const telemetry = window.ProductTelemetry || {
-  classifyGenerationError: () => 'unknown',
-  durationMs: () => 0,
-  trackEvent: () => false,
-};
+const TG_CHANNEL_URL = 'https://t.me/amnezia_config';
+
+const API_WARP_TIMEOUT_MS = 120000;
 
 const telemetryNow = () =>
   window.performance && typeof window.performance.now === 'function'
@@ -48,986 +61,6 @@ const getEndpointTelemetrySource = (data, endpointMode) => {
 const getWarningCount = (warning) =>
   Array.isArray(warning) ? warning.length : warning ? 1 : 0;
 
-/** Возвращает переведённую строку или fallback (если перевод не загружен). */
-const t = (key, fallback) => _i18n.strings[key] !== undefined ? _i18n.strings[key] : (fallback !== undefined ? fallback : key);
-
-/** Обходит все элементы с data-i18n-* и применяет переводы. */
-const applyTranslations = () => {
-  document.querySelectorAll('[data-i18n]').forEach((el) => {
-    const key = el.getAttribute('data-i18n');
-    const val = _i18n.strings[key];
-    if (val !== undefined) el.textContent = val;
-  });
-  document.querySelectorAll('[data-i18n-html]').forEach((el) => {
-    const key = el.getAttribute('data-i18n-html');
-    const val = _i18n.strings[key];
-    if (val !== undefined) el.innerHTML = val;
-  });
-  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
-    const key = el.getAttribute('data-i18n-title');
-    const val = _i18n.strings[key];
-    if (val !== undefined) el.title = val;
-  });
-  document.querySelectorAll('[data-i18n-aria-label]').forEach((el) => {
-    const key = el.getAttribute('data-i18n-aria-label');
-    const val = _i18n.strings[key];
-    if (val !== undefined) el.setAttribute('aria-label', val);
-  });
-};
-
-/**
- * Загружает словарь для заданного языка и применяет переводы.
- * Fallback: если файл недоступен (offline), оставляем HTML-текст нетронутым.
- */
-const loadLocale = async (lang) => {
-  try {
-    const res = await fetch(`/locales/${lang}.json`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    _i18n.strings = await res.json();
-    _i18n.locale = lang;
-    applyTranslations();
-    if (lastResultSummary) renderResultExplanation(lastResultSummary);
-    if (lastCompatibility) renderCompatibilityCard(lastCompatibility);
-  } catch {
-    // В офлайн-режиме или при 404 оставляем исходный HTML-текст (русский)
-  }
-  // Обновляем состояние кнопок переключателя
-  document.querySelectorAll('.lang-btn').forEach((btn) => {
-    btn.classList.toggle('lang-btn--active', btn.dataset.lang === _i18n.locale);
-  });
-};
-
-const applyServiceStatus = (id, result) => {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const txt = el.querySelector('.health-status__text');
-  el.className = `health-status health-status--${result.ok ? 'ok' : 'fail'}`;
-  if (txt) {
-    txt.textContent = result.ok
-      ? (result.latencyMs != null ? result.latencyMs + ' ms' : 'доступен')
-      : 'недоступен';
-  }
-};
-
-// Shares the nginx /api/ rate-limit zone with the status modal: rapid tab switching
-// must not turn into a request burst.
-const HEALTH_MIN_GAP_MS = 15_000;
-let lastHealthFetchAt = -Infinity;
-
-const fetchHealthStatus = async () => {
-  lastHealthFetchAt = Date.now();
-  const warnEl = document.getElementById('healthWarn');
-  try {
-    const res = await fetch('/api/healthcheck');
-    const data = await res.json();
-    const { api, engage } = data.services ?? {};
-    applyServiceStatus('healthStatus-api',    api    ?? { ok: false, latencyMs: null });
-    applyServiceStatus('healthStatus-engage', engage ?? { ok: false, latencyMs: null });
-    if (warnEl) {
-      if (api && !api.ok) {
-        warnEl.textContent = 'Cloudflare API недоступен — генерация может не сработать';
-        warnEl.hidden = false;
-      } else {
-        warnEl.hidden = true;
-      }
-    }
-  } catch {
-    applyServiceStatus('healthStatus-api',    { ok: false, latencyMs: null });
-    applyServiceStatus('healthStatus-engage', { ok: false, latencyMs: null });
-    if (warnEl) {
-      warnEl.textContent = 'Сервер недоступен — попробуйте позже';
-      warnEl.hidden = false;
-    }
-  }
-};
-
-/**
- * Fetch /api/status and show a banner only for measured problems (degraded/down).
- * `unknown` means there is no endpoint health data — not a failure, so no banner.
- */
-const fetchServiceStatus = async () => {
-  const bannerEl = document.getElementById('statusBanner');
-  if (!bannerEl) return;
-  try {
-    const res = await fetch('/api/status');
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data.status === 'degraded' || data.status === 'down') {
-      const key = data.status === 'down' ? 'status_banner_down' : 'status_banner_degraded';
-      // data-i18n lets applyTranslations() re-render the text when the locale loads or changes.
-      bannerEl.dataset.i18n = key;
-      bannerEl.textContent = key === 'status_banner_down'
-        ? t(key, 'WARP-endpoint не проходят проверку — генерация может не сработать')
-        : t(key, 'Часть WARP-endpoint не проходит проверку — генерация может работать нестабильно');
-      bannerEl.hidden = false;
-    } else {
-      delete bannerEl.dataset.i18n;
-      bannerEl.hidden = true;
-    }
-  } catch {
-    // Silent — don't show banner on network error
-  }
-};
-
-/**
- * Инициализирует i18n: определяет язык (localStorage → navigator.language → 'ru').
- * Вызывается один раз при DOMContentLoaded.
- */
-const initI18n = () => {
-  const saved = localStorage.getItem('lang');
-  const nav = (navigator.language || '').toLowerCase().startsWith('ru') ? 'ru' : 'en';
-  const lang = saved || nav;
-  loadLocale(lang);
-};
-
-/** Переключает язык и сохраняет выбор в localStorage. */
-const switchLang = (lang) => {
-  localStorage.setItem('lang', lang);
-  loadLocale(lang);
-};
-
-// ─────────────────────────────────────────────────────────────
-// F-02 / F-05 / F-07: Модальные окна
-// ─────────────────────────────────────────────────────────────
-
-// Live status poller of the status modal; created on first open, stopped on close.
-let statusPoller = null;
-
-/** Открывает любое модальное окно по id. */
-const openModal = (id) => {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.style.display = 'flex';
-  el.setAttribute('aria-hidden', 'false');
-};
-
-/** Закрывает любое модальное окно по id. */
-const closeModal = (id) => {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.style.display = 'none';
-  el.setAttribute('aria-hidden', 'true');
-  if (id === 'statusModal' && statusPoller) statusPoller.stop();
-};
-
-/**
- * Открывает модальное окно предпросмотра конфига.
- * @param {string} decodedConfig
- */
-const openPreviewModal = (decodedConfig) => {
-  const textarea = document.getElementById('configPreviewTextModal');
-  if (textarea) textarea.value = decodedConfig;
-  openModal('configPreviewModal');
-};
-
-// ── Статус сервисов (live: /api/status + /api/healthcheck) ──
-
-const formatMoscowTime = (isoStr) => {
-  const d = new Date(isoStr);
-  if (isNaN(d)) return isoStr;
-  return d.toLocaleString('ru-RU', {
-    timeZone: 'Europe/Moscow',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  }) + t('status_msk_suffix', ' (МСК)');
-};
-
-const getLiveStatusLabels = () => {
-  const base = window.LiveStatus.DEFAULT_LABELS;
-  return {
-    ...base,
-    names: {
-      ...base.names,
-      warp_engage: t('status_engage_name', base.names.warp_engage),
-      cidr_source: t('status_cidr_name', base.names.cidr_source),
-      endpoint_pool: t('status_pool_name', base.names.endpoint_pool),
-    },
-    statusText: {
-      ok:       t('status_ok',       base.statusText.ok),
-      error:    t('status_error',    base.statusText.error),
-      degraded: t('status_degraded', base.statusText.degraded),
-      unknown:  t('status_unknown',  base.statusText.unknown),
-    },
-    latency:      t('status_latency',      base.latency),
-    unreachable:  t('status_unreachable',  base.unreachable),
-    poolDetail:   t('status_pool_detail',  base.poolDetail),
-    poolFallback: t('status_pool_fallback', base.poolFallback),
-    poolUnmeasured: t('status_pool_unmeasured', base.poolUnmeasured),
-  };
-};
-
-const renderStatusModalLoading = () => {
-  const content     = document.getElementById('statusModalContent');
-  const lastChecked = document.getElementById('statusModalLastChecked');
-  if (content) { content.className = 'status-loading-msg'; content.textContent = t('status_loading', 'Загрузка...'); }
-  if (lastChecked) lastChecked.hidden = true;
-};
-
-const renderStatusModal = (snapshot) => {
-  const content     = document.getElementById('statusModalContent');
-  const lastChecked = document.getElementById('statusModalLastChecked');
-  if (!content) return;
-  content.className = '';
-  content.innerHTML = window.LiveStatus.renderCardsHtml(snapshot, getLiveStatusLabels());
-  if (lastChecked) {
-    lastChecked.hidden = false;
-    lastChecked.textContent = '';
-    const label = document.createElement('strong');
-    label.textContent = t('status_last_checked_label', 'Последняя проверка:');
-    lastChecked.append(label, document.createElement('br'), formatMoscowTime(snapshot.checkedAt),
-      document.createElement('br'), t('status_auto_refresh', 'Обновляется автоматически раз в минуту, пока вкладка открыта.'));
-  }
-};
-
-const formatMoscowClock = (ms) => new Date(ms).toLocaleTimeString('ru-RU', {
-  timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit',
-}) + t('status_msk_suffix', ' (МСК)');
-
-const renderStatusModalError = (err, { retryAt = null } = {}) => {
-  const content     = document.getElementById('statusModalContent');
-  const lastChecked = document.getElementById('statusModalLastChecked');
-  if (lastChecked) lastChecked.hidden = true;
-  if (!content) return;
-  const reason = {
-    timeout:      t('status_reason_timeout', 'сервер не ответил вовремя'),
-    rate_limited: t('status_reason_rate_limited', 'слишком много запросов'),
-  }[err && err.kind] || t('status_reason_other', 'не удалось получить актуальные данные');
-  content.className = 'status-error-msg';
-  content.textContent = '';
-  const title = document.createElement('strong');
-  title.textContent = t('status_unavailable', 'Статус временно недоступен');
-  content.append(title, document.createElement('br'), reason);
-  if (retryAt != null) {
-    content.append(document.createElement('br'),
-      t('status_retry_at', 'Следующая попытка около {time}.').replace('{time}', formatMoscowClock(retryAt)));
-  }
-};
-
-/** Открывает модал статуса; данные обновляются, пока модал открыт и вкладка видима. */
-const openStatusModal = () => {
-  openModal('statusModal');
-  telemetry.trackEvent('status_modal_opened');
-  if (!window.LiveStatus) {
-    renderStatusModalError(new Error('live-status.js not loaded'));
-    return;
-  }
-  if (!statusPoller) {
-    statusPoller = window.LiveStatus.createPoller({
-      load: () => window.LiveStatus.loadSnapshot(),
-      onLoading: renderStatusModalLoading,
-      onData: renderStatusModal,
-      onError: renderStatusModalError,
-    });
-  }
-  statusPoller.start();
-};
-
-// ─────────────────────────────────────────────────────────────
-// F-02 / F-05: Показ тройки кнопок на месте кнопки генерации
-// ─────────────────────────────────────────────────────────────
-
-const POST_GEN_ROW_IDS = {
-  generateButton:     'postGenLegacy',
-  generateButtonAwg2: 'postGenAwg2',
-  generateButtonAwg3: 'postGenAwg3',
-  generateButtonAwg31: 'postGenAwg31',
-};
-
-/**
- * Скрывает кнопку генерации и показывает на её месте тройку кнопок:
- * Скачать | QR | Просмотр конфига.
- */
-const showTgChannelCta = () => {
-  const cta = document.getElementById('tgChannelCta');
-  if (!cta || !cta.hidden) return;
-  cta.hidden = false;
-  const btn = cta.querySelector('.tg-channel-cta__btn');
-  if (btn) {
-    btn.href = TG_CHANNEL_URL;
-    btn.addEventListener('click', () => {
-      if (typeof ym === 'function') ym(99328227, 'reachGoal', 'telegram_channel_cta_click');
-    }, { once: true });
-  }
-};
-
-const showPostGenRow = ({
-  buttonId,
-  readyDownloadText,
-  filename,
-  decodedConfig,
-  vpnLink,
-  telemetryContext,
-}) => {
-  // Скрываем кнопку генерации
-  const genBtn = document.getElementById(buttonId);
-  if (genBtn) genBtn.hidden = true;
-
-  // Показываем post-gen row
-  const baseButtonId = buttonId.replace(/_v\d+$/, '');
-  const baseRowId = POST_GEN_ROW_IDS[baseButtonId];
-  if (!baseRowId) return;
-  let row = document.getElementById(baseRowId);
-  if (!row) return;
-  if (buttonId !== baseButtonId) {
-    const variantRowId = `${baseRowId}_${buttonId.slice(baseButtonId.length + 1)}`;
-    let variantRow = document.getElementById(variantRowId);
-    if (!variantRow) {
-      variantRow = row.cloneNode(true);
-      variantRow.id = variantRowId;
-      variantRow.querySelector('.post-gen-row__download .button__text')?.removeAttribute('data-i18n');
-      row.parentElement.appendChild(variantRow);
-    }
-    row = variantRow;
-  }
-  row.hidden = false;
-  showTgChannelCta();
-
-  // Кнопка скачать
-  const dlBtn = row.querySelector('.post-gen-row__download');
-  if (dlBtn) {
-    const span = dlBtn.querySelector('.button__text');
-    if (span) span.textContent = readyDownloadText;
-    dlBtn.onclick = () => {
-      downloadFile(decodedConfig, filename);
-      telemetry.trackEvent('config_downloaded', telemetryContext);
-    };
-  }
-
-  // Кнопка просмотра
-  const prevBtn = row.querySelector('.post-gen-row__preview');
-  if (prevBtn) {
-    prevBtn.onclick = () => {
-      openPreviewModal(decodedConfig);
-      telemetry.trackEvent('config_preview_opened', telemetryContext);
-    };
-  }
-
-  // Кнопка подробностей о конфиге (ℹ) — wire up на случай клонированных строк
-  const infoBtn = row.querySelector('.post-gen-row__info');
-  if (infoBtn) {
-    infoBtn.onclick = () => openModal('resultInfoModal');
-  }
-
-  // Кнопка copy vpn:// — показываем только если link есть в ответе
-  const copyBtn = row.querySelector('.post-gen-row__copy-vpn-link');
-  if (copyBtn) {
-    if (vpnLink) {
-      copyBtn.hidden = false;
-      copyBtn.onclick = async () => {
-        try {
-          await navigator.clipboard.writeText(vpnLink);
-          telemetry.trackEvent('vpn_link_copied', telemetryContext);
-          const status = document.getElementById('status');
-          if (status) status.textContent = t('vpn_link_copied', 'Ссылка скопирована, откройте AmneziaVPN на телефоне.');
-        } catch (e) {
-          console.error('Clipboard write failed:', e);
-          const status = document.getElementById('status');
-          if (status) status.textContent = t('vpn_link_copy_failed', 'Не удалось скопировать. Скопируйте вручную из консоли (F12).');
-        }
-      };
-    } else {
-      copyBtn.hidden = true;
-    }
-  }
-};
-
-const summaryValue = (key, value) => {
-  const values = {
-    format: {
-      legacy: getModeLabel('legacy'),
-      awg2: getModeLabel('awg2'),
-      awg3: getModeLabel('awg3'),
-      awg31: getModeLabel('awg31'),
-      unknown: t('result_summary_no_data', 'нет данных'),
-    },
-    endpointMode: {
-      hostname: t('result_summary_endpoint_hostname', 'hostname'),
-      auto: t('result_summary_endpoint_auto', 'auto'),
-      manual: t('result_summary_endpoint_manual', 'manual'),
-      unknown: t('result_summary_no_data', 'нет данных'),
-    },
-    endpointSource: {
-      hostname: t('result_summary_endpoint_hostname', 'hostname'),
-      manual: t('result_summary_endpoint_manual', 'manual'),
-      tcpCheck: t('result_summary_endpoint_tcp_check', 'встроенный список, проверка TCP'),
-      fallback: t('result_summary_endpoint_fallback', 'fallback'),
-      unknown: t('result_summary_no_data', 'нет данных'),
-    },
-    routesSource: {
-      opencck: 'OpenCCK',
-      community: t('result_summary_routes_community', 'community lists'),
-      antifilter: 'antifilter',
-      staticFallback: t('result_summary_routes_static_fallback', 'static fallback'),
-      notApplicable: t('result_summary_not_applicable', 'не применяется'),
-      unknown: t('result_summary_no_data', 'нет данных'),
-    },
-    routeMode: {
-      full: t('result_summary_route_full', 'full route'),
-      split: t('result_summary_route_split', 'выборочная'),
-    },
-    profile: {
-      mobile: 'mobile',
-      router: 'router',
-      mobileRouter: 'mobile + router',
-      standard: t('result_summary_profile_standard', 'standard'),
-      unknown: t('result_summary_no_data', 'нет данных'),
-    },
-    ipv6: {
-      enabled: t('result_summary_ipv6_enabled', 'включён'),
-      disabled: t('result_summary_ipv6_disabled', 'отключён'),
-      disabledByMobile: t('result_summary_ipv6_disabled_mobile', 'отключён mobile-профилем'),
-      unknown: t('result_summary_no_data', 'нет данных'),
-    },
-    vpnImport: {
-      available: t('result_summary_import_available', 'vpn:// доступен'),
-      notRequested: t('result_summary_import_not_requested', 'не запрошен'),
-      unknown: t('result_summary_no_data', 'нет данных'),
-    },
-  };
-  return values[key]?.[value] ?? t('result_summary_no_data', 'нет данных');
-};
-
-const warningText = (warning) => {
-  const byCode = {
-    partial_generation: t('risk_partial_generation', 'Создано меньше вариантов, чем запрошено.'),
-    no_configs: t('risk_no_configs', 'Генерация не вернула ни одного конфига.'),
-    endpoint_fallback: t('risk_endpoint_fallback', 'Использован fallback-источник endpoint.'),
-    endpoint_unknown: t('risk_endpoint_unknown', 'Источник endpoint не указан.'),
-    allowed_ips_limit_disabled: t('risk_limit_disabled', 'Лимит AllowedIPs отключён.'),
-    routes_fallback: t('risk_routes_fallback', 'Использован резервный источник маршрутов.'),
-    routes_unknown: t('risk_routes_unknown', 'Источник маршрутов не указан.'),
-  };
-  return byCode[warning.code] || warning.message || t('result_summary_no_data', 'нет данных');
-};
-
-const appendSummaryField = (container, label, value) => {
-  const row = document.createElement('div');
-  row.className = 'result-summary-card__field';
-  const term = document.createElement('dt');
-  term.textContent = label;
-  const description = document.createElement('dd');
-  description.textContent = value;
-  row.append(term, description);
-  container.appendChild(row);
-};
-
-const getModeLabel = (mode) => {
-  const labels = {
-    legacy: 'AWG 1.5',
-    awg2: 'AWG 2.0',
-    awg3: 'AWG 3.0',
-    awg31: 'AWG 3.1',
-  };
-  return labels[mode] || t('result_summary_no_data', 'нет данных');
-};
-
-const getModeFilename = (mode) => ({
-  legacy: 'AmneziaWarp.conf',
-  awg2: 'AmneziaWarp-AWG2.conf',
-  awg3: 'AmneziaWarp-AWG3.0.conf',
-  awg31: 'AmneziaWarp-AWG3.1.conf',
-}[mode] || 'AmneziaWarp.conf');
-const getModeLoadingLabel = (mode) => t(`loading_${mode}`, `Генерация конфигурации (${getModeLabel(mode)})...`);
-const getModeReadyDownloadLabel = (mode) => t(`ready_download_${mode}`, `Скачать ${getModeFilename(mode)}`);
-const getModeSuccessLabel = (mode) => t(`success_${mode}`, `Конфигурация ${getModeLabel(mode)} успешно сгенерирована.`);
-
-const getModeBadgeClass = (mode) => {
-  if (mode === 'awg2' || mode === 'awg3' || mode === 'awg31') {
-    return `history-item__badge history-item__badge--${mode}`;
-  }
-  return 'history-item__badge history-item__badge--legacy';
-};
-
-const getAwgFeatureLabel = (feature) => ({
-  'junk-packets': t('awg_feature_junk', 'Junk packets'),
-  cps: t('awg_feature_cps', 'CPS packets'),
-  'timing-ranges': t('awg_feature_timing', 'Рандомизация timing'),
-  'persistent-keepalive-range': t('awg_feature_keepalive', 'Диапазон PersistentKeepalive'),
-  'content-padding-addition': t('awg_feature_content_padding', 'ContentPaddingAddition'),
-  'disable-cookies': t('awg_feature_disable_cookies', 'DisableCookies'),
-  'header-protection': t('awg_feature_header_disabled', 'Header Protection отключён'),
-  'message-padding': t('awg_feature_padding_disabled', 'S1-S4 padding отключён'),
-  'dynamic-message-headers': t('awg_feature_headers_disabled', 'Dynamic H1-H4 отключён'),
-  'random-trailers': t('awg_feature_trailers_disabled', 'RandomTrailers отключён'),
-  'router-compatibility': t('awg_router_warning', 'Совместимость с роутерами зависит от реализации роутера'),
-}[feature] || feature);
-
-const getAwgCapabilityLabel = (capability) => ({
-  contentPaddingAddition: t('awg_capability_content_padding', 'ContentPaddingAddition'),
-  disableCookies: t('awg_capability_disable_cookies', 'DisableCookies'),
-  randomTrailers: t('awg_capability_random_trailers', 'RandomTrailers'),
-  headerProtectionKey: t('awg_capability_header_protection_key', 'HeaderProtectionKey'),
-}[capability] || capability);
-
-const getAwgEvidenceStatusLabel = (status) => ({
-  verified: t('awg_evidence_status_verified', 'Verified'),
-  'source-confirmed': t('awg_evidence_status_source_confirmed', 'Source-confirmed'),
-  experimental: t('awg_evidence_status_experimental', 'Experimental'),
-  'peer-dependent-disabled': t('awg_evidence_status_peer_dependent_disabled', 'Disabled: compatible peer required'),
-  unknown: t('awg_evidence_status_unknown', 'Unknown'),
-}[status] || t('awg_evidence_status_unknown', 'Unknown'));
-
-const getAwgEffectiveStateLabel = (state) => ({
-  active: t('awg_effective_state_active', 'active'),
-  disabled: t('awg_effective_state_disabled', 'disabled'),
-  blocked: t('awg_effective_state_blocked', 'blocked'),
-}[state] || t('awg_effective_state_disabled', 'disabled'));
-
-const formatAwgCapabilityEvidence = (capability) => {
-  const parts = [
-    getAwgEvidenceStatusLabel(capability.status),
-    getAwgEffectiveStateLabel(capability.effectiveState),
-  ];
-  if (capability.effectiveValue) {
-    parts.push(`${t('awg_effective_value', 'value')}: ${capability.effectiveValue}`);
-  }
-  return parts.join(' · ');
-};
-
-const appendAwgConstraint = (container, feature) => {
-  const label = document.createElement('div');
-  label.className = 'risk-label risk-label--info';
-  const state = document.createElement('strong');
-  state.textContent = t('awg_disabled_for_warp', 'Ограничение WARP');
-  const message = document.createElement('span');
-  message.textContent = getAwgFeatureLabel(feature);
-  label.append(state, message);
-  container.appendChild(label);
-};
-
-const renderResultExplanation = (summary) => {
-  const fields = document.getElementById('resultSummaryFields');
-  const risks = document.getElementById('resultRiskLabels');
-  if (!fields || !risks || !summary) return;
-
-  fields.textContent = '';
-  risks.textContent = '';
-  const endpointMode = summaryValue('endpointMode', summary.endpoint.mode);
-  const endpointSource = summaryValue('endpointSource', summary.endpoint.source);
-  const endpoint = endpointMode === endpointSource ? endpointMode : `${endpointMode} / ${endpointSource}`;
-  const presetNames = summary.presets.length
-    ? ` (${summary.presets.slice(0, 4).join(', ')}${summary.presets.length > 4 ? ', …' : ''})`
-    : '';
-
-  appendSummaryField(fields, t('result_summary_format', 'Формат'), summaryValue('format', summary.format));
-  appendSummaryField(fields, t('result_summary_variants', 'Вариантов'), String(summary.variants));
-  appendSummaryField(fields, t('result_summary_endpoint', 'Endpoint'), endpoint);
-  appendSummaryField(
-    fields,
-    t('result_summary_port', 'Порт'),
-    summary.port == null ? t('result_summary_no_data', 'нет данных') : String(summary.port),
-  );
-  appendSummaryField(fields, t('result_summary_routes_source', 'Маршруты'), summaryValue('routesSource', summary.routesSource));
-  appendSummaryField(fields, t('result_summary_route_mode', 'Режим маршрутов'), summaryValue('routeMode', summary.routeMode));
-  appendSummaryField(
-    fields,
-    t('result_summary_presets', 'Presets'),
-    `${summary.presets.length}${presetNames}`,
-  );
-  appendSummaryField(fields, t('result_summary_profile', 'Профиль'), summaryValue('profile', summary.profile));
-  appendSummaryField(fields, t('result_summary_ipv6', 'IPv6'), summaryValue('ipv6', summary.ipv6));
-  const cpsValue = summary.cps.requested === 'auto'
-    ? `Auto → ${summary.cps.resolved}${summary.cps.stability === 'experimental' ? ' (experimental)' : ''}`
-    : `${summary.cps.resolved}${summary.cps.stability === 'experimental' ? ' (experimental)' : ''}`;
-  appendSummaryField(fields, t('result_summary_cps', 'CPS'), cpsValue);
-  appendSummaryField(fields, t('result_summary_import', 'Импорт'), summaryValue('vpnImport', summary.vpnImport));
-  if (summary.awg) {
-    appendSummaryField(
-      fields,
-      t('awg_profile_label', 'AWG-профиль'),
-      `AWG ${summary.awg.version} ${t('awg_warp_safe', 'WARP-safe')}`,
-    );
-    appendSummaryField(
-      fields,
-      t('awg_enabled_features', 'Включено'),
-      summary.awg.enabledFeatures.map(getAwgFeatureLabel).join(', '),
-    );
-    summary.awg.disabledFeatures.forEach((feature) => appendAwgConstraint(risks, feature));
-    if (summary.awg.experimentalFeatures.length) {
-      appendSummaryField(
-        fields,
-        t('awg_experimental_features', 'Экспериментально'),
-        summary.awg.experimentalFeatures.map(getAwgFeatureLabel).join(', '),
-      );
-    }
-    if (summary.awg.capabilities && Object.keys(summary.awg.capabilities).length) {
-      appendSummaryField(
-        fields,
-        t('awg_protocol_evidence', 'Protocol evidence'),
-        t('awg_evidence_scope', 'Source-confirmed describes upstream behavior, not a live test on your network.'),
-      );
-      Object.entries(summary.awg.capabilities).forEach(([key, capability]) => {
-        appendSummaryField(fields, getAwgCapabilityLabel(key), formatAwgCapabilityEvidence(capability));
-      });
-    }
-    appendSummaryField(
-      fields,
-      t('awg_client_compatibility', 'Совместимость клиента'),
-      summary.awg.version === '3.1'
-        ? t('awg31_client_warning', 'Рекомендуется AmneziaVPN 5.0.1.5+ или совместимый AWG 3.1 client.')
-        : t('awg3_client_warning', 'Требуется клиент с поддержкой параметров AWG 3.x.'),
-    );
-    if (summary.awg.routerCompatibility) appendAwgConstraint(risks, 'router-compatibility');
-  }
-  appendSummaryField(fields, t('result_summary_warnings', 'Предупреждения'), String(summary.warnings.length));
-
-  if (!summary.warnings.length) {
-    const calm = document.createElement('p');
-    calm.className = 'result-risk-list__empty';
-    calm.textContent = t('risk_no_critical_warnings', 'Критичных предупреждений нет.');
-    risks.appendChild(calm);
-  } else {
-    summary.warnings.forEach((warning) => {
-      const label = document.createElement('div');
-      label.className = `risk-label risk-label--${warning.level}`;
-      const level = document.createElement('strong');
-      level.textContent = t(`risk_${warning.level}`, warning.level);
-      const message = document.createElement('span');
-      message.textContent = warningText(warning);
-      label.append(level, message);
-      risks.appendChild(label);
-    });
-  }
-
-  document.querySelectorAll('.post-gen-row__info').forEach((btn) => { btn.hidden = false; });
-};
-
-// ── Compatibility card (2.7.0) ────────────────────────────────────────────────
-
-/** Maps canonical server-side format ids to display labels. */
-const COMPAT_FORMAT_LABELS = { conf: '.conf', vpnlink: 'vpn://', qr: 'QR' };
-
-/**
- * Localizes a fixed English server string (warning or reason) via a known-prefix
- * lookup. Falls back to the original string, which is always secret-free.
- */
-const localizeCompatText = (text) => {
-  if (typeof text !== 'string') return '';
-  const map = [
-    ['AmneziaWG fields are client-side configuration parameters', 'compat_cloudflare_peer_notice'],
-    ['Compatibility depends on the client', 'compat_client_version_warning'],
-    ['This format does not have a stable exporter', 'compat_unsupported_exporter_warning'],
-    ['Direct export is not implemented', 'compat_reason_no_exporter'],
-    ['Research/documentation target only', 'compat_reason_research'],
-    ['No supported import path', 'compat_reason_no_path'],
-  ];
-  for (const [prefix, key] of map) {
-    if (text.startsWith(prefix)) return t(key, text);
-  }
-  return text;
-};
-
-const compatListItem = (primary, secondary) => {
-  const li = document.createElement('li');
-  li.className = 'compat-card__item';
-  const name = document.createElement('span');
-  name.className = 'compat-card__client';
-  name.textContent = primary;
-  li.appendChild(name);
-  if (secondary) {
-    const meta = document.createElement('span');
-    meta.className = 'compat-card__meta';
-    meta.textContent = secondary;
-    li.appendChild(meta);
-  }
-  return li;
-};
-
-const fillCompatGroup = (groupId, listId, items, buildItem) => {
-  const group = document.getElementById(groupId);
-  const list = document.getElementById(listId);
-  if (!group || !list) return;
-  list.textContent = '';
-  if (!Array.isArray(items) || items.length === 0) {
-    group.hidden = true;
-    return;
-  }
-  items.forEach((entry) => list.appendChild(buildItem(entry)));
-  group.hidden = false;
-};
-
-/**
- * Renders the post-generation compatibility card from the /api/warp
- * `compatibility` summary. When the summary is missing/invalid, the card is
- * hidden and generation actions (download/preview/vpn://) keep working.
- */
-const renderCompatibilityCard = (compatibility) => {
-  const card = document.getElementById('compatibilityCard');
-  if (!card) return;
-
-  const valid = compatibility
-    && typeof compatibility === 'object'
-    && (Array.isArray(compatibility.recommended)
-      || Array.isArray(compatibility.experimental)
-      || Array.isArray(compatibility.notRecommended));
-
-  if (!valid) {
-    card.hidden = true;
-    return;
-  }
-
-  const recommended = compatibility.recommended || [];
-  const experimental = compatibility.experimental || [];
-  const notRecommended = compatibility.notRecommended || [];
-  const warnings = compatibility.warnings || [];
-
-  // Format line: union of usable exports across recommended + experimental.
-  const formatEl = document.getElementById('compatFormat');
-  if (formatEl) {
-    const formats = new Set();
-    [...recommended, ...experimental].forEach((c) => {
-      (c.exports || []).forEach((ex) => formats.add(COMPAT_FORMAT_LABELS[ex] || ex));
-    });
-    if (formats.size === 0) formats.add('.conf');
-    formatEl.textContent = `${t('compat_format', 'Формат')}: ${[...formats].join(', ')}`;
-  }
-
-  fillCompatGroup('compatRecommended', 'compatRecommendedList', recommended, (c) => {
-    const platforms = (c.platforms || []).join(', ');
-    return compatListItem(c.name || c.clientId, platforms);
-  });
-
-  fillCompatGroup('compatExperimental', 'compatExperimentalList', experimental, (c) => {
-    const warn = (c.warnings || [])[0];
-    return compatListItem(c.name || c.clientId, warn ? localizeCompatText(warn) : '');
-  });
-
-  fillCompatGroup('compatNotRecommended', 'compatNotRecommendedList', notRecommended, (c) => (
-    compatListItem(c.name || c.clientId, localizeCompatText(c.reason || ''))
-  ));
-
-  const warnEl = document.getElementById('compatWarnings');
-  if (warnEl) {
-    warnEl.textContent = '';
-    if (warnings.length) {
-      warnings.forEach((w) => {
-        const p = document.createElement('p');
-        p.className = 'compat-card__warning';
-        p.textContent = localizeCompatText(w);
-        warnEl.appendChild(p);
-      });
-      warnEl.hidden = false;
-    } else {
-      warnEl.hidden = true;
-    }
-  }
-
-  card.hidden = false;
-};
-
-const getResultStateSnapshot = () => ({
-  configCount: cfgState.configCount,
-  warpEndpoint: cfgState.warpEndpoint,
-  port: cfgState.port,
-  routePresets: getSelectedRouteIds(),
-  mobileMode: cfgState.mobileMode,
-  routerMode: cfgState.routerMode,
-  routeMode: cfgState.routeMode,
-  includeIpv6: cfgState.includeIpv6,
-  ignoreLimit: cfgState.ignoreLimit,
-  vpnLinkRequested: true,
-});
-
-const API_WARP_TIMEOUT_MS = 120000;
-
-/**
- * Maximum safe number of IPv4 CIDR routes in AllowedIPs.
- * Above this threshold routers and low-memory devices (GL.iNet, Keenetic, MikroTik)
- * may fail to apply the routing table. 500 is a conservative limit that works reliably
- * on all tested platforms. Users are warned at 80 % and blocked at 100 %.
- */
-const MAX_CIDR_LIMIT = 1000;
-
-/** Routing mode enum. Always use these constants — never bare string literals. */
-const ROUTE_MODES = Object.freeze({ FULL: 'full', SPLIT: 'split' });
-
-const TG_CHANNEL_URL = 'https://t.me/amnezia_config';
-
-/**
- * @param {Response} response
- * @returns {Promise<Record<string, unknown>>}
- */
-const parseJsonResponse = async (response) => {
-  const raw = await response.text();
-  const trimmed = (raw || '').trim();
-  if (!trimmed) {
-    throw new Error(t('err_empty_response', 'Пустой ответ сервера.'));
-  }
-  const lower = trimmed.slice(0, 64).toLowerCase();
-  if (
-    trimmed.startsWith('<')
-    || lower.includes('<!doctype')
-    || lower.includes('<html')
-  ) {
-    throw new Error(t('err_html_response', 'Сервер вернул HTML вместо JSON (нет API). Запустите vercel dev или откройте задеплоенный сайт.'));
-  }
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    throw new Error(t('err_not_json', 'Ответ не похож на JSON. Проверьте доступность API.'));
-  }
-};
-
-const debounce = (fn, delayMs) => {
-  let t = null;
-  return (...args) => {
-    if (t) clearTimeout(t);
-    t = setTimeout(() => {
-      t = null;
-      fn(...args);
-    }, delayMs);
-  };
-};
-
-/** @type {{ presets: Array<{id:string,label:string,category?:string,sitesCount?:number}>, groupRfPopular: string[], dnsPresets: Array<{id:string,label:string}>, dnsDefault: string, selectedDns: string, iplistSource: 'none' | 'api' | 'fallback', cidrCount4: number, includeIpv6: boolean }} */
-const cfgState = {
-  presets: [],
-  groupRfPopular: [],
-  dnsPresets: [],
-  dnsDefault: 'cloudflare',
-  selectedDns: '',
-  iplistSource: 'none',
-  /** Current IPv4 CIDR count for selected presets (updated after each fetch). */
-  cidrCount4: 0,
-  /** Whether IPv6 CIDRs should be included in the generated config. Off by default. */
-  includeIpv6: false,
-  /** When true the CIDR limit is not enforced — tiles are never disabled. */
-  ignoreLimit: false,
-  /** When true, router-safe caps are applied (Jc≤2, Jmin/Jmax≤128). */
-  routerMode: false,
-  /** CPS protocol for I1 field: auto | quic | dns | stun | dtls | sip | static */
-  cpsProtocol: 'auto',
-  /** Set of preset IDs confirmed to return 0 IPv4 CIDRs from opencck. */
-  zeroCidrPresets: new Set(),
-  warpPort: 4500,
-  /** Allowlisted UDP port for WARP endpoint (mirrors cfgState.warpPort; kept in sync). */
-  port: 4500,
-  warpEndpoint: 'hostname',
-  /** When true, server appends I2-I5 to AWG 2.0 [Interface]. */
-  extraCps: false,
-  /** When true, mobile preset (low Jc/Jmax, IPv4-only). */
-  mobileMode: false,
-  /** Explicit routing mode. 'full' = all traffic through tunnel; 'split' = only selected presets. */
-  routeMode: ROUTE_MODES.FULL,
-  /** Number of configs to generate (1–3). */
-  configCount: 1,
-};
-
-const getPresetsFallbackUrl = () => {
-  const el = document.querySelector('script[src*="script.js"]');
-  if (el && el.src) {
-    try {
-      return new URL('presets-fallback.json', el.src).href;
-    } catch {
-      /* ignore */
-    }
-  }
-  return new URL('static/presets-fallback.json', window.location.href).href;
-};
-
-/**
- * Tries GET /api/iplist, then static presets-fallback.json next to script.js.
- * @returns {Promise<{ source: 'api' | 'fallback', data: Record<string, unknown> }>}
- */
-const fetchPresetsManifest = async () => {
-  let apiErr = null;
-  try {
-    const res = await fetch('/api/iplist');
-    const data = await parseJsonResponse(res);
-    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
-    if (!data.success) throw new Error(data.message || 'Ошибка списка пресетов');
-    return { source: 'api', data };
-  } catch (e) {
-    apiErr = e;
-  }
-  const fallbackUrl = getPresetsFallbackUrl();
-  try {
-    const res2 = await fetch(fallbackUrl, { cache: 'no-cache' });
-    if (!res2.ok) throw new Error(`HTTP ${res2.status}`);
-    const parsed = JSON.parse((await res2.text()).trim());
-    if (!Array.isArray(parsed.presets)) throw new Error('Некорректный fallback');
-    return { source: 'fallback', data: parsed };
-  } catch {
-    throw apiErr;
-  }
-};
-
-let presetStatsAbort = null;
-
-const ROUTE_CATEGORY_ORDER = ['social', 'gaming', 'torrent', 'more'];
-
-const ROUTE_CONTAINER_BY_CATEGORY = {
-  social: 'routeTilesSocial',
-  gaming: 'routeTilesGaming',
-  torrent: 'routeTilesTorrent',
-  more: 'routeTilesMore',
-};
-
-const ROUTE_TILE_ROOT_SELECTORS = ROUTE_CATEGORY_ORDER.map(
-  (c) => `#${ROUTE_CONTAINER_BY_CATEGORY[c]} .cfg-tile`,
-);
-
-const ROUTE_CHECKBOX_SELECTOR = ROUTE_TILE_ROOT_SELECTORS.map(
-  (s) => `${s} input[type="checkbox"]:checked`,
-).join(', ');
-
-const forEachRouteTile = (fn) => {
-  ROUTE_TILE_ROOT_SELECTORS.forEach((sel) => {
-    document.querySelectorAll(sel).forEach(fn);
-  });
-};
-
-const clearAllRouteTileHosts = () => {
-  ROUTE_CATEGORY_ORDER.forEach((c) => {
-    const el = document.getElementById(ROUTE_CONTAINER_BY_CATEGORY[c]);
-    if (el) el.textContent = '';
-  });
-};
-
-const getSelectedRouteIds = () =>
-  Array.from(document.querySelectorAll(ROUTE_CHECKBOX_SELECTOR)).map((el) => el.value);
-
-const openSettingsModal = () => {
-  const settingsModal = document.getElementById('settingsModal');
-  const toggleBtn = document.getElementById('settingsToggle');
-  if (!settingsModal) return;
-  settingsModal.style.display = 'flex';
-  settingsModal.setAttribute('aria-hidden', 'false');
-  if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
-  const closeBtn = document.getElementById('settingsModalClose');
-  if (closeBtn) closeBtn.focus();
-};
-
-const closeSettingsModal = () => {
-  const settingsModal = document.getElementById('settingsModal');
-  const toggleBtn = document.getElementById('settingsToggle');
-  if (!settingsModal) return;
-  settingsModal.style.display = 'none';
-  settingsModal.setAttribute('aria-hidden', 'true');
-  if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
-};
-
-/**
- * When mobile mode toggles, IPv6 routes must be off (server forces this anyway,
- * but the UI should reflect it). Disable the IPv6 checkbox while mobile is on,
- * and uncheck it. Restore interactivity when mobile is off.
- */
-const applyMobileModeCascade = () => {
-  const ipv6Toggle = document.getElementById('ipv6Toggle');
-  if (!ipv6Toggle) return;
-  if (cfgState.mobileMode) {
-    if (cfgState.includeIpv6) {
-      cfgState.includeIpv6 = false;
-      ipv6Toggle.checked = false;
-    }
-    ipv6Toggle.disabled = true;
-  } else {
-    ipv6Toggle.disabled = false;
-  }
-};
-
-const getSelectedDnsKey = () => cfgState.selectedDns || '';
-
 const buildWarpQueryString = (mode) => {
   const params = new URLSearchParams();
   params.set('mode', mode);
@@ -1057,684 +90,75 @@ const buildWarpQueryString = (mode) => {
   return params.toString();
 };
 
-/** Renders contextual AllowedIPs explanation based on current cfgState. */
-const updateAllowedIpsExplanation = () => {
-  const el = document.getElementById('allowedIpsExplanation');
-  if (!el) return;
+// ─────────────────────────────────────────────────────────────
+// Профиль AWG и генерация (одна кнопка для всех профилей)
+// ─────────────────────────────────────────────────────────────
 
-  const lines = [];
+const PROFILE_MODES = ['legacy', 'awg2', 'awg3', 'awg31'];
+const DEFAULT_PROFILE = 'awg2';
+const PROFILE_STORAGE_KEY = 'awg_profile';
 
-  if (cfgState.routeMode === ROUTE_MODES.FULL) {
-    lines.push(t('routing_allowedips_full',
-      'В AllowedIPs будет добавлен полный маршрут. Это направит весь поддерживаемый трафик через туннель.'));
-  } else {
-    lines.push(t('routing_allowedips_split',
-      'В AllowedIPs попадут только сети выбранных направлений. Если нужный сайт не входит в выбранные presets, он может идти мимо туннеля.'));
-    lines.push(t('routing_allowedips_limit',
-      'Большие списки AllowedIPs могут нестабильно импортироваться или работать на телефонах и роутерах. Поэтому генератор предупреждает на 80% лимита и блокирует выбор при 1000 IPv4 CIDR, если не включён режим «Без лимита».'));
-  }
-
-  if (cfgState.ignoreLimit) {
-    lines.push(t('routing_allowedips_nolimit',
-      'Режим «Без лимита» снимает защитное ограничение, но не гарантирует, что клиент или роутер корректно обработает большой список маршрутов.'));
-  }
-
-  if (cfgState.mobileMode) {
-    lines.push(t('routing_allowedips_mobile_ipv6',
-      'Mobile-профиль принудительно отключает IPv6, чтобы снизить риск проблем на мобильных сетях и клиентах.'));
-  }
-
-  el.innerHTML = lines
-    .map((line) => `<p class="allowed-ips-explanation__line">${line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`)
-    .join('');
+const getSelectedProfile = () => {
+  const checked = document.querySelector('[name="awgProfile"]:checked');
+  return checked && PROFILE_MODES.includes(checked.value) ? checked.value : DEFAULT_PROFILE;
 };
 
-/** Sets cfgState.routeMode and updates all UI state for the routes tab. */
-const updateRouteModeUI = (mode) => {
-  cfgState.routeMode = mode;
-
-  document.getElementById('routeModeFull')
-    ?.classList.toggle('route-mode-btn--active', mode === ROUTE_MODES.FULL);
-  document.getElementById('routeModeSplit')
-    ?.classList.toggle('route-mode-btn--active', mode === ROUTE_MODES.SPLIT);
-
-  const desc = document.getElementById('routeModeDescription');
-  if (desc) {
-    desc.textContent = mode === ROUTE_MODES.FULL
-      ? t('routing_mode_full_desc',
-          'Весь поддерживаемый трафик будет направлен через WARP. Это рекомендуемый вариант, если не нужно выбирать отдельные сервисы.')
-      : t('routing_mode_split_desc',
-          'Через WARP пойдут только выбранные направления. Если нужный сайт не входит в выбранные presets, он может идти мимо туннеля.');
-  }
-
-  // Dim preset tiles in full tunnel mode (pointer-events: none via CSS class)
-  document.getElementById('panel-routes')
-    ?.classList.toggle('routes-panel--full-tunnel', mode === ROUTE_MODES.FULL);
-
-  // Show "presets ignored" notice only when full + at least one preset is checked
-  const ignoredNotice = document.getElementById('presetsIgnoredNotice');
-  if (ignoredNotice) {
-    ignoredNotice.hidden = !(mode === ROUTE_MODES.FULL && getSelectedRouteIds().length > 0);
-  }
-
-  // Update CIDR counter (full tunnel: "not applicable"; split: actual count)
-  updateCidrCounter(mode === ROUTE_MODES.FULL ? 0 : cfgState.cidrCount4);
-
-  updateAllowedIpsExplanation();
-};
-
-/** Update the CIDR counter element (#cidrCounter) and mini counter (#cidrCounterMini). */
-const updateCidrCounter = (count4) => {
-  const el = document.getElementById('cidrCounter');
-  const mini = document.getElementById('cidrCounterMini');
-
-  // Full tunnel: CIDR counter not applicable
-  if (cfgState.routeMode === ROUTE_MODES.FULL) {
-    if (el) el.textContent = t('routing_counter_not_applicable', 'IPv4 маршруты: не применяется');
-    if (mini) mini.textContent = '';
-    return;
-  }
-
-  if (cfgState.ignoreLimit) {
-    if (el) {
-      el.classList.remove('cidr-counter--warn', 'cidr-counter--over');
-      el.innerHTML = `<span class="cidr-counter__label">${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4} ${t('cidr_limit_disabled', '(лимит отключён)')}</span>`;
-    }
-    if (mini) { mini.textContent = `IPv4: ${count4}`; mini.className = 'cidr-counter-mini'; }
-  } else {
-    const pct = Math.min(count4 / MAX_CIDR_LIMIT, 1);
-    const warn = count4 >= MAX_CIDR_LIMIT * 0.8 && count4 < MAX_CIDR_LIMIT;
-    const over = count4 >= MAX_CIDR_LIMIT;
-    if (el) {
-      el.classList.toggle('cidr-counter--warn', warn);
-      el.classList.toggle('cidr-counter--over', over);
-      el.innerHTML = `
-        <span class="cidr-counter__label">${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4} / ${MAX_CIDR_LIMIT}</span>
-        <div class="cidr-counter__bar-track">
-          <div class="cidr-counter__bar-fill" style="width:${(pct * 100).toFixed(1)}%"></div>
-        </div>`;
-    }
-    if (mini) {
-      mini.textContent = `IPv4: ${count4} / ${MAX_CIDR_LIMIT}`;
-      mini.className = 'cidr-counter-mini' + (over ? ' cidr-counter-mini--over' : warn ? ' cidr-counter-mini--warn' : '');
-    }
-  }
-};
-
-/**
- * Disable unchecked route tiles when the CIDR limit is reached (or re-enable when below).
- * Already-checked tiles stay interactive so the user can deselect them.
- * When cfgState.ignoreLimit is true, tiles are never disabled.
- */
-const updateTileDisabledState = () => {
-  const overLimit = !cfgState.ignoreLimit && cfgState.cidrCount4 >= MAX_CIDR_LIMIT;
-  forEachRouteTile((tile) => {
-    const cb = tile.querySelector('input[type="checkbox"]');
-    if (!cb) return;
-    if (!cb.checked) {
-      cb.disabled = overLimit;
-      tile.classList.toggle('cfg-tile--disabled', overLimit);
-    } else {
-      cb.disabled = false;
-      tile.classList.remove('cfg-tile--disabled');
-    }
-  });
-};
-
-const refreshPresetStats = debounce(async () => {
-  const el = document.getElementById('presetStats');
-  if (!el) return;
-
-  const selected = getSelectedRouteIds();
-  if (!selected.length) {
-    cfgState.cidrCount4 = 0;
-    el.textContent = t('preset_none_selected', 'Пресеты не выбраны — весь трафик пойдёт через туннель.');
-    el.classList.remove('preset-stats--warn');
-    updateCidrCounter(0);
-    updateTileDisabledState();
-    return;
-  }
-
-  if (cfgState.iplistSource !== 'api') {
-    el.textContent = t('preset_offline_warning', 'Пресеты выбраны из локального списка. Оценка CIDR и генерация конфига с AllowedIPs по пресетам нуждаются в API — запустите vercel dev или откройте задеплоенный сайт.');
-    el.classList.add('preset-stats--warn');
-    return;
-  }
-
-  if (presetStatsAbort) presetStatsAbort.abort();
-  presetStatsAbort = new AbortController();
-
-  el.textContent = t('preset_loading', 'Загрузка оценки маршрутов…');
-  el.classList.remove('preset-stats--warn');
-
+/** Восстанавливает последний выбранный профиль; по умолчанию — AWG 2.0. */
+const initProfileSelector = () => {
+  let saved = null;
   try {
-    const qs = new URLSearchParams();
-    qs.set('presets', selected.join(','));
-    if (cfgState.includeIpv6) qs.set('ipv6', '1');
-    const res = await fetch(`/api/iplist?${qs.toString()}`, {
-      signal: presetStatsAbort.signal,
-    });
-    const data = await parseJsonResponse(res);
-    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
-
-    const count4 = data.count4 ?? data.count;
-    cfgState.cidrCount4 = count4;
-    updateCidrCounter(count4);
-    updateTileDisabledState();
-
-    // Track presets that return 0 CIDRs when selected alone
-    if (selected.length === 1) {
-      const pid = selected[0];
-      if (count4 === 0) cfgState.zeroCidrPresets.add(pid);
-      else cfgState.zeroCidrPresets.delete(pid);
-      applyZeroCidrMarks();
-    }
-
-    const cidrSource = data.cidrSource;
-    const overLimit = !cfgState.ignoreLimit && count4 >= MAX_CIDR_LIMIT;
-    if (overLimit) {
-      el.classList.add('preset-stats--warn');
-      el.textContent = `${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4}/${MAX_CIDR_LIMIT} IPv4 CIDR. ${t('preset_over_limit_msg', 'Некоторые устройства могут работать нестабильно. Рекомендуется отключить часть категорий.')}`;
-    } else if (cidrSource === 'antifilter') {
-      el.classList.add('preset-stats--warn');
-      el.textContent = `⚠ iplist.opencck.org недоступен — использован резервный источник antifilter.download (${count4} общих подсетей РФ). Маршруты могут быть неточными.`;
-    } else if (cidrSource === 'mixed') {
-      el.classList.add('preset-stats--warn');
-      el.textContent = `⚠ Часть пресетов не найдена в opencck — дополнено из antifilter.download (${count4} IPv4). Некоторые маршруты могут быть неточными.`;
-    } else {
-      el.classList.remove('preset-stats--warn');
-      const ipv6Info = cfgState.includeIpv6 && data.count6 ? `, IPv6: +${data.count6}` : '';
-      const limitNote = cfgState.ignoreLimit && count4 >= MAX_CIDR_LIMIT ? t('preset_limit_warn_suffix', ' ⚠ лимит превышен') : '';
-      el.textContent = `${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4}${ipv6Info}${limitNote} (${data.sitesQueried}${t('tile_domains_suffix', ' доменов в запросе')}).`;
-    }
-  } catch (err) {
-    if (err && err.name === 'AbortError') return;
-    el.textContent = t('preset_preview_fail_prefix', 'Предпросмотр недоступен: ') + (err.message || err);
-    el.classList.add('preset-stats--warn');
+    saved = localStorage.getItem(PROFILE_STORAGE_KEY);
+  } catch {
+    saved = null;
   }
-}, 480);
-
-const updateTileActiveClass = (label) => {
-  const input = label.querySelector('input');
-  if (!input) return;
-  label.classList.toggle('cfg-tile--active', input.checked);
-};
-
-/** Mark/unmark route tiles that are known to return 0 CIDRs. */
-const applyZeroCidrMarks = () => {
-  forEachRouteTile((tile) => {
-    const cb = tile.querySelector('input[type="checkbox"]');
-    if (!cb) return;
-    const isZero = cfgState.zeroCidrPresets.has(cb.value);
-    tile.classList.toggle('cfg-tile--zero-cidr', isZero);
-    let warn = tile.querySelector('.cfg-tile__zero-warn');
-    if (isZero && !warn) {
-      warn = document.createElement('span');
-      warn.className = 'cfg-tile__zero-warn';
-      warn.textContent = '⚠ 0 IP';
-      warn.title = 'Нет данных в iplist.opencck.org — маршруты не будут добавлены';
-      tile.appendChild(warn);
-    } else if (!isZero && warn) {
-      warn.remove();
-    }
-  });
-};
-
-const renderDnsTiles = (host) => {
-  host.textContent = '';
-  for (const d of cfgState.dnsPresets) {
-    const label = document.createElement('label');
-    label.className = 'cfg-tile';
-
-    const input = document.createElement('input');
-    input.type = 'radio';
-    input.name = 'dns-preset';
-    input.value = d.id;
-    input.checked = d.id === cfgState.dnsDefault;
-    if (input.checked) {
-      cfgState.selectedDns = d.id;
-      label.classList.add('cfg-tile--active');
-    }
-
-    input.addEventListener('change', () => {
-      cfgState.selectedDns = d.id;
-      host.querySelectorAll('.cfg-tile').forEach((tile) => updateTileActiveClass(tile));
-    });
-
-    const span = document.createElement('span');
-    span.textContent = d.label;
-
-    label.appendChild(input);
-    label.appendChild(span);
-    host.appendChild(label);
+  // Профиль из ссылки с настройками (?profile=awg3) важнее запомненного, но не перезаписывает его:
+  // выбор посетителя запоминается только по его собственному клику.
+  const linked = shareLink ? shareLink.parseShareParams(window.location.search).profile : undefined;
+  const initial = linked || saved;
+  if (PROFILE_MODES.includes(initial)) {
+    const input = document.querySelector(`[name="awgProfile"][value="${initial}"]`);
+    if (input) input.checked = true;
   }
-};
-
-const renderRouteTiles = (host, presetList) => {
-  if (!host) return;
-  host.textContent = '';
-  for (const p of presetList) {
-    const label = document.createElement('label');
-    label.className = 'cfg-tile cfg-tile--route';
-    label.title = `${p.label} (${p.sitesCount ?? '?'}${t('tile_domains_suffix', ' доменов в запросе')})`;
-
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.value = p.id;
+  document.querySelectorAll('[name="awgProfile"]').forEach((input) => {
     input.addEventListener('change', () => {
-      updateTileActiveClass(label);
-      refreshPresetStats();
-      // Keep "presets ignored" notice in sync when user toggles tiles
-      const ignoredNotice = document.getElementById('presetsIgnoredNotice');
-      if (ignoredNotice) {
-        ignoredNotice.hidden = !(cfgState.routeMode === ROUTE_MODES.FULL && getSelectedRouteIds().length > 0);
+      try {
+        localStorage.setItem(PROFILE_STORAGE_KEY, input.value);
+      } catch {
+        // Без localStorage выбор просто не запомнится
       }
     });
-
-    const span = document.createElement('span');
-    span.textContent = p.label;
-
-    label.appendChild(input);
-    label.appendChild(span);
-    host.appendChild(label);
-  }
-};
-
-const initSettingsPanel = async () => {
-  const dnsHost = document.getElementById('dnsTiles');
-  const toggleBtn = document.getElementById('settingsToggle');
-  const settingsModal = document.getElementById('settingsModal');
-  const settingsModalClose = document.getElementById('settingsModalClose');
-
-  if (toggleBtn) {
-    toggleBtn.addEventListener('click', () => {
-      const isOpen = settingsModal && settingsModal.style.display === 'flex';
-      if (isOpen) closeSettingsModal();
-      else openSettingsModal();
-    });
-  }
-
-  if (settingsModalClose) {
-    settingsModalClose.addEventListener('click', () => closeSettingsModal());
-  }
-
-  if (settingsModal) {
-    settingsModal.addEventListener('click', (ev) => {
-      if (ev.target === settingsModal) closeSettingsModal();
-    });
-  }
-
-  try {
-    const { source, data } = await fetchPresetsManifest();
-    cfgState.iplistSource = source;
-
-    cfgState.presets = data.presets || [];
-    cfgState.groupRfPopular = data.groupRfPopular || [];
-    cfgState.dnsPresets = data.dnsPresets || [];
-    cfgState.dnsDefault = data.dnsDefault || 'cloudflare';
-
-    if (dnsHost) renderDnsTiles(dnsHost);
-
-    ROUTE_CATEGORY_ORDER.forEach((cat) => {
-      const host = document.getElementById(ROUTE_CONTAINER_BY_CATEGORY[cat]);
-      const list = cfgState.presets.filter((p) => p.category === cat);
-      renderRouteTiles(host, list);
-    });
-    applyZeroCidrMarks();
-
-    const btnRf = document.getElementById('presetRfPopular');
-    const btnClear = document.getElementById('presetClear');
-
-    // Route mode toggle (2.6.0)
-    document.getElementById('routeModeFull')
-      ?.addEventListener('click', () => updateRouteModeUI(ROUTE_MODES.FULL));
-    document.getElementById('routeModeSplit')
-      ?.addEventListener('click', () => updateRouteModeUI(ROUTE_MODES.SPLIT));
-
-    const ipv6Toggle = document.getElementById('ipv6Toggle');
-    if (ipv6Toggle) {
-      ipv6Toggle.checked = cfgState.includeIpv6;
-      ipv6Toggle.addEventListener('change', () => {
-        cfgState.includeIpv6 = ipv6Toggle.checked;
-        refreshPresetStats();
-      });
-    }
-
-    const ignoreLimitToggle = document.getElementById('ignoreLimitToggle');
-    if (ignoreLimitToggle) {
-      ignoreLimitToggle.checked = cfgState.ignoreLimit;
-      ignoreLimitToggle.addEventListener('change', () => {
-        cfgState.ignoreLimit = ignoreLimitToggle.checked;
-        updateCidrCounter(cfgState.cidrCount4);
-        updateTileDisabledState();
-        updateAllowedIpsExplanation();
-      });
-    }
-
-    const routerModeToggle = document.getElementById('routerModeToggle');
-    if (routerModeToggle) {
-      routerModeToggle.checked = cfgState.routerMode;
-      routerModeToggle.addEventListener('change', () => {
-        cfgState.routerMode = routerModeToggle.checked;
-      });
-    }
-
-    const cps5Toggle = document.getElementById('cps5Toggle');
-    if (cps5Toggle) {
-      cps5Toggle.checked = cfgState.extraCps;
-      cps5Toggle.addEventListener('change', () => {
-        cfgState.extraCps = cps5Toggle.checked;
-      });
-    }
-
-    const mobileModeToggle = document.getElementById('mobileModeToggle');
-    if (mobileModeToggle) {
-      mobileModeToggle.checked = cfgState.mobileMode;
-      mobileModeToggle.addEventListener('change', () => {
-        cfgState.mobileMode = mobileModeToggle.checked;
-        applyMobileModeCascade();
-        updateAllowedIpsExplanation();
-      });
-    }
-
-    const warpPortSelect = document.getElementById('warpPortSelect');
-    if (warpPortSelect) {
-      warpPortSelect.value = String(cfgState.port);
-      warpPortSelect.addEventListener('change', () => {
-        const n = Number.parseInt(warpPortSelect.value, 10);
-        if (n > 0) { cfgState.warpPort = n; cfgState.port = n; }
-      });
-    }
-
-    const warpEndpointSelect = document.getElementById('warpEndpointSelect');
-    if (warpEndpointSelect) {
-      warpEndpointSelect.value = cfgState.warpEndpoint;
-      warpEndpointSelect.addEventListener('change', () => {
-        cfgState.warpEndpoint = warpEndpointSelect.value;
-      });
-    }
-
-    document.querySelectorAll('[name="cpsProtocol"]').forEach((radio) => {
-      radio.addEventListener('change', (e) => {
-        cfgState.cpsProtocol = e.target.value;
-      });
-    });
-
-    document.querySelectorAll('[name="configCount"]').forEach((radio) => {
-      radio.addEventListener('change', (e) => {
-        cfgState.configCount = Number.parseInt(e.target.value, 10) || 1;
-      });
-    });
-
-    const settingsResetBtn = document.getElementById('settingsModalReset');
-    if (settingsResetBtn) {
-      settingsResetBtn.addEventListener('click', () => {
-        // Reset toggles
-        cfgState.includeIpv6 = false;
-        cfgState.ignoreLimit = false;
-        cfgState.routerMode = false;
-        cfgState.cpsProtocol = 'auto';
-        cfgState.warpPort = 4500;
-        cfgState.port = 4500;
-        cfgState.warpEndpoint = 'hostname';
-        cfgState.extraCps = false;
-        cfgState.mobileMode = false;
-        cfgState.configCount = 1;
-        const countRadio1 = document.querySelector('[name="configCount"][value="1"]');
-        if (countRadio1) countRadio1.checked = true;
-        if (ipv6Toggle) ipv6Toggle.checked = false;
-        if (ignoreLimitToggle) ignoreLimitToggle.checked = false;
-        if (routerModeToggle) routerModeToggle.checked = false;
-        const autoRadio = document.querySelector('[name="cpsProtocol"][value="auto"]');
-        if (autoRadio) autoRadio.checked = true;
-        if (warpPortSelect) warpPortSelect.value = '4500';
-        if (warpEndpointSelect) warpEndpointSelect.value = 'hostname';
-        const cps5ToggleReset = document.getElementById('cps5Toggle');
-        if (cps5ToggleReset) cps5ToggleReset.checked = false;
-        const mobileToggleReset = document.getElementById('mobileModeToggle');
-        if (mobileToggleReset) mobileToggleReset.checked = false;
-        applyMobileModeCascade();
-        // Clear route presets
-        forEachRouteTile((tile) => {
-          const cb = tile.querySelector('input[type="checkbox"]');
-          if (cb) { cb.checked = false; cb.disabled = false; tile.classList.remove('cfg-tile--disabled'); updateTileActiveClass(tile); }
-        });
-        // Reset DNS to default
-        const firstDns = document.querySelector('[name="dns-preset"]');
-        if (firstDns) { firstDns.checked = true; cfgState.selectedDns = firstDns.value; document.querySelectorAll('.cfg-tile').forEach((tile) => updateTileActiveClass(tile)); }
-        cfgState.cidrCount4 = 0;
-        updateCidrCounter(0);
-        updateTileDisabledState();
-        refreshPresetStats();
-      });
-    }
-
-    if (btnRf) {
-      btnRf.addEventListener('click', () => {
-        const want = new Set(cfgState.groupRfPopular);
-        forEachRouteTile((tile) => {
-          const cb = tile.querySelector('input[type="checkbox"]');
-          if (cb) {
-            // Only check tiles that are not disabled (limit guard)
-            if (!cb.disabled || want.has(cb.value)) {
-              cb.checked = want.has(cb.value);
-              updateTileActiveClass(tile);
-            }
-          }
-        });
-        refreshPresetStats();
-      });
-    }
-
-    if (btnClear) {
-      btnClear.addEventListener('click', () => {
-        forEachRouteTile((tile) => {
-          const cb = tile.querySelector('input[type="checkbox"]');
-          if (cb) {
-            cb.checked = false;
-            cb.disabled = false;
-            tile.classList.remove('cfg-tile--disabled');
-            updateTileActiveClass(tile);
-          }
-        });
-        cfgState.cidrCount4 = 0;
-        updateCidrCounter(0);
-        updateTileDisabledState();
-        refreshPresetStats();
-      });
-    }
-
-    // Initialize route mode UI (2.6.0)
-    updateRouteModeUI(cfgState.routeMode);
-    updateAllowedIpsExplanation();
-
-    refreshPresetStats();
-  } catch (e) {
-    const statsEl = document.getElementById('presetStats');
-    clearAllRouteTileHosts();
-    if (statsEl) {
-      statsEl.classList.add('preset-stats--warn');
-      statsEl.textContent = t('preset_load_fail_prefix', 'Не удалось загрузить пресеты: ') + (e.message || e);
-    }
-  }
-};
-
-// ─────────────────────────────────────────────────────────────
-// История генераций (localStorage)
-// ─────────────────────────────────────────────────────────────
-
-const HISTORY_KEY = 'awg_history';
-const HISTORY_MAX = 20;
-
-const loadHistory = () => {
-  try {
-    const raw = localStorage.getItem(HISTORY_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-};
-
-const saveToHistory = (mode, decodedConfig, filename) => {
-  const entry = {
-    ts: Date.now(),
-    mode,
-    presets: getSelectedRouteIds(),
-    dns: getSelectedDnsKey(),
-    b64: btoa(decodedConfig),
-    filename,
-  };
-  try {
-    const arr = loadHistory();
-    arr.unshift(entry);
-    if (arr.length > HISTORY_MAX) arr.length = HISTORY_MAX;
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(arr));
-  } catch { /* quota exceeded or private mode */ }
-  renderHistoryPanel();
-};
-
-const formatHistoryTime = (ts) => {
-  const d = new Date(ts);
-  return d.toLocaleString(_i18n.locale === 'en' ? 'en-GB' : 'ru-RU', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
   });
 };
 
-const renderHistoryPanel = () => {
-  const btn = document.getElementById('historyModalBtn');
-  const list = document.getElementById('historyList');
-  const countEl = document.getElementById('historyCount');
-  const emptyMsg = document.getElementById('historyEmptyMsg');
-  const arr = loadHistory();
+let generationInFlight = false;
 
-  // Show/hide the history button
-  if (btn) btn.hidden = arr.length === 0;
-  if (countEl) countEl.textContent = arr.length > 0 ? String(arr.length) : '';
-
-  if (!list) return;
-  list.textContent = '';
-
-  if (!arr.length) {
-    if (emptyMsg) emptyMsg.hidden = false;
-    return;
-  }
-  if (emptyMsg) emptyMsg.hidden = true;
-
-  arr.forEach((entry) => {
-    const item = document.createElement('div');
-    item.className = 'history-item';
-
-    // Mode badge
-    const badge = document.createElement('span');
-    badge.className = getModeBadgeClass(entry.mode);
-    badge.textContent = getModeLabel(entry.mode);
-
-    // Info block
-    const info = document.createElement('div');
-    info.className = 'history-item__info';
-
-    const timeEl = document.createElement('div');
-    timeEl.className = 'history-item__time';
-    timeEl.textContent = formatHistoryTime(entry.ts);
-
-    const presetsEl = document.createElement('div');
-    presetsEl.className = 'history-item__presets';
-    const presetSummary = entry.presets && entry.presets.length
-      ? entry.presets.slice(0, 4).join(', ') + (entry.presets.length > 4 ? '…' : '')
-      : t('history_no_presets', 'без пресетов');
-    presetsEl.textContent = presetSummary;
-    presetsEl.title = entry.presets ? entry.presets.join(', ') : '';
-
-    info.appendChild(timeEl);
-    info.appendChild(presetsEl);
-
-    // Actions
-    const actions = document.createElement('div');
-    actions.className = 'history-item__actions';
-
-    const dlBtn = document.createElement('button');
-    dlBtn.type = 'button';
-    dlBtn.className = 'button button--sm history-item__dl';
-    dlBtn.textContent = t('history_download', '↓');
-    dlBtn.title = entry.filename;
-    dlBtn.addEventListener('click', () => {
-      downloadFile(atob(entry.b64), entry.filename);
-      telemetry.trackEvent('history_item_downloaded', {
-        mode: entry.mode,
-        route_mode: entry.presets && entry.presets.length ? 'split' : 'full',
-      });
-    });
-
-    const previewBtn = document.createElement('button');
-    previewBtn.type = 'button';
-    previewBtn.className = 'button button--sm history-item__preview';
-    previewBtn.innerHTML = '<span aria-hidden="true">&#128065;</span>';
-    previewBtn.title = t('preview_btn_title', 'Просмотреть конфигурацию');
-    previewBtn.addEventListener('click', () => {
-      openPreviewModal(atob(entry.b64));
-      telemetry.trackEvent('history_item_previewed', {
-        mode: entry.mode,
-        route_mode: entry.presets && entry.presets.length ? 'split' : 'full',
-      });
-    });
-
-    actions.appendChild(dlBtn);
-    actions.appendChild(previewBtn);
-
-    item.appendChild(badge);
-    item.appendChild(info);
-    item.appendChild(actions);
-    list.appendChild(item);
-  });
-};
-
-const downloadFile = (content, filename) => {
-  // application/octet-stream avoids mobile browsers appending .txt to .conf (text/plain triggers that).
-  const blob = new Blob([content], { type: 'application/octet-stream' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.style.display = 'none';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(link.href);
-};
-
-const GENERATE_BUTTON_IDS = ['generateButton', 'generateButtonAwg2', 'generateButtonAwg3', 'generateButtonAwg31'];
-
-const setAllGenerateButtonsDisabled = (disabled) => {
-  GENERATE_BUTTON_IDS.forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.disabled = disabled;
-  });
-};
-
-/**
- * @param {{ buttonId: string, mode: string, filename: string, boundGenerateClick: () => void }} options
- */
-const generateConfig = async (options) => {
-  const { buttonId, mode, filename, boundGenerateClick } = options;
-  const button = document.getElementById(buttonId);
-  if (!button) return;
+const generateConfig = async () => {
+  const button = document.getElementById('generateButton');
+  if (!button || generationInFlight) return;
+  const mode = getSelectedProfile();
+  const filename = getModeFilename(mode);
   const status = document.getElementById('status');
   const startedAt = telemetryNow();
   const startedContext = getTelemetryContext(mode);
   const resultState = getResultStateSnapshot();
   let response;
 
-  const loadingLabel = getModeLoadingLabel(mode);
-  const readyDownloadText = getModeReadyDownloadLabel(mode);
-
   // Empty split tunnel guard
   if (cfgState.routeMode === ROUTE_MODES.SPLIT && getSelectedRouteIds().length === 0) {
     status.textContent = t('routing_empty_split_error',
       'Для выборочной маршрутизации выберите хотя бы одно направление или переключитесь на полный туннель.');
+    status.classList.remove('visually-hidden');
     return;
   }
 
-  setAllGenerateButtonsDisabled(true);
-  button.classList.add('button--loading');
-  status.textContent = loadingLabel;
+  generationInFlight = true;
+  button.disabled = true;
+  button.classList.add('btn--loading');
+  button.setAttribute('aria-busy', 'true');
+  status.textContent = getModeLoadingLabel(mode);
+  // Ход и итог генерации видны в панели результата; строку оставляем только для экранных дикторов
+  status.classList.add('visually-hidden');
+  showResultLoading();
   telemetry.trackEvent('generation_started', startedContext);
 
   try {
@@ -1754,93 +178,70 @@ const generateConfig = async (options) => {
     const data = await parseJsonResponse(response);
 
     if (!response.ok) {
-      throw new Error(data.message || `Ошибка HTTP: ${response.status}`);
+      throw new Error(data.message || `${t('err_http_prefix', 'Ошибка HTTP:')} ${response.status}`);
     }
 
-    if (data.success) {
-      if (!data.content) throw new Error(t('err_no_content', 'Отсутствует содержимое конфигурации.'));
-
-      if (boundGenerateClick) button.removeEventListener('click', boundGenerateClick);
-
-      const allConfigs = (data.configs && data.configs.length > 1) ? data.configs : null;
-      const countProduced = Number.isInteger(data.count)
-        ? data.count
-        : data.configs && data.configs.length
-          ? data.configs.length
-          : 1;
-      const warningCount = getWarningCount(data.warning);
-      const completedContext = {
-        ...startedContext,
-        count_produced: countProduced,
-        endpoint_source: getEndpointTelemetrySource(data, startedContext.endpoint_mode),
-        routes_source: data.routesTelemetrySource || 'unknown',
-        has_warning: warningCount > 0,
-        warning_count: warningCount,
-        cps_requested: data.cpsRequested || startedContext.cps_requested,
-        cps_resolved: data.cpsResolved || 'unknown',
-        cps_stability: data.cpsStability || 'unknown',
-        duration_ms: telemetry.durationMs(startedAt, telemetryNow()),
-      };
-      telemetry.trackEvent(
-        countProduced < startedContext.count_requested
-          ? 'generation_partially_succeeded'
-          : 'generation_succeeded',
-        completedContext,
-      );
-      if (resultExplanation) {
-        lastResultSummary = resultExplanation.buildResultSummary(data, resultState);
-        renderResultExplanation(lastResultSummary);
-      }
-      lastCompatibility = data.compatibility || null;
-      renderCompatibilityCard(lastCompatibility);
-      if (allConfigs) {
-        // Multiple configs: show each as a separate download row.
-        // Auto-download only the first; remaining variants require a manual click
-        // because browsers block multiple programmatic link.click() in one tick.
-        allConfigs.forEach((cfg, idx) => {
-          const variantFilename = filename.replace(/\.conf$/, `_variant${idx + 1}.conf`);
-          const decoded = atob(cfg.content);
-          const variantBtn = idx === 0 ? buttonId : `${buttonId}_v${idx + 1}`;
-          showPostGenRow({
-            buttonId: variantBtn,
-            readyDownloadText: `Вариант ${idx + 1}`,
-            filename: variantFilename,
-            decodedConfig: decoded,
-            vpnLink: cfg.vpnLink,
-            telemetryContext: completedContext,
-          });
-          if (idx === 0) {
-            downloadFile(decoded, variantFilename);
-            telemetry.trackEvent('config_downloaded', completedContext);
-            saveToHistory(mode, decoded, variantFilename);
-          }
-        });
-      } else {
-        const decodedConfig = atob(data.content);
-        showPostGenRow({
-          buttonId,
-          readyDownloadText,
-          filename,
-          decodedConfig,
-          vpnLink: data.vpnLink,
-          telemetryContext: completedContext,
-        });
-        downloadFile(decodedConfig, filename);
-        telemetry.trackEvent('config_downloaded', completedContext);
-        saveToHistory(mode, decodedConfig, filename);
-      }
-
-      if (data.warning) {
-        status.textContent = t(
-          'generation_completed_with_warnings',
-          'Конфигурация создана с предупреждениями. Подробности указаны в карточке результата.',
-        );
-      } else {
-        status.textContent = getModeSuccessLabel(mode);
-      }
-    } else {
+    if (!data.success) {
       throw new Error(data.message || t('err_unknown_gen', 'Неизвестная ошибка при генерации конфигурации.'));
     }
+    if (!data.content) throw new Error(t('err_no_content', 'Отсутствует содержимое конфигурации.'));
+
+    const countProduced = Number.isInteger(data.count)
+      ? data.count
+      : data.configs && data.configs.length
+        ? data.configs.length
+        : 1;
+    const warningCount = getWarningCount(data.warning);
+    const completedContext = {
+      ...startedContext,
+      count_produced: countProduced,
+      endpoint_source: getEndpointTelemetrySource(data, startedContext.endpoint_mode),
+      routes_source: data.routesTelemetrySource || 'unknown',
+      has_warning: warningCount > 0,
+      warning_count: warningCount,
+      cps_requested: data.cpsRequested || startedContext.cps_requested,
+      cps_resolved: data.cpsResolved || 'unknown',
+      cps_stability: data.cpsStability || 'unknown',
+      duration_ms: telemetry.durationMs(startedAt, telemetryNow()),
+    };
+    telemetry.trackEvent(
+      countProduced < startedContext.count_requested
+        ? 'generation_partially_succeeded'
+        : 'generation_succeeded',
+      completedContext,
+    );
+    if (resultExplanation) {
+      lastResultSummary = resultExplanation.buildResultSummary(data, resultState);
+      renderResultExplanation(lastResultSummary);
+    }
+    lastCompatibility = data.compatibility || null;
+    renderCompatibilityCard(lastCompatibility);
+
+    // Несколько вариантов (count = 2–3) показываются переключателем в панели результата.
+    // Автоматически скачивается только первый: браузеры блокируют несколько загрузок подряд.
+    const variants = data.configs && data.configs.length > 1
+      ? data.configs.map((cfg, idx) => ({
+        filename: filename.replace(/\.conf$/, `_variant${idx + 1}.conf`),
+        decodedConfig: atob(cfg.content),
+        vpnLink: cfg.vpnLink || null,
+      }))
+      : [{ filename, decodedConfig: atob(data.content), vpnLink: data.vpnLink || null }];
+
+    showResult({
+      mode,
+      variants,
+      hasWarnings: warningCount > 0,
+      telemetryContext: completedContext,
+      snapshot: resultState,
+    });
+    downloadFile(variants[0].decodedConfig, variants[0].filename);
+    telemetry.trackEvent('config_downloaded', completedContext);
+    saveToHistory(mode, variants[0].decodedConfig, variants[0].filename, resultState);
+
+    status.textContent = data.warning
+      ? t('generation_completed_with_warnings',
+        'Конфигурация создана с предупреждениями. Подробности указаны в карточке результата.')
+      : getModeSuccessLabel(mode);
   } catch (error) {
     telemetry.trackEvent('generation_failed', {
       ...startedContext,
@@ -1851,10 +252,13 @@ const generateConfig = async (options) => {
     const message = error && error.name === 'AbortError'
       ? t('err_timeout', 'Превышено время ожидания ответа. Попробуйте ещё раз.')
       : error.message;
-    status.textContent = `Ошибка: ${message}`;
+    status.textContent = `${t('err_prefix', 'Ошибка:')} ${message}`;
+    showResultError(message);
   } finally {
-    setAllGenerateButtonsDisabled(false);
-    button.classList.remove('button--loading');
+    generationInFlight = false;
+    button.disabled = false;
+    button.classList.remove('btn--loading');
+    button.removeAttribute('aria-busy');
   }
 };
 
@@ -1866,100 +270,44 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  initProfileSelector();
   const generateButton = document.getElementById('generateButton');
-  const generateButtonAwg2 = document.getElementById('generateButtonAwg2');
-  const generateButtonAwg3 = document.getElementById('generateButtonAwg3');
-  const generateButtonAwg31 = document.getElementById('generateButtonAwg31');
-
-  const legacyOptions = {
-    buttonId: 'generateButton',
-    mode: 'legacy',
-    filename: 'AmneziaWarp.conf',
-    boundGenerateClick: () => {},
-  };
-  legacyOptions.boundGenerateClick = () => generateConfig(legacyOptions);
-
-  const awg2Options = {
-    buttonId: 'generateButtonAwg2',
-    mode: 'awg2',
-    filename: 'AmneziaWarp-AWG2.conf',
-    boundGenerateClick: () => {},
-  };
-  awg2Options.boundGenerateClick = () => generateConfig(awg2Options);
-
-  const awg3Options = {
-    buttonId: 'generateButtonAwg3',
-    mode: 'awg3',
-    filename: getModeFilename('awg3'),
-    boundGenerateClick: () => {},
-  };
-  awg3Options.boundGenerateClick = () => generateConfig(awg3Options);
-
-  const awg31Options = {
-    buttonId: 'generateButtonAwg31',
-    mode: 'awg31',
-    filename: getModeFilename('awg31'),
-    boundGenerateClick: () => {},
-  };
-  awg31Options.boundGenerateClick = () => generateConfig(awg31Options);
-
   if (generateButton) {
-    generateButton.addEventListener('click', legacyOptions.boundGenerateClick);
+    generateButton.addEventListener('click', () => generateConfig());
   } else {
     console.error('Кнопка "generateButton" не найдена.');
   }
+  initResultPanel();
 
-  if (generateButtonAwg2) {
-    generateButtonAwg2.addEventListener('click', awg2Options.boundGenerateClick);
-  } else {
-    console.error('Кнопка "generateButtonAwg2" не найдена.');
-  }
-
-  if (generateButtonAwg3) {
-    generateButtonAwg3.addEventListener('click', awg3Options.boundGenerateClick);
-  } else {
-    console.error('Кнопка "generateButtonAwg3" не найдена.');
-  }
-
-  if (generateButtonAwg31) {
-    generateButtonAwg31.addEventListener('click', awg31Options.boundGenerateClick);
-  } else {
-    console.error('Кнопка "generateButtonAwg31" не найдена.');
-  }
-
-  // ── История генераций (модальное окно) ──
-  const historyModalBtn   = document.getElementById('historyModalBtn');
-  const historyModal      = document.getElementById('historyModal');
-  const historyModalClose = document.getElementById('historyModalClose');
-  const historyClearBtn   = document.getElementById('historyClearBtn');
-
-  const openHistoryModal = () => {
-    renderHistoryPanel();
-    if (historyModal) {
-      historyModal.style.display = 'flex';
-      historyModal.setAttribute('aria-hidden', 'false');
-    }
-  };
-
-  const closeHistoryModal = () => {
-    if (historyModal) {
-      historyModal.style.display = 'none';
-      historyModal.setAttribute('aria-hidden', 'true');
-    }
-  };
-
-  if (historyModalBtn) historyModalBtn.addEventListener('click', openHistoryModal);
-  if (historyModalClose) historyModalClose.addEventListener('click', closeHistoryModal);
-  if (historyModal) {
-    historyModal.addEventListener('click', (e) => {
-      if (e.target === historyModal) closeHistoryModal();
+  // ── История генераций ──
+  const historyModalBtn = document.getElementById('historyModalBtn');
+  const historyClearBtn = document.getElementById('historyClearBtn');
+  if (historyModalBtn) {
+    historyModalBtn.addEventListener('click', () => {
+      renderHistoryPanel();
+      openModal('historyModal', historyModalBtn);
     });
   }
   if (historyClearBtn) {
+    // Разрушающее действие — со вторым подтверждающим нажатием.
+    let confirmTimer = null;
+    const resetConfirm = () => {
+      historyClearBtn.dataset.confirm = '';
+      setI18nText(historyClearBtn, 'history_clear_all', 'Очистить историю');
+    };
     historyClearBtn.addEventListener('click', () => {
+      if (historyClearBtn.dataset.confirm !== '1') {
+        historyClearBtn.dataset.confirm = '1';
+        setI18nText(historyClearBtn, 'history_clear_confirm', 'Нажмите ещё раз, чтобы удалить');
+        if (confirmTimer) clearTimeout(confirmTimer);
+        confirmTimer = setTimeout(resetConfirm, 4000);
+        return;
+      }
+      if (confirmTimer) clearTimeout(confirmTimer);
       try { localStorage.removeItem(HISTORY_KEY); } catch { /* */ }
+      resetConfirm();
       renderHistoryPanel();
-      closeHistoryModal();
+      document.querySelector('#historyModal .modal__close')?.focus();
     });
   }
   renderHistoryPanel();
@@ -1968,94 +316,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── F-03: Локализация ──
   initI18n();
-  telemetry.trackEvent('healthcheck_opened');
-  fetchHealthStatus();
-  // Poll only while the tab is visible: background tabs polling every minute used to
-  // generate most of the request volume.
-  setInterval(() => {
-    if (!document.hidden) fetchHealthStatus();
-  }, 60_000);
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && Date.now() - lastHealthFetchAt >= HEALTH_MIN_GAP_MS) fetchHealthStatus();
-  });
-  fetchServiceStatus();
   document.querySelectorAll('.lang-btn').forEach((btn) => {
     btn.addEventListener('click', () => switchLang(btn.dataset.lang));
   });
+  restoreLangHandoff();
 
-  // ── F-05: Копировать конфиг (в модале предпросмотра) ──
+  // ── Статус сервисов: карточка в hero и модал ──
+  telemetry.trackEvent('healthcheck_opened');
+  initHeroStatus();
+  fetchServiceStatus();
+  const statusModalBtn = document.getElementById('statusModalBtn');
+  if (statusModalBtn) statusModalBtn.addEventListener('click', () => openStatusModal(statusModalBtn));
+  // Делегирование: ссылки внутри переводимого текста (ответ FAQ) перерисовываются при загрузке словаря
+  document.addEventListener('click', (ev) => {
+    const link = ev.target.closest && ev.target.closest('[data-status-link]');
+    if (!link || ev.button !== 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
+    ev.preventDefault();
+    openStatusModal(link);
+  });
+  const statusRefreshBtn = document.getElementById('statusRefreshBtn');
+  if (statusRefreshBtn) {
+    statusRefreshBtn.addEventListener('click', () => {
+      statusRefreshBtn.classList.add('is-spinning');
+      setTimeout(() => statusRefreshBtn.classList.remove('is-spinning'), 900);
+      refreshHeroStatus();
+    });
+  }
+
+  // ── Предпросмотр: «Копировать» отдаёт полный конфиг, хотя на экране ключ скрыт ──
   const copyConfigBtnModal = document.getElementById('copyConfigBtnModal');
   if (copyConfigBtnModal) {
     copyConfigBtnModal.addEventListener('click', async () => {
-      const textarea = document.getElementById('configPreviewTextModal');
-      if (!textarea || !textarea.value) return;
-      try {
-        await navigator.clipboard.writeText(textarea.value);
-      } catch {
-        textarea.select();
-        document.execCommand('copy');
-      }
-      const origText = copyConfigBtnModal.textContent;
-      copyConfigBtnModal.textContent = t('btn_copied', 'Скопировано!');
-      setTimeout(() => { copyConfigBtnModal.textContent = origText; }, 2000);
+      if (!previewConfigText) return;
+      const copied = await copyText(previewConfigText);
+      toast(copied ? t('btn_copied', 'Скопировано!') : t('copy_failed', 'Не удалось скопировать.'), copied ? 'success' : 'info');
     });
   }
 
-  // ── F-07: Статус сервисов ──
-  const statusModalBtn = document.getElementById('statusModalBtn');
-  if (statusModalBtn) {
-    statusModalBtn.addEventListener('click', openStatusModal);
-  }
-
-  // ── Закрытие модалов по клику на затемнённый оверлей ──
-  ['configPreviewModal', 'statusModal', 'resultInfoModal'].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('click', (ev) => { if (ev.target === el) closeModal(id); });
-  });
-
-  // ── Модал подробностей о конфиге ──
-  document.querySelectorAll('.post-gen-row__info').forEach((btn) => {
-    btn.addEventListener('click', () => openModal('resultInfoModal'));
-  });
-  const resultInfoCloseBtn = document.getElementById('resultInfoModalClose');
-  if (resultInfoCloseBtn) resultInfoCloseBtn.addEventListener('click', () => closeModal('resultInfoModal'));
-
-  // ── Стандартные кнопки окна ──
-  const closeButton = document.querySelector('.close-button');
-  const minimizeButton = document.querySelector('.minimize-button');
-  if (closeButton) closeButton.addEventListener('click', () => window.close());
-  if (minimizeButton) {
-    minimizeButton.addEventListener('click', () => {
-      const windowContent = document.querySelector('.window-content');
-      if (!windowContent) return;
-      windowContent.style.display = windowContent.style.display === 'none' ? 'flex' : 'none';
-    });
-  }
-
-  // ── Информационный модал ──
+  // ── «Какой профиль выбрать?» ──
   const infoLink = document.getElementById('infoLink');
-  const modal    = document.getElementById('modal');
-
-  if (infoLink && modal) {
-    const closeInfoModal = () => { modal.style.display = 'none'; modal.setAttribute('aria-hidden', 'true'); };
-    const openInfoModal  = () => { modal.style.display = 'flex'; modal.setAttribute('aria-hidden', 'false'); };
-
-    infoLink.addEventListener('click', openInfoModal);
-    modal.addEventListener('click', (ev) => { if (ev.target === modal) closeInfoModal(); });
-
-    // ESC закрывает любой открытый модал
-    document.addEventListener('keydown', (ev) => {
-      if (ev.key !== 'Escape') return;
-      const settingsEl = document.getElementById('settingsModal');
-      if (settingsEl && settingsEl.style.display === 'flex') { closeSettingsModal(); return; }
-      if (historyModal && historyModal.style.display === 'flex') { closeHistoryModal(); return; }
-      for (const id of ['configPreviewModal', 'statusModal', 'resultInfoModal']) {
-        const el = document.getElementById(id);
-        if (el && el.style.display === 'flex') { closeModal(id); return; }
-      }
-      if (modal.style.display === 'flex') closeInfoModal();
-    });
-  } else {
-    console.error('Элементы "infoLink" или "modal" не найдены.');
-  }
+  if (infoLink) infoLink.addEventListener('click', () => openModal('modal', infoLink));
 });

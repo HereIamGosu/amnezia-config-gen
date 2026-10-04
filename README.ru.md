@@ -7,7 +7,6 @@
 | | |
 | --- | --- |
 | **Генератор** | <https://awgconfig.com/> |
-| **Информационная страница** | <https://hereiamgosu.github.io/amnezia-config-gen/> |
 | **Telegram-канал** | <https://t.me/amnezia_config> |
 | **Исходный код** | <https://github.com/HereIamGosu/amnezia-config-gen> |
 
@@ -75,8 +74,10 @@ npm start    # vercel dev → http://localhost:3000
 
 | Путь | Назначение |
 |---|---|
-| `public/index.html` | Точка входа UI |
-| `public/static/script.js`, `styles.css` | Логика и стили фронтенда |
+| `public/index.html` | Точка входа UI (русская версия, `/`) |
+| `public/en/index.html` | Английская страница (`/en`), генерируется `npm run seo:en` — не править вручную |
+| `public/404.html`, `robots.txt`, `sitemap.xml`, `llms.txt`, `.well-known/security.txt` | Страница ошибки и файлы для поисковиков, ИИ-поиска и сообщений об уязвимостях |
+| `public/static/*.js`, `styles.css` | Фронтенд: `script.js` (генерация и связка) плюс `i18n.js`, `common.js`, `status.js`, `result.js`, `settings.js`, `settings-link.js`, `history.js`, `share-link.js`, `ui-shell.js`, `metrika.js`; стили. Браузерные тесты: `e2e/` (`npm run test:e2e`) |
 | `public/static/presets-fallback.json` | Запасной каталог пресетов без API |
 | `api/warp.js` | Эндпоинт генерации WARP-конфига |
 | `src/server/awg/` | AWG-профили, строгие ranges, WARP safety и финальная сериализация |
@@ -235,6 +236,8 @@ Experimental и research форматы **не** являются стабиль
 | `npm test` | Все тесты через встроенный `node:test` |
 | `npm run test:coverage` | Тесты с экспериментальным coverage |
 | `npm run presets:fallback` | Пересобрать `public/static/presets-fallback.json` из `api/routePresets.js` |
+| `npm run indexnow` | Отправить адреса из sitemap в IndexNow (Bing, Яндекс и другие); `--wait-revision <sha>` ждёт выкладки, `--since <commit>` пропускает релизы без изменений, `--dry-run` |
+| `npm run seo:en` | Пересобрать `public/en/index.html` из `public/index.html` и `public/locales/en.json` (`seo:check` проверяет) |
 | `npm run build` | Заглушка (сборка не нужна) |
 
 Запустить один файл тестов: `node --test __tests__/invariant-i1-uppercase.test.js`.

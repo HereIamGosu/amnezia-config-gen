@@ -17,7 +17,11 @@ Use this process for patch and minor releases. It requires only Git, Node/npm, a
    npm version X.Y.Z --no-git-tag-version
    ```
 
-3. Update release notes, source audit, changelog, release ledger, and current frontend asset cache keys.
+3. Update release notes, source audit, changelog, release ledger, and current frontend asset cache keys
+   (`?v=` in `public/index.html`, `public/status.html`, `public/404.html` and the icons of
+   `public/site.webmanifest`), the JSON-LD `softwareVersion` in `public/index.html`, and `<lastmod>` in
+   `public/sitemap.xml` (not older than the release date). Then regenerate the English page with
+   `npm run seo:en`. `release:check` also fails when `public/.well-known/security.txt` expires within 30 days.
 
 4. Install and verify:
 
@@ -63,6 +67,19 @@ Use this process for patch and minor releases. It requires only Git, Node/npm, a
 10. Create the GitHub Release from the checked-in release notes. Do not rely on generated notes for protocol policy.
 
 11. Verify deployed asset versions after deployment by checking that static asset URLs use `?v=X.Y.Z`.
+
+12. Search engines are notified through IndexNow (Bing, Yandex, Seznam, Naver, Yep) automatically:
+    `.github/workflows/indexnow.yml` runs on every push to `main` that touches `public/`, waits until
+    production serves the pushed commit (or a later commit containing it) and submits the sitemap
+    URLs (see `deploy/CI_CD.md`). Check
+    that the "IndexNow" workflow run of the release push succeeded.
+
+    Fallback, only when that run failed or was skipped — run the workflow manually
+    (`workflow_dispatch`) or from a checkout of the release commit:
+
+   ```bash
+   npm run indexnow -- --wait-revision "$(git rev-parse HEAD)" --since vPREVIOUS
+   ```
 
 ## Historical metadata repair
 

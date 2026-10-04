@@ -56,24 +56,56 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Any reference to a cache-keyed /static/ asset: relative, root-relative or absolute (og:image, JSON-LD).
 function collectVersionedAssetUrls(html) {
-  const urls = [];
-  const attributePattern = /\b(?:href|src)="([^"]*\?v=([^"&]+)[^"]*)"/g;
-  let match;
-
-  while ((match = attributePattern.exec(html)) !== null) {
-    const [url, version] = [match[1], match[2]];
-
-    if (url.startsWith('static/')) {
-      urls.push({ url, version });
-    }
-  }
-
-  return urls;
+  const pattern = /(?<![\w./-])((?:https:\/\/awgconfig\.com)?\/?static\/[^"'\s?#<>]+\?v=([^"'&\s#<>]+))/g;
+  return [...html.matchAll(pattern)].map((match) => ({ url: match[1], version: match[2] }));
 }
 
 // Every page that loads static/* assets: each needs ?v=<package version> on all of them.
-const HTML_ENTRY_POINTS = ['public/index.html', 'public/status.html'];
+const HTML_ENTRY_POINTS = ['public/index.html', 'public/en/index.html', 'public/status.html', 'public/404.html', 'public/lab/index.html', 'public/en/lab/index.html'];
+
+function checkManifestIconVersions(manifest, packageVersion) {
+  const failures = [];
+  for (const icon of manifest.icons || []) {
+    const version = /\?v=([^&]+)/.exec(icon.src || '')?.[1];
+    if (version !== packageVersion) {
+      failures.push(`public/site.webmanifest icon ${icon.src} must use ?v=${packageVersion}`);
+    }
+  }
+  return failures;
+}
+
+function releaseDateOf(changelog, packageVersion) {
+  const match = new RegExp(`^## \\[${escapeRegExp(packageVersion)}\\] - (\\d{4}-\\d{2}-\\d{2})$`, 'm').exec(changelog);
+  return match ? match[1] : null;
+}
+
+// A lastmod older than the release it ships with teaches search engines to ignore it.
+function checkSitemapFreshness(sitemap, releaseDate) {
+  const dates = [...sitemap.matchAll(/<lastmod>([^<]+)<\/lastmod>/g)].map((match) => match[1]);
+  if (dates.length === 0) return ['public/sitemap.xml has no <lastmod>'];
+  return dates
+    .filter((date) => !releaseDate || date.slice(0, 10) < releaseDate)
+    .map((date) => `public/sitemap.xml lastmod ${date} is older than the release date ${releaseDate}`);
+}
+
+function checkSoftwareVersion(html, packageVersion) {
+  const versions = [...html.matchAll(/"softwareVersion":\s*"([^"]*)"/g)].map((match) => match[1]);
+  if (versions.length !== 1) return [`public/index.html must declare exactly one JSON-LD softwareVersion, found ${versions.length}`];
+  return versions[0] === packageVersion ? [] : [`public/index.html JSON-LD softwareVersion ${versions[0]}, expected ${packageVersion}`];
+}
+
+// RFC 9116: Expires is mandatory; renew well before it lapses.
+function checkSecurityTxtExpiry(text, now = new Date(), minDaysLeft = 30) {
+  const value = /^Expires:\s*(\S+)\s*$/m.exec(text)?.[1];
+  const expires = value ? new Date(value) : null;
+  if (!expires || Number.isNaN(expires.getTime())) return ['public/.well-known/security.txt has no valid Expires'];
+  const daysLeft = (expires.getTime() - now.getTime()) / 86_400_000;
+  return daysLeft < minDaysLeft
+    ? [`public/.well-known/security.txt expires ${value}: renew Expires (less than ${minDaysLeft} days left)`]
+    : [];
+}
 
 function checkHtmlAssetVersions(htmlByFile, packageVersion) {
   const failures = [];
@@ -111,8 +143,8 @@ function findStaleCurrentVersionClaims(relativePath, packageVersion) {
     });
 }
 
-function runProtocolEvidenceCheck() {
-  const result = spawnSync(process.execPath, ['scripts/generate-protocol-evidence.js', '--check'], {
+function runCheckScript(script, label) {
+  const result = spawnSync(process.execPath, [script, '--check'], {
     cwd: ROOT,
     encoding: 'utf8',
     shell: false,
@@ -123,7 +155,7 @@ function runProtocolEvidenceCheck() {
   }
 
   const output = `${result.stderr || ''}${result.stdout || ''}`.trim();
-  return [output || 'Protocol evidence check failed'];
+  return [output || `${label} check failed`];
 }
 
 function main() {
@@ -181,10 +213,15 @@ function main() {
     Object.fromEntries(HTML_ENTRY_POINTS.map((file) => [file, readText(file)])),
     packageVersion,
   ));
+  failures.push(...checkManifestIconVersions(readJson('public/site.webmanifest'), packageVersion));
+  failures.push(...checkSoftwareVersion(readText('public/index.html'), packageVersion));
+  failures.push(...checkSitemapFreshness(readText('public/sitemap.xml'), releaseDateOf(changelog, packageVersion)));
+  failures.push(...checkSecurityTxtExpiry(readText('public/.well-known/security.txt')));
 
   failures.push(...findStaleCurrentVersionClaims('README.md', packageVersion));
   failures.push(...findStaleCurrentVersionClaims('README.ru.md', packageVersion));
-  failures.push(...runProtocolEvidenceCheck());
+  failures.push(...runCheckScript('scripts/generate-protocol-evidence.js', 'Protocol evidence'));
+  failures.push(...runCheckScript('scripts/build-en-page.js', 'English page'));
 
   if (!exists('docs/releases/RELEASE_LEDGER.md')) {
     failures.push('docs/releases/RELEASE_LEDGER.md is missing');
@@ -216,4 +253,13 @@ if (require.main === module) {
   }
 }
 
-module.exports = { checkHtmlAssetVersions, collectVersionedAssetUrls, HTML_ENTRY_POINTS };
+module.exports = {
+  checkHtmlAssetVersions,
+  checkManifestIconVersions,
+  checkSecurityTxtExpiry,
+  checkSitemapFreshness,
+  checkSoftwareVersion,
+  collectVersionedAssetUrls,
+  releaseDateOf,
+  HTML_ENTRY_POINTS,
+};
