@@ -187,10 +187,26 @@ class LabEndpointProvider {
   }
 }
 
+// Snapshot age buckets (seconds) for the shadow summary.
+const AGE_BUCKETS = [[60, 'lt60s'], [120, 'lt120s'], [180, 'lt180s']];
+const ageBucket = (s) => (AGE_BUCKETS.find(([limit]) => s < limit) || [null, 'ge180s'])[1];
+
 const emptyCounters = () => ({
-  requests: 0, lab_available: 0, lab_unavailable: {}, selected: 0, port_fallback: 0, errors: 0,
-  distinct_for_count: { 2: { requests: 0, distinct_sum: 0, short: 0 }, 3: { requests: 0, distinct_sum: 0, short: 0 } },
-  pool_age_s: { n: 0, sum: 0, max: 0 },
+  shadow_requests: 0,
+  shadow_lab_available: 0,
+  shadow_lab_unavailable: 0,
+  shadow_unavailable_reasons: {},
+  shadow_pool_stale: 0,
+  shadow_selection_success: 0,
+  shadow_selection_failure: 0,
+  shadow_port_fallback: 0,
+  shadow_errors: 0,
+  // count = 2/3 requests only
+  shadow_multi_requests: 0,
+  shadow_distinct_ip_success: 0,
+  shadow_distinct_port_success: 0,
+  shadow_insufficient_diversity: 0,
+  snapshot_age_bucket: { lt60s: 0, lt120s: 0, lt180s: 0, ge180s: 0 },
 });
 
 /**
@@ -211,26 +227,28 @@ class ShadowRecorder {
   observe(req = {}) {
     const c = this.counters;
     try {
-      c.requests += 1;
+      c.shadow_requests += 1;
       const r = this.provider.select(req);
+      if (r.ageSec != null) c.snapshot_age_bucket[ageBucket(r.ageSec)] += 1;
       if (!r.available) {
-        c.lab_unavailable[r.reason] = (c.lab_unavailable[r.reason] || 0) + 1;
+        c.shadow_lab_unavailable += 1;
+        c.shadow_selection_failure += 1;
+        if (r.reason === 'snapshot_stale') c.shadow_pool_stale += 1;
+        c.shadow_unavailable_reasons[r.reason] = (c.shadow_unavailable_reasons[r.reason] || 0) + 1;
       } else {
-        c.lab_available += 1;
-        c.selected += r.distinct;
-        if (!r.portMatched) c.port_fallback += 1;
-        c.pool_age_s.n += 1;
-        c.pool_age_s.sum += r.ageSec;
-        c.pool_age_s.max = Math.max(c.pool_age_s.max, r.ageSec);
-        const bucket = c.distinct_for_count[r.requested];
-        if (bucket) {
-          bucket.requests += 1;
-          bucket.distinct_sum += r.distinct;
-          if (r.distinct < r.requested) bucket.short += 1;
+        c.shadow_lab_available += 1;
+        if (r.distinct >= 1) c.shadow_selection_success += 1;
+        else c.shadow_selection_failure += 1;
+        if (!r.portMatched) c.shadow_port_fallback += 1;
+        if (r.requested > 1) {
+          c.shadow_multi_requests += 1;
+          if (new Set(r.endpoints.map((e) => e.ip)).size === r.requested) c.shadow_distinct_ip_success += 1;
+          if (new Set(r.endpoints.map((e) => e.port)).size === r.requested) c.shadow_distinct_port_success += 1;
+          if (r.distinct < r.requested) c.shadow_insufficient_diversity += 1;
         }
       }
     } catch {
-      c.errors += 1;
+      c.shadow_errors += 1;
     }
     try {
       this.maybeFlush();
@@ -240,24 +258,16 @@ class ShadowRecorder {
   }
 
   summary() {
-    const c = this.counters;
     return {
       window_start: new Date(this.windowStart).toISOString(),
       window_end: new Date(this.now()).toISOString(),
-      requests: c.requests,
-      shadow_lab_available: c.lab_available,
-      shadow_lab_unavailable: c.lab_unavailable,
-      shadow_selected: c.selected,
-      shadow_port_fallback: c.port_fallback,
-      shadow_errors: c.errors,
-      shadow_pool_age_s: { avg: c.pool_age_s.n ? Math.round(c.pool_age_s.sum / c.pool_age_s.n) : null, max: c.pool_age_s.max },
-      shadow_distinct_count_for_count_2_3: c.distinct_for_count,
+      ...this.counters,
     };
   }
 
   maybeFlush(force = false) {
     if (!force && this.now() - this.windowStart < this.flushEveryMs) return;
-    if (this.counters.requests > 0) this.log(`[endpoint-shadow] ${JSON.stringify(this.summary())}`);
+    if (this.counters.shadow_requests > 0) this.log(`[endpoint-shadow] ${JSON.stringify(this.summary())}`);
     this.windowStart = this.now();
     this.counters = emptyCounters();
   }

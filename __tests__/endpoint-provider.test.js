@@ -152,10 +152,13 @@ test('shadow keeps aggregates only and never logs endpoints', () => {
   shadow.observe({ count: 3, port: 2408 });
   shadow.observe({ count: 2 });
   const s = shadow.summary();
-  assert.equal(s.requests, 3);
+  assert.equal(s.shadow_requests, 3);
   assert.equal(s.shadow_lab_available, 3);
-  assert.equal(s.shadow_selected, 6);
-  assert.equal(s.shadow_distinct_count_for_count_2_3['3'].distinct_sum, 3);
+  assert.equal(s.shadow_selection_success, 3);
+  assert.equal(s.shadow_multi_requests, 2);
+  assert.equal(s.shadow_distinct_ip_success, 2);
+  assert.equal(s.shadow_insufficient_diversity, 0);
+  assert.equal(s.snapshot_age_bucket.lt60s, 3);  // snapshot generated 20 s before NOW
   t += 2000;
   shadow.observe({ count: 1 });
   assert.equal(lines.length, 1);
@@ -169,8 +172,20 @@ test('shadow counts unavailability reasons and swallows provider errors', () => 
   shadow.observe({ count: 1 });
   const broken = new ShadowRecorder({ provider: { select: () => { throw new Error('boom'); } }, log: () => {}, now: () => NOW });
   assert.doesNotThrow(() => broken.observe({ count: 1 }));
-  assert.deepEqual(shadow.summary().shadow_lab_unavailable, { snapshot_stale: 1 });
+  assert.equal(shadow.summary().shadow_lab_unavailable, 1);
+  assert.equal(shadow.summary().shadow_pool_stale, 1);
+  assert.deepEqual(shadow.summary().shadow_unavailable_reasons, { snapshot_stale: 1 });
+  assert.equal(shadow.summary().shadow_selection_failure, 1);
   assert.equal(broken.summary().shadow_errors, 1);
+});
+
+test('shadow observe is cheap enough to never matter for request latency', () => {
+  const { provider } = providerFor(snapshot(POOL));
+  const shadow = new ShadowRecorder({ provider, log: () => {}, now: () => NOW });
+  const t0 = process.hrtime.bigint();
+  for (let i = 0; i < 2000; i += 1) shadow.observe({ count: 1 + (i % 3), port: 4500 });
+  const perCallMs = Number(process.hrtime.bigint() - t0) / 1e6 / 2000;
+  assert.ok(perCallMs < 1, `observe took ${perCallMs.toFixed(3)} ms per call`);  // runs after the response anyway
 });
 
 // ── /api/warp integration: shadow never changes the response ────────────────────
