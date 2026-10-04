@@ -10,7 +10,7 @@ const path = require('node:path');
 const { test } = require('node:test');
 
 const {
-  KEY, HOST, KEY_LOCATION, ENDPOINT, buildPayload, changedPublicFiles, parseArgs, sitemapUrls, submit, waitForRevision,
+  KEY, HOST, KEY_LOCATION, ENDPOINT, buildPayload, changedPublicFiles, isDescendant, parseArgs, sitemapUrls, submit, waitForRevision,
 } = require('../scripts/indexnow');
 
 const root = path.resolve(__dirname, '..');
@@ -83,6 +83,64 @@ test('waiting for a revision polls X-App-Revision until production serves it', a
   assert.deepEqual(result, { reached: true, initial: 'old' });
   assert.deepEqual(requests[0], ['https://awgconfig.com/', 'HEAD']);
   assert.equal(requests.length, 4);
+});
+
+test('a later commit that contains the pushed one counts as deployed (quick follow-up push)', async () => {
+  const live = ['0ld0ld0', '0ld0ld0', 'b7e2a9f'];
+  const asked = [];
+  let clock = 0;
+  const result = await waitForRevision('a1c3e5d', {
+    fetchImpl: async () => response(200, { 'x-app-revision': live.shift() || 'b7e2a9f' }),
+    wait: async (ms) => { clock += ms; },
+    now: () => clock,
+    intervalMs: 10,
+    timeoutMs: 1000,
+    descends: (revision, current) => { asked.push([revision, current]); return current === 'b7e2a9f'; },
+  });
+  assert.deepEqual(result, { reached: true, initial: '0ld0ld0' });
+  assert.deepEqual(asked, [['a1c3e5d', 'b7e2a9f']], 'git is asked only once production moved, never for the idle revision');
+});
+
+test('a live revision that is not a commit SHA never reaches git', async () => {
+  let clock = 0;
+  const asked = [];
+  const result = await waitForRevision('abc1234', {
+    fetchImpl: async () => response(200, { 'x-app-revision': clock === 0 ? 'abc0000' : '--upload-pack=evil' }),
+    wait: async (ms) => { clock += ms; },
+    now: () => clock,
+    intervalMs: 100,
+    timeoutMs: 250,
+    descends: (revision, current) => { asked.push(current); return true; },
+  });
+  assert.equal(result.reached, false);
+  assert.deepEqual(asked, []);
+});
+
+test('an unrelated revision is not mistaken for a descendant', async () => {
+  let clock = 0;
+  const result = await waitForRevision('new', {
+    fetchImpl: async () => response(200, { 'x-app-revision': clock === 0 ? 'old' : 'other-branch' }),
+    wait: async (ms) => { clock += ms; },
+    now: () => clock,
+    intervalMs: 100,
+    timeoutMs: 250,
+    descends: () => false,
+  });
+  assert.equal(result.reached, false);
+});
+
+test('isDescendant uses merge-base and fetches an unknown later commit once', () => {
+  const calls = [];
+  let fetched = false;
+  const run = (args) => {
+    calls.push(args.join(' '));
+    if (args[0] === 'fetch') { fetched = true; return ''; }
+    if (!fetched) throw new Error('fatal: Not a valid commit name');
+    return '';
+  };
+  assert.equal(isDescendant('aaa', 'bbb', run), true);
+  assert.deepEqual(calls, ['merge-base --is-ancestor aaa bbb', 'fetch --quiet origin bbb', 'merge-base --is-ancestor aaa bbb']);
+  assert.equal(isDescendant('aaa', 'ccc', () => { throw new Error('exit 1'); }), false, 'git failure is "not proven"');
 });
 
 test('waiting gives up at the deadline and tolerates network errors', async () => {

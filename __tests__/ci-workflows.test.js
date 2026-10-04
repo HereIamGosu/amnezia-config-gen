@@ -9,8 +9,23 @@ const workflows = fs.readdirSync(workflowsDir)
   .filter((file) => /\.ya?ml$/.test(file))
   .map((file) => ({ file, text: fs.readFileSync(path.join(workflowsDir, file), 'utf8') }));
 
-test('CI is a single workflow; obsolete duplicates are gone', () => {
-  assert.deepEqual(workflows.map((w) => w.file).sort(), ['ci.yml']);
+test('CI is a single workflow plus the IndexNow notifier; obsolete duplicates are gone', () => {
+  assert.deepEqual(workflows.map((w) => w.file).sort(), ['ci.yml', 'indexnow.yml']);
+});
+
+test('IndexNow runs on its own, after public/ changes on main, and waits for production', () => {
+  const indexnow = workflows.find((w) => w.file === 'indexnow.yml').text;
+  assert.match(indexnow, /push:\n\s+branches: \[main\]\n\s+paths: \['public\/\*\*'\]/);
+  assert.match(indexnow, /workflow_dispatch:/);
+  assert.match(indexnow, /timeout-minutes: \d+/);
+  assert.match(indexnow, /permissions:\n\s+contents: read\n/);
+  assert.match(indexnow, /fetch-depth: 0/, '--since needs the previous commit');
+  assert.match(indexnow, /--wait-revision "\$GITHUB_SHA"/);
+  assert.match(indexnow, /--since "\$BEFORE_SHA"/);
+  assert.match(indexnow, /BEFORE_SHA: \$\{\{ github\.event\.before \}\}/);
+  assert.doesNotMatch(indexnow, /needs:|docker|npm ci/, 'no build and no dependency on CI jobs');
+  const ci = workflows.find((w) => w.file === 'ci.yml').text;
+  assert.doesNotMatch(ci, /indexnow/i, 'a slow deploy must never fail CI');
 });
 
 test('every action is pinned to a full commit SHA with its version noted', () => {
@@ -50,6 +65,10 @@ test('the image is built once and the smoke test runs against that image', () =>
   assert.match(ci, /load:\s*true/);
   assert.match(ci, /APP_REVISION=\$\{\{ github\.sha \}\}/);
   assert.match(ci, /bash scripts\/ci\/smoke-image\.sh "\$IMAGE" "\$GITHUB_SHA"/);
+  // build-assets ran in the builder stage: the image ships parseable, precompressed scripts.
+  assert.match(ci, /name: Check built assets in the image\n\s+run: \|\n\s+docker run --rm --network none [^\n]*"\$IMAGE"/);
+  assert.match(ci, /node --check "\$f"/);
+  assert.match(ci, /Content-Encoding: \$enc/);
   assert.doesNotMatch(ci, /docker build\b/, 'no second, ad-hoc build');
   assert.doesNotMatch(ci, /:latest\b/);
   assert.match(ci, /DOCKER_BUILD_RECORD_UPLOAD: false/, 'no implicit build-record artifact (PRs included)');
@@ -69,8 +88,8 @@ const jobsOf = (text) => {
 test('only the publish job can write, only for pushes to main, and it never builds', () => {
   const ci = workflows.find((w) => w.file === 'ci.yml').text;
   const jobs = jobsOf(ci);
-  assert.deepEqual(Object.keys(jobs), ['ci', 'image', 'publish']);
-  for (const name of ['ci', 'image']) {
+  assert.deepEqual(Object.keys(jobs), ['ci', 'e2e', 'image', 'publish']);
+  for (const name of ['ci', 'e2e', 'image']) {
     assert.match(jobs[name], /permissions:\n\s+contents: read\n/, `${name}: read-only`);
     assert.doesNotMatch(jobs[name], /packages:|docker push|docker\/login-action/, `${name} must not publish`);
   }
@@ -91,6 +110,18 @@ test('only the publish job can write, only for pushes to main, and it never buil
   const script = fs.readFileSync(path.join(root, 'scripts', 'ci', 'publish-image.sh'), 'utf8');
   assert.match(script, /docker load/);
   assert.doesNotMatch(script.replace(/^\s*#.*$/gm, ''), /docker build\b|buildx build|:latest/);
+});
+
+test('browser e2e tests run in their own job and cannot be skipped silently', () => {
+  const jobs = jobsOf(workflows.find((w) => w.file === 'ci.yml').text);
+  const e2e = jobs.e2e;
+  assert.match(e2e, /run: npm ci\n/);
+  assert.match(e2e, /npm run test:e2e/);
+  assert.match(e2e, /E2E_REQUIRE_CHROME: '1'/, 'a runner without Chrome must fail the job, not skip it');
+  assert.doesNotMatch(e2e, /docker|secrets\.|packages:/);
+  assert.doesNotMatch(jobs.ci, /test:e2e/, 'unit job stays browser-free');
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  assert.equal(pkg.scripts['test:e2e'], 'node e2e/run.js');
 });
 
 test('Dependabot keeps pinned actions and the base image current', () => {

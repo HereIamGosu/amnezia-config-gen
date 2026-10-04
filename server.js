@@ -10,7 +10,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const ROOT = __dirname;
-const PUBLIC_DIR = path.join(ROOT, 'public');
+// PUBLIC_DIR overrides the static root (tests serve a built copy); production uses ./public.
+const PUBLIC_DIR = process.env.PUBLIC_DIR ? path.resolve(process.env.PUBLIC_DIR) : path.join(ROOT, 'public');
 const API_DIR = path.join(ROOT, 'api');
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -45,6 +46,14 @@ const MIME_TYPES = {
   '.ttf': 'font/ttf',
   '.pdf': 'application/pdf',
 };
+
+// Precompressed siblings (<file>.br, <file>.gz) are written by scripts/build-assets.js in the
+// Docker builder stage. Preference order: Brotli, then gzip; otherwise the plain file.
+const PRECOMPRESSED = [
+  { encoding: 'br', suffix: '.br' },
+  { encoding: 'gzip', suffix: '.gz' },
+];
+const COMPRESSIBLE_EXTENSIONS = new Set(['.html', '.css', '.js', '.mjs', '.json', '.map', '.txt', '.xml', '.webmanifest', '.svg']);
 
 const VERCEL_CONFIG = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
 
@@ -216,6 +225,8 @@ const resolveStaticFile = (pathname) => {
     return null;
   }
   if (decoded.includes('\0')) return null;
+  // Precompressed siblings are an internal representation, reachable only via Accept-Encoding.
+  if (/\.(br|gz)$/i.test(decoded)) return null;
   let filePath = path.join(PUBLIC_DIR, path.normalize(decoded));
   if (filePath !== PUBLIC_DIR && !filePath.startsWith(PUBLIC_DIR + path.sep)) return null;
   try {
@@ -240,6 +251,50 @@ const pipeFile = (filePath, res) => {
   stream.pipe(res);
 };
 
+/** Accept-Encoding -> Map(coding -> q). Missing q means 1; unparsable q means "not acceptable". */
+const parseAcceptEncoding = (header) => {
+  const accepted = new Map();
+  for (const part of String(header || '').split(',')) {
+    const [name, ...params] = part.split(';').map((s) => s.trim().toLowerCase());
+    if (!name) continue;
+    let q = 1;
+    for (const param of params) {
+      const m = /^q\s*=\s*([0-9.]+)$/.exec(param);
+      if (m) q = Number(m[1]);
+    }
+    accepted.set(name, Number.isFinite(q) ? q : 0);
+  }
+  return accepted;
+};
+
+const acceptsEncoding = (accepted, encoding) =>
+  (accepted.has(encoding) ? accepted.get(encoding) : accepted.get('*') ?? 0) > 0;
+
+/**
+ * Precompressed representation of a static file: { vary, variant }. `vary` is true whenever a
+ * sibling exists (the response then depends on Accept-Encoding, plain or not). A sibling older
+ * than its file is ignored, so an edited file is never shadowed by a stale build. Range requests
+ * always get the plain file.
+ */
+const pickPrecompressed = (req, filePath, stat) => {
+  if (!COMPRESSIBLE_EXTENSIONS.has(path.extname(filePath).toLowerCase())) return { vary: false, variant: null };
+  const siblings = [];
+  for (const { encoding, suffix } of PRECOMPRESSED) {
+    try {
+      const siblingStat = fs.statSync(filePath + suffix);
+      if (siblingStat.isFile() && siblingStat.mtimeMs >= stat.mtimeMs) {
+        siblings.push({ encoding, filePath: filePath + suffix, stat: siblingStat });
+      }
+    } catch {
+      // no sibling of this encoding
+    }
+  }
+  if (siblings.length === 0) return { vary: false, variant: null };
+  if (req.headers.range) return { vary: true, variant: null };
+  const accepted = parseAcceptEncoding(req.headers['accept-encoding']);
+  return { vary: true, variant: siblings.find((s) => acceptsEncoding(accepted, s.encoding)) || null };
+};
+
 const serveStatic = (req, res, pathname) => {
   if (!['GET', 'HEAD'].includes(req.method)) {
     res.writeHead(405, { Allow: 'GET, HEAD' });
@@ -262,11 +317,17 @@ const serveStatic = (req, res, pathname) => {
     return;
   }
 
-  const { filePath, stat } = found;
-  const etag = `"${crypto.createHash('sha1').update(`${stat.size}-${stat.mtimeMs}`).digest('hex').slice(0, 16)}"`;
+  const { vary, variant } = pickPrecompressed(req, found.filePath, found.stat);
+  const { filePath, stat } = variant || found;
+  // Each representation gets its own strong validator.
+  const etagHash = crypto.createHash('sha1').update(`${stat.size}-${stat.mtimeMs}`).digest('hex').slice(0, 16);
+  const etag = `"${etagHash}${variant ? `-${variant.encoding}` : ''}"`;
   res.setHeader('ETag', etag);
-  res.setHeader('Last-Modified', stat.mtime.toUTCString());
-  res.setHeader('Content-Type', MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream');
+  res.setHeader('Last-Modified', found.stat.mtime.toUTCString());
+  // The type of the original file, never of the .br/.gz sibling.
+  res.setHeader('Content-Type', MIME_TYPES[path.extname(found.filePath).toLowerCase()] || 'application/octet-stream');
+  if (vary) res.setHeader('Vary', 'Accept-Encoding');
+  if (variant) res.setHeader('Content-Encoding', variant.encoding);
 
   if (req.headers['if-none-match'] === etag) {
     res.statusCode = 304;

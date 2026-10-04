@@ -68,8 +68,14 @@ Use this process for patch and minor releases. It requires only Git, Node/npm, a
 
 11. Verify deployed asset versions after deployment by checking that static asset URLs use `?v=X.Y.Z`.
 
-12. Notify search engines through IndexNow (Bing, Yandex, Seznam, Naver, Yep). The command waits until
-    production serves the release commit and skips the request when nothing under `public/` changed:
+12. Search engines are notified through IndexNow (Bing, Yandex, Seznam, Naver, Yep) automatically:
+    `.github/workflows/indexnow.yml` runs on every push to `main` that touches `public/`, waits until
+    production serves the pushed commit (or a later commit containing it) and submits the sitemap
+    URLs (see `deploy/CI_CD.md`). Check
+    that the "IndexNow" workflow run of the release push succeeded.
+
+    Fallback, only when that run failed or was skipped — run the workflow manually
+    (`workflow_dispatch`) or from a checkout of the release commit:
 
    ```bash
    npm run indexnow -- --wait-revision "$(git rev-parse HEAD)" --since vPREVIOUS

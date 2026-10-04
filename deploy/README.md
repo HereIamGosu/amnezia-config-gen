@@ -95,8 +95,34 @@ Nothing application-specific lives only on the server except the TLS key (re-iss
    `public/llms.txt`, `public/.well-known/security.txt`, `package.json` `homepage`, README links.
 5. Optionally keep the sslip.io host as a 301 redirect to the new domain.
 
+## Static assets: minification and compression
+
+The image ships a built copy of `public/` (builder stage of `deploy/Dockerfile`,
+`scripts/build-assets.js`, details in [`CI_CD.md`](CI_CD.md)): minified static JS/CSS plus
+precompressed siblings `<file>.br` and `<file>.gz` for text assets. No nginx module is needed:
+
+- `server.js` picks a sibling from `Accept-Encoding` (Brotli first, then gzip; `q=0` and `*`
+  honoured), sends `Content-Encoding`, `Vary: Accept-Encoding`, the original `Content-Type`, a
+  per-encoding `ETag` and the unchanged `vercel.json` headers (`Cache-Control`, CSP, …). Range
+  requests, files without siblings and siblings older than their file get the plain file. Direct
+  requests for `*.br` / `*.gz` answer 404.
+- nginx (`deploy/nginx-amnezia-site.conf`, `gzip on; gzip_proxied any;`) does not compress a
+  response that already carries `Content-Encoding`: the gzip filter passes it through, so precompressed
+  Brotli/gzip reaches the client unchanged and nginx gzip still covers everything served plain (API
+  JSON, files without siblings). `proxy_set_header` does not touch `Accept-Encoding`, so the
+  client's value reaches the app. nginx needs no change.
+- Check on production: `curl -sI -H 'Accept-Encoding: br' https://awgconfig.com/static/script.js?v=<version>`
+  → `content-encoding: br`, `vary: Accept-Encoding`.
+
 ## Local run
 
 ```bash
 PORT=3000 node server.js
+```
+
+Serves the readable sources. To run against a built copy (as the image does):
+
+```bash
+cp -r public /tmp/public-built && node scripts/build-assets.js /tmp/public-built
+PORT=3000 PUBLIC_DIR=/tmp/public-built node server.js
 ```

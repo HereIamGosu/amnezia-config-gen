@@ -77,7 +77,7 @@ npm start    # vercel dev → http://localhost:3000
 | `public/index.html` | Точка входа UI (русская версия, `/`) |
 | `public/en/index.html` | Английская страница (`/en`), генерируется `npm run seo:en` — не править вручную |
 | `public/404.html`, `robots.txt`, `sitemap.xml`, `llms.txt`, `.well-known/security.txt` | Страница ошибки и файлы для поисковиков, ИИ-поиска и сообщений об уязвимостях |
-| `public/static/script.js`, `styles.css` | Логика и стили фронтенда |
+| `public/static/*.js`, `styles.css` | Фронтенд: `script.js` (генерация и связка) плюс `i18n.js`, `common.js`, `status.js`, `result.js`, `settings.js`, `settings-link.js`, `history.js`, `share-link.js`, `ui-shell.js`, `metrika.js`; стили. Браузерные тесты: `e2e/` (`npm run test:e2e`) |
 | `public/static/presets-fallback.json` | Запасной каталог пресетов без API |
 | `api/warp.js` | Эндпоинт генерации WARP-конфига |
 | `src/server/awg/` | AWG-профили, строгие ranges, WARP safety и финальная сериализация |

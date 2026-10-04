@@ -94,6 +94,37 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # Real-browser tests: server.js + headless Chrome over the DevTools Protocol (no extra
+  # dependencies, see e2e/run.js). A job of its own so unit results never wait on a browser;
+  # /api/warp and every external request are stubbed, so it never registers a WARP device.
+  e2e:
+    name: Browser end-to-end tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The runner image ships Google Chrome; without it the run must fail, not skip.
+      - name: Browser tests
+        env:
+          E2E_REQUIRE_CHROME: '1'
+        run: |
+          google-chrome --version
+          npm run test:e2e
+
   image:
     name: Build image once, test that image
     needs: ci
@@ -145,6 +176,34 @@ jobs:
 
       - name: Smoke-test the built image
         run: bash scripts/ci/smoke-image.sh "$IMAGE" "$GITHUB_SHA"
+
+      # The builder stage ran scripts/build-assets.js: every shipped script must still parse,
+      # be minified, carry .br/.gz siblings, and the server must answer with Content-Encoding.
+      - name: Check built assets in the image
+        run: |
+          docker run --rm --network none --read-only --tmpfs /tmp:size=16m --entrypoint sh "$IMAGE" -ec '
+            cd /app/public
+            for f in static/*.js; do
+              node --check "$f"
+              test -s "$f.br" && test -s "$f.gz" || { echo "missing precompressed sibling for $f"; exit 1; }
+              # Minified = long lines (multi-line template literals keep their own newlines).
+              size=$(($(wc -c < "$f"))); lines=$(($(wc -l < "$f") + 1))
+              if [ "$size" -gt 2048 ] && [ $((size / lines)) -lt 200 ]; then echo "$f is not minified"; exit 1; fi
+            done
+            for f in static/styles.css index.html en/index.html; do
+              test -s "$f.br" && test -s "$f.gz" || { echo "missing precompressed sibling for $f"; exit 1; }
+            done
+            node /app/server.js > /tmp/server.log 2>&1 &
+            for _ in 1 2 3 4 5 6 7 8 9 10; do wget -q -O /dev/null http://127.0.0.1:3000/api/status && break; sleep 1; done
+            for enc in br gzip; do
+              headers="$(wget -S -O /dev/null --header "Accept-Encoding: $enc" "http://127.0.0.1:3000/static/script.js" 2>&1)"
+              case "$headers" in
+                *"Content-Encoding: $enc"*) echo "ok: /static/script.js served with Content-Encoding: $enc" ;;
+                *) echo "no Content-Encoding: $enc"; echo "$headers"; cat /tmp/server.log; exit 1 ;;
+              esac
+            done
+            echo "built assets: all checks passed"
+          '
 
       # Hand-off to the publish job: it checks this archive against the job outputs (sha256,
       # image ID, config digest from manifest.json) and pushes it — it never rebuilds.

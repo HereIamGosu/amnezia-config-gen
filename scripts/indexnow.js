@@ -86,17 +86,47 @@ const liveRevision = async (fetchImpl) => {
   }
 };
 
+const gitRun = (args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+
 /**
- * Polls production until it answers with `revision`. Returns { reached, initial }, where
- * `initial` is the revision that was live when waiting started (null if unknown).
+ * True when `descendant` already contains `revision`: production went straight to a later commit
+ * (a quick follow-up push), which includes our changes too. A commit pushed after this checkout is
+ * fetched once; any git failure means "not proven", so waiting simply continues.
+ */
+function isDescendant(revision, descendant, run = gitRun) {
+  const check = () => {
+    try {
+      run(['merge-base', '--is-ancestor', revision, descendant]);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (check()) return true;
+  try {
+    run(['fetch', '--quiet', 'origin', descendant]);
+  } catch {
+    return false;
+  }
+  return check();
+}
+
+/**
+ * Polls production until it serves `revision` or a later commit that contains it. Returns
+ * { reached, initial }, where `initial` is the revision that was live when waiting started (null if unknown).
  */
 async function waitForRevision(revision, {
   fetchImpl = fetch, wait = sleep, now = Date.now, timeoutMs = 30 * 60_000, intervalMs = 30_000, onPoll = () => {},
+  descends = isDescendant,
 } = {}) {
   const deadline = now() + timeoutMs;
   const initial = await liveRevision(fetchImpl);
   let current = initial;
-  while (current !== revision) {
+  // Only a revision that changed since waiting started can be a descendant: no git calls while production is idle.
+  // The live header goes to git only when it looks like a commit SHA (defence in depth: no option-like values).
+  const reached = () => current === revision
+    || (!!current && current !== initial && /^[0-9a-f]{7,40}$/.test(current) && descends(revision, current));
+  while (!reached()) {
     onPoll(current);
     if (now() >= deadline) return { reached: false, initial };
     await wait(intervalMs);
@@ -171,5 +201,5 @@ if (require.main === module) {
 }
 
 module.exports = {
-  KEY, HOST, KEY_LOCATION, ENDPOINT, buildPayload, changedPublicFiles, parseArgs, sitemapUrls, submit, waitForRevision,
+  KEY, HOST, KEY_LOCATION, ENDPOINT, buildPayload, changedPublicFiles, isDescendant, parseArgs, sitemapUrls, submit, waitForRevision,
 };
