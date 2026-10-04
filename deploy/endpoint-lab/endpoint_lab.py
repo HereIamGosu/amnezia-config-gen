@@ -67,7 +67,7 @@ MAX_CANDIDATES = 64
 WARP_API_HOST = "api.cloudflareclient.com"
 WARP_API_PREFIX = "/v0i1909051800"  # same API version api/warp.js uses in production
 WARP_API_TIMEOUT_S = 20
-WARP_API_MAX_ATTEMPTS = 2           # bounded: never a registration loop
+WARP_API_MAX_ATTEMPTS = 2           # bounded; POST reg is single-attempt (a lost reply must not mean 2 registrations)
 MAX_API_RESPONSE = 256 * 1024
 
 MTU = 1280
@@ -335,9 +335,10 @@ class WarpApi:
         except urllib.error.HTTPError as exc:
             return exc.code, exc.read(MAX_API_RESPONSE + 1)
 
-    def call(self, method: str, path: str, body: dict | None = None, token: str | None = None) -> dict:
+    def call(self, method: str, path: str, body: dict | None = None, token: str | None = None,
+             attempts: int = WARP_API_MAX_ATTEMPTS) -> dict:
         last = "no attempt"
-        for attempt in range(WARP_API_MAX_ATTEMPTS):
+        for attempt in range(attempts):
             try:
                 status, raw = self.transport(method, path, body, token)
             except (OSError, TimeoutError) as exc:
@@ -355,9 +356,9 @@ class WarpApi:
                 if status < 500:
                     raise LabError(UNKNOWN, f"WARP API rejected {method} {path.split('/')[0]}: HTTP {status}")
                 last = f"HTTP {status}"
-            if attempt + 1 < WARP_API_MAX_ATTEMPTS:
+            if attempt + 1 < attempts:
                 time.sleep(2)
-        raise LabError(LOCAL_RESOURCE_ERROR, f"WARP API unavailable after {WARP_API_MAX_ATTEMPTS} attempts ({last})")
+        raise LabError(LOCAL_RESOURCE_ERROR, f"WARP API unavailable after {attempts} attempt(s) ({last})")
 
 
 def register_probe_identity(runner: "CommandRunner", api: WarpApi, conf_dir: str = CONF_DIR,
@@ -386,7 +387,7 @@ def register_probe_identity(runner: "CommandRunner", api: WarpApi, conf_dir: str
     tos = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")  # as api/warp.js sends it
     body = {"install_id": "", "tos": tos, "key": public_key,
             "fcm_token": "", "type": "ios", "locale": "en_US"}
-    response = api.call("POST", "reg", body)
+    response = api.call("POST", "reg", body, attempts=1)  # never retried: see WARP_API_MAX_ATTEMPTS
     reg = _validate_registration(response.get("result"))
     # Persist before enabling: a crash after this point resumes with PATCH instead of a new registration.
     _atomic_write(key_path, (private_key + "\n").encode(), 0o600)

@@ -86,7 +86,7 @@ controls). At most 64 endpoints per file. IPv6 is unsupported on this node (`dis
 ## Probe identity
 
 One dedicated consumer-WARP registration, created by `register-probe-identity`:
-`wg genkey` → `wg pubkey` (via stdin) → `POST reg` (at most 2 attempts, no retry on 429) →
+`wg genkey` → `wg pubkey` (via stdin) → `POST reg` (single attempt: a lost reply must never become a second registration) →
 validated response persisted atomically with `warp_enabled=false` → `PATCH warp_enabled` →
 persisted `true`. If the PATCH fails, the next run only retries the PATCH. Probes refuse an identity
 that is missing, malformed, half-enabled or whose key file is group/other-readable
@@ -148,7 +148,7 @@ pool drains within 7 minutes. Stale state is never served.
 
 | Event | Endpoint states | Lab state | Future generator | Alert (Phase B) | Recovery |
 | --- | --- | --- | --- | --- | --- |
-| WARP registration API down | unchanged | identity creation fails after 2 attempts | n/a | — | operator reruns |
+| WARP registration API down | unchanged | identity creation fails (POST once, PATCH at most twice) | n/a | — | operator reruns |
 | Probe identity invalid/revoked | unchanged (Lab failure) | `lab_failure` | pool drains in 7 min → 503 in Lab mode | critical if pool empty | rotate identity |
 | One endpoint silent | ACTIVE→SUSPECT | ok | endpoint leaves pool | none | next verify |
 | All endpoints silent at once | unchanged (`suspect_global`) | suspect_global | pool drains | warning → critical | fix host/uplink |

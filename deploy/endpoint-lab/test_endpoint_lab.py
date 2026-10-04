@@ -582,12 +582,20 @@ class RegistrationTests(unittest.TestCase):
         self.assertEqual(calls2, [])
 
     def test_api_unavailable_is_bounded_and_writes_nothing(self):
-        t, calls = self.transport([(503, b""), OSError("reset")])
-        with mock.patch.object(lab.time, "sleep"), self.assertRaises(lab.LabError) as ctx:
-            lab.register_probe_identity(FakeRunner(), lab.WarpApi(t), self.dir, self.dir)
+        for failure in ((503, b""), OSError("reset")):
+            with self.subTest(failure=str(failure)[:20]):
+                t, calls = self.transport([failure, (200, json.dumps(reg_response()).encode())])
+                with mock.patch.object(lab.time, "sleep"), self.assertRaises(lab.LabError) as ctx:
+                    lab.register_probe_identity(FakeRunner(), lab.WarpApi(t), self.dir, self.dir)
+                self.assertEqual(len(calls), 1)  # POST reg is never retried: a lost reply could mean two registrations
+                self.assertEqual(ctx.exception.code, lab.LOCAL_RESOURCE_ERROR)
+                self.assertEqual(os.listdir(self.dir), [])
+
+    def test_patch_retry_is_bounded(self):
+        t, calls = self.transport([(503, b""), (503, b"")])
+        with mock.patch.object(lab.time, "sleep"), self.assertRaises(lab.LabError):
+            lab.WarpApi(t).call("PATCH", "reg/x", {"warp_enabled": True}, "tok")
         self.assertEqual(len(calls), lab.WARP_API_MAX_ATTEMPTS)
-        self.assertEqual(ctx.exception.code, lab.LOCAL_RESOURCE_ERROR)
-        self.assertEqual(os.listdir(self.dir), [])
 
     def test_rate_limit_is_not_retried(self):
         t, calls = self.transport([(429, b"{}")])
