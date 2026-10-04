@@ -516,12 +516,14 @@ class SchedulerTests(LabFixture):
     def test_lock_timing_invariants_hold(self):
         disc_hold = max(lab.DISCOVERY_WALL_S) + lab.worst_case_probe_s(lab.DISCOVERY_HANDSHAKE_TIMEOUT_S) + lab.JOB_SLACK_S
         self.assertLess(disc_hold, lab.REFRESH_LOCK_WAIT_S)  # refresh always outlasts a discovery run
-        unit = open(os.path.join(HERE, "systemd", "amnezia-endpoint-lab-refresh.service"), encoding="utf-8").read()
+        with open(os.path.join(HERE, "systemd", "amnezia-endpoint-lab-refresh.service"), encoding="utf-8") as fh:
+            unit = fh.read()
         timeout = int(re.search(r"^TimeoutStartSec=(\d+)$", unit, re.M).group(1))
         refresh_total = (lab.REFRESH_LOCK_WAIT_S + lab.REFRESH_WALL_S
                          + lab.worst_case_probe_s(lab.REFRESH_HANDSHAKE_TIMEOUT_S) + lab.JOB_SLACK_S)
         self.assertLess(refresh_total, timeout)  # systemd never kills a refresh that waited and then ran
-        disc_unit = open(os.path.join(HERE, "systemd", "amnezia-endpoint-lab-discovery.service"), encoding="utf-8").read()
+        with open(os.path.join(HERE, "systemd", "amnezia-endpoint-lab-discovery.service"), encoding="utf-8") as fh:
+            disc_unit = fh.read()
         disc_timeout = int(re.search(r"^TimeoutStartSec=(\d+)$", disc_unit, re.M).group(1))
         self.assertLess(lab.DISCOVERY_LOCK_WAIT_S + disc_hold, disc_timeout)
 
