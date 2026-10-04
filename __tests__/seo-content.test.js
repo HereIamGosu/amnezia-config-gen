@@ -30,8 +30,11 @@ test('FAQ text is in the HTML on load (modal from the header), translated on /en
   assert.ok(start > 0, 'FAQ modal exists');
   const faq = html.slice(start, html.indexOf('<!-- Конфиденциальность -->', start));
   assert.match(faq, /aria-labelledby="faqModalHeading"/);
-  const questions = [...faq.matchAll(/<summary class="faq__q" data-i18n="(faq_q\d+)">/g)].map((m) => m[1]);
+  // data-i18n стоит на span текста: на <summary> перевод стёр бы номер и кнопку-шеврон
+  const questions = [...faq.matchAll(/<summary class="faq__q"><span class="faq__num" aria-hidden="true">\d{2}<\/span><span class="faq__q-text" data-i18n="(faq_q\d+)">/g)].map((m) => m[1]);
   const answers = [...faq.matchAll(/<div class="faq__a" data-i18n-html="(faq_a\d+)">/g)].map((m) => m[1]);
+  assert.equal((faq.match(/class="faq__toggle" aria-hidden="true"/g) || []).length, questions.length, 'every question shows a toggle');
+  assert.equal((faq.match(/<details class="faq__item" name="faq"/g) || []).length, questions.length, 'one answer open at a time');
   assert.ok(questions.length >= 6, 'at least six questions');
   assert.equal(answers.length, questions.length);
   for (const key of [...questions, ...answers, 'faq_title', 'faq_lead']) {

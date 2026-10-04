@@ -1048,32 +1048,32 @@
         </header>
         <div class="modal__body">
           <div class="faq__list">
-            <details class="faq__item" open>
-              <summary class="faq__q" data-i18n="faq_q1">What is AmneziaWG and how is it different from WireGuard?</summary>
+            <details class="faq__item" name="faq" open>
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">01</span><span class="faq__q-text" data-i18n="faq_q1">What is AmneziaWG and how is it different from WireGuard?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
               <div class="faq__a" data-i18n-html="faq_a1">AmneziaWG is a WireGuard fork by the Amnezia team. Encryption and keys are the same as in WireGuard, but the protocol adds obfuscation: junk packets before the handshake (Jc, Jmin, Jmax), CPS imitation packets (I1–I5) and, from AWG 2.0 on, header and padding parameters. This makes AmneziaWG traffic harder to identify by the WireGuard signature.</div>
             </details>
-            <details class="faq__item">
-              <summary class="faq__q" data-i18n="faq_q2">What is Cloudflare WARP and do I need my own server?</summary>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">02</span><span class="faq__q-text" data-i18n="faq_q2">What is Cloudflare WARP and do I need my own server?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
               <div class="faq__a" data-i18n-html="faq_a2">WARP is a free Cloudflare service built on WireGuard. The generator registers a new device through the official WARP API and builds a ready config from the result, so no server of your own is needed. The Cloudflare server stays a standard WireGuard peer, which is why some AmneziaWG parameters are intentionally fixed for it: S1–S4 = 0, H1–H4 = 1–4, MTU 1280.</div>
             </details>
-            <details class="faq__item">
-              <summary class="faq__q" data-i18n="faq_q3">Which profile should I choose: AWG 1.5, 2.0, 3.0 or 3.1?</summary>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">03</span><span class="faq__q-text" data-i18n="faq_q3">Which profile should I choose: AWG 1.5, 2.0, 3.0 or 3.1?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
               <div class="faq__a" data-i18n-html="faq_a3">Start with AWG 2.0: it is the default and imports into current AmneziaWG and AmneziaVPN. AWG 1.5 is for older clients. AWG 3.0 and 3.1 add client-side features of newer versions such as timing randomization; 3.1 needs AmneziaVPN 5.0.1.5+ or a compatible client. If the import fails, go back to AWG 2.0.</div>
             </details>
-            <details class="faq__item">
-              <summary class="faq__q" data-i18n="faq_q4">How do I import the config into AmneziaWG or AmneziaVPN?</summary>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">04</span><span class="faq__q-text" data-i18n="faq_q4">How do I import the config into AmneziaWG or AmneziaVPN?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
               <div class="faq__a" data-i18n-html="faq_a4">On Windows, install the AmneziaWG client and add a tunnel from the downloaded <code>.conf</code> file. On Android and iOS, use AmneziaVPN or AmneziaWG: import the <code>.conf</code> file or paste the <code>vpn://</code> link if it is available for the chosen profile. For routers (Keenetic, OpenWrt, MikroTik, GL.iNet), turn on "Router mode" in settings before generating.</div>
             </details>
-            <details class="faq__item">
-              <summary class="faq__q" data-i18n="faq_q5">The config imports but does not connect. What should I do?</summary>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">05</span><span class="faq__q-text" data-i18n="faq_q5">The config imports but does not connect. What should I do?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
               <div class="faq__a" data-i18n-html="faq_a5">Try another UDP port (2408, 500, 1701) and an endpoint IP address instead of the hostname — both are in the settings of step 2. On mobile networks, turn on the mobile profile. Make sure your client version supports the chosen AWG profile. If it connects but sites do not open, check DNS and routes. The current service state is on the <a href="status.html">Status</a> page.</div>
             </details>
-            <details class="faq__item">
-              <summary class="faq__q" data-i18n="faq_q6">Is it free? What happens to the keys?</summary>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">06</span><span class="faq__q-text" data-i18n="faq_q6">Is it free? What happens to the keys?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
               <div class="faq__a" data-i18n-html="faq_a6">The generator is free and needs no sign-up. Keys are created during generation and handed straight to you — the server does not store them. Generation history is kept only in your browser and can be cleared. The source code is open under the AGPL-3.0 license.</div>
             </details>
-            <details class="faq__item">
-              <summary class="faq__q" data-i18n="faq_q7">Can I route only some sites through WARP?</summary>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">07</span><span class="faq__q-text" data-i18n="faq_q7">Can I route only some sites through WARP?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
               <div class="faq__a" data-i18n-html="faq_a7">Yes. In settings, choose split routing and tick the services you need: only their IPv4 subnets go into AllowedIPs, and other traffic goes directly. To keep the config reliable on phones and routers, the generator limits the list to 1000 IPv4 subnets.</div>
             </details>
           </div>

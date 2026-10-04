@@ -1047,32 +1047,32 @@
         </header>
         <div class="modal__body">
           <div class="faq__list">
-            <details class="faq__item" open>
-              <summary class="faq__q" data-i18n="faq_q1">Что такое AmneziaWG и чем он отличается от WireGuard?</summary>
+            <details class="faq__item" name="faq" open>
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">01</span><span class="faq__q-text" data-i18n="faq_q1">Что такое AmneziaWG и чем он отличается от WireGuard?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
               <div class="faq__a" data-i18n-html="faq_a1">AmneziaWG — форк WireGuard от команды Amnezia. Шифрование и ключи те же, что у WireGuard, но к протоколу добавлена маскировка: «мусорные» пакеты перед рукопожатием (Jc, Jmin, Jmax), пакеты-имитации CPS (I1–I5) и, начиная с AWG 2.0, параметры заголовков и паддинга. Поэтому трафик AmneziaWG сложнее распознать по сигнатуре WireGuard.</div>
             </details>
-            <details class="faq__item">
-              <summary class="faq__q" data-i18n="faq_q2">Что такое Cloudflare WARP и нужен ли свой сервер?</summary>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">02</span><span class="faq__q-text" data-i18n="faq_q2">Что такое Cloudflare WARP и нужен ли свой сервер?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
               <div class="faq__a" data-i18n-html="faq_a2">WARP — бесплатный сервис Cloudflare на базе WireGuard. Генератор регистрирует новое устройство через официальный API WARP и собирает из полученных данных готовый конфиг, поэтому свой сервер не нужен. Сервер Cloudflare остаётся стандартным WireGuard peer, и часть параметров AmneziaWG для него намеренно фиксирована: S1–S4 = 0, H1–H4 = 1–4, MTU 1280.</div>
             </details>
-            <details class="faq__item">
-              <summary class="faq__q" data-i18n="faq_q3">Какой профиль выбрать: AWG 1.5, 2.0, 3.0 или 3.1?</summary>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">03</span><span class="faq__q-text" data-i18n="faq_q3">Какой профиль выбрать: AWG 1.5, 2.0, 3.0 или 3.1?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
               <div class="faq__a" data-i18n-html="faq_a3">Начните с AWG 2.0: он выбран по умолчанию и импортируется в актуальные AmneziaWG и AmneziaVPN. AWG 1.5 нужен для старых клиентов. AWG 3.0 и 3.1 добавляют клиентские возможности новых версий, например рандомизацию таймингов; для 3.1 нужен AmneziaVPN 5.0.1.5+ или совместимый клиент. Если импорт не проходит, вернитесь к AWG 2.0.</div>
             </details>
-            <details class="faq__item">
-              <summary class="faq__q" data-i18n="faq_q4">Как импортировать конфиг в AmneziaWG или AmneziaVPN?</summary>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">04</span><span class="faq__q-text" data-i18n="faq_q4">Как импортировать конфиг в AmneziaWG или AmneziaVPN?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
               <div class="faq__a" data-i18n-html="faq_a4">На Windows установите клиент AmneziaWG и добавьте туннель из скачанного файла <code>.conf</code>. На Android и iOS используйте AmneziaVPN или AmneziaWG: импортируйте файл <code>.conf</code> или вставьте ссылку <code>vpn://</code>, если она доступна для выбранного профиля. Для роутеров (Keenetic, OpenWrt, MikroTik, GL.iNet) перед генерацией включите в настройках «Режим роутера».</div>
             </details>
-            <details class="faq__item">
-              <summary class="faq__q" data-i18n="faq_q5">Конфиг импортировался, но не подключается. Что делать?</summary>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">05</span><span class="faq__q-text" data-i18n="faq_q5">Конфиг импортировался, но не подключается. Что делать?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
               <div class="faq__a" data-i18n-html="faq_a5">Попробуйте другой UDP-порт (2408, 500, 1701) и IP-адрес endpoint вместо hostname — это меняется в настройках на шаге 2. В мобильной сети включите мобильный профиль. Убедитесь, что версия клиента поддерживает выбранный профиль AWG. Если подключение есть, но сайты не открываются, проверьте DNS и маршруты. Текущее состояние сервисов — на странице <a href="status.html">«Статус»</a>.</div>
             </details>
-            <details class="faq__item">
-              <summary class="faq__q" data-i18n="faq_q6">Это бесплатно? Что происходит с ключами?</summary>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">06</span><span class="faq__q-text" data-i18n="faq_q6">Это бесплатно? Что происходит с ключами?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
               <div class="faq__a" data-i18n-html="faq_a6">Генератор бесплатный и работает без регистрации. Ключи создаются при генерации и сразу отдаются вам — сервер их не сохраняет. История генераций хранится только в вашем браузере, её можно очистить. Исходный код открыт под лицензией AGPL-3.0.</div>
             </details>
-            <details class="faq__item">
-              <summary class="faq__q" data-i18n="faq_q7">Можно ли пустить через WARP только отдельные сайты?</summary>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">07</span><span class="faq__q-text" data-i18n="faq_q7">Можно ли пустить через WARP только отдельные сайты?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
               <div class="faq__a" data-i18n-html="faq_a7">Да. В настройках выберите выборочную маршрутизацию и отметьте нужные сервисы: в AllowedIPs попадут только их IPv4-подсети, остальной трафик пойдёт напрямую. Чтобы конфиг надёжно работал на телефонах и роутерах, генератор ограничивает список 1000 IPv4-подсетями.</div>
             </details>
           </div>
