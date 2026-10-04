@@ -111,6 +111,29 @@ class StateMachineTests(unittest.TestCase):
         self.assertEqual(new.state, lab.HANDSHAKE_OK)
         self.assertFalse(lab.is_eligible(new, NOW))
 
+    def test_handshake_alone_never_revives_failed_states(self):
+        hs = lab.ProbeResult(True)
+        for state in (lab.SUSPECT, lab.QUARANTINE, lab.DEAD):
+            with self.subTest(state=state):
+                row = self.row(state=state, consecutive_failures=5, quarantine_until=NOW + 60)
+                new = lab.apply_outcome(row, hs, deep=False, now=NOW)
+                self.assertEqual((new.state, new.consecutive_failures, new.quarantine_until),
+                                 (state, 5, NOW + 60))
+                self.assertEqual(new.last_handshake_ok_at, NOW)
+
+    def test_blacklisted_endpoint_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = lab.Store(os.path.join(tmp, "lab.db"))
+            with store.transaction():
+                store.upsert_candidate(lab.parse_endpoint("162.159.192.1", 2408), "consumer_seed", NOW)
+                store.conn.execute("UPDATE endpoint SET manual_blacklist=1")
+            engine = FakeProbeEngine({"162.159.192.1:2408": OK})
+            runner = lab.Lab(store, engine, identity_loader=lambda: identity(tmp), clock=lambda: NOW, public_dir=tmp)
+            with self.assertRaises(lab.LabError):
+                runner.run(["162.159.192.1:2408"], deep=True)
+            self.assertEqual(engine.calls, [])
+            store.conn.close()
+
     def test_traffic_failure_is_endpoint_failure(self):
         new = lab.apply_outcome(self.row(), NO_TRAFFIC, deep=True, now=NOW)
         self.assertEqual(new.consecutive_failures, 1)

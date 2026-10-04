@@ -47,7 +47,9 @@ anything (`links == {lo, aelXXXXXX}`, exactly one default route via the tunnel).
 HTTPS request can only have crossed the WireGuard tunnel. Teardown is `ip netns delete` (destroys the
 moved interface) plus `ip link delete` for the not-yet-moved case, in `finally`, also on SIGTERM.
 Names come from `secrets.token_hex(3)`: `ael-[0-9a-f]{6}` / `ael[0-9a-f]{6}`. `endpoint-lab cleanup`
-and the startup sweep (objects older than 10 min) touch only these exact patterns.
+and the startup sweep touch only these exact patterns. The startup sweep removes namespaces older than
+10 min and every not-yet-moved `ael……` link (such links exist only during setup). Both run under the
+global lock, so no probe can be in progress at that moment.
 
 ## Paths and permissions
 
@@ -102,14 +104,18 @@ Never delete the working identity for experiments. Lifecycle questions (expiry, 
 
 ## States
 
-`DISCOVERED → (probe) HANDSHAKE_OK → (verify) ACTIVE`. `VERIFIED` is used when a blacklisted endpoint
-passes (a blacklist outranks every automatic state). Endpoint failures: `ACTIVE → SUSPECT`, which
+`DISCOVERED → (probe) HANDSHAKE_OK → (verify) ACTIVE`. `manual_blacklist` outranks every automatic
+state: `probe`, `verify` and `verify-all` refuse blacklisted endpoints, and the pure transition maps a
+blacklisted success to `VERIFIED` (never `ACTIVE`). Phase A has no blacklist command: the column is set
+by hand in SQLite until Phase B adds one. Endpoint failures: `ACTIVE → SUSPECT`, which
 leaves the pool at once. A good verify brings it back to `ACTIVE`. Three consecutive failures →
 `QUARANTINE`: `verify-all` skips it for 30 min, after which it is probed again and a good verify
 returns it to `ACTIVE`. Ten more consecutive failures (13 in total) → `DEAD`, kept, not deleted, and
 skipped by `verify-all`. A DEAD endpoint that shows up again in an imported candidates file after the
-30-minute cooldown restarts as `DISCOVERED`. An explicit `verify ID` is an operator action and is
-never skipped. A handshake alone never revives `SUSPECT`. Generator eligibility:
+30-minute cooldown restarts as `DISCOVERED`. An explicit `verify ID` is an operator action and is not
+held back by the quarantine or DEAD rules (blacklisted endpoints are still refused). A handshake-only
+`probe` advances only `DISCOVERED`. `SUSPECT`, `QUARANTINE` and `DEAD` keep their state and failure
+count until a deep verify succeeds (or, for DEAD, the endpoint is re-imported). Generator eligibility:
 `state = ACTIVE ∧ ¬blacklist ∧ expires_at > now ∧ traffic fresh`.
 
 **Lab failure ≠ endpoint failure.** `LOCAL_RESOURCE_ERROR`, `TUNNEL_SETUP_FAILED`,

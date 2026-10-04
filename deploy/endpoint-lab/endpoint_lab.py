@@ -680,10 +680,10 @@ def apply_outcome(row: EndpointRow, result: ProbeResult, deep: bool, now: int) -
             nxt.state, nxt.expires_at = ACTIVE, now + ACTIVE_TTL_S
         return nxt
     if not deep and result.handshake_ok:
-        # a handshake alone never creates ACTIVE; it only advances fresh candidates
-        if nxt.state in (DISCOVERED, PROBING, QUARANTINE, DEAD):
+        # A handshake alone never creates ACTIVE and only advances fresh candidates. SUSPECT, QUARANTINE
+        # and DEAD keep their state and failure count: they recover through a deep verify (or re-import).
+        if nxt.state in (DISCOVERED, PROBING):
             nxt.state = HANDSHAKE_OK
-        if nxt.state != SUSPECT:  # SUSPECT recovers only through a full deep verify
             nxt.consecutive_failures = 0
         return nxt
     # endpoint failure
