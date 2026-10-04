@@ -79,7 +79,7 @@ negative_control`, адрес вне `192.0.2.0/24` и нет ручного bla
 | `freshness.lastSuccessAt` | `max(last_traffic_ok_at)` по публичным endpoint'ам — последняя успешная глубокая проверка |
 | `freshness.oldestActiveVerifiedAt` | `min(last_traffic_ok_at)` по eligible ACTIVE (`is_eligible`: ACTIVE, не blacklist, срок не истёк) |
 | `freshness.activeTtlSec` | константа Lab `ACTIVE_TTL_S` (сейчас 420) |
-| `sessions` | окно 15 минут, наблюдения `traffic` публичных endpoint'ов: `firstSession = ok ∧ sessions=1`, `retryRescued = ok ∧ sessions=2`, `failed = fail` (сбой, засчитанный endpoint'у), каждая доля делится на их сумму. Inconclusive, suppressed и сбои самого Lab не входят — в отличие от `both_sessions_failed` в `lab-status.json`. Нет наблюдений — `null`, а не 0/0/0 |
+| `sessions` | окно 15 минут, наблюдения `traffic` публичных endpoint'ов (без negative control по source и по `192.0.2.0/24`, без blacklist): `firstSession = ok ∧ sessions≠2` (ok без числа сессий считается первой, как в корзинах истории), `retryRescued = ok ∧ sessions=2`, `failed = fail` (сбой, засчитанный endpoint'у), каждая доля делится на их сумму; `samples` — эта сумма. Inconclusive, suppressed и сбои самого Lab не входят — в отличие от `both_sessions_failed` в `lab-status.json`. Нет наблюдений — `null`, а не 0/0/0 |
 | `activeHistory` | `run.active_after` за 24 ч (refresh, discovery, manual), по `finished_at`; ≤ 1500 точек, при избытке — равномерное прореживание с сохранением последней |
 | `events` | `transition` за 24 ч, ≤ 100, новые первыми; правила ниже |
 | `retryAfterSec` | `REFRESH_INTERVAL_S` (60): чаще опрашивать бессмысленно |
