@@ -66,6 +66,14 @@ Both slots run with production hardening: read-only rootfs, `/tmp` tmpfs, `cap_d
 `NODE_ENV=production`, `APP_REVISION=<sha>`, restart `unless-stopped`. The controller verifies
 these on the running container before it is used.
 
+Endpoint Lab shadow mode (off by default): if `/etc/amnezia-deploy/endpoint-shadow` exists **and**
+`/var/lib/amnezia-endpoint-lab/public` exists, newly started slots get that directory as a read-only
+bind mount at `/run/endpoint-lab` plus `ENDPOINT_SHADOW=lab` and
+`ENDPOINT_LAB_POOL_PATH=/run/endpoint-lab/active-pool.json`. It is the only mount a slot may have:
+the constraint check rejects any other mount, a writable one, or another source. The flag takes effect
+on the next container start (next deploy); removing it and redeploying turns shadow mode off. Shadow
+mode never changes responses (see `deploy/ENDPOINT_LAB.md` on the Endpoint Lab branch).
+
 `/etc/nginx/sites-available/amnezia-web` includes `/etc/nginx/amnezia-deploy/upstream.conf`
 (`upstream amnezia_backend { server 127.0.0.1:<port>; }`). That file is the only nginx file the
 controller writes: tmp → fsync → rename, `nginx -t`, `systemctl reload nginx`. If the test fails,

@@ -54,6 +54,13 @@ MEMORY_BYTES = 256 * 1024 * 1024
 NANO_CPUS = 1_000_000_000
 PIDS_LIMIT = 128
 
+# Endpoint Lab shadow mode (Phase C), off by default: when the operator creates the flag file and the Lab's
+# public snapshot directory exists, new slots get that directory read-only plus the shadow env. Nothing else
+# may be mounted into a slot (constraint_problems). Takes effect on the next container start.
+ENDPOINT_SHADOW_FLAG = "/etc/amnezia-deploy/endpoint-shadow"
+ENDPOINT_LAB_PUBLIC = "/var/lib/amnezia-endpoint-lab/public"
+ENDPOINT_SHADOW_MOUNT = "/run/endpoint-lab"
+
 HEALTH_DEADLINE_S = 90  # image HEALTHCHECK: interval 30s, start period 10s
 PUBLIC_PROPAGATION_S = 15
 RATE_LIMIT_WAIT_S = 90  # nginx amnezia_api zone: 30 r/min per IP (a token every 2 s), Retry-After 30
@@ -393,11 +400,23 @@ def constraint_problems(info, slot):
         problems.append(f"port binding is not exactly 127.0.0.1:{SLOTS[slot]['port']}")
     if (hc.get("RestartPolicy") or {}).get("Name") != "unless-stopped":
         problems.append("restart policy is not unless-stopped")
+    for m in info.get("Mounts") or []:
+        if not (m.get("Type") == "bind" and m.get("Source") == ENDPOINT_LAB_PUBLIC
+                and m.get("Destination") == ENDPOINT_SHADOW_MOUNT and m.get("RW") is False):
+            problems.append(f"unexpected mount {m.get('Destination')} (only the read-only Endpoint Lab snapshot is allowed)")
     return problems
 
 
-def run_args(slot, cand):
+def endpoint_shadow_enabled():
+    return os.path.exists(ENDPOINT_SHADOW_FLAG) and os.path.isdir(ENDPOINT_LAB_PUBLIC)
+
+
+def run_args(slot, cand, shadow=False):
     name, port = SLOTS[slot]["name"], SLOTS[slot]["port"]
+    extra = []
+    if shadow:
+        extra = ["--mount", f"type=bind,src={ENDPOINT_LAB_PUBLIC},dst={ENDPOINT_SHADOW_MOUNT},readonly",
+                 "-e", "ENDPOINT_SHADOW=lab", "-e", f"ENDPOINT_LAB_POOL_PATH={ENDPOINT_SHADOW_MOUNT}/active-pool.json"]
     return [
         "run", "-d", "--name", name, "--restart", "unless-stopped",
         "-p", f"127.0.0.1:{port}:3000",
@@ -406,7 +425,7 @@ def run_args(slot, cand):
         "--memory", str(MEMORY_BYTES), "--cpus", "1", "--pids-limit", str(PIDS_LIMIT),
         "--log-driver", "json-file", "--log-opt", "max-size=10m", "--log-opt", "max-file=3",
         "--stop-timeout", "10",
-        "-e", "NODE_ENV=production", "-e", f"APP_REVISION={cand.sha}",
+        "-e", "NODE_ENV=production", "-e", f"APP_REVISION={cand.sha}", *extra,
         "--label", f"amnezia.deploy.slot={slot}", "--label", f"amnezia.deploy.sha={cand.sha}",
         "--label", f"amnezia.deploy.digest={cand.digest}",
         cand.ref,
@@ -752,7 +771,7 @@ def _bring_up(sysm, op, slot, cand, legacy_name=None):
         op.stage("START_CANDIDATE")
         name = SLOTS[slot]["name"]
         if not reuse:
-            sysm.docker(*run_args(slot, cand))
+            sysm.docker(*run_args(slot, cand, shadow=endpoint_shadow_enabled()))
         info = sysm.docker_inspect(name)
         problems = constraint_problems(info or {}, slot)
         if problems:

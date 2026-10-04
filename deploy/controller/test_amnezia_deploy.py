@@ -12,6 +12,7 @@ import sys
 import tempfile
 import types
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(__file__))
 import amnezia_deploy as ad  # noqa: E402
@@ -283,6 +284,35 @@ class CandidateTests(Base):
         for flag in ("--read-only", "--cap-drop", "--security-opt", "--memory", "--cpus", "--pids-limit"):
             self.assertIn(flag, args)
         self.assertEqual(args[-1], f"{ad.IMAGE}@sha256:{'1' * 64}")
+
+    def test_endpoint_shadow_mount_is_read_only_and_off_by_default(self):
+        cand = ad.Candidate(SHA_A, "sha256:" + "1" * 64, None)
+        plain = ad.run_args("green", cand)
+        self.assertFalse(any("--mount" == a or "ENDPOINT_" in a for a in plain))
+        shadow = ad.run_args("green", cand, shadow=True)
+        mount = shadow[shadow.index("--mount") + 1]
+        self.assertEqual(mount, f"type=bind,src={ad.ENDPOINT_LAB_PUBLIC},dst={ad.ENDPOINT_SHADOW_MOUNT},readonly")
+        self.assertIn("ENDPOINT_SHADOW=lab", shadow)
+        self.assertIn(f"ENDPOINT_LAB_POOL_PATH={ad.ENDPOINT_SHADOW_MOUNT}/active-pool.json", shadow)
+        self.assertEqual(shadow[-1], plain[-1])
+        with tempfile.TemporaryDirectory() as tmp:
+            flag, public = os.path.join(tmp, "endpoint-shadow"), os.path.join(tmp, "public")
+            with mock.patch.object(ad, "ENDPOINT_SHADOW_FLAG", flag), mock.patch.object(ad, "ENDPOINT_LAB_PUBLIC", public):
+                self.assertFalse(ad.endpoint_shadow_enabled())
+                open(flag, "w").close()
+                self.assertFalse(ad.endpoint_shadow_enabled())  # no Lab snapshot dir: never mount a missing path
+                os.makedirs(public)
+                self.assertTrue(ad.endpoint_shadow_enabled())
+
+    def test_constraints_allow_only_the_read_only_lab_mount(self):
+        good = container_info("x", 13101, SHA_A, "d")
+        lab_ro = {"Type": "bind", "Source": ad.ENDPOINT_LAB_PUBLIC, "Destination": ad.ENDPOINT_SHADOW_MOUNT, "RW": False}
+        self.assertEqual(ad.constraint_problems({**good, "Mounts": [lab_ro]}, "green"), [])
+        for bad in ({**lab_ro, "RW": True}, {**lab_ro, "Source": "/var/lib/amnezia-endpoint-lab"},
+                    {"Type": "bind", "Source": "/var/run/docker.sock", "Destination": "/var/run/docker.sock", "RW": True},
+                    {**lab_ro, "Type": "volume"}):
+            with self.subTest(mount=bad):
+                self.assertTrue(any("unexpected mount" in p for p in ad.constraint_problems({**good, "Mounts": [bad]}, "green")))
 
     def test_constraints_detect_regressions(self):
         good = container_info("x", 13101, SHA_A, "d")
