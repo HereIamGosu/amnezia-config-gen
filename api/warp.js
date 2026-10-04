@@ -18,6 +18,22 @@ const { buildVpnLink } = require('../src/server/vpnLinkBuilder');
 const { getCompatibilityForGeneration } = require('../src/server/clientCompatibility');
 const { getTopEndpoints } = require('../src/server/endpointCache');
 const { checkTcpLatency, pickBestEndpoint } = require('../src/server/endpointHealth');
+const { createShadowFromEnv } = require('../src/server/endpointProvider');
+
+/**
+ * Endpoint Lab shadow mode (Phase C): null unless ENDPOINT_SHADOW=lab and ENDPOINT_LAB_POOL_PATH are set.
+ * It observes Auto requests after the response is sent and never influences what the user receives.
+ */
+let endpointShadow = createShadowFromEnv();
+
+const observeEndpointShadow = (count, warpExtras) => {
+  if (!endpointShadow || warpExtras.peerEndpoint) return; // manual endpoints are not Auto requests
+  try {
+    endpointShadow.observe({ count, port: warpExtras.warpPort ?? null });
+  } catch {
+    /* shadow mode never affects generation */
+  }
+};
 const { buildAwg3Interface } = require('../src/server/awg/configBuilder');
 const {
   AWG3_DEFAULT_TIMINGS,
@@ -1510,6 +1526,7 @@ const handler = async (req, res) => {
       ...(responseWarnings.length ? { warning: responseWarnings.length === 1 ? responseWarnings[0] : responseWarnings } : {}),
       ...(compatibility ? { compatibility } : {}),
     });
+    observeEndpointShadow(count, warpExtras); // after the response: aggregate counters only
   } catch (error) {
     console.error('Ошибка генерации конфигурации:', error);
     const sc = error.statusCode;
@@ -1531,6 +1548,7 @@ const handler = async (req, res) => {
 
 module.exports = handler;
 module.exports.__internals = {
+  setEndpointShadow: (shadow) => { endpointShadow = shadow; },
   buildInterfaceLegacy,
   buildInterfaceAwg2,
   buildInterfaceAwg2WarpSafe,
