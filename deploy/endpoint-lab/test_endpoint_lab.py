@@ -1391,6 +1391,9 @@ class WebExportTests(LabFixture):
         out = os.environ["WEB_SAMPLE_OUT"]
         os.makedirs(out, exist_ok=True)
         lab.export_web(self.store, out, self.clock_value)
+        for name in (lab.SNAPSHOT_FILE, lab.STATUS_FILE):  # the operational files of the same run (compatibility mode)
+            with open(os.path.join(self.public, name), "rb") as src, open(os.path.join(out, name), "wb") as dst:
+                dst.write(src.read())
 
 
 class ReportTests(LabFixture):
