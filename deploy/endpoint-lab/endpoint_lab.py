@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime as dt
+import functools
 try:
     import fcntl  # Linux only (the VPS); absent on Windows dev machines
 except ImportError:  # pragma: no cover
@@ -1383,6 +1384,332 @@ def write_snapshot(public_dir: str, snapshot: dict) -> str:
     return path
 
 
+# --- public web export (browser contract v1) ---------------------------------------------------------------------
+# The website's /api/lab serves these files as they are (thin transport); it never reads lab.db. They are a
+# separate artifact: active-pool.json (generator provider) and lab-status.json (monitoring) are unchanged.
+# Contract and exact formulas: docs/specs/endpoint-lab-frontend.md on the website branch.
+WEB_SCHEMA_VERSION = 1
+WEB_OVERVIEW_FILE = "web-overview.json"
+WEB_DETAILS_DIR = "web-endpoints"                 # <sha256(endpoint_id)[:32]>.json, never a name built from input
+WEB_MAX_ENDPOINTS = 500
+WEB_MAX_EVENTS = 100
+WEB_MAX_ACTIVE_HISTORY = 1500
+WEB_MAX_DETAIL_EVENTS = 100
+WEB_SESSIONS_WINDOW_S = 15 * 60                   # the same window as lab-status.json stats_15m
+WEB_RELIABILITY_WINDOW_S = 3600
+WEB_RELIABILITY_MIN_SAMPLES = 3                   # fewer meaningful deep probes in the window: reliability null
+WEB_FEED_WINDOW_S = 24 * 3600                     # activeHistory and the event feed
+WEB_TIMELINE_STEP_S = 15 * 60                     # 96 points cover 24 h
+WEB_TIMELINE_POINTS = 96
+WEB_HISTORY_RANGES = (("24h", 24 * 3600, 15 * 60), ("7d", 7 * 86400, 2 * 3600), ("30d", 30 * 86400, 12 * 3600))
+WEB_DETAIL_MAX_AGE_S = 3600                       # an untouched detail file is rewritten at least hourly
+WEB_DETAIL_ROTATE_PER_RUN = 12                    # untouched files refreshed per publish (bounds the job time)
+WEB_OVERVIEW_MAX_BYTES = 2 * 1024 * 1024
+WEB_DETAIL_MAX_BYTES = 256 * 1024
+WEB_DETAIL_NAME_RE = re.compile(r"^[0-9a-f]{32}\.json$")
+WEB_STATE = {ACTIVE: "ACTIVE", VERIFIED: "VERIFIED", SUSPECT: "SUSPECT", QUARANTINE: "QUARANTINE", DEAD: "DEAD",
+             DISCOVERED: "DISCOVERED", PROBING: "CHECKING", HANDSHAKE_OK: "CHECKING", VERIFYING: "CHECKING"}
+WEB_STATE_ORDER = ("ACTIVE", "VERIFIED", "SUSPECT", "CHECKING", "QUARANTINE", "DEAD", "DISCOVERED")
+# Endpoint failure codes as stable public codes; everything else (Lab-side codes, UNKNOWN) is "unknown".
+# Raw messages are never exported: they may carry host details.
+WEB_ERROR_CODES = {TIMEOUT: "timeout", HANDSHAKE_NO_RESPONSE: "handshake_no_response",
+                   HANDSHAKE_INVALID_OR_UNEXPECTED: "handshake_invalid", DNS_FAILED: "dns_failed",
+                   HTTPS_TIMEOUT: "https_timeout", HTTPS_TLS_FAILED: "https_tls_failed",
+                   TRAFFIC_FAILED: "traffic_failed", TARGETS_UNREACHABLE: "targets_unreachable"}
+# Causes that come from an operator: such transitions never reach the public event feed.
+WEB_OPERATOR_CAUSES = ("operator", "unblacklisted", "unquarantined", "reimported")
+# One meaningful deep-probe outcome per probe: traffic ok/fail, or a handshake that failed (then no traffic row).
+# Suppressed, inconclusive and lab_failure rows prove nothing about the endpoint and are left out.
+WEB_MEANINGFUL_SQL = ("((o.probe_type='traffic' AND o.result IN ('ok','fail'))"
+                      " OR (o.probe_type='handshake' AND o.result='fail'))")
+
+
+@functools.lru_cache(maxsize=1 << 16)
+def _web_iso(ts: int | None) -> str | None:
+    """iso() with a cache: history points and buckets repeat from one publish to the next."""
+    return iso(ts)
+
+
+def web_detail_name(endpoint_id: str) -> str:
+    return hashlib.sha256(endpoint_id.encode("ascii")).hexdigest()[:32] + ".json"
+
+
+def web_publishable(rec: sqlite3.Row) -> bool:
+    """Negative controls and manually blacklisted endpoints are operator concepts: never public."""
+    return (rec["source"] != SRC_NEGATIVE and not rec["manual_blacklist"]
+            and ipaddress.ip_address(rec["ip"]) not in NEGATIVE_CONTROL_PREFIX)
+
+
+def _web_outcome(o: sqlite3.Row) -> str:
+    """first / retry / fail of one meaningful deep probe (an ok without a sessions count reads as first)."""
+    if o["probe_type"] == "traffic" and o["result"] == "ok":
+        return "retry" if o["sessions"] == 2 else "first"
+    return "fail"
+
+
+def _web_session(o: sqlite3.Row | None) -> str | None:
+    if o is None:
+        return None
+    if o["probe_type"] == "traffic" and o["result"] == "ok":
+        return {1: "first", 2: "retry"}.get(o["sessions"])
+    return "failed"
+
+
+def _web_https(o: sqlite3.Row | None) -> str | None:
+    """ok: that probe carried TLS-verified HTTPS through the tunnel. A failed handshake never tried HTTPS."""
+    if o is None or o["probe_type"] != "traffic":
+        return None
+    return "ok" if o["result"] == "ok" else "fail"
+
+
+def _web_ratio(ok: int, n: int) -> float | None:
+    return round(ok / n, 4) if n >= WEB_RELIABILITY_MIN_SAMPLES else None
+
+
+def _web_state_at(ts: int, current: str, transitions: list) -> str:
+    """State at a moment: the last transition up to it, else the from-state of the first one after it."""
+    before = [t for t in transitions if t["ts"] <= ts]
+    if before:
+        return before[-1]["to_state"]
+    return transitions[0]["from_state"] if transitions else current
+
+
+def _web_event(t: sqlite3.Row) -> str | None:
+    frm, to, cause = t["from_state"], t["to_state"], t["cause"]
+    if cause in WEB_OPERATOR_CAUSES:
+        return None
+    if to == ACTIVE:
+        return "restored" if frm in (SUSPECT, QUARANTINE, DEAD) else "promoted"
+    if to == SUSPECT:
+        return "suspect"
+    if to == VERIFIED and cause == "pool_cap":
+        return "demoted"
+    if to == QUARANTINE:
+        return "excluded"
+    if to == DEAD:
+        return "dead"
+    return None
+
+
+def _web_downsample(points: list, limit: int) -> list:
+    """Deterministic: evenly spaced indices, the latest point always kept."""
+    if len(points) <= limit:
+        return points
+    step = (len(points) - 1) / (limit - 1)
+    return [points[round(i * step)] for i in range(limit)]
+
+
+class WebModel:
+    """Everything the public export needs, read once from committed state."""
+
+    def __init__(self, store: Store, now: int):
+        self.store, self.now = store, now
+        self.meta = store.meta()
+        self.rows = [r for r in store.all() if web_publishable(r)]
+        self.ids = {r["endpoint_id"] for r in self.rows}
+        self.latest: dict = {}
+        self.reliability: dict = {}
+        for eid, ok, n in store.conn.execute(
+                f"SELECT o.endpoint_id, sum(o.probe_type='traffic' AND o.result='ok'), count(*) FROM observation o"
+                f" WHERE o.timestamp>=? AND {WEB_MEANINGFUL_SQL} GROUP BY o.endpoint_id",
+                (now - WEB_RELIABILITY_WINDOW_S,)):
+            self.reliability[eid] = _web_ratio(ok or 0, n)
+
+    def last_probe(self, endpoint_id: str) -> sqlite3.Row | None:
+        """Latest meaningful deep-probe outcome (index observation_endpoint_ts, newest first)."""
+        if endpoint_id not in self.latest:
+            self.latest[endpoint_id] = self.store.conn.execute(
+                "SELECT o.timestamp, o.probe_type, o.result, o.sessions, o.operation_id FROM observation o"
+                f" WHERE o.endpoint_id=? AND {WEB_MEANINGFUL_SQL} ORDER BY o.timestamp DESC, o.id DESC LIMIT 1",
+                (endpoint_id,)).fetchone()
+        return self.latest[endpoint_id]
+
+    def endpoint(self, rec: sqlite3.Row) -> dict:
+        o = self.last_probe(rec["endpoint_id"])
+        return {"ip": rec["ip"], "port": rec["port"], "state": WEB_STATE.get(rec["state"], rec["state"]),
+                "source": rec["source"], "lastVerifiedAt": _web_iso(rec["last_traffic_ok_at"]),
+                "expiresAt": _web_iso(rec["expires_at"]) if rec["state"] == ACTIVE else None,
+                "session": _web_session(o), "https": _web_https(o),
+                "reliability": self.reliability.get(rec["endpoint_id"])}
+
+    def counts(self) -> dict:
+        out = {"active": 0, "verified": 0, "suspect": 0, "quarantine": 0, "dead": 0}
+        for r in self.rows:
+            key = {ACTIVE: "active", VERIFIED: "verified", SUSPECT: "suspect", QUARANTINE: "quarantine",
+                   DEAD: "dead"}.get(r["state"])
+            if key:
+                out[key] += 1
+        return out
+
+    def freshness(self) -> dict:
+        ok_at = [r["last_traffic_ok_at"] for r in self.rows if r["last_traffic_ok_at"]]
+        eligible = [r["last_traffic_ok_at"] for r in self.rows
+                    if is_eligible(Store.to_row(r), self.now) and r["last_traffic_ok_at"]]
+        return {"lastSuccessAt": _web_iso(max(ok_at)) if ok_at else None,
+                "oldestActiveVerifiedAt": _web_iso(min(eligible)) if eligible else None,
+                "activeTtlSec": ACTIVE_TTL_S}
+
+    def sessions(self) -> dict | None:
+        first, retry, failed = self.store.conn.execute(
+            "SELECT sum(o.result='ok' AND o.sessions=1), sum(o.result='ok' AND o.sessions=2), sum(o.result='fail')"
+            " FROM observation o JOIN endpoint e USING(endpoint_id) WHERE o.probe_type='traffic' AND o.timestamp>=?"
+            " AND e.source<>? AND e.manual_blacklist=0", (self.now - WEB_SESSIONS_WINDOW_S, SRC_NEGATIVE)).fetchone()
+        first, retry, failed = first or 0, retry or 0, failed or 0
+        n = first + retry + failed
+        if n == 0:
+            return None
+        return {"firstSession": round(first / n, 4), "retryRescued": round(retry / n, 4),
+                "failed": round(failed / n, 4), "window": "15m", "samples": n}
+
+    def active_history(self) -> list:
+        rows = self.store.conn.execute(
+            "SELECT finished_at, active_after FROM run WHERE kind IN ('refresh','discovery','manual')"
+            " AND started_at>=? AND active_after IS NOT NULL AND finished_at IS NOT NULL ORDER BY finished_at, id",
+            (self.now - WEB_FEED_WINDOW_S,)).fetchall()
+        points = [{"at": _web_iso(r["finished_at"]), "active": r["active_after"]} for r in rows]
+        return _web_downsample(points, WEB_MAX_ACTIVE_HISTORY)
+
+    def events(self) -> list:
+        since = self.now - WEB_FEED_WINDOW_S
+        c = self.store.conn
+        discovery = {r["operation_id"]: r["finished_at"] for r in c.execute(
+            "SELECT operation_id, finished_at FROM run WHERE kind='discovery' AND status='completed' AND started_at>=?",
+            (since,))}
+        found: dict = {}
+        out = []
+        for t in c.execute("SELECT ts, endpoint_id, from_state, to_state, cause, operation_id FROM transition"
+                           " WHERE ts>=? ORDER BY ts DESC, id DESC", (since,)):
+            if t["endpoint_id"] not in self.ids:
+                continue
+            kind = _web_event(t)
+            if kind is None:
+                continue
+            if kind in ("promoted", "restored") and t["operation_id"] in discovery:
+                found[t["operation_id"]] = found.get(t["operation_id"], 0) + 1  # one discovery event per run
+                continue
+            out.append({"type": kind, "endpoint": t["endpoint_id"], "at": _web_iso(t["ts"]), "_ts": t["ts"]})
+            if len(out) >= WEB_MAX_EVENTS:
+                break
+        for op, n in found.items():
+            out.append({"type": "discovery", "count": n, "at": _web_iso(discovery[op]), "_ts": discovery[op]})
+        out.sort(key=lambda e: e["_ts"], reverse=True)
+        return [{k: v for k, v in e.items() if k != "_ts"} for e in out[:WEB_MAX_EVENTS]]
+
+    def overview(self) -> dict:
+        ordered = sorted(self.rows, key=lambda r: (WEB_STATE_ORDER.index(WEB_STATE.get(r["state"], "DISCOVERED")),
+                                                   ipaddress.ip_address(r["ip"]), r["port"]))
+        return {"schemaVersion": WEB_SCHEMA_VERSION, "status": self.meta.get("lab_health", LAB_OK).lower(),
+                "generatedAt": _web_iso(self.now), "coverage": "full", "counts": self.counts(),
+                "freshness": self.freshness(), "sessions": self.sessions(), "activeHistory": self.active_history(),
+                "events": self.events(), "endpoints": [self.endpoint(r) for r in ordered[:WEB_MAX_ENDPOINTS]],
+                "retryAfterSec": REFRESH_INTERVAL_S}
+
+    def detail(self, rec: sqlite3.Row) -> dict:
+        eid, c, now = rec["endpoint_id"], self.store.conn, self.now
+        checks = None
+        last = self.last_probe(eid)
+        if last is not None:
+            rows = c.execute("SELECT probe_type, result FROM observation WHERE endpoint_id=? AND operation_id=?"
+                             " AND timestamp=?", (eid, last["operation_id"], last["timestamp"])).fetchall()
+            hs = next((r["result"] for r in rows if r["probe_type"] == "handshake" and r["result"] in ("ok", "fail")), None)
+            at = _web_iso(last["timestamp"])
+            traffic = last["result"] if last["probe_type"] == "traffic" else None
+            checks = {"handshake": {"result": hs, "at": at} if hs else None,
+                      "tunnel": {"result": "ok", "at": at} if traffic == "ok" else None,
+                      "https": {"result": traffic, "at": at} if traffic else None}
+
+        def ratio(since: int) -> tuple[float | None, int]:
+            ok, n = c.execute(f"SELECT sum(o.probe_type='traffic' AND o.result='ok'), count(*) FROM observation o"
+                              f" WHERE o.endpoint_id=? AND o.timestamp>=? AND {WEB_MEANINGFUL_SQL}", (eid, since)).fetchone()
+            return _web_ratio(ok or 0, n), n
+        h1, _ = ratio(now - 3600)
+        h24, n24 = ratio(now - 86400)
+        transitions = c.execute("SELECT ts, from_state, to_state FROM transition WHERE endpoint_id=? AND ts>=?"
+                                " ORDER BY ts, id", (eid, now - WEB_TIMELINE_POINTS * WEB_TIMELINE_STEP_S)).fetchall()
+        timeline = []
+        for i in range(WEB_TIMELINE_POINTS):
+            at = now - (WEB_TIMELINE_POINTS - 1 - i) * WEB_TIMELINE_STEP_S
+            if at < rec["first_seen_at"]:
+                continue
+            state = _web_state_at(at, rec["state"], transitions)
+            timeline.append({"at": _web_iso(at), "state": WEB_STATE.get(state, state)})
+        buckets: dict = {}
+        ok_sql = "(o.probe_type='traffic' AND o.result='ok')"
+        for name, span, step in WEB_HISTORY_RANGES:
+            counted = c.execute(
+                f"SELECT (o.timestamp/?)*? AS b, sum({ok_sql} AND coalesce(o.sessions,1)<>2),"
+                f" sum({ok_sql} AND o.sessions=2), sum(NOT {ok_sql}) FROM observation o"
+                f" WHERE o.endpoint_id=? AND o.timestamp>=? AND {WEB_MEANINGFUL_SQL} GROUP BY b ORDER BY b",
+                (step, step, eid, now - span)).fetchall()
+            if not counted:
+                buckets[name] = []
+                continue
+            # zero buckets only between real probes and now, never before the first one
+            grid = {s: {"first": 0, "retry": 0, "fail": 0} for s in range(counted[0][0], now + 1, step)}
+            for b, first, retry, fail in counted:
+                grid[b] = {"first": first or 0, "retry": retry or 0, "fail": fail or 0}
+            buckets[name] = [{"at": _web_iso(s), **v} for s, v in sorted(grid.items())]
+        events = [{"at": _web_iso(o["timestamp"]), "result": _web_outcome(o),
+                   **({"error": WEB_ERROR_CODES.get(o["error_code"], "unknown")} if _web_outcome(o) == "fail" else {})}
+                  for o in c.execute(
+                      "SELECT o.timestamp, o.probe_type, o.result, o.sessions, o.error_code FROM observation o"
+                      f" WHERE o.endpoint_id=? AND {WEB_MEANINGFUL_SQL} ORDER BY o.timestamp DESC, o.id DESC LIMIT ?",
+                      (eid, WEB_MAX_DETAIL_EVENTS))]
+        last_error = None
+        if rec["last_error_code"]:
+            last_error = {"code": WEB_ERROR_CODES.get(rec["last_error_code"], "unknown"), "at": _web_iso(rec["last_error_at"])}
+        return {"schemaVersion": WEB_SCHEMA_VERSION, "generatedAt": _web_iso(now), "endpoint": self.endpoint(rec),
+                "checks": checks, "stability": {"h1": h1, "h24": h24, "observations": n24},
+                "timeline": timeline, "lastError": last_error, "historyBuckets": buckets, "historyEvents": events}
+
+
+def _web_json(doc: dict, limit: int) -> bytes:
+    data = (json.dumps(doc, separators=(",", ":"), ensure_ascii=True) + "\n").encode("ascii")
+    if len(data) > limit:
+        raise ValueError(f"public export over {limit} bytes")
+    return data
+
+
+def export_web(store: Store, public_dir: str, now: int, rotate: int = WEB_DETAIL_ROTATE_PER_RUN) -> dict:
+    """Overview always; detail files for endpoints changed since the last export, missing ones, and the
+    `rotate` oldest others once they are older than WEB_DETAIL_MAX_AGE_S. Orphans (no longer public) are
+    removed. Every file is written atomically; a failure leaves the previous files to age out."""
+    started = time.monotonic()
+    model = WebModel(store, now)
+    overview = model.overview()
+    _atomic_write(os.path.join(public_dir, WEB_OVERVIEW_FILE), _web_json(overview, WEB_OVERVIEW_MAX_BYTES), 0o644)
+    details_dir = os.path.join(public_dir, WEB_DETAILS_DIR)
+    os.makedirs(details_dir, mode=0o755, exist_ok=True)
+    if os.stat(details_dir).st_mode & 0o777 != 0o755:
+        os.chmod(details_dir, 0o755)
+    since = int(model.meta.get("web_export_at", "0") or 0)
+    listed = {web_detail_name(e["ip"] + ":" + str(e["port"])): e for e in overview["endpoints"]}
+    by_name = {web_detail_name(r["endpoint_id"]): r for r in model.rows}
+    existing = {}
+    with os.scandir(details_dir) as it:
+        for entry in it:
+            if WEB_DETAIL_NAME_RE.match(entry.name):
+                existing[entry.name] = entry.stat().st_mtime
+    removed = 0
+    for name in existing:
+        if name not in listed:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(os.path.join(details_dir, name))
+            removed += 1
+    due, stale = [], []
+    for name in listed:
+        rec = by_name[name]
+        if name not in existing or (rec["updated_at"] or 0) >= since:
+            due.append(name)
+        elif existing[name] < time.time() - WEB_DETAIL_MAX_AGE_S:  # file age: wall clock, like the mtime
+            stale.append(name)
+    stale.sort(key=lambda n: existing[n])
+    for name in due + stale[:rotate]:
+        _atomic_write(os.path.join(details_dir, name), _web_json(model.detail(by_name[name]), WEB_DETAIL_MAX_BYTES), 0o644)
+    return {"endpoints": len(overview["endpoints"]), "details_written": len(due) + len(stale[:rotate]),
+            "details_removed": removed, "duration_ms": int((time.monotonic() - started) * 1000)}
+
+
 # --- host resources ------------------------------------------------------------------------------------------
 @dataclass
 class Resources:
@@ -1740,7 +2067,27 @@ class Lab:
                           (json.dumps(public_status(self.store), indent=2) + "\n").encode(), 0o644)
         except (OSError, sqlite3.Error, LabError) as exc:
             log(f"endpoint-lab: {STATUS_FILE} not written: {type(exc).__name__}")
+        self.publish_web(now)
         return True
+
+    def publish_web(self, now: int) -> dict | None:
+        """The website's public export, from committed state. Never fails the job: on error the previous
+        files stay (and age out) and a code without details is kept in lab_meta."""
+        try:
+            stats = export_web(self.store, self.public_dir, now)
+        except (OSError, sqlite3.Error, ValueError) as exc:
+            log(f"endpoint-lab: web export failed: {type(exc).__name__}")
+            with contextlib.suppress(sqlite3.Error):
+                with self.store.transaction():
+                    self.store.set_meta("web_export_error", f"WEB_EXPORT_FAILED: {type(exc).__name__}")
+                    self.store.set_meta("web_export_error_at", now)
+            return None
+        with contextlib.suppress(sqlite3.Error):
+            with self.store.transaction():
+                self.store.set_meta("web_export_at", now)
+                self.store.set_meta("web_export_ms", stats["duration_ms"])
+                self.store.conn.execute("DELETE FROM lab_meta WHERE key IN ('web_export_error', 'web_export_error_at')")
+        return stats
 
     # -- scheduled runs
     def refresh_plan(self, now: int, res: Resources) -> list[str]:
