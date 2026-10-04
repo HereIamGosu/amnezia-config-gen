@@ -28,10 +28,12 @@ describe('donate button', () => {
     assert.equal(en.donate_text, 'Support the author <br/>and show appreciation');
   });
 
-  test('keeps a 60/40 row layout for button and text', () => {
+  test('lives in the footer as a brand-coloured link with a heart icon (2.8 design)', () => {
+    const html = readProjectFile('public/index.html');
     const css = readProjectFile('public/static/styles.css');
-    assert.match(css, /flex-wrap:\s*nowrap;/);
-    assert.match(css, /flex:\s*3 1 0;/);
-    assert.match(css, /flex:\s*2 1 0;/);
+    const footer = html.slice(html.indexOf('<footer class="site-footer">'), html.indexOf('</footer>'));
+    assert.match(footer, /class="donate-link"/, 'donate link is part of the footer');
+    assert.match(footer, /<use href="#i-heart"\/>/, 'donate link shows the heart icon');
+    assert.match(css, /\.donate-link\s*\{[^}]*color:\s*var\(--color-orange\);/s, 'donate uses the brand orange');
   });
 });

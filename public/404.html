@@ -5,106 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>404 — страница не найдена · Page not found — AmneziaWG Config Generator</title>
     <meta name="robots" content="noindex" />
-    <meta name="theme-color" content="#0077FF" />
+    <meta name="theme-color" content="#07090c" />
     <!-- Отдаётся с кодом 404 на любом адресе, поэтому все пути абсолютные -->
     <link rel="icon" href="/static/favicon.ico?v=2.7.4" sizes="16x16 32x32 48x48" />
     <link rel="icon" href="/static/favicon-32x32.png?v=2.7.4" type="image/png" sizes="32x32" />
     <link rel="icon" href="/static/favicon-16x16.png?v=2.7.4" type="image/png" sizes="16x16" />
     <link rel="apple-touch-icon" href="/static/apple-touch-icon.png?v=2.7.4" sizes="180x180" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
-    />
-    <style>
-      * { box-sizing: border-box; }
-
-      body {
-        margin: 0;
-        padding: 20px;
-        min-height: 100vh;
-        background-color: #c0c0c0;
-        font-family: "Press Start 2P", cursive, "MS Sans Serif", sans-serif;
-        color: #000;
-        display: flex;
-        justify-content: center;
-        align-items: flex-start;
-      }
-
-      .window {
-        width: min(560px, 98vw);
-        margin-top: 8vh;
-        border: 2px solid #000080;
-        background-color: #c0c0c0;
-        box-shadow: 5px 5px #808080;
-        border-radius: 4px;
-        overflow: hidden;
-      }
-
-      .window-header {
-        background-color: #000080;
-        color: #fff;
-        padding: 6px 10px;
-        font-size: 13px;
-        font-weight: bold;
-        line-height: 1.3;
-        border-bottom: 2px solid #fff;
-      }
-
-      .window-body { padding: 24px 20px; text-align: center; }
-
-      .code {
-        font-size: 40px;
-        color: #000080;
-        margin: 0 0 20px;
-        text-shadow: 3px 3px #808080;
-      }
-
-      .message {
-        font-size: 10px;
-        line-height: 1.8;
-        margin: 0 0 6px;
-      }
-
-      .message + .message { margin-bottom: 24px; color: #333; }
-
-      .actions {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 12px;
-      }
-
-      .button {
-        display: inline-block;
-        padding: 10px 14px;
-        font: inherit;
-        font-size: 9px;
-        color: #000;
-        text-decoration: none;
-        background: #c0c0c0;
-        border: 2px outset #fff;
-        box-shadow: 1px 1px #000;
-      }
-
-      .button:active { border-style: inset; }
-      .button:focus-visible { outline: 2px dotted #000080; outline-offset: 2px; }
-    </style>
+    <link rel="stylesheet" href="/static/styles.css?v=2.7.4" />
   </head>
   <body>
-    <main class="window">
-      <div class="window-header">AmneziaWG Config Generator</div>
-      <div class="window-body">
-        <h1 class="code">404</h1>
-        <p class="message">Страница не найдена. Возможно, ссылка устарела.</p>
-        <p class="message" lang="en">Page not found. The link may be outdated.</p>
-        <nav class="actions" aria-label="Навигация · Navigation">
-          <a class="button" href="/" hreflang="ru">На главную</a>
-          <a class="button" href="/en" hreflang="en" lang="en">Go to home page</a>
-          <a class="button" href="/status.html">Статус · Status</a>
-        </nav>
+    <header class="site-header">
+      <div class="container site-header__inner">
+        <a class="brand" href="/">
+          <img class="brand__logo" src="/static/icon-192.png?v=2.7.4" alt="" width="40" height="40" />
+          <span class="brand__text">
+            <span class="brand__name">AmneziaWG</span>
+            <span class="brand__sub">Config Generator</span>
+          </span>
+        </a>
       </div>
+    </header>
+
+    <main class="standalone">
+      <section class="card standalone__card">
+        <h1 class="error-code">404</h1>
+        <p class="standalone__message">Страница не найдена. Возможно, ссылка устарела.</p>
+        <p class="standalone__message" lang="en">Page not found. The link may be outdated.</p>
+        <nav class="standalone__actions" aria-label="Навигация · Navigation">
+          <a class="btn btn--primary" href="/" hreflang="ru">На главную</a>
+          <a class="btn" href="/en" hreflang="en" lang="en">Go to home page</a>
+          <a class="btn btn--ghost" href="/status.html">Статус · Status</a>
+        </nav>
+      </section>
     </main>
   </body>
 </html>

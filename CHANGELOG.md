@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 - `robots.txt`: drop `Crawl-delay` (ignored by Yandex and Google), add Yandex `Clean-param` for ad and analytics tags, document why `/static/`, `/locales/` and `/status.html` stay crawlable.
 - Remaining hard-coded Russian strings in the settings (WARP endpoint, UDP port, number of configs), the logo `alt` and several `aria-label`s are now translated.
 - nginx site snippet: `gzip_vary on` (compressed responses carry `Vary: Accept-Encoding`, so shared caches never serve gzip to a client that did not ask for it), `gzip_comp_level 5`, and `favicon.ico` is compressed too. Takes effect only when the snippet is reinstalled on the server.
+- Interface redesign (dark design system replaces the Win95 look) on the main page, `status.html` and the 404 page:
+  - Hero with the new illustration (checklist labels are live, translatable text), a "System status" card fed by the same live poller as the status modal (no separate `/api/healthcheck` polling), and a three-step flow: choose a profile card (AWG 2.0 is the default and is remembered), adjust parameters via chips that always show the real settings, and one "Generate" button instead of four.
+  - Result panel with loading / success / warning / error states, a variant switcher for 2–3 configs, `.conf` / `vpn://` preview tabs and "More actions". Previews hide `PrivateKey` (and show only the start of `vpn://`); download and copy still give the full config.
+  - All nine modals share one shell with a focus trap, Escape / backdrop close and focus return; the settings dialog keeps three tabs and opens on the tab of the clicked chip; on phones modals are bottom sheets. History rows show route mode, DNS, endpoint and device, and clearing needs a second click. New "Privacy" and "Disclaimer" dialogs.
+  - Inter is self-hosted (OFL) with preload instead of Google Fonts; the hero image is WebP (156 KB, 67 KB on phones) with fixed dimensions.
+  - The info dialog no longer claims `AllowedIPs = 0.0.0.0/0, ::/0` by default: AllowedIPs are IPv4-only unless IPv6 is enabled (invariant I6).
 
 ### Fixed
 - The inline SVG filter used a wrong XML namespace (`/1000/svg`).

@@ -27,10 +27,13 @@ test('generation renders summary and diagnostics without replacing result action
   assert.match(script, /renderResultExplanation\(lastResultSummary\)/);
   assert.match(script, /formatAwgCapabilityEvidence/);
   assert.match(script, /awg_protocol_evidence/);
-  assert.match(script, /variantRow = row\.cloneNode\(true\)/);
-  assert.match(html, /post-gen-row__download/);
-  assert.match(html, /post-gen-row__preview/);
-  assert.match(html, /post-gen-row__copy-vpn-link/);
+  // Варианты (count = 2–3) — переключатель в панели результата, а не клоны строк кнопок.
+  assert.match(script, /data\.configs\.map\(\(cfg, idx\) => \(\{/);
+  assert.match(script, /_variant\$\{idx \+ 1\}\.conf/);
+  assert.match(html, /id="resultVariantButtons"/);
+  assert.match(html, /id="resultDownload"/);
+  assert.match(html, /data-result-action="preview"/);
+  assert.match(html, /id="resultCopyLink"/);
   assert.match(html, /data-i18n="diagnostics_no_handshake"/);
   assert.match(html, /data-i18n="diagnostics_import_failed"/);
   assert.doesNotMatch(script, /console\.log\(['"]vpn:\/\//);

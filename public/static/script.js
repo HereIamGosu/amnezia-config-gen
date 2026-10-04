@@ -100,6 +100,11 @@ const loadLocale = async (lang) => {
     updateCidrCounter(cfgState.routeMode === ROUTE_MODES.FULL ? 0 : cfgState.cidrCount4);
     if (lastResultSummary) renderResultExplanation(lastResultSummary);
     if (lastCompatibility) renderCompatibilityCard(lastCompatibility);
+    // Тексты, которые строит JS (статус, чипы, результат, история), — на языке словаря
+    renderHeroStatus();
+    updateParamChips();
+    if (currentResult) renderResultSuccess();
+    renderHistoryPanel();
   } catch {
     // В офлайн-режиме или при 404 оставляем исходный HTML-текст (русский)
   }
@@ -107,50 +112,6 @@ const loadLocale = async (lang) => {
   document.querySelectorAll('.lang-btn').forEach((btn) => {
     btn.classList.toggle('lang-btn--active', btn.dataset.lang === _i18n.locale);
   });
-};
-
-const applyServiceStatus = (id, result) => {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const txt = el.querySelector('.health-status__text');
-  el.className = `health-status health-status--${result.ok ? 'ok' : 'fail'}`;
-  if (txt) {
-    txt.textContent = result.ok
-      ? (result.latencyMs != null ? result.latencyMs + ' ms' : 'доступен')
-      : 'недоступен';
-  }
-};
-
-// Shares the nginx /api/ rate-limit zone with the status modal: rapid tab switching
-// must not turn into a request burst.
-const HEALTH_MIN_GAP_MS = 15_000;
-let lastHealthFetchAt = -Infinity;
-
-const fetchHealthStatus = async () => {
-  lastHealthFetchAt = Date.now();
-  const warnEl = document.getElementById('healthWarn');
-  try {
-    const res = await fetch('/api/healthcheck');
-    const data = await res.json();
-    const { api, engage } = data.services ?? {};
-    applyServiceStatus('healthStatus-api',    api    ?? { ok: false, latencyMs: null });
-    applyServiceStatus('healthStatus-engage', engage ?? { ok: false, latencyMs: null });
-    if (warnEl) {
-      if (api && !api.ok) {
-        warnEl.textContent = 'Cloudflare API недоступен — генерация может не сработать';
-        warnEl.hidden = false;
-      } else {
-        warnEl.hidden = true;
-      }
-    }
-  } catch {
-    applyServiceStatus('healthStatus-api',    { ok: false, latencyMs: null });
-    applyServiceStatus('healthStatus-engage', { ok: false, latencyMs: null });
-    if (warnEl) {
-      warnEl.textContent = 'Сервер недоступен — попробуйте позже';
-      warnEl.hidden = false;
-    }
-  }
 };
 
 /**
@@ -224,37 +185,93 @@ const switchLang = (lang) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// F-02 / F-05 / F-07: Модальные окна
+// Модальные окна (каркас, ловушка фокуса и ESC — в ui-shell.js)
 // ─────────────────────────────────────────────────────────────
 
-// Live status poller of the status modal; created on first open, stopped on close.
-let statusPoller = null;
+const uiShell = window.UiShell || null;
 
-/** Открывает любое модальное окно по id. */
-const openModal = (id) => {
+/** Открывает модальное окно по id; после закрытия фокус вернётся на opener. */
+const openModal = (id, opener) => {
+  if (uiShell) {
+    uiShell.openModal(id, opener);
+    return;
+  }
   const el = document.getElementById(id);
   if (!el) return;
-  el.style.display = 'flex';
+  el.classList.add('is-open');
   el.setAttribute('aria-hidden', 'false');
 };
 
-/** Закрывает любое модальное окно по id. */
-const closeModal = (id) => {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.style.display = 'none';
-  el.setAttribute('aria-hidden', 'true');
-  if (id === 'statusModal' && statusPoller) statusPoller.stop();
+const toast = (text) => {
+  if (uiShell) uiShell.toast(text);
 };
 
-/**
- * Открывает модальное окно предпросмотра конфига.
- * @param {string} decodedConfig
- */
-const openPreviewModal = (decodedConfig) => {
-  const textarea = document.getElementById('configPreviewTextModal');
-  if (textarea) textarea.value = decodedConfig;
-  openModal('configPreviewModal');
+/** Копирует текст в буфер; без Clipboard API (http, старые браузеры) — через выделение. */
+const copyText = async (text) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch {
+      ok = false;
+    }
+    area.remove();
+    return ok;
+  }
+};
+
+const makeIcon = (id, cls = 'icon') => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', cls);
+  svg.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', `#${id}`);
+  svg.appendChild(use);
+  return svg;
+};
+
+const escapeHtml = (value) => String(value)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// ── Превью конфига: PrivateKey маскируется только на экране ──
+
+const SECRET_MASK = '••••••••••••••••';
+
+/** HTML конфига с подсветкой секций; значение PrivateKey заменено маской. Всё экранировано. */
+const renderConfigHtml = (configText) => configText.split(/\r?\n/).map((line) => {
+  if (/^\s*\[[^\]]+\]\s*$/.test(line)) return `<span class="c-section">${escapeHtml(line)}</span>`;
+  if (/^\s*#/.test(line)) return `<span class="c-comment">${escapeHtml(line)}</span>`;
+  const m = /^(\s*)([A-Za-z0-9]+)(\s*=\s*)(.*)$/.exec(line);
+  if (!m) return escapeHtml(line);
+  const value = /^privatekey$/i.test(m[2])
+    ? `<span class="c-mask">${SECRET_MASK}</span>`
+    : escapeHtml(m[4]);
+  return `${escapeHtml(m[1])}<span class="c-key">${escapeHtml(m[2])}</span>${escapeHtml(m[3])}${value}`;
+}).join('\n');
+
+/** vpn://-ссылка кодирует весь конфиг вместе с ключом: на экране — только начало. */
+const renderVpnLinkHtml = (link) => `${escapeHtml(link.slice(0, 28))}<span class="c-mask">${SECRET_MASK}</span>`;
+
+let previewConfigText = '';
+
+/** Открывает предпросмотр конфига: на экране ключ скрыт, «Копировать» отдаёт полный текст. */
+const openPreviewModal = (decodedConfig, filename, opener) => {
+  previewConfigText = decodedConfig;
+  const code = document.getElementById('configPreviewCode');
+  if (code) code.innerHTML = renderConfigHtml(decodedConfig);
+  const name = document.getElementById('previewFileName');
+  if (name && filename) name.textContent = filename;
+  openModal('configPreviewModal', opener);
 };
 
 // ── Статус сервисов (live: /api/status + /api/healthcheck) ──
@@ -340,132 +357,457 @@ const renderStatusModalError = (err, { retryAt = null } = {}) => {
   }
 };
 
-/** Открывает модал статуса; данные обновляются, пока модал открыт и вкладка видима. */
-const openStatusModal = () => {
-  openModal('statusModal');
-  telemetry.trackEvent('status_modal_opened');
-  if (!window.LiveStatus) {
-    renderStatusModalError(new Error('live-status.js not loaded'));
+// ── Карточка «Статус системы» в hero ──
+// Один поллер на страницу кормит и карточку, и модал статуса: раз в минуту, пока вкладка
+// видима, с паузой по Retry-After (createPoller). Отдельного опроса /api/healthcheck больше нет.
+
+let statusPoller = null;
+/** @type {{ kind: 'loading' } | { kind: 'data', snapshot: object, at: number } | { kind: 'error', error: Error, at: number }} */
+let heroStatus = { kind: 'loading' };
+
+const HERO_STATUS_ROWS = [
+  { key: 'generator', label: ['status_row_generator', 'Генератор API'] },
+  { key: 'warp_api', label: ['status_row_warp_api', 'Регистрация WARP'] },
+  { key: 'warp_engage', label: ['status_row_engage', 'WARP endpoint'] },
+  { key: 'endpoint_pool', label: ['status_row_pool', 'Пул endpoint\'ов'] },
+  { key: 'cidr_source', label: ['status_row_cidr', 'Источник CIDR'], optional: true },
+];
+
+const STATE_ICONS = { ok: 'i-check', degraded: 'i-alert', error: 'i-x', unknown: 'i-help' };
+
+const getStateLabel = (state) => ({
+  ok: t('status_state_ok', 'Работает'),
+  degraded: t('status_state_degraded', 'Нестабильно'),
+  error: t('status_state_error', 'Недоступен'),
+  unknown: t('status_state_unknown', 'Нет данных'),
+}[state] || t('status_state_unknown', 'Нет данных'));
+
+const OVERALL_LABELS = {
+  ok: ['status_overall_ok', 'Всё работает'],
+  degraded: ['status_overall_degraded', 'Есть сбои'],
+  error: ['status_overall_error', 'Сервис недоступен'],
+  unknown: ['status_overall_unknown', 'Нет данных'],
+  loading: ['status_checking', 'Проверяем…'],
+};
+
+/** Сервер ответил, но данные не годятся (лимит, устаревшие) — это не «недоступен». */
+const generatorStateForError = (error) => (
+  ['network', 'timeout', 'http'].includes(error && error.kind) ? 'error' : 'unknown'
+);
+
+const computeOverall = (states) => {
+  const measured = states.filter((s) => s !== 'unknown');
+  if (!measured.length) return 'unknown';
+  if (measured.every((s) => s === 'error')) return 'error';
+  if (measured.some((s) => s === 'error' || s === 'degraded')) return 'degraded';
+  return 'ok';
+};
+
+/** Текст с ключом перевода: applyTranslations() перерисует его при смене языка. */
+const setI18nText = (el, key, fallback) => {
+  if (!el) return;
+  el.dataset.i18n = key;
+  el.textContent = t(key, fallback);
+};
+
+const renderHeroStatus = () => {
+  const list = document.getElementById('statusList');
+  if (!list) return;
+
+  let rows;
+  if (heroStatus.kind === 'data') {
+    const byKey = Object.fromEntries(heroStatus.snapshot.services.map((svc) => [svc.key, svc.status]));
+    rows = HERO_STATUS_ROWS
+      .filter((row) => !row.optional || byKey[row.key])
+      .map((row) => ({ ...row, state: row.key === 'generator' ? 'ok' : (byKey[row.key] || 'unknown') }));
+  } else if (heroStatus.kind === 'error') {
+    const generator = generatorStateForError(heroStatus.error);
+    rows = HERO_STATUS_ROWS
+      .filter((row) => !row.optional)
+      .map((row) => ({ ...row, state: row.key === 'generator' ? generator : 'unknown' }));
+  } else {
+    rows = HERO_STATUS_ROWS.filter((row) => !row.optional).map((row) => ({ ...row, state: 'loading' }));
+  }
+
+  list.textContent = '';
+  rows.forEach((row) => {
+    const li = document.createElement('li');
+    li.className = 'status-row';
+    const icon = document.createElement('span');
+    icon.className = `state-icon state-icon--${row.state}`;
+    if (row.state !== 'loading') icon.appendChild(makeIcon(STATE_ICONS[row.state]));
+    const name = document.createElement('span');
+    name.className = 'status-row__name';
+    setI18nText(name, row.label[0], row.label[1]);
+    const state = document.createElement('span');
+    state.className = `status-row__state status-row__state--${row.state}`;
+    if (row.state !== 'loading') state.textContent = getStateLabel(row.state);
+    li.append(icon, name, state);
+    list.appendChild(li);
+  });
+
+  const overall = heroStatus.kind === 'loading' ? 'loading' : computeOverall(rows.map((row) => row.state));
+  const dotClass = `dot dot--${overall === 'unknown' ? 'unknown' : overall}`;
+  const overallEl = document.getElementById('statusOverall');
+  if (overallEl) {
+    overallEl.className = `status-overall status-overall--${overall}`;
+    const dot = overallEl.querySelector('.dot');
+    if (dot) dot.className = dotClass;
+  }
+  const [labelKey, labelFallback] = OVERALL_LABELS[overall];
+  setI18nText(document.getElementById('statusOverallText'), labelKey, labelFallback);
+  setI18nText(document.getElementById('statusStripText'), labelKey, labelFallback);
+  const stripDot = document.getElementById('statusStripDot');
+  if (stripDot) stripDot.className = dotClass;
+
+  // Предупреждение над шагами — только о реальных проблемах, без ложных тревог.
+  const warnEl = document.getElementById('healthWarn');
+  if (warnEl) {
+    const apiDown = rows.some((row) => row.key === 'warp_api' && row.state === 'error');
+    const serverDown = rows.some((row) => row.key === 'generator' && row.state === 'error');
+    if (serverDown) {
+      setI18nText(warnEl, 'health_warn_server', 'Сервер генератора недоступен — попробуйте позже.');
+      warnEl.hidden = false;
+    } else if (apiDown) {
+      setI18nText(warnEl, 'health_warn_api', 'Cloudflare API недоступен — генерация может не сработать.');
+      warnEl.hidden = false;
+    } else {
+      warnEl.hidden = true;
+    }
+  }
+  renderHeroCheckedAt();
+};
+
+const renderHeroCheckedAt = () => {
+  const el = document.getElementById('statusCheckedAt');
+  if (!el) return;
+  if (heroStatus.kind === 'loading') {
+    setI18nText(el, 'status_not_checked', 'Проверка…');
     return;
   }
-  if (!statusPoller) {
-    statusPoller = window.LiveStatus.createPoller({
-      load: () => window.LiveStatus.loadSnapshot(),
-      onLoading: renderStatusModalLoading,
-      onData: renderStatusModal,
-      onError: renderStatusModalError,
-    });
+  const minutes = Math.floor((Date.now() - heroStatus.at) / 60_000);
+  delete el.dataset.i18n;
+  el.textContent = minutes < 1
+    ? t('status_checked_just_now', 'Проверено только что')
+    : t('status_checked_minutes', 'Проверено {n} мин назад').replace('{n}', String(minutes));
+};
+
+const initHeroStatus = () => {
+  if (!window.LiveStatus) {
+    heroStatus = { kind: 'error', error: new Error('live-status.js not loaded'), at: Date.now() };
+    renderHeroStatus();
+    renderStatusModalError(heroStatus.error);
+    return;
   }
+  statusPoller = window.LiveStatus.createPoller({
+    load: () => window.LiveStatus.loadSnapshot(),
+    onLoading: () => {
+      heroStatus = { kind: 'loading' };
+      renderHeroStatus();
+      renderStatusModalLoading();
+    },
+    onData: (snapshot) => {
+      heroStatus = { kind: 'data', snapshot, at: Date.now() };
+      renderHeroStatus();
+      renderStatusModal(snapshot);
+    },
+    onError: (error, meta) => {
+      heroStatus = { kind: 'error', error, at: Date.now() };
+      renderHeroStatus();
+      renderStatusModalError(error, meta);
+    },
+  });
+  statusPoller.start();
+  // Только подпись «Проверено N мин назад» — без сетевых запросов.
+  setInterval(renderHeroCheckedAt, 30_000);
+};
+
+/** Ручное обновление: перезапуск поллера соблюдает минимальный интервал между запросами. */
+const refreshHeroStatus = () => {
+  if (!statusPoller) return;
+  statusPoller.stop();
   statusPoller.start();
 };
 
+/** Открывает модал статуса; данные приходят от того же поллера, что и у карточки. */
+const openStatusModal = (opener) => {
+  openModal('statusModal', opener);
+  telemetry.trackEvent('status_modal_opened');
+  if (heroStatus.kind === 'data') renderStatusModal(heroStatus.snapshot);
+  else if (heroStatus.kind === 'error') renderStatusModalError(heroStatus.error);
+};
+
 // ─────────────────────────────────────────────────────────────
-// F-02 / F-05: Показ тройки кнопок на месте кнопки генерации
+// Панель результата: загрузка → успех (варианты, превью, действия) / ошибка
 // ─────────────────────────────────────────────────────────────
 
-const POST_GEN_ROW_IDS = {
-  generateButton:     'postGenLegacy',
-  generateButtonAwg2: 'postGenAwg2',
-  generateButtonAwg3: 'postGenAwg3',
-  generateButtonAwg31: 'postGenAwg31',
+/**
+ * @type {null | {
+ *   mode: string,
+ *   variants: Array<{ filename: string, decodedConfig: string, vpnLink: string | null }>,
+ *   active: number,
+ *   tab: 'conf' | 'link',
+ *   hasWarnings: boolean,
+ *   telemetryContext: Record<string, unknown>,
+ *   snapshot: ReturnType<typeof getResultStateSnapshot>,
+ * }}
+ */
+let currentResult = null;
+let progressTimer = null;
+
+const showResultView = (view) => {
+  const panel = document.getElementById('resultPanel');
+  if (!panel) return;
+  panel.hidden = false;
+  document.getElementById('resultLoading').hidden = view !== 'loading';
+  document.getElementById('resultError').hidden = view !== 'error';
+  document.getElementById('resultSuccess').hidden = view !== 'success';
+};
+
+const scrollResultIntoView = () => {
+  const panel = document.getElementById('resultPanel');
+  if (!panel) return;
+  const rect = panel.getBoundingClientRect();
+  if (rect.top < 0 || rect.top > window.innerHeight * 0.75) {
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+};
+
+/** Этапы в карточке загрузки — ориентир для пользователя, а не точный прогресс сервера. */
+const startResultProgress = () => {
+  const items = Array.from(document.querySelectorAll('#resultProgress li'));
+  let step = 0;
+  const paint = () => items.forEach((li, i) => {
+    li.classList.toggle('is-done', i < step);
+    li.classList.toggle('is-active', i === step);
+  });
+  paint();
+  if (progressTimer) clearInterval(progressTimer);
+  progressTimer = setInterval(() => {
+    if (step < items.length - 1) {
+      step += 1;
+      paint();
+    }
+  }, 1400);
+};
+
+const stopResultProgress = () => {
+  if (progressTimer) clearInterval(progressTimer);
+  progressTimer = null;
+};
+
+const showResultLoading = () => {
+  showResultView('loading');
+  startResultProgress();
+  scrollResultIntoView();
+};
+
+const showResultError = (message) => {
+  stopResultProgress();
+  const text = document.getElementById('resultErrorText');
+  if (text) text.textContent = message;
+  showResultView('error');
+};
+
+const activeVariant = () => (currentResult ? currentResult.variants[currentResult.active] : null);
+
+const getDeviceLabel = (mobile, router) => {
+  if (mobile && router) return t('device_mobile_router', 'Смартфон + роутер');
+  if (mobile) return t('device_mobile', 'Смартфон');
+  if (router) return t('device_router', 'Роутер');
+  return t('device_universal', 'Универсальный');
+};
+
+const getDnsLabel = (id) => {
+  const preset = cfgState.dnsPresets.find((d) => d.id === id);
+  if (preset) return preset.label.replace(/\s*\(.*\)\s*$/, '');
+  // Каталог пресетов ещё не загружен: показываем id с заглавной буквы
+  return id ? id.charAt(0).toUpperCase() + id.slice(1) : 'Cloudflare';
+};
+
+const appendQuickSummary = (list, icon, label, value, isOn = false) => {
+  const item = document.createElement('div');
+  item.className = 'summary-item';
+  const term = document.createElement('dt');
+  term.textContent = label;
+  const desc = document.createElement('dd');
+  desc.textContent = value;
+  desc.title = value;
+  if (isOn) desc.classList.add('is-on');
+  item.append(makeIcon(icon), term, desc);
+  list.appendChild(item);
+};
+
+const renderQuickSummary = () => {
+  const list = document.getElementById('resultQuickSummary');
+  if (!list || !currentResult) return;
+  const snap = currentResult.snapshot;
+  const summary = lastResultSummary;
+  list.textContent = '';
+
+  const endpoint = summary
+    ? summaryValue('endpointMode', summary.endpoint.mode)
+    : (snap.warpEndpoint === 'hostname' ? t('chip_endpoint_auto', 'Автовыбор') : snap.warpEndpoint);
+  const routes = snap.routeMode === ROUTE_MODES.SPLIT
+    ? `${t('routing_mode_split', 'Выборочная')} · ${snap.routePresets.length}`
+    : t('routing_mode_full', 'Полный туннель');
+  const port = summary && summary.port != null ? String(summary.port) : String(snap.port);
+  const ipv6On = summary ? summary.ipv6 === 'enabled' : snap.includeIpv6;
+  const ipv6 = summary ? summaryValue('ipv6', summary.ipv6) : (ipv6On ? t('chip_on', 'Включён') : t('chip_off', 'Выключен'));
+  const warnings = summary ? summary.warnings.length : 0;
+
+  appendQuickSummary(list, 'i-shield-check', t('result_summary_profile_label', 'Профиль'), getModeLabel(currentResult.mode));
+  appendQuickSummary(list, 'i-plug', t('chip_port', 'Порт WARP'), port);
+  appendQuickSummary(list, 'i-pin', 'Endpoint', endpoint);
+  appendQuickSummary(list, 'i-network', 'IPv6', ipv6, ipv6On);
+  appendQuickSummary(list, 'i-route', t('routing_mode_title', 'Маршрутизация'), routes);
+  appendQuickSummary(list, 'i-laptop', t('chip_device', 'Устройство'), getDeviceLabel(snap.mobileMode, snap.routerMode));
+  appendQuickSummary(list, 'i-globe', 'DNS', getDnsLabel(snap.dns));
+  appendQuickSummary(list, 'i-alert', t('result_summary_warnings', 'Предупреждения'),
+    warnings ? String(warnings) : t('result_no_warnings', 'Нет'));
+};
+
+const renderResultCode = () => {
+  const code = document.getElementById('resultCode');
+  const note = document.getElementById('resultCodeNote');
+  const variant = activeVariant();
+  if (!code || !variant) return;
+  const linkTab = currentResult.tab === 'link';
+  if (linkTab && variant.vpnLink) {
+    code.classList.add('code-block--wrap');
+    code.innerHTML = renderVpnLinkHtml(variant.vpnLink);
+    setI18nText(note, 'result_link_note', 'Ссылка содержит ключ, поэтому показано только начало. «Копировать» скопирует её целиком.');
+  } else {
+    code.classList.remove('code-block--wrap');
+    code.innerHTML = renderConfigHtml(variant.decodedConfig);
+    setI18nText(note, 'result_code_note', 'PrivateKey скрыт в превью. Скачивание и копирование отдают полный конфиг.');
+  }
+};
+
+const renderResultSuccess = () => {
+  if (!currentResult) return;
+  stopResultProgress();
+  const variant = activeVariant();
+
+  const badge = document.getElementById('resultBadge');
+  if (badge) badge.classList.toggle('result__badge--warn', currentResult.hasWarnings);
+  const title = document.getElementById('resultTitle');
+  if (currentResult.hasWarnings) setI18nText(title, 'result_warn_title', 'Готово, но есть предупреждения');
+  else setI18nText(title, 'result_ready_title', 'Конфигурация готова!');
+  const subtitle = document.getElementById('resultSubtitle');
+  if (subtitle) {
+    subtitle.textContent = t('result_ready_subtitle', 'Профиль {mode} успешно сгенерирован.')
+      .replace('{mode}', getModeLabel(currentResult.mode));
+  }
+
+  // Переключатель вариантов (count = 2–3)
+  const variantsWrap = document.getElementById('resultVariants');
+  const variantButtons = document.getElementById('resultVariantButtons');
+  if (variantsWrap && variantButtons) {
+    variantButtons.textContent = '';
+    variantsWrap.hidden = currentResult.variants.length < 2;
+    currentResult.variants.forEach((_, index) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'seg__btn';
+      btn.textContent = String(index + 1);
+      btn.setAttribute('aria-pressed', String(index === currentResult.active));
+      btn.addEventListener('click', () => {
+        currentResult.active = index;
+        renderResultSuccess();
+      });
+      variantButtons.appendChild(btn);
+    });
+  }
+
+  // vpn:// бывает не у всех профилей (для AWG 3.0 намеренно недоступен)
+  const copyLinkBtn = document.getElementById('resultCopyLink');
+  const linkTab = document.getElementById('resultTabLink');
+  const hasLink = !!(variant && variant.vpnLink);
+  if (copyLinkBtn) copyLinkBtn.hidden = !hasLink;
+  if (linkTab) linkTab.disabled = !hasLink;
+  if (!hasLink && currentResult.tab === 'link') {
+    currentResult.tab = 'conf';
+    if (uiShell) uiShell.selectTab('resultTabConf');
+  }
+
+  renderQuickSummary();
+  renderResultCode();
+  showResultView('success');
 };
 
 /**
- * Скрывает кнопку генерации и показывает на её месте тройку кнопок:
- * Скачать | QR | Просмотр конфига.
+ * Показывает результат генерации.
+ * @param {{ mode: string, variants: Array<{ filename: string, decodedConfig: string, vpnLink: string | null }>, hasWarnings: boolean, telemetryContext: Record<string, unknown>, snapshot: object }} result
  */
-const showTgChannelCta = () => {
-  const cta = document.getElementById('tgChannelCta');
-  if (!cta || !cta.hidden) return;
-  cta.hidden = false;
-  const btn = cta.querySelector('.tg-channel-cta__btn');
-  if (btn) {
-    btn.href = TG_CHANNEL_URL;
-    btn.addEventListener('click', () => {
-      if (typeof ym === 'function') ym(99328227, 'reachGoal', 'telegram_channel_cta_click');
-    }, { once: true });
-  }
+const showResult = (result) => {
+  currentResult = { ...result, active: 0, tab: 'conf' };
+  if (uiShell) uiShell.selectTab('resultTabConf');
+  renderResultSuccess();
+  scrollResultIntoView();
 };
 
-const showPostGenRow = ({
-  buttonId,
-  readyDownloadText,
-  filename,
-  decodedConfig,
-  vpnLink,
-  telemetryContext,
-}) => {
-  // Скрываем кнопку генерации
-  const genBtn = document.getElementById(buttonId);
-  if (genBtn) genBtn.hidden = true;
+const initResultPanel = () => {
+  document.getElementById('resultDownload')?.addEventListener('click', () => {
+    const variant = activeVariant();
+    if (!variant) return;
+    downloadFile(variant.decodedConfig, variant.filename);
+    telemetry.trackEvent('config_downloaded', currentResult.telemetryContext);
+  });
 
-  // Показываем post-gen row
-  const baseButtonId = buttonId.replace(/_v\d+$/, '');
-  const baseRowId = POST_GEN_ROW_IDS[baseButtonId];
-  if (!baseRowId) return;
-  let row = document.getElementById(baseRowId);
-  if (!row) return;
-  if (buttonId !== baseButtonId) {
-    const variantRowId = `${baseRowId}_${buttonId.slice(baseButtonId.length + 1)}`;
-    let variantRow = document.getElementById(variantRowId);
-    if (!variantRow) {
-      variantRow = row.cloneNode(true);
-      variantRow.id = variantRowId;
-      variantRow.querySelector('.post-gen-row__download .button__text')?.removeAttribute('data-i18n');
-      row.parentElement.appendChild(variantRow);
-    }
-    row = variantRow;
-  }
-  row.hidden = false;
-  showTgChannelCta();
-
-  // Кнопка скачать
-  const dlBtn = row.querySelector('.post-gen-row__download');
-  if (dlBtn) {
-    const span = dlBtn.querySelector('.button__text');
-    if (span) span.textContent = readyDownloadText;
-    dlBtn.onclick = () => {
-      downloadFile(decodedConfig, filename);
-      telemetry.trackEvent('config_downloaded', telemetryContext);
-    };
-  }
-
-  // Кнопка просмотра
-  const prevBtn = row.querySelector('.post-gen-row__preview');
-  if (prevBtn) {
-    prevBtn.onclick = () => {
-      openPreviewModal(decodedConfig);
-      telemetry.trackEvent('config_preview_opened', telemetryContext);
-    };
-  }
-
-  // Кнопка подробностей о конфиге (ℹ) — wire up на случай клонированных строк
-  const infoBtn = row.querySelector('.post-gen-row__info');
-  if (infoBtn) {
-    infoBtn.onclick = () => openModal('resultInfoModal');
-  }
-
-  // Кнопка copy vpn:// — показываем только если link есть в ответе
-  const copyBtn = row.querySelector('.post-gen-row__copy-vpn-link');
-  if (copyBtn) {
-    if (vpnLink) {
-      copyBtn.hidden = false;
-      copyBtn.onclick = async () => {
-        try {
-          await navigator.clipboard.writeText(vpnLink);
-          telemetry.trackEvent('vpn_link_copied', telemetryContext);
-          const status = document.getElementById('status');
-          if (status) status.textContent = t('vpn_link_copied', 'Ссылка скопирована, откройте AmneziaVPN на телефоне.');
-        } catch (e) {
-          console.error('Clipboard write failed:', e);
-          const status = document.getElementById('status');
-          if (status) status.textContent = t('vpn_link_copy_failed', 'Не удалось скопировать. Скопируйте вручную из консоли (F12).');
-        }
-      };
+  document.getElementById('resultCopyLink')?.addEventListener('click', async () => {
+    const variant = activeVariant();
+    if (!variant || !variant.vpnLink) return;
+    if (await copyText(variant.vpnLink)) {
+      telemetry.trackEvent('vpn_link_copied', currentResult.telemetryContext);
+      toast(t('vpn_link_copied', 'Ссылка скопирована, откройте AmneziaVPN на телефоне.'));
     } else {
-      copyBtn.hidden = true;
+      toast(t('vpn_link_copy_failed', 'Не удалось скопировать ссылку.'));
     }
-  }
+  });
+
+  document.getElementById('resultCopyCode')?.addEventListener('click', async () => {
+    const variant = activeVariant();
+    if (!variant) return;
+    const text = currentResult.tab === 'link' && variant.vpnLink ? variant.vpnLink : variant.decodedConfig;
+    toast(await copyText(text) ? t('btn_copied', 'Скопировано!') : t('copy_failed', 'Не удалось скопировать.'));
+  });
+
+  document.getElementById('resultTabConf')?.closest('[role="tablist"]')?.addEventListener('tabs:change', (ev) => {
+    if (!currentResult) return;
+    currentResult.tab = ev.detail.tabId === 'resultTabLink' ? 'link' : 'conf';
+    renderResultCode();
+  });
+
+  document.getElementById('resultMoreMenu')?.addEventListener('click', (ev) => {
+    const item = ev.target.closest('[data-result-action]');
+    if (!item || !currentResult) return;
+    const moreBtn = document.getElementById('resultMoreBtn');
+    const variant = activeVariant();
+    switch (item.dataset.resultAction) {
+      case 'preview':
+        openPreviewModal(variant.decodedConfig, variant.filename, moreBtn);
+        telemetry.trackEvent('config_preview_opened', currentResult.telemetryContext);
+        break;
+      case 'explain':
+        openModal('resultInfoModal', moreBtn);
+        break;
+      case 'compat': {
+        const card = document.getElementById('compatibilityCard');
+        if (card && !card.hidden) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          openModal('instructionModal', moreBtn);
+        }
+        break;
+      }
+      case 'regenerate':
+        document.getElementById('generateButton')?.click();
+        break;
+      default:
+        break;
+    }
+  });
 };
 
 const summaryValue = (key, value) => {
@@ -565,7 +907,6 @@ const getModeFilename = (mode) => ({
   awg31: 'AmneziaWarp-AWG3.1.conf',
 }[mode] || 'AmneziaWarp.conf');
 const getModeLoadingLabel = (mode) => t(`loading_${mode}`, `Генерация конфигурации (${getModeLabel(mode)})...`);
-const getModeReadyDownloadLabel = (mode) => t(`ready_download_${mode}`, `Скачать ${getModeFilename(mode)}`);
 const getModeSuccessLabel = (mode) => t(`success_${mode}`, `Конфигурация ${getModeLabel(mode)} успешно сгенерирована.`);
 
 const getModeBadgeClass = (mode) => {
@@ -725,8 +1066,6 @@ const renderResultExplanation = (summary) => {
       risks.appendChild(label);
     });
   }
-
-  document.querySelectorAll('.post-gen-row__info').forEach((btn) => { btn.hidden = false; });
 };
 
 // ── Compatibility card (2.7.0) ────────────────────────────────────────────────
@@ -857,6 +1196,7 @@ const getResultStateSnapshot = () => ({
   warpEndpoint: cfgState.warpEndpoint,
   port: cfgState.port,
   routePresets: getSelectedRouteIds(),
+  dns: getSelectedDnsKey(),
   mobileMode: cfgState.mobileMode,
   routerMode: cfgState.routerMode,
   routeMode: cfgState.routeMode,
@@ -1024,24 +1364,47 @@ const clearAllRouteTileHosts = () => {
 const getSelectedRouteIds = () =>
   Array.from(document.querySelectorAll(ROUTE_CHECKBOX_SELECTOR)).map((el) => el.value);
 
-const openSettingsModal = () => {
-  const settingsModal = document.getElementById('settingsModal');
-  const toggleBtn = document.getElementById('settingsToggle');
-  if (!settingsModal) return;
-  settingsModal.style.display = 'flex';
-  settingsModal.setAttribute('aria-hidden', 'false');
-  if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
-  const closeBtn = document.getElementById('settingsModalClose');
-  if (closeBtn) closeBtn.focus();
+const SETTINGS_TABS = { routes: 'tab-routes', dnscps: 'tab-dnscps', extra: 'tab-extra' };
+
+/**
+ * Открывает настройки на нужной вкладке (чипы шага 2 ведут каждый в свой раздел).
+ * @param {{ tab?: string, focusId?: string, opener?: Element }} [options]
+ */
+const openSettingsModal = ({ tab = 'routes', focusId = null, opener = null } = {}) => {
+  if (uiShell) uiShell.selectTab(SETTINGS_TABS[tab] || SETTINGS_TABS.routes);
+  openModal('settingsModal', opener);
+  document.getElementById('settingsToggle')?.setAttribute('aria-expanded', 'true');
+  const target = focusId && document.getElementById(focusId);
+  if (target) {
+    target.scrollIntoView({ block: 'center' });
+    if (!target.disabled) target.focus({ preventScroll: true });
+  }
 };
 
-const closeSettingsModal = () => {
-  const settingsModal = document.getElementById('settingsModal');
-  const toggleBtn = document.getElementById('settingsToggle');
-  if (!settingsModal) return;
-  settingsModal.style.display = 'none';
-  settingsModal.setAttribute('aria-hidden', 'true');
-  if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
+/** Значения чипов шага 2 — всегда фактическое состояние cfgState, а не картинка из макета. */
+const updateParamChips = () => {
+  const setChip = (id, text, modifier) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    delete el.dataset.i18n;
+    el.textContent = text;
+    el.title = text;
+    el.classList.toggle('param-chip__value--on', modifier === 'on');
+    el.classList.toggle('param-chip__value--accent', modifier === 'accent');
+  };
+
+  const selectedCount = getSelectedRouteIds().length;
+  setChip('chipRouting', cfgState.routeMode === ROUTE_MODES.SPLIT
+    ? `${t('routing_mode_split', 'Выборочная')} · ${selectedCount}`
+    : t('routing_mode_full', 'Полный туннель'));
+  setChip('chipDns', getDnsLabel(getSelectedDnsKey() || cfgState.dnsDefault));
+  setChip('chipEndpoint', cfgState.warpEndpoint === 'hostname'
+    ? t('chip_endpoint_auto', 'Автовыбор')
+    : cfgState.warpEndpoint, 'accent');
+  setChip('chipPort', String(cfgState.port));
+  setChip('chipIpv6', cfgState.includeIpv6 ? t('chip_on', 'Включён') : t('chip_off', 'Выключен'),
+    cfgState.includeIpv6 ? 'on' : null);
+  setChip('chipDevice', getDeviceLabel(cfgState.mobileMode, cfgState.routerMode));
 };
 
 /**
@@ -1309,7 +1672,7 @@ const applyZeroCidrMarks = () => {
       warn = document.createElement('span');
       warn.className = 'cfg-tile__zero-warn';
       warn.textContent = '⚠ 0 IP';
-      warn.title = 'Нет данных в iplist.opencck.org — маршруты не будут добавлены';
+      warn.title = t('tile_zero_cidr_title', 'Нет данных в iplist.opencck.org — маршруты не будут добавлены');
       tile.appendChild(warn);
     } else if (!isZero && warn) {
       warn.remove();
@@ -1336,15 +1699,32 @@ const renderDnsTiles = (host) => {
     input.addEventListener('change', () => {
       cfgState.selectedDns = d.id;
       host.querySelectorAll('.cfg-tile').forEach((tile) => updateTileActiveClass(tile));
+      updateParamChips();
     });
 
-    const span = document.createElement('span');
-    span.textContent = d.label;
-
     label.appendChild(input);
-    label.appendChild(span);
+    label.appendChild(buildTileText(d.label));
     host.appendChild(label);
   }
+};
+
+/** Название плитки и подпись в скобках («Cloudflare (по умолчанию)») — двумя строками. */
+const buildTileText = (fullLabel, sub = '') => {
+  const match = /^(.*?)\s*\((.+)\)\s*$/.exec(fullLabel);
+  const text = document.createElement('span');
+  text.className = 'cfg-tile__text';
+  const name = document.createElement('span');
+  name.className = 'cfg-tile__name';
+  name.textContent = match ? match[1] : fullLabel;
+  text.appendChild(name);
+  const subText = sub || (match ? match[2] : '');
+  if (subText) {
+    const subEl = document.createElement('span');
+    subEl.className = 'cfg-tile__sub';
+    subEl.textContent = subText;
+    text.appendChild(subEl);
+  }
+  return text;
 };
 
 const renderRouteTiles = (host, presetList) => {
@@ -1361,6 +1741,7 @@ const renderRouteTiles = (host, presetList) => {
     input.addEventListener('change', () => {
       updateTileActiveClass(label);
       refreshPresetStats();
+      updateParamChips();
       // Keep "presets ignored" notice in sync when user toggles tiles
       const ignoredNotice = document.getElementById('presetsIgnoredNotice');
       if (ignoredNotice) {
@@ -1368,11 +1749,14 @@ const renderRouteTiles = (host, presetList) => {
       }
     });
 
-    const span = document.createElement('span');
-    span.textContent = p.label;
+    const mark = document.createElement('span');
+    mark.className = 'cfg-tile__mark';
+    mark.setAttribute('aria-hidden', 'true');
+    mark.textContent = Array.from(p.label.replace(/[^\p{L}\p{N}]/gu, ''))[0] || '•';
 
     label.appendChild(input);
-    label.appendChild(span);
+    label.appendChild(mark);
+    label.appendChild(buildTileText(p.label));
     host.appendChild(label);
   }
 };
@@ -1381,23 +1765,27 @@ const initSettingsPanel = async () => {
   const dnsHost = document.getElementById('dnsTiles');
   const toggleBtn = document.getElementById('settingsToggle');
   const settingsModal = document.getElementById('settingsModal');
-  const settingsModalClose = document.getElementById('settingsModalClose');
 
   if (toggleBtn) {
-    toggleBtn.addEventListener('click', () => {
-      const isOpen = settingsModal && settingsModal.style.display === 'flex';
-      if (isOpen) closeSettingsModal();
-      else openSettingsModal();
-    });
+    toggleBtn.addEventListener('click', () => openSettingsModal({ opener: toggleBtn }));
   }
-
-  if (settingsModalClose) {
-    settingsModalClose.addEventListener('click', () => closeSettingsModal());
-  }
-
+  document.querySelectorAll('[data-settings-tab]').forEach((chip) => {
+    chip.addEventListener('click', () => openSettingsModal({
+      tab: chip.dataset.settingsTab,
+      focusId: chip.dataset.settingsFocus || null,
+      opener: chip,
+    }));
+  });
   if (settingsModal) {
+    settingsModal.addEventListener('modal:close', () => {
+      if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
+      updateParamChips();
+    });
+    // Любая правка внутри настроек сразу видна на чипах шага 2 (обработчики ниже меняют cfgState
+    // синхронно, а этот слушатель на всплытии срабатывает после них).
+    settingsModal.addEventListener('change', updateParamChips);
     settingsModal.addEventListener('click', (ev) => {
-      if (ev.target === settingsModal) closeSettingsModal();
+      if (ev.target.closest('button')) updateParamChips();
     });
   }
 
@@ -1584,6 +1972,7 @@ const initSettingsPanel = async () => {
     // Initialize route mode UI (2.6.0)
     updateRouteModeUI(cfgState.routeMode);
     updateAllowedIpsExplanation();
+    updateParamChips();
 
     refreshPresetStats();
   } catch (e) {
@@ -1610,7 +1999,7 @@ const loadHistory = () => {
   } catch { return []; }
 };
 
-const saveToHistory = (mode, decodedConfig, filename) => {
+const saveToHistory = (mode, decodedConfig, filename, snapshot = getResultStateSnapshot()) => {
   const entry = {
     ts: Date.now(),
     mode,
@@ -1618,6 +2007,11 @@ const saveToHistory = (mode, decodedConfig, filename) => {
     dns: getSelectedDnsKey(),
     b64: btoa(decodedConfig),
     filename,
+    routeMode: snapshot.routeMode,
+    port: snapshot.port,
+    endpoint: snapshot.warpEndpoint === 'hostname' ? 'auto' : 'ip',
+    mobile: snapshot.mobileMode,
+    router: snapshot.routerMode,
   };
   try {
     const arr = loadHistory();
@@ -1630,22 +2024,51 @@ const saveToHistory = (mode, decodedConfig, filename) => {
 
 const formatHistoryTime = (ts) => {
   const d = new Date(ts);
-  return d.toLocaleString(_i18n.locale === 'en' ? 'en-GB' : 'ru-RU', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
+  const locale = _i18n.locale === 'en' ? 'en-GB' : 'ru-RU';
+  const time = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const days = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86_400_000);
+  if (days === 0) return `${t('history_today', 'сегодня')}, ${time}`;
+  if (days === 1) return `${t('history_yesterday', 'вчера')}, ${time}`;
+  return d.toLocaleString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+};
+
+/** Заголовок записи истории: режим маршрутов и DNS. Старые записи без routeMode — по пресетам. */
+const historyTitle = (entry) => {
+  const presets = entry.presets || [];
+  const split = entry.routeMode ? entry.routeMode === ROUTE_MODES.SPLIT : presets.length > 0;
+  if (split) return t('history_title_split', 'Выборочная · {n} presets').replace('{n}', String(presets.length));
+  return `${t('routing_mode_full', 'Полный туннель')} · ${getDnsLabel(entry.dns || 'cloudflare')} DNS`;
+};
+
+const historyMeta = (entry) => {
+  const parts = [formatHistoryTime(entry.ts)];
+  if (entry.endpoint) parts.push(`endpoint ${entry.endpoint === 'ip' ? 'IP' : 'auto'}`);
+  if (entry.port && Number(entry.port) !== 4500) parts.push(`port ${entry.port}`);
+  if (entry.mobile || entry.router) parts.push(getDeviceLabel(!!entry.mobile, !!entry.router));
+  return parts.join(' · ');
+};
+
+const makeIconButton = (icon, label, onClick) => {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn--icon btn--sm';
+  btn.setAttribute('aria-label', label);
+  btn.title = label;
+  btn.appendChild(makeIcon(icon, 'icon icon--sm'));
+  btn.addEventListener('click', onClick);
+  return btn;
 };
 
 const renderHistoryPanel = () => {
-  const btn = document.getElementById('historyModalBtn');
   const list = document.getElementById('historyList');
   const countEl = document.getElementById('historyCount');
   const emptyMsg = document.getElementById('historyEmptyMsg');
+  const clearBtn = document.getElementById('historyClearBtn');
   const arr = loadHistory();
 
-  // Show/hide the history button
-  if (btn) btn.hidden = arr.length === 0;
   if (countEl) countEl.textContent = arr.length > 0 ? String(arr.length) : '';
+  if (clearBtn) clearBtn.hidden = arr.length === 0;
 
   if (!list) return;
   list.textContent = '';
@@ -1660,66 +2083,38 @@ const renderHistoryPanel = () => {
     const item = document.createElement('div');
     item.className = 'history-item';
 
-    // Mode badge
     const badge = document.createElement('span');
     badge.className = getModeBadgeClass(entry.mode);
     badge.textContent = getModeLabel(entry.mode);
 
-    // Info block
     const info = document.createElement('div');
     info.className = 'history-item__info';
+    const title = document.createElement('div');
+    title.className = 'history-item__title';
+    title.textContent = historyTitle(entry);
+    title.title = entry.presets && entry.presets.length ? entry.presets.join(', ') : title.textContent;
+    const meta = document.createElement('div');
+    meta.className = 'history-item__meta';
+    meta.textContent = historyMeta(entry);
+    info.append(title, meta);
 
-    const timeEl = document.createElement('div');
-    timeEl.className = 'history-item__time';
-    timeEl.textContent = formatHistoryTime(entry.ts);
-
-    const presetsEl = document.createElement('div');
-    presetsEl.className = 'history-item__presets';
-    const presetSummary = entry.presets && entry.presets.length
-      ? entry.presets.slice(0, 4).join(', ') + (entry.presets.length > 4 ? '…' : '')
-      : t('history_no_presets', 'без пресетов');
-    presetsEl.textContent = presetSummary;
-    presetsEl.title = entry.presets ? entry.presets.join(', ') : '';
-
-    info.appendChild(timeEl);
-    info.appendChild(presetsEl);
-
-    // Actions
+    const telemetryContext = {
+      mode: entry.mode,
+      route_mode: entry.presets && entry.presets.length ? 'split' : 'full',
+    };
     const actions = document.createElement('div');
     actions.className = 'history-item__actions';
-
-    const dlBtn = document.createElement('button');
-    dlBtn.type = 'button';
-    dlBtn.className = 'button button--sm history-item__dl';
-    dlBtn.textContent = t('history_download', '↓');
-    dlBtn.title = entry.filename;
-    dlBtn.addEventListener('click', () => {
+    const previewBtn = makeIconButton('i-eye', t('preview_btn_title', 'Просмотреть конфигурацию'), (ev) => {
+      openPreviewModal(atob(entry.b64), entry.filename, ev.currentTarget);
+      telemetry.trackEvent('history_item_previewed', telemetryContext);
+    });
+    const dlBtn = makeIconButton('i-download', `${t('history_download_label', 'Скачать')} ${entry.filename}`, () => {
       downloadFile(atob(entry.b64), entry.filename);
-      telemetry.trackEvent('history_item_downloaded', {
-        mode: entry.mode,
-        route_mode: entry.presets && entry.presets.length ? 'split' : 'full',
-      });
+      telemetry.trackEvent('history_item_downloaded', telemetryContext);
     });
+    actions.append(previewBtn, dlBtn);
 
-    const previewBtn = document.createElement('button');
-    previewBtn.type = 'button';
-    previewBtn.className = 'button button--sm history-item__preview';
-    previewBtn.innerHTML = '<span aria-hidden="true">&#128065;</span>';
-    previewBtn.title = t('preview_btn_title', 'Просмотреть конфигурацию');
-    previewBtn.addEventListener('click', () => {
-      openPreviewModal(atob(entry.b64));
-      telemetry.trackEvent('history_item_previewed', {
-        mode: entry.mode,
-        route_mode: entry.presets && entry.presets.length ? 'split' : 'full',
-      });
-    });
-
-    actions.appendChild(dlBtn);
-    actions.appendChild(previewBtn);
-
-    item.appendChild(badge);
-    item.appendChild(info);
-    item.appendChild(actions);
+    item.append(badge, info, actions);
     list.appendChild(item);
   });
 };
@@ -1737,41 +2132,71 @@ const downloadFile = (content, filename) => {
   URL.revokeObjectURL(link.href);
 };
 
-const GENERATE_BUTTON_IDS = ['generateButton', 'generateButtonAwg2', 'generateButtonAwg3', 'generateButtonAwg31'];
+// ─────────────────────────────────────────────────────────────
+// Профиль AWG и генерация (одна кнопка для всех профилей)
+// ─────────────────────────────────────────────────────────────
 
-const setAllGenerateButtonsDisabled = (disabled) => {
-  GENERATE_BUTTON_IDS.forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.disabled = disabled;
+const PROFILE_MODES = ['legacy', 'awg2', 'awg3', 'awg31'];
+const DEFAULT_PROFILE = 'awg2';
+const PROFILE_STORAGE_KEY = 'awg_profile';
+
+const getSelectedProfile = () => {
+  const checked = document.querySelector('[name="awgProfile"]:checked');
+  return checked && PROFILE_MODES.includes(checked.value) ? checked.value : DEFAULT_PROFILE;
+};
+
+/** Восстанавливает последний выбранный профиль; по умолчанию — AWG 2.0. */
+const initProfileSelector = () => {
+  let saved = null;
+  try {
+    saved = localStorage.getItem(PROFILE_STORAGE_KEY);
+  } catch {
+    saved = null;
+  }
+  if (PROFILE_MODES.includes(saved)) {
+    const input = document.querySelector(`[name="awgProfile"][value="${saved}"]`);
+    if (input) input.checked = true;
+  }
+  document.querySelectorAll('[name="awgProfile"]').forEach((input) => {
+    input.addEventListener('change', () => {
+      try {
+        localStorage.setItem(PROFILE_STORAGE_KEY, input.value);
+      } catch {
+        // Без localStorage выбор просто не запомнится
+      }
+    });
   });
 };
 
-/**
- * @param {{ buttonId: string, mode: string, filename: string, boundGenerateClick: () => void }} options
- */
-const generateConfig = async (options) => {
-  const { buttonId, mode, filename, boundGenerateClick } = options;
-  const button = document.getElementById(buttonId);
-  if (!button) return;
+let generationInFlight = false;
+
+const generateConfig = async () => {
+  const button = document.getElementById('generateButton');
+  if (!button || generationInFlight) return;
+  const mode = getSelectedProfile();
+  const filename = getModeFilename(mode);
   const status = document.getElementById('status');
   const startedAt = telemetryNow();
   const startedContext = getTelemetryContext(mode);
   const resultState = getResultStateSnapshot();
   let response;
 
-  const loadingLabel = getModeLoadingLabel(mode);
-  const readyDownloadText = getModeReadyDownloadLabel(mode);
-
   // Empty split tunnel guard
   if (cfgState.routeMode === ROUTE_MODES.SPLIT && getSelectedRouteIds().length === 0) {
     status.textContent = t('routing_empty_split_error',
       'Для выборочной маршрутизации выберите хотя бы одно направление или переключитесь на полный туннель.');
+    status.classList.remove('visually-hidden');
     return;
   }
 
-  setAllGenerateButtonsDisabled(true);
-  button.classList.add('button--loading');
-  status.textContent = loadingLabel;
+  generationInFlight = true;
+  button.disabled = true;
+  button.classList.add('btn--loading');
+  button.setAttribute('aria-busy', 'true');
+  status.textContent = getModeLoadingLabel(mode);
+  // Ход и итог генерации видны в панели результата; строку оставляем только для экранных дикторов
+  status.classList.add('visually-hidden');
+  showResultLoading();
   telemetry.trackEvent('generation_started', startedContext);
 
   try {
@@ -1791,93 +2216,70 @@ const generateConfig = async (options) => {
     const data = await parseJsonResponse(response);
 
     if (!response.ok) {
-      throw new Error(data.message || `Ошибка HTTP: ${response.status}`);
+      throw new Error(data.message || `${t('err_http_prefix', 'Ошибка HTTP:')} ${response.status}`);
     }
 
-    if (data.success) {
-      if (!data.content) throw new Error(t('err_no_content', 'Отсутствует содержимое конфигурации.'));
-
-      if (boundGenerateClick) button.removeEventListener('click', boundGenerateClick);
-
-      const allConfigs = (data.configs && data.configs.length > 1) ? data.configs : null;
-      const countProduced = Number.isInteger(data.count)
-        ? data.count
-        : data.configs && data.configs.length
-          ? data.configs.length
-          : 1;
-      const warningCount = getWarningCount(data.warning);
-      const completedContext = {
-        ...startedContext,
-        count_produced: countProduced,
-        endpoint_source: getEndpointTelemetrySource(data, startedContext.endpoint_mode),
-        routes_source: data.routesTelemetrySource || 'unknown',
-        has_warning: warningCount > 0,
-        warning_count: warningCount,
-        cps_requested: data.cpsRequested || startedContext.cps_requested,
-        cps_resolved: data.cpsResolved || 'unknown',
-        cps_stability: data.cpsStability || 'unknown',
-        duration_ms: telemetry.durationMs(startedAt, telemetryNow()),
-      };
-      telemetry.trackEvent(
-        countProduced < startedContext.count_requested
-          ? 'generation_partially_succeeded'
-          : 'generation_succeeded',
-        completedContext,
-      );
-      if (resultExplanation) {
-        lastResultSummary = resultExplanation.buildResultSummary(data, resultState);
-        renderResultExplanation(lastResultSummary);
-      }
-      lastCompatibility = data.compatibility || null;
-      renderCompatibilityCard(lastCompatibility);
-      if (allConfigs) {
-        // Multiple configs: show each as a separate download row.
-        // Auto-download only the first; remaining variants require a manual click
-        // because browsers block multiple programmatic link.click() in one tick.
-        allConfigs.forEach((cfg, idx) => {
-          const variantFilename = filename.replace(/\.conf$/, `_variant${idx + 1}.conf`);
-          const decoded = atob(cfg.content);
-          const variantBtn = idx === 0 ? buttonId : `${buttonId}_v${idx + 1}`;
-          showPostGenRow({
-            buttonId: variantBtn,
-            readyDownloadText: `Вариант ${idx + 1}`,
-            filename: variantFilename,
-            decodedConfig: decoded,
-            vpnLink: cfg.vpnLink,
-            telemetryContext: completedContext,
-          });
-          if (idx === 0) {
-            downloadFile(decoded, variantFilename);
-            telemetry.trackEvent('config_downloaded', completedContext);
-            saveToHistory(mode, decoded, variantFilename);
-          }
-        });
-      } else {
-        const decodedConfig = atob(data.content);
-        showPostGenRow({
-          buttonId,
-          readyDownloadText,
-          filename,
-          decodedConfig,
-          vpnLink: data.vpnLink,
-          telemetryContext: completedContext,
-        });
-        downloadFile(decodedConfig, filename);
-        telemetry.trackEvent('config_downloaded', completedContext);
-        saveToHistory(mode, decodedConfig, filename);
-      }
-
-      if (data.warning) {
-        status.textContent = t(
-          'generation_completed_with_warnings',
-          'Конфигурация создана с предупреждениями. Подробности указаны в карточке результата.',
-        );
-      } else {
-        status.textContent = getModeSuccessLabel(mode);
-      }
-    } else {
+    if (!data.success) {
       throw new Error(data.message || t('err_unknown_gen', 'Неизвестная ошибка при генерации конфигурации.'));
     }
+    if (!data.content) throw new Error(t('err_no_content', 'Отсутствует содержимое конфигурации.'));
+
+    const countProduced = Number.isInteger(data.count)
+      ? data.count
+      : data.configs && data.configs.length
+        ? data.configs.length
+        : 1;
+    const warningCount = getWarningCount(data.warning);
+    const completedContext = {
+      ...startedContext,
+      count_produced: countProduced,
+      endpoint_source: getEndpointTelemetrySource(data, startedContext.endpoint_mode),
+      routes_source: data.routesTelemetrySource || 'unknown',
+      has_warning: warningCount > 0,
+      warning_count: warningCount,
+      cps_requested: data.cpsRequested || startedContext.cps_requested,
+      cps_resolved: data.cpsResolved || 'unknown',
+      cps_stability: data.cpsStability || 'unknown',
+      duration_ms: telemetry.durationMs(startedAt, telemetryNow()),
+    };
+    telemetry.trackEvent(
+      countProduced < startedContext.count_requested
+        ? 'generation_partially_succeeded'
+        : 'generation_succeeded',
+      completedContext,
+    );
+    if (resultExplanation) {
+      lastResultSummary = resultExplanation.buildResultSummary(data, resultState);
+      renderResultExplanation(lastResultSummary);
+    }
+    lastCompatibility = data.compatibility || null;
+    renderCompatibilityCard(lastCompatibility);
+
+    // Несколько вариантов (count = 2–3) показываются переключателем в панели результата.
+    // Автоматически скачивается только первый: браузеры блокируют несколько загрузок подряд.
+    const variants = data.configs && data.configs.length > 1
+      ? data.configs.map((cfg, idx) => ({
+        filename: filename.replace(/\.conf$/, `_variant${idx + 1}.conf`),
+        decodedConfig: atob(cfg.content),
+        vpnLink: cfg.vpnLink || null,
+      }))
+      : [{ filename, decodedConfig: atob(data.content), vpnLink: data.vpnLink || null }];
+
+    showResult({
+      mode,
+      variants,
+      hasWarnings: warningCount > 0,
+      telemetryContext: completedContext,
+      snapshot: resultState,
+    });
+    downloadFile(variants[0].decodedConfig, variants[0].filename);
+    telemetry.trackEvent('config_downloaded', completedContext);
+    saveToHistory(mode, variants[0].decodedConfig, variants[0].filename, resultState);
+
+    status.textContent = data.warning
+      ? t('generation_completed_with_warnings',
+        'Конфигурация создана с предупреждениями. Подробности указаны в карточке результата.')
+      : getModeSuccessLabel(mode);
   } catch (error) {
     telemetry.trackEvent('generation_failed', {
       ...startedContext,
@@ -1888,10 +2290,13 @@ const generateConfig = async (options) => {
     const message = error && error.name === 'AbortError'
       ? t('err_timeout', 'Превышено время ожидания ответа. Попробуйте ещё раз.')
       : error.message;
-    status.textContent = `Ошибка: ${message}`;
+    status.textContent = `${t('err_prefix', 'Ошибка:')} ${message}`;
+    showResultError(message);
   } finally {
-    setAllGenerateButtonsDisabled(false);
-    button.classList.remove('button--loading');
+    generationInFlight = false;
+    button.disabled = false;
+    button.classList.remove('btn--loading');
+    button.removeAttribute('aria-busy');
   }
 };
 
@@ -1903,100 +2308,44 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  initProfileSelector();
   const generateButton = document.getElementById('generateButton');
-  const generateButtonAwg2 = document.getElementById('generateButtonAwg2');
-  const generateButtonAwg3 = document.getElementById('generateButtonAwg3');
-  const generateButtonAwg31 = document.getElementById('generateButtonAwg31');
-
-  const legacyOptions = {
-    buttonId: 'generateButton',
-    mode: 'legacy',
-    filename: 'AmneziaWarp.conf',
-    boundGenerateClick: () => {},
-  };
-  legacyOptions.boundGenerateClick = () => generateConfig(legacyOptions);
-
-  const awg2Options = {
-    buttonId: 'generateButtonAwg2',
-    mode: 'awg2',
-    filename: 'AmneziaWarp-AWG2.conf',
-    boundGenerateClick: () => {},
-  };
-  awg2Options.boundGenerateClick = () => generateConfig(awg2Options);
-
-  const awg3Options = {
-    buttonId: 'generateButtonAwg3',
-    mode: 'awg3',
-    filename: getModeFilename('awg3'),
-    boundGenerateClick: () => {},
-  };
-  awg3Options.boundGenerateClick = () => generateConfig(awg3Options);
-
-  const awg31Options = {
-    buttonId: 'generateButtonAwg31',
-    mode: 'awg31',
-    filename: getModeFilename('awg31'),
-    boundGenerateClick: () => {},
-  };
-  awg31Options.boundGenerateClick = () => generateConfig(awg31Options);
-
   if (generateButton) {
-    generateButton.addEventListener('click', legacyOptions.boundGenerateClick);
+    generateButton.addEventListener('click', () => generateConfig());
   } else {
     console.error('Кнопка "generateButton" не найдена.');
   }
+  initResultPanel();
 
-  if (generateButtonAwg2) {
-    generateButtonAwg2.addEventListener('click', awg2Options.boundGenerateClick);
-  } else {
-    console.error('Кнопка "generateButtonAwg2" не найдена.');
-  }
-
-  if (generateButtonAwg3) {
-    generateButtonAwg3.addEventListener('click', awg3Options.boundGenerateClick);
-  } else {
-    console.error('Кнопка "generateButtonAwg3" не найдена.');
-  }
-
-  if (generateButtonAwg31) {
-    generateButtonAwg31.addEventListener('click', awg31Options.boundGenerateClick);
-  } else {
-    console.error('Кнопка "generateButtonAwg31" не найдена.');
-  }
-
-  // ── История генераций (модальное окно) ──
-  const historyModalBtn   = document.getElementById('historyModalBtn');
-  const historyModal      = document.getElementById('historyModal');
-  const historyModalClose = document.getElementById('historyModalClose');
-  const historyClearBtn   = document.getElementById('historyClearBtn');
-
-  const openHistoryModal = () => {
-    renderHistoryPanel();
-    if (historyModal) {
-      historyModal.style.display = 'flex';
-      historyModal.setAttribute('aria-hidden', 'false');
-    }
-  };
-
-  const closeHistoryModal = () => {
-    if (historyModal) {
-      historyModal.style.display = 'none';
-      historyModal.setAttribute('aria-hidden', 'true');
-    }
-  };
-
-  if (historyModalBtn) historyModalBtn.addEventListener('click', openHistoryModal);
-  if (historyModalClose) historyModalClose.addEventListener('click', closeHistoryModal);
-  if (historyModal) {
-    historyModal.addEventListener('click', (e) => {
-      if (e.target === historyModal) closeHistoryModal();
+  // ── История генераций ──
+  const historyModalBtn = document.getElementById('historyModalBtn');
+  const historyClearBtn = document.getElementById('historyClearBtn');
+  if (historyModalBtn) {
+    historyModalBtn.addEventListener('click', () => {
+      renderHistoryPanel();
+      openModal('historyModal', historyModalBtn);
     });
   }
   if (historyClearBtn) {
+    // Разрушающее действие — со вторым подтверждающим нажатием.
+    let confirmTimer = null;
+    const resetConfirm = () => {
+      historyClearBtn.dataset.confirm = '';
+      setI18nText(historyClearBtn, 'history_clear_all', 'Очистить историю');
+    };
     historyClearBtn.addEventListener('click', () => {
+      if (historyClearBtn.dataset.confirm !== '1') {
+        historyClearBtn.dataset.confirm = '1';
+        setI18nText(historyClearBtn, 'history_clear_confirm', 'Нажмите ещё раз, чтобы удалить');
+        if (confirmTimer) clearTimeout(confirmTimer);
+        confirmTimer = setTimeout(resetConfirm, 4000);
+        return;
+      }
+      if (confirmTimer) clearTimeout(confirmTimer);
       try { localStorage.removeItem(HISTORY_KEY); } catch { /* */ }
+      resetConfirm();
       renderHistoryPanel();
-      closeHistoryModal();
+      document.querySelector('#historyModal .modal__close')?.focus();
     });
   }
   renderHistoryPanel();
@@ -2005,94 +2354,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── F-03: Локализация ──
   initI18n();
-  telemetry.trackEvent('healthcheck_opened');
-  fetchHealthStatus();
-  // Poll only while the tab is visible: background tabs polling every minute used to
-  // generate most of the request volume.
-  setInterval(() => {
-    if (!document.hidden) fetchHealthStatus();
-  }, 60_000);
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && Date.now() - lastHealthFetchAt >= HEALTH_MIN_GAP_MS) fetchHealthStatus();
-  });
-  fetchServiceStatus();
   document.querySelectorAll('.lang-btn').forEach((btn) => {
     btn.addEventListener('click', () => switchLang(btn.dataset.lang));
   });
 
-  // ── F-05: Копировать конфиг (в модале предпросмотра) ──
+  // ── Статус сервисов: карточка в hero и модал ──
+  telemetry.trackEvent('healthcheck_opened');
+  initHeroStatus();
+  fetchServiceStatus();
+  const statusModalBtn = document.getElementById('statusModalBtn');
+  if (statusModalBtn) statusModalBtn.addEventListener('click', () => openStatusModal(statusModalBtn));
+  const statusRefreshBtn = document.getElementById('statusRefreshBtn');
+  if (statusRefreshBtn) {
+    statusRefreshBtn.addEventListener('click', () => {
+      statusRefreshBtn.classList.add('is-spinning');
+      setTimeout(() => statusRefreshBtn.classList.remove('is-spinning'), 900);
+      refreshHeroStatus();
+    });
+  }
+
+  // ── Предпросмотр: «Копировать» отдаёт полный конфиг, хотя на экране ключ скрыт ──
   const copyConfigBtnModal = document.getElementById('copyConfigBtnModal');
   if (copyConfigBtnModal) {
     copyConfigBtnModal.addEventListener('click', async () => {
-      const textarea = document.getElementById('configPreviewTextModal');
-      if (!textarea || !textarea.value) return;
-      try {
-        await navigator.clipboard.writeText(textarea.value);
-      } catch {
-        textarea.select();
-        document.execCommand('copy');
-      }
-      const origText = copyConfigBtnModal.textContent;
-      copyConfigBtnModal.textContent = t('btn_copied', 'Скопировано!');
-      setTimeout(() => { copyConfigBtnModal.textContent = origText; }, 2000);
+      if (!previewConfigText) return;
+      toast(await copyText(previewConfigText) ? t('btn_copied', 'Скопировано!') : t('copy_failed', 'Не удалось скопировать.'));
     });
   }
 
-  // ── F-07: Статус сервисов ──
-  const statusModalBtn = document.getElementById('statusModalBtn');
-  if (statusModalBtn) {
-    statusModalBtn.addEventListener('click', openStatusModal);
-  }
-
-  // ── Закрытие модалов по клику на затемнённый оверлей ──
-  ['configPreviewModal', 'statusModal', 'resultInfoModal'].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('click', (ev) => { if (ev.target === el) closeModal(id); });
-  });
-
-  // ── Модал подробностей о конфиге ──
-  document.querySelectorAll('.post-gen-row__info').forEach((btn) => {
-    btn.addEventListener('click', () => openModal('resultInfoModal'));
-  });
-  const resultInfoCloseBtn = document.getElementById('resultInfoModalClose');
-  if (resultInfoCloseBtn) resultInfoCloseBtn.addEventListener('click', () => closeModal('resultInfoModal'));
-
-  // ── Стандартные кнопки окна ──
-  const closeButton = document.querySelector('.close-button');
-  const minimizeButton = document.querySelector('.minimize-button');
-  if (closeButton) closeButton.addEventListener('click', () => window.close());
-  if (minimizeButton) {
-    minimizeButton.addEventListener('click', () => {
-      const windowContent = document.querySelector('.window-content');
-      if (!windowContent) return;
-      windowContent.style.display = windowContent.style.display === 'none' ? 'flex' : 'none';
-    });
-  }
-
-  // ── Информационный модал ──
+  // ── «Какой профиль выбрать?» ──
   const infoLink = document.getElementById('infoLink');
-  const modal    = document.getElementById('modal');
-
-  if (infoLink && modal) {
-    const closeInfoModal = () => { modal.style.display = 'none'; modal.setAttribute('aria-hidden', 'true'); };
-    const openInfoModal  = () => { modal.style.display = 'flex'; modal.setAttribute('aria-hidden', 'false'); };
-
-    infoLink.addEventListener('click', openInfoModal);
-    modal.addEventListener('click', (ev) => { if (ev.target === modal) closeInfoModal(); });
-
-    // ESC закрывает любой открытый модал
-    document.addEventListener('keydown', (ev) => {
-      if (ev.key !== 'Escape') return;
-      const settingsEl = document.getElementById('settingsModal');
-      if (settingsEl && settingsEl.style.display === 'flex') { closeSettingsModal(); return; }
-      if (historyModal && historyModal.style.display === 'flex') { closeHistoryModal(); return; }
-      for (const id of ['configPreviewModal', 'statusModal', 'resultInfoModal']) {
-        const el = document.getElementById(id);
-        if (el && el.style.display === 'flex') { closeModal(id); return; }
-      }
-      if (modal.style.display === 'flex') closeInfoModal();
-    });
-  } else {
-    console.error('Элементы "infoLink" или "modal" не найдены.');
-  }
+  if (infoLink) infoLink.addEventListener('click', () => openModal('modal', infoLink));
 });
