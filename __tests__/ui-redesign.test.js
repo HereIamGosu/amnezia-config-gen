@@ -147,7 +147,7 @@ test('first screen loads fast: self-hosted fonts, sized hero image, no third-par
   assert.ok(hero, 'hero image must exist');
   assert.match(hero[0], /width="1460" height="901"/, 'hero reserves its box (no layout shift)');
   assert.match(hero[0], /fetchpriority="high"/);
-  for (const asset of ['hero-warp.webp', 'hero-warp-760.webp', 'hero-warp.png']) {
+  for (const asset of ['hero-warp.webp', 'hero-warp-760.webp', 'hero-warp-520.webp', 'hero-warp.png', 'logo-80.webp']) {
     assert.ok(fs.existsSync(path.join(root, 'public/static', asset)), `${asset} must be committed`);
   }
 });

@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Генератор AmneziaWG для Cloudflare WARP — AWG 1.5, 2.0, 3.0 и 3.1</title>
+    <title>Генератор конфигов AmneziaWG для Cloudflare WARP — AWG 1.5–3.1</title>
     <meta
       name="description"
-      content="Создайте WARP-safe .conf для AmneziaWG 1.5, 2.0, 3.0 и 3.1. AWG 3.x использует только клиентские возможности, совместимые со стандартным WireGuard peer Cloudflare."
+      content="Бесплатный генератор .conf и vpn:// для AmneziaWG и AmneziaVPN на Cloudflare WARP: AWG 1.5, 2.0, 3.0 и 3.1, выборочные маршруты, DNS и CPS. Без регистрации."
     />
     <meta
       name="robots"
@@ -24,6 +24,7 @@
     <link rel="icon" href="static/favicon.ico?v=2.7.4" sizes="16x16 32x32 48x48" />
     <link rel="icon" href="static/favicon-32x32.png?v=2.7.4" type="image/png" sizes="32x32" />
     <link rel="icon" href="static/favicon-16x16.png?v=2.7.4" type="image/png" sizes="16x16" />
+    <link rel="icon" href="static/favicon-120x120.png?v=2.7.4" type="image/png" sizes="120x120" />
     <link rel="icon" href="static/icon-192.png?v=2.7.4" type="image/png" sizes="192x192" />
     <link rel="apple-touch-icon" href="static/apple-touch-icon.png?v=2.7.4" sizes="180x180" />
     <!-- Inter (OFL) отдаётся с нашего домена: без блокирующего CSS сторонних шрифтов -->
@@ -93,7 +94,7 @@
     />
     <meta
       property="og:description"
-      content="WARP-safe .conf для AmneziaWG 1.5, 2.0, 3.0 и 3.1; Cloudflare остаётся стандартным WireGuard peer."
+      content="Готовые .conf и vpn:// для AmneziaWG и AmneziaVPN на Cloudflare WARP: AWG 1.5, 2.0, 3.0 и 3.1. Бесплатно и без регистрации."
     />
     <meta property="og:url" content="https://awgconfig.com/" />
     <meta
@@ -115,7 +116,7 @@
     />
     <meta
       name="twitter:description"
-      content="Создайте WARP-safe .conf для AWG 1.5, 2.0, 3.0 и 3.1 без ручной правки конфига."
+      content="Готовые .conf и vpn:// для AmneziaWG и AmneziaVPN на Cloudflare WARP: AWG 1.5, 2.0, 3.0 и 3.1. Бесплатно и без регистрации."
     />
     <meta
       name="twitter:image"
@@ -154,8 +155,8 @@
             "@type": "WebPage",
             "@id": "https://awgconfig.com/#webpage",
             "url": "https://awgconfig.com/",
-            "name": "Генератор AmneziaWG для Cloudflare WARP — AWG 1.5, 2.0, 3.0 и 3.1",
-            "description": "Создайте WARP-safe .conf для AmneziaWG 1.5, 2.0, 3.0 и 3.1. AWG 3.x использует только клиентские возможности, совместимые со стандартным WireGuard peer Cloudflare.",
+            "name": "Генератор конфигов AmneziaWG для Cloudflare WARP — AWG 1.5–3.1",
+            "description": "Бесплатный генератор .conf и vpn:// для AmneziaWG и AmneziaVPN на Cloudflare WARP: AWG 1.5, 2.0, 3.0 и 3.1, выборочные маршруты, DNS и CPS. Без регистрации.",
             "isPartOf": {
               "@id": "https://awgconfig.com/#website"
             },
@@ -291,7 +292,7 @@
     <header class="site-header" id="siteHeader">
       <div class="container site-header__inner">
         <a class="brand" href="#top">
-          <img class="brand__logo" src="static/icon-192.png?v=2.7.4" alt="" width="40" height="40" />
+          <img class="brand__logo" src="static/logo-80.webp?v=2.7.4" alt="" width="40" height="40" />
           <span class="brand__text">
             <span class="brand__name">AmneziaWG</span>
             <span class="brand__sub">Config Generator</span>
@@ -353,7 +354,7 @@
 
           <figure class="hero-art">
             <picture>
-              <source type="image/webp" srcset="static/hero-warp-760.webp?v=2.7.4 760w, static/hero-warp.webp?v=2.7.4 1460w" sizes="(max-width: 720px) 100vw, (max-width: 1180px) 50vw, 520px" />
+              <source type="image/webp" srcset="static/hero-warp-520.webp?v=2.7.4 520w, static/hero-warp-760.webp?v=2.7.4 760w, static/hero-warp.webp?v=2.7.4 1460w" sizes="(max-width: 720px) 100vw, (max-width: 1180px) 50vw, 520px" />
               <img class="hero-art__img" src="static/hero-warp.png?v=2.7.4" width="1460" height="901" alt="Астронавт с файлом .conf подключается к Cloudflare WARP" data-i18n-alt="hero_art_alt" fetchpriority="high" decoding="async" />
             </picture>
             <ul class="hero-art__labels" aria-hidden="true">
@@ -793,18 +794,54 @@
           </div>
         </article>
       </section>
+      <!-- ── Частые вопросы (видимый текст для людей и поисковиков) ── -->
+      <section class="container faq" id="faq" aria-labelledby="faqTitle">
+        <h2 class="faq__title" id="faqTitle" data-i18n="faq_title">Частые вопросы</h2>
+        <p class="faq__lead" data-i18n="faq_lead">Коротко о том, как работает генератор и что делать, если туннель не поднимается.</p>
+        <div class="faq__list">
+          <details class="faq__item" open>
+            <summary class="faq__q" data-i18n="faq_q1">Что такое AmneziaWG и чем он отличается от WireGuard?</summary>
+            <div class="faq__a" data-i18n-html="faq_a1">AmneziaWG — форк WireGuard от команды Amnezia. Шифрование и ключи те же, что у WireGuard, но к протоколу добавлена маскировка: «мусорные» пакеты перед рукопожатием (Jc, Jmin, Jmax), пакеты-имитации CPS (I1–I5) и, начиная с AWG 2.0, параметры заголовков и паддинга. Поэтому трафик AmneziaWG сложнее распознать по сигнатуре WireGuard.</div>
+          </details>
+          <details class="faq__item">
+            <summary class="faq__q" data-i18n="faq_q2">Что такое Cloudflare WARP и нужен ли свой сервер?</summary>
+            <div class="faq__a" data-i18n-html="faq_a2">WARP — бесплатный сервис Cloudflare на базе WireGuard. Генератор регистрирует новое устройство через официальный API WARP и собирает из полученных данных готовый конфиг, поэтому свой сервер не нужен. Сервер Cloudflare остаётся стандартным WireGuard peer, и часть параметров AmneziaWG для него намеренно фиксирована: S1–S4 = 0, H1–H4 = 1–4, MTU 1280.</div>
+          </details>
+          <details class="faq__item">
+            <summary class="faq__q" data-i18n="faq_q3">Какой профиль выбрать: AWG 1.5, 2.0, 3.0 или 3.1?</summary>
+            <div class="faq__a" data-i18n-html="faq_a3">Начните с AWG 2.0: он выбран по умолчанию и импортируется в актуальные AmneziaWG и AmneziaVPN. AWG 1.5 нужен для старых клиентов. AWG 3.0 и 3.1 добавляют клиентские возможности новых версий, например рандомизацию таймингов; для 3.1 нужен AmneziaVPN 5.0.1.5+ или совместимый клиент. Если импорт не проходит, вернитесь к AWG 2.0.</div>
+          </details>
+          <details class="faq__item">
+            <summary class="faq__q" data-i18n="faq_q4">Как импортировать конфиг в AmneziaWG или AmneziaVPN?</summary>
+            <div class="faq__a" data-i18n-html="faq_a4">На Windows установите клиент AmneziaWG и добавьте туннель из скачанного файла <code>.conf</code>. На Android и iOS используйте AmneziaVPN или AmneziaWG: импортируйте файл <code>.conf</code> или вставьте ссылку <code>vpn://</code>, если она доступна для выбранного профиля. Для роутеров (Keenetic, OpenWrt, MikroTik, GL.iNet) перед генерацией включите в настройках «Режим роутера».</div>
+          </details>
+          <details class="faq__item">
+            <summary class="faq__q" data-i18n="faq_q5">Конфиг импортировался, но не подключается. Что делать?</summary>
+            <div class="faq__a" data-i18n-html="faq_a5">Попробуйте другой UDP-порт (2408, 500, 1701) и IP-адрес endpoint вместо hostname — это меняется в настройках на шаге 2. В мобильной сети включите мобильный профиль. Убедитесь, что версия клиента поддерживает выбранный профиль AWG. Если подключение есть, но сайты не открываются, проверьте DNS и маршруты. Текущее состояние сервисов — на странице <a href="status.html">«Статус»</a>.</div>
+          </details>
+          <details class="faq__item">
+            <summary class="faq__q" data-i18n="faq_q6">Это бесплатно? Что происходит с ключами?</summary>
+            <div class="faq__a" data-i18n-html="faq_a6">Генератор бесплатный и работает без регистрации. Ключи создаются при генерации и сразу отдаются вам — сервер их не сохраняет. История генераций хранится только в вашем браузере, её можно очистить. Исходный код открыт под лицензией AGPL-3.0.</div>
+          </details>
+          <details class="faq__item">
+            <summary class="faq__q" data-i18n="faq_q7">Можно ли пустить через WARP только отдельные сайты?</summary>
+            <div class="faq__a" data-i18n-html="faq_a7">Да. В настройках выберите выборочную маршрутизацию и отметьте нужные сервисы: в AllowedIPs попадут только их IPv4-подсети, остальной трафик пойдёт напрямую. Чтобы конфиг надёжно работал на телефонах и роутерах, генератор ограничивает список 1000 IPv4-подсетями.</div>
+          </details>
+        </div>
+      </section>
     </main>
 
     <footer class="site-footer">
       <div class="container site-footer__inner">
         <div class="site-footer__brand">
-          <img src="static/icon-192.png?v=2.7.4" alt="" width="32" height="32" loading="lazy" />
+          <img src="static/logo-80.webp?v=2.7.4" alt="" width="32" height="32" loading="lazy" />
           <div>
             <strong>AmneziaWG Config Generator</strong><br />
             <span data-i18n-html="footer_tagline">Открытый проект. Сделано с <span class="heart">♥</span></span>
           </div>
         </div>
         <div class="site-footer__links">
+          <a class="link-btn" href="#faq" data-i18n="footer_faq">Вопросы и ответы</a>
           <button type="button" class="link-btn" data-open-modal="privacyModal" data-i18n="footer_privacy">Конфиденциальность</button>
           <button type="button" class="link-btn" data-open-modal="disclaimerModal" data-i18n="footer_disclaimer">Отказ от ответственности</button>
           <a
@@ -1199,7 +1236,7 @@
                   <span class="option-row__hint" data-i18n="mobile_mode_hint">Низкие Jc/Jmax, MTU 1280, только IPv4 — для смартфонов</span>
                 </span>
               </label>
-              <label class="option-row" title="Только для AmneziaWG 2.0. Добавляет 4 случайных пакета мимикрии (I2-I5) перед handshake — усиливает обход DPI." data-i18n-title="cps5_title">
+              <label class="option-row" title="Только для AmneziaWG 2.0. Добавляет 4 случайных пакета мимикрии (I2-I5) перед handshake — усиливает маскировку трафика." data-i18n-title="cps5_title">
                 <input type="checkbox" class="switch" id="cps5Toggle" />
                 <span class="option-row__text">
                   <span class="option-row__label" data-i18n="cps5_label">Усиленная маскировка (I2-I5)</span>

@@ -25,5 +25,4 @@ Key facts:
 
 ## Optional
 
-- [Project info page](https://hereiamgosu.github.io/amnezia-config-gen/)
 - [Security policy](https://github.com/HereIamGosu/amnezia-config-gen/blob/main/SECURITY.md)

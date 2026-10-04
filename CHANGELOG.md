@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 - A 404 page in both languages (served with status 404 and `noindex`), `/.well-known/security.txt` (RFC 9116) and `/llms.txt` for AI search.
 - Favicons in PNG (16, 32, 192 px) and an Apple touch icon are declared in `<head>`; social preview gains `og:image:type`, `og:locale:alternate` and `twitter:image:alt`.
 - IndexNow: the key file is served from the site root and `npm run indexnow` submits the sitemap URLs to Bing, Yandex, Seznam, Naver and Yep. It can wait until production serves a given commit (`X-App-Revision`) and skip releases that change nothing under `public/`; the release process runs it after a deploy.
+- A visible "Frequently asked questions" section (7 questions, Russian and English, native `<details>`): what AmneziaWG and WARP are, which AWG profile to pick, how to import the config, what to do when it does not connect, what happens to the keys, split routing. The text is in the HTML from the start, so search engines index it on both `/` and `/en`.
+- `/favicon.ico` in the site root and a 120×120 PNG favicon on every page, as Yandex requires for search results.
 
 ### Changed
 - The interface language now follows the address (`/` is Russian, `/en` is English) instead of the browser language. The RU/EN buttons open the other address and remember the choice; a remembered choice redirects there on the next visit. Search engine crawlers therefore see the language that matches the URL.
@@ -27,6 +29,11 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
   - All nine modals share one shell with a focus trap, Escape / backdrop close and focus return; the settings dialog keeps three tabs and opens on the tab of the clicked chip; on phones modals are bottom sheets. History rows show route mode, DNS, endpoint and device, and clearing needs a second click. New "Privacy" and "Disclaimer" dialogs.
   - Inter is self-hosted (OFL) with preload instead of Google Fonts; the hero image is WebP (156 KB, 67 KB on phones) with fixed dimensions.
   - The info dialog no longer claims `AllowedIPs = 0.0.0.0/0, ::/0` by default: AllowedIPs are IPv4-only unless IPv6 is enabled (invariant I6).
+- Title and description target the main queries ("генератор конфигов AmneziaWG", AmneziaVPN, `vpn://`, WARP) and fit the snippet length in Google and Yandex (title ≤ 70, description ≤ 160 characters).
+- The former GitHub Pages landing (`hereiamgosu.github.io/amnezia-config-gen/`) competed with awgconfig.com in search results as a self-canonical duplicate. It is now an instant redirect with a cross-domain `canonical` to https://awgconfig.com/; internal docs are excluded from the Pages build and the mirror is no longer linked from the README or `llms.txt`.
+- The Content-Security-Policy no longer allows Google Fonts (Inter is self-hosted); the web app manifest uses the dark theme colour `#07090c`.
+- Accessibility: white text on blue (badges, blue buttons, step numbers) uses `#2563eb` for WCAG AA contrast; the header logo is an 80 px WebP (4 KB) instead of the 192 px PNG.
+- Neutral technical wording: the CPS5 hint says "strengthens traffic obfuscation" instead of "DPI evasion".
 
 ### Fixed
 - The inline SVG filter used a wrong XML namespace (`/1000/svg`).

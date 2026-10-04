@@ -7,7 +7,6 @@ Web UI and HTTP API for building `.conf` files for the **AmneziaWG** client (Wir
 | | |
 | --- | --- |
 | **Generator** | <https://awgconfig.com/> |
-| **Project info page** | <https://hereiamgosu.github.io/amnezia-config-gen/> |
 | **Telegram channel** | <https://t.me/amnezia_config> |
 | **Source code** | <https://github.com/HereIamGosu/amnezia-config-gen> |
 

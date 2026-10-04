@@ -7,7 +7,6 @@
 | | |
 | --- | --- |
 | **Генератор** | <https://awgconfig.com/> |
-| **Информационная страница** | <https://hereiamgosu.github.io/amnezia-config-gen/> |
 | **Telegram-канал** | <https://t.me/amnezia_config> |
 | **Исходный код** | <https://github.com/HereIamGosu/amnezia-config-gen> |
 
