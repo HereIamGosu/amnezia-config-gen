@@ -130,10 +130,19 @@ class StateMachineTests(unittest.TestCase):
         for i in range(lab.SUSPECT_TO_QUARANTINE_FAILURES):
             r = lab.apply_outcome(r, NO_HS, deep=True, now=NOW + i)
         self.assertEqual(r.state, lab.QUARANTINE)
-        self.assertIsNotNone(r.quarantine_until)
-        for i in range(lab.QUARANTINE_TO_DEAD_FAILURES):
+        self.assertEqual(r.quarantine_until, NOW + 2 + lab.QUARANTINE_S)
+        for i in range(lab.QUARANTINE_TO_DEAD_FAILURES - 1):  # one short of the documented "ten more"
             r = lab.apply_outcome(r, NO_HS, deep=True, now=NOW + 100 + i)
+        self.assertEqual(r.state, lab.QUARANTINE)
+        r = lab.apply_outcome(r, NO_HS, deep=True, now=NOW + 200)
         self.assertEqual(r.state, lab.DEAD)
+
+    def test_batch_skips_cooling_quarantine_dead_and_blacklist(self):
+        self.assertTrue(lab.due_for_batch(self.row(), NOW))
+        self.assertFalse(lab.due_for_batch(self.row(state=lab.QUARANTINE, quarantine_until=NOW + 1), NOW))
+        self.assertTrue(lab.due_for_batch(self.row(state=lab.QUARANTINE, quarantine_until=NOW), NOW))
+        self.assertFalse(lab.due_for_batch(self.row(state=lab.DEAD), NOW))
+        self.assertFalse(lab.due_for_batch(self.row(manual_blacklist=1), NOW))
 
     def test_lab_failure_never_penalises(self):
         active = lab.apply_outcome(self.row(), OK, deep=True, now=NOW)
@@ -187,6 +196,18 @@ class StoreAndLabTests(unittest.TestCase):
         with self.store.transaction():
             self.assertFalse(self.store.upsert_candidate(lab.parse_endpoint("162.159.192.1", 2408), "x", NOW + 5))
             self.assertTrue(self.store.upsert_candidate(lab.parse_endpoint("162.159.192.1", 500), "x", NOW + 5))
+
+    def test_dead_restarts_only_after_cooldown_on_reimport(self):
+        ep = lab.parse_endpoint("162.159.192.1", 2408)
+        with self.store.transaction():
+            self.store.conn.execute("UPDATE endpoint SET state='DEAD', consecutive_failures=13, last_error_at=?"
+                                    " WHERE endpoint_id=?", (NOW, ep.endpoint_id))
+            self.store.upsert_candidate(ep, "consumer_seed", NOW + 60)
+        self.assertEqual(self.store.get(ep.endpoint_id)["state"], lab.DEAD)
+        with self.store.transaction():
+            self.store.upsert_candidate(ep, "consumer_seed", NOW + lab.QUARANTINE_S)
+        row = self.store.get(ep.endpoint_id)
+        self.assertEqual((row["state"], row["consecutive_failures"]), (lab.DISCOVERED, 0))
 
     def test_transaction_rolls_back(self):
         with self.assertRaises(RuntimeError), self.store.transaction():
@@ -281,11 +302,13 @@ class SnapshotTests(unittest.TestCase):
             self.assertEqual(os.listdir(tmp), [lab.SNAPSHOT_FILE])  # no temp file left behind
 
     def test_validate_snapshot_fails_closed(self):
-        good = {"schema_version": 1, "generated_at": lab.iso(NOW), "expires_at": lab.iso(NOW + 60), "endpoints": []}
+        good = {"schema_version": 1, "generated_at": lab.iso(NOW), "expires_at": lab.iso(NOW + 60),
+                "lab_status": "ok", "endpoints": []}
         self.assertEqual(lab.validate_snapshot(good, NOW), [])
         self.assertEqual(lab.validate_snapshot({**good, "expires_at": lab.iso(NOW - 1)}, NOW), [])
         bad_ep = {k: None for k in lab.SNAPSHOT_ENDPOINT_KEYS} | {"private_key": PRIVATE}
         for doc in ({**good, "schema_version": 2}, {**good, "generated_at": lab.iso(NOW + 3600)},
+                    {**good, "private_key": PRIVATE}, {**good, "lab_status": "great"},
                     {**good, "endpoints": [bad_ep]}, "not json object"):
             with self.subTest(doc=str(doc)[:50]), self.assertRaises((ValueError, KeyError, lab.LabError)):
                 lab.validate_snapshot(doc, NOW)

@@ -85,7 +85,7 @@ COMMAND_TIMEOUT_S = 20
 ACTIVE_TTL_S = 7 * 60               # ACTIVE expires 7 min after the last successful deep verify
 SUSPECT_TO_QUARANTINE_FAILURES = 3
 QUARANTINE_S = 30 * 60
-QUARANTINE_TO_DEAD_FAILURES = 10
+QUARANTINE_TO_DEAD_FAILURES = 10   # further consecutive failures after entering QUARANTINE
 OBSERVATION_RETENTION_S = 30 * 24 * 3600
 STALE_RESOURCE_AGE_S = 600
 GLOBAL_GUARD_MIN_BATCH = 3
@@ -695,7 +695,7 @@ def apply_outcome(row: EndpointRow, result: ProbeResult, deep: bool, now: int) -
     if row.state == ACTIVE:
         nxt.state = SUSPECT  # first meaningful failure: out of the pool, quick recheck next
     elif row.state == QUARANTINE:
-        if nxt.consecutive_failures >= QUARANTINE_TO_DEAD_FAILURES:
+        if nxt.consecutive_failures >= SUSPECT_TO_QUARANTINE_FAILURES + QUARANTINE_TO_DEAD_FAILURES:
             nxt.state = DEAD
     elif row.state != DEAD and nxt.consecutive_failures >= SUSPECT_TO_QUARANTINE_FAILURES:
         nxt.state, nxt.quarantine_until = QUARANTINE, now + QUARANTINE_S
@@ -706,6 +706,13 @@ def is_eligible(row: EndpointRow, now: int) -> bool:
     return (row.state == ACTIVE and not row.manual_blacklist and row.expires_at is not None
             and row.expires_at > now and row.last_traffic_ok_at is not None
             and row.last_traffic_ok_at > now - ACTIVE_TTL_S)
+
+
+def due_for_batch(row: EndpointRow, now: int) -> bool:
+    """verify-all skips blacklisted, DEAD and still-cooling QUARANTINE endpoints (an explicit verify may not)."""
+    if row.manual_blacklist or row.state == DEAD:
+        return False
+    return not (row.state == QUARANTINE and row.quarantine_until is not None and row.quarantine_until > now)
 
 
 def global_failure_suspected(results: list[ProbeResult]) -> bool:
@@ -787,8 +794,13 @@ class Store:
         self.conn.execute("COMMIT")
 
     def upsert_candidate(self, ep: Endpoint, source: str, now: int) -> bool:
-        """Insert as DISCOVERED or refresh last_seen_at; returns True for a new endpoint."""
-        is_new = self.get(ep.endpoint_id) is None
+        """Insert as DISCOVERED or refresh last_seen_at; returns True for a new endpoint.
+        A DEAD endpoint found again after the quarantine cooldown restarts as DISCOVERED."""
+        existing = self.get(ep.endpoint_id)
+        is_new = existing is None
+        if existing is not None and existing["state"] == DEAD and (existing["last_error_at"] or 0) <= now - QUARANTINE_S:
+            self.conn.execute("UPDATE endpoint SET state=?, consecutive_failures=0, quarantine_until=NULL,"
+                              " updated_at=? WHERE endpoint_id=?", (DISCOVERED, now, ep.endpoint_id))
         self.conn.execute(
             "INSERT INTO endpoint (endpoint_id, ip, port, address_family, state, source, first_seen_at,"
             " last_seen_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)"
@@ -851,6 +863,8 @@ class Store:
 
 
 # --- snapshot ------------------------------------------------------------------------------------------------
+SNAPSHOT_TOP_KEYS = ("schema_version", "generated_at", "expires_at", "lab_status", "endpoints")
+SNAPSHOT_LAB_STATUSES = ("ok", "empty", "degraded")
 SNAPSHOT_ENDPOINT_KEYS = ("ip", "port", "family", "state", "lab_verified_at", "expires_at", "source_class",
                           "probe_completion_ms", "traffic_total_ms")
 
@@ -880,6 +894,8 @@ def validate_snapshot(doc: object, now: int) -> list[dict]:
 
     if not isinstance(doc, dict) or doc.get("schema_version") != SNAPSHOT_SCHEMA_VERSION:
         raise ValueError("unsupported snapshot schema")
+    if set(doc) != set(SNAPSHOT_TOP_KEYS) or doc["lab_status"] not in SNAPSHOT_LAB_STATUSES:
+        raise ValueError("unexpected snapshot fields or lab_status")
     if parse(doc["generated_at"]) > now + 60:
         raise ValueError("snapshot generated in the future")
     if parse(doc["expires_at"]) <= now:
@@ -1033,7 +1049,7 @@ def main(argv: list[str] | None = None) -> int:
                 for e, res in lab.run([eid], deep=args.cmd == "verify"):
                     print(format_result(e, res))
             elif args.cmd == "verify-all":
-                ids = [r["endpoint_id"] for r in store.all() if not r["manual_blacklist"]]
+                ids = [r["endpoint_id"] for r in store.all() if due_for_batch(store.to_row(r), now_s())]
                 for e, res in lab.run(ids, deep=True):
                     print(format_result(e, res))
                 print(f"run status: {store.meta().get('last_run_status')}")

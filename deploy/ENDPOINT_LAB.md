@@ -52,7 +52,7 @@ and the startup sweep (objects older than 10 min) touch only these exact pattern
 ## Paths and permissions
 
 | Path | Mode | Content |
-|---|---|---|
+| --- | --- | --- |
 | `/usr/local/sbin/endpoint-lab` | 0755 | the CLI |
 | `/etc/wireguard/amnezia-endpoint-lab/wg.key` | 0600 | WireGuard private key only |
 | `/etc/amnezia-endpoint-lab/identity.json` | 0600 | public key, peer key, WARP addresses, registration id/token |
@@ -105,8 +105,12 @@ Never delete the working identity for experiments. Lifecycle questions (expiry, 
 `DISCOVERED → (probe) HANDSHAKE_OK → (verify) ACTIVE`. `VERIFIED` is used when a blacklisted endpoint
 passes (a blacklist outranks every automatic state). Endpoint failures: `ACTIVE → SUSPECT`, which
 leaves the pool at once. A good verify brings it back to `ACTIVE`. Three consecutive failures →
-`QUARANTINE` (30 min). Ten more → `DEAD`, kept, not deleted. A handshake alone never revives
-`SUSPECT`. Generator eligibility: `state = ACTIVE ∧ ¬blacklist ∧ expires_at > now ∧ traffic fresh`.
+`QUARANTINE`: `verify-all` skips it for 30 min, after which it is probed again and a good verify
+returns it to `ACTIVE`. Ten more consecutive failures (13 in total) → `DEAD`, kept, not deleted, and
+skipped by `verify-all`. A DEAD endpoint that shows up again in an imported candidates file after the
+30-minute cooldown restarts as `DISCOVERED`. An explicit `verify ID` is an operator action and is
+never skipped. A handshake alone never revives `SUSPECT`. Generator eligibility:
+`state = ACTIVE ∧ ¬blacklist ∧ expires_at > now ∧ traffic fresh`.
 
 **Lab failure ≠ endpoint failure.** `LOCAL_RESOURCE_ERROR`, `TUNNEL_SETUP_FAILED`,
 `ROUTE_SETUP_FAILED`, `PROBE_IDENTITY_INVALID`, `RATE_LIMITED`, `CANCELLED` and `UNKNOWN` leave
@@ -130,14 +134,14 @@ Metrics: `probe_completion_ms` is "trigger → the Lab saw a handshake" (the ker
 ```
 
 The file is written as temp file → fsync → `os.replace` → directory fsync. A consumer must
-fail closed (see `validate_snapshot`): unknown schema, future `generated_at`, unexpected fields or an
-invalid endpoint → reject the file. Past top-level `expires_at` → empty pool. If the Lab stops, the
+fail closed (see `validate_snapshot`): unknown schema, future `generated_at`, unexpected top-level or
+endpoint fields, an unknown `lab_status` or an invalid endpoint → reject the file. Past top-level `expires_at` → empty pool. If the Lab stops, the
 pool drains within 7 minutes. Stale state is never served.
 
 ## Failure matrix
 
 | Event | Endpoint states | Lab state | Future generator | Alert (Phase B) | Recovery |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | WARP registration API down | unchanged | identity creation fails after 2 attempts | n/a | — | operator reruns |
 | Probe identity invalid/revoked | unchanged (Lab failure) | `lab_failure` | pool drains in 7 min → 503 in Lab mode | critical if pool empty | rotate identity |
 | One endpoint silent | ACTIVE→SUSPECT | ok | endpoint leaves pool | none | next verify |
