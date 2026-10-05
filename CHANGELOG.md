@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-10-06
+
 ### Added
+- Endpoint Lab: a host subsystem on the project server (`deploy/endpoint-lab`, installed separately with `install.sh`) that proves Cloudflare WARP `IP:port` endpoints with a real WireGuard handshake and HTTPS traffic through the tunnel, keeps a small pool of fresh verified endpoints (ACTIVE, 7-minute TTL) and publishes only secret-free files: `active-pool.json`, `lab-status.json`, `web-overview.json` and per-endpoint details for ACTIVE, VERIFIED and SUSPECT endpoints. Its negative control and blacklisted addresses are never published; error codes are an allowlist.
+- Public Endpoint Lab page at `/lab` and `/en/lab` (`noindex`): pool health, freshness, ACTIVE history, events, the endpoint list and per-endpoint details with 24 h / 7 d / 30 d ranges. Read-only: no operator actions on the page or in the API.
+- Read-only `GET /api/lab` (overview) and `GET /api/lab?endpoint=<ip:port>&range=all|24h|7d|30d` (one endpoint). The site reads the Lab's public directory only, re-validates every file against the public contract and answers `503 lab_not_available` without it; the generator works either way.
+- "Endpoint Lab" row in the "System status" card with a quick view of the pool; `/api/status` adds `lab: { available }` so the page asks `/api/lab` only where Lab files exist.
+- Lab Auto, a new explicit endpoint mode: "Endpoint Lab — auto (verified IPs)" in the WARP endpoint list, `endpointMode=lab` in `/api/warp`. Each config gets a distinct endpoint from the fresh ACTIVE pool, chosen once before the WARP registration; the selected port is a preference, other verified ports are used and reported when it is short, and fewer distinct endpoints than requested give fewer configs with a warning instead of duplicates. Without usable Lab data the request fails with `503 lab_unavailable`, `lab_stale` or `lab_no_endpoints` and the interface says so; it never switches to the hostname silently. The generated config differs from the hostname mode only in `Endpoint` (invariant I11).
 - Every response carries `X-App-Revision: <commit sha>` (from the image's `APP_REVISION`), so deployment checks can prove which release answers publicly.
 - English version of the site at `/en` with its own title, description, social preview and structured data. Both versions are linked with `hreflang` (`x-default` → `/en`) and listed in `sitemap.xml`. The page is generated from `public/index.html` and `en.json` (`npm run seo:en`); a test fails when it is out of date.
 - A 404 page in both languages (served with status 404 and `noindex`), `/.well-known/security.txt` (RFC 9116) and `/llms.txt` for AI search.
@@ -21,6 +28,9 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 - Browser end-to-end tests with no new dependencies: `npm run test:e2e` starts `server.js` with the real headers and CSP, drives headless Chrome over the DevTools protocol and covers profiles, settings tabs, stacked dialogs, FAQ/status links, generation success/error with a stubbed `/api/warp`, settings links and the 390 px layout; it fails on console errors, CSP violations and unexpected external requests. CI runs it in a separate `e2e` job.
 
 ### Changed
+- The default endpoint stays `engage.cloudflareclient.com` (the 2.7.4 behaviour); its step-2 chip now reads "Hostname" instead of "Автовыбор / Auto", which would be confused with Lab Auto.
+- Deploy controller: the Lab public directory is mounted read-only into the site slots whenever it exists, independent of the shadow-mode flag; `/etc/amnezia-deploy/endpoint-lab-public-off` withholds it. Shadow mode stays a diagnostic switch that observes hostname-mode requests only. The installed controller is updated by copying the file (`deploy/CONTROLLER.md`).
+- Endpoint Lab runs every refresh and discovery under one absolute deadline (probes, retries, controls and the identity check included); a probe cut short by the deadline is not an endpoint failure, and the web export is bounded per run and never fails the Lab job.
 - The interface language now follows the address (`/` is Russian, `/en` is English) instead of the browser language. The RU/EN buttons open the other address and remember the choice; a remembered choice redirects there on the next visit. Search engine crawlers therefore see the language that matches the URL.
 - Icons, the web app manifest icons and the social preview image carry `?v=<version>` cache keys, so browsers and social networks pick up the new images.
 - Structured data: `UtilitiesApplication` category, `softwareVersion`, preview image, both languages; `release:check` keeps the version, the sitemap `lastmod`, manifest icon keys and the `security.txt` expiry current.
