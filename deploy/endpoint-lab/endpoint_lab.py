@@ -1410,6 +1410,9 @@ WEB_DETAIL_NAME_RE = re.compile(r"^[0-9a-f]{32}\.json$")
 WEB_STATE = {ACTIVE: "ACTIVE", VERIFIED: "VERIFIED", SUSPECT: "SUSPECT", QUARANTINE: "QUARANTINE", DEAD: "DEAD",
              DISCOVERED: "DISCOVERED", PROBING: "CHECKING", HANDSHAKE_OK: "CHECKING", VERIFYING: "CHECKING"}
 WEB_STATE_ORDER = ("ACTIVE", "VERIFIED", "SUSPECT", "CHECKING", "QUARANTINE", "DEAD", "DISCOVERED")
+# Endpoints listed one by one (overview list + detail files). QUARANTINE, DEAD, DISCOVERED and CHECKING are
+# public only as counts and as transitions in the event feed.
+WEB_PUBLIC_STATES = (ACTIVE, VERIFIED, SUSPECT)
 # Endpoint failure codes as stable public codes; everything else (Lab-side codes, UNKNOWN) is "unknown".
 # Raw messages are never exported: they may carry host details.
 WEB_ERROR_CODES = {TIMEOUT: "timeout", HANDSHAKE_NO_RESPONSE: "handshake_no_response",
@@ -1547,14 +1550,18 @@ class WebModel:
                     if is_eligible(Store.to_row(r), self.now) and r["last_traffic_ok_at"]]
         return {"lastSuccessAt": _web_iso(max(ok_at)) if ok_at else None,
                 "oldestActiveVerifiedAt": _web_iso(min(eligible)) if eligible else None,
-                "activeTtlSec": ACTIVE_TTL_S}
+                "activeTtlSec": ACTIVE_TTL_S,
+                # the same promise as active-pool.json: a stopped timer makes the export stale after this
+                "validUntil": _web_iso(self.now + SNAPSHOT_TTL_S)}
 
     def sessions(self) -> dict | None:
+        """Every meaningful deep-probe outcome of the window: first / retry / failed, where failed includes a
+        handshake that never answered. The same split as reliability and the history buckets."""
+        ok_sql = "(o.probe_type='traffic' AND o.result='ok')"
         first, retry, failed = self.store.conn.execute(
-            # same split as the history buckets: an ok without a sessions count reads as first
-            "SELECT sum(o.result='ok' AND coalesce(o.sessions,1)<>2), sum(o.result='ok' AND o.sessions=2),"
-            " sum(o.result='fail') FROM observation o JOIN endpoint e USING(endpoint_id)"
-            " WHERE o.probe_type='traffic' AND o.timestamp>=? AND e.source<>? AND e.manual_blacklist=0"
+            f"SELECT sum({ok_sql} AND coalesce(o.sessions,1)<>2), sum({ok_sql} AND o.sessions=2), sum(NOT {ok_sql})"
+            " FROM observation o JOIN endpoint e USING(endpoint_id)"
+            f" WHERE {WEB_MEANINGFUL_SQL} AND o.timestamp>=? AND e.source<>? AND e.manual_blacklist=0"
             " AND e.ip NOT LIKE '192.0.2.%'",  # NEGATIVE_CONTROL_PREFIX, whatever the source label says
             (self.now - WEB_SESSIONS_WINDOW_S, SRC_NEGATIVE)).fetchone()
         first, retry, failed = first or 0, retry or 0, failed or 0
@@ -1598,8 +1605,9 @@ class WebModel:
         return [{k: v for k, v in e.items() if k != "_ts"} for e in out[:WEB_MAX_EVENTS]]
 
     def overview(self) -> dict:
-        ordered = sorted(self.rows, key=lambda r: (WEB_STATE_ORDER.index(WEB_STATE.get(r["state"], "DISCOVERED")),
-                                                   ipaddress.ip_address(r["ip"]), r["port"]))
+        listed = [r for r in self.rows if r["state"] in WEB_PUBLIC_STATES]
+        ordered = sorted(listed, key=lambda r: (WEB_STATE_ORDER.index(WEB_STATE.get(r["state"], "DISCOVERED")),
+                                                ipaddress.ip_address(r["ip"]), r["port"]))
         return {"schemaVersion": WEB_SCHEMA_VERSION, "status": self.meta.get("lab_health", LAB_OK).lower(),
                 "generatedAt": _web_iso(self.now), "coverage": "full", "counts": self.counts(),
                 "freshness": self.freshness(), "sessions": self.sessions(), "activeHistory": self.active_history(),

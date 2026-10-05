@@ -1156,10 +1156,10 @@ class WebExportTests(LabFixture):
                          (1, "degraded", "full", lab.REFRESH_INTERVAL_S))
         self.assertEqual(doc["counts"], {"active": 1, "verified": 1, "suspect": 1, "quarantine": 1, "dead": 1})
         self.assertEqual(doc["freshness"], {"lastSuccessAt": lab.iso(NOW - 60), "oldestActiveVerifiedAt": lab.iso(NOW - 60),
-                                            "activeTtlSec": lab.ACTIVE_TTL_S})
+                                            "activeTtlSec": lab.ACTIVE_TTL_S, "validUntil": lab.iso(NOW + lab.SNAPSHOT_TTL_S)})
         self.assertIsNone(doc["sessions"], "no observations in the window: no 0/0/0 fractions")
         states = [e["state"] for e in doc["endpoints"]]
-        self.assertEqual(states, ["ACTIVE", "VERIFIED", "SUSPECT", "CHECKING", "QUARANTINE", "DEAD", "DISCOVERED"])
+        self.assertEqual(states, ["ACTIVE", "VERIFIED", "SUSPECT"], "QUARANTINE, DEAD, CHECKING, DISCOVERED: counts only")
         first = doc["endpoints"][0]
         self.assertEqual(set(first), {"ip", "port", "state", "source", "lastVerifiedAt", "expiresAt", "session",
                                       "https", "reliability"})
@@ -1188,6 +1188,29 @@ class WebExportTests(LabFixture):
         names = os.listdir(os.path.join(self.public, lab.WEB_DETAILS_DIR))
         self.assertEqual(names, [lab.web_detail_name(a)], "detail files only for public endpoints")
 
+    def test_only_active_verified_suspect_are_listed_the_rest_stays_counts_and_transitions(self):
+        listed = {s: self.add(f"162.159.192.{i}", state=s) for i, s in enumerate((lab.ACTIVE, lab.VERIFIED, lab.SUSPECT), 1)}
+        hidden = {s: self.add(f"162.159.193.{i}", state=s) for i, s in
+                  enumerate((lab.QUARANTINE, lab.DEAD, lab.DISCOVERED, lab.VERIFYING), 1)}
+        with self.store.transaction():
+            for k, (frm, to, cause) in enumerate(((lab.SUSPECT, lab.QUARANTINE, "TRAFFIC_FAILED"),
+                                                  (lab.QUARANTINE, lab.DEAD, "TIMEOUT"))):
+                eid = hidden[to]
+                self.store.conn.execute("INSERT INTO transition (ts, endpoint_id, from_state, to_state, cause, operation_id)"
+                                        " VALUES (?,?,?,?,?,?)", (NOW - 100 - k, eid, frm, to, cause, f"t{k}"))
+        self.export()
+        doc = self.overview()
+        self.assertEqual(sorted(e["state"] for e in doc["endpoints"]), ["ACTIVE", "SUSPECT", "VERIFIED"])
+        self.assertEqual(doc["counts"], {"active": 1, "verified": 1, "suspect": 1, "quarantine": 1, "dead": 1})
+        self.assertEqual({e["type"]: e["endpoint"] for e in doc["events"]},
+                         {"excluded": hidden[lab.QUARANTINE], "dead": hidden[lab.DEAD]}, "transition history stays")
+        names = sorted(os.listdir(os.path.join(self.public, lab.WEB_DETAILS_DIR)))
+        self.assertEqual(names, sorted(lab.web_detail_name(e) for e in listed.values()))
+        with self.store.transaction():  # an ACTIVE endpoint that moves to QUARANTINE loses its detail page
+            self.store.conn.execute("UPDATE endpoint SET state=? WHERE endpoint_id=?", (lab.QUARANTINE, listed[lab.ACTIVE]))
+        self.assertEqual(self.export(NOW + 60)["details_removed"], 1)
+        self.assertNotIn(lab.web_detail_name(listed[lab.ACTIVE]), os.listdir(os.path.join(self.public, lab.WEB_DETAILS_DIR)))
+
     def test_sessions_fractions_window_and_meaning(self):
         ids = [self.add(f"162.159.192.{i}", lab.OFFICIAL_PORTS[i % 4], state=lab.VERIFYING) for i in range(1, 6)]
         self.probe(ids[0], ok, NOW - 60)
@@ -1195,11 +1218,12 @@ class WebExportTests(LabFixture):
         self.probe(ids[2], retry_ok, NOW - 40)
         self.probe(ids[3], traffic_fail, NOW - 30)
         self.probe(ids[4], ok, NOW - lab.WEB_SESSIONS_WINDOW_S - 1)  # outside the 15-minute window
-        self.probe(ids[4], no_hs, NOW - 20)  # a handshake failure is not a tunnel-session outcome
+        self.probe(ids[4], no_hs, NOW - 20)  # a handshake that never answered is a failed check
+        self.probe(ids[1], lambda: inconclusive(), NOW - 10, op="op-inconclusive")  # proves nothing: not counted
         self.export()
         s = self.overview()["sessions"]
         self.assertEqual((s["firstSession"], s["retryRescued"], s["failed"], s["window"], s["samples"]),
-                         (0.5, 0.25, 0.25, "15m", 4))
+                         (0.4, 0.2, 0.4, "15m", 5))
         self.assertAlmostEqual(s["firstSession"] + s["retryRescued"] + s["failed"], 1.0)
 
     def test_sessions_ignore_negative_control_addresses_under_any_source_label(self):
@@ -1333,7 +1357,7 @@ class WebExportTests(LabFixture):
         self.assert_public(json.dumps(d))
 
     def test_unknown_or_lab_side_error_codes_are_generic(self):
-        eid = self.add("162.159.192.1", state=lab.VERIFYING)
+        eid = self.add("162.159.192.1", state=lab.VERIFIED)
         with self.store.transaction():
             self.store.conn.execute("UPDATE endpoint SET last_error_code='SOMETHING_INTERNAL', last_error_at=? WHERE"
                                     " endpoint_id=?", (NOW - 10, eid))
@@ -1346,6 +1370,7 @@ class WebExportTests(LabFixture):
                 for i in range(256):
                     for port in (2408, 500):
                         self.store.upsert_candidate(lab.parse_endpoint(f"{prefix}.{i}", port), lab.SRC_CONSUMER, NOW)
+            self.store.conn.execute("UPDATE endpoint SET state=?", (lab.VERIFIED,))  # listed one by one
         self.export()
         doc = self.overview()
         self.assertEqual(len(doc["endpoints"]), lab.WEB_MAX_ENDPOINTS)
