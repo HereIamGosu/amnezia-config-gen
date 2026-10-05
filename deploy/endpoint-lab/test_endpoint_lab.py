@@ -1422,6 +1422,359 @@ class SnapshotTests(LabFixture):
             self.assertNotIn(word, text)
 
 
+def retry_ok():
+    return replace(ok(), sessions=2)
+
+
+def traffic_fail():
+    return lab.ProbeResult(True, traffic_ok=False, error_code=lab.TRAFFIC_FAILED, probe_completion_ms=80,
+                           message="curl exit 7 in /run/netns/ael-abc123 for /etc/wireguard/x.conf", sessions=2)
+
+
+FORBIDDEN_PUBLIC = ("private", "token", "registration", "device_id", "/etc/", "var/lib", "wg.key", "identity.json",
+                    "systemd", "netns", "Traceback", "blacklist", "operator", "192.0.2.")
+
+
+class WebExportTests(LabFixture):
+    """Public web export (web-overview.json + web-endpoints/*.json): browser contract v1."""
+
+    def probe(self, eid, res, at, kind="refresh", op=None):
+        with self.store.transaction():
+            self.store.record(eid, res(), True, at, op or f"op-{at}-{eid}", run_kind=kind)
+
+    def export(self, now=NOW, **kw):
+        return lab.export_web(self.store, self.public, now, **kw)
+
+    def overview(self):
+        with open(os.path.join(self.public, lab.WEB_OVERVIEW_FILE), encoding="utf-8") as fh:
+            return json.load(fh)
+
+    def detail(self, eid):
+        with open(os.path.join(self.public, lab.WEB_DETAILS_DIR, lab.web_detail_name(eid)), encoding="utf-8") as fh:
+            return json.load(fh)
+
+    def assert_public(self, text):
+        for word in FORBIDDEN_PUBLIC:
+            self.assertNotIn(word, text)
+        self.assertIsNone(lab.SECRET_LIKE_RE.search(text))
+
+    def test_overview_contract_counts_freshness_and_order(self):
+        a = self.add("162.159.192.1", state=lab.ACTIVE)
+        self.add("162.159.192.2", 500, state=lab.VERIFIED)
+        self.add("162.159.192.3", 1701, state=lab.SUSPECT)
+        self.add("162.159.192.4", 4500, state=lab.QUARANTINE)
+        self.add("162.159.192.5", state=lab.DEAD)
+        self.add("162.159.192.6", state=lab.VERIFYING)
+        self.add("162.159.192.7", state=lab.DISCOVERED)
+        with self.store.transaction():
+            self.store.set_meta("lab_health", lab.LAB_DEGRADED)
+        self.export()
+        doc = self.overview()
+        self.assertEqual(set(doc), {"schemaVersion", "status", "generatedAt", "coverage", "counts", "freshness",
+                                    "sessions", "activeHistory", "events", "endpoints", "retryAfterSec"})
+        self.assertEqual((doc["schemaVersion"], doc["status"], doc["coverage"], doc["retryAfterSec"]),
+                         (1, "degraded", "full", lab.REFRESH_INTERVAL_S))
+        self.assertEqual(doc["counts"], {"active": 1, "verified": 1, "suspect": 1, "quarantine": 1, "dead": 1})
+        self.assertEqual(doc["freshness"], {"lastSuccessAt": lab.iso(NOW - 60), "oldestActiveVerifiedAt": lab.iso(NOW - 60),
+                                            "activeTtlSec": lab.ACTIVE_TTL_S, "validUntil": lab.iso(NOW + lab.SNAPSHOT_TTL_S)})
+        self.assertIsNone(doc["sessions"], "no observations in the window: no 0/0/0 fractions")
+        states = [e["state"] for e in doc["endpoints"]]
+        self.assertEqual(states, ["ACTIVE", "VERIFIED", "SUSPECT"], "QUARANTINE, DEAD, CHECKING, DISCOVERED: counts only")
+        first = doc["endpoints"][0]
+        self.assertEqual(set(first), {"ip", "port", "state", "source", "lastVerifiedAt", "expiresAt", "session",
+                                      "https", "reliability"})
+        self.assertEqual((first["ip"], first["port"], first["source"], first["expiresAt"]),
+                         ("162.159.192.1", 2408, lab.SRC_CONSUMER, lab.iso(NOW + 300)))
+        self.assertIsNone(doc["endpoints"][1]["expiresAt"], "only ACTIVE carries an expiry")
+        self.assertTrue(os.path.exists(os.path.join(self.public, lab.WEB_DETAILS_DIR, lab.web_detail_name(a))))
+
+    def test_negative_control_and_blacklist_never_public(self):
+        a = self.add("162.159.192.1", state=lab.VERIFYING)
+        n = self.add("192.0.2.1", state=lab.VERIFYING, source=lab.SRC_NEGATIVE)
+        b = self.add("162.159.192.9", state=lab.VERIFYING)
+        self.make_lab(FakeProbeEngine()).run_batch([a, n, b], "manual")
+        with self.store.transaction():
+            self.store.conn.execute("UPDATE endpoint SET manual_blacklist=1, blacklist_reason='abuse report' WHERE"
+                                    " endpoint_id=?", (b,))
+        self.clock_value = NOW + 30
+        self.export(NOW + 30)
+        doc = self.overview()
+        text = json.dumps(doc)
+        self.assertEqual([e["ip"] for e in doc["endpoints"]], ["162.159.192.1"])
+        self.assertEqual(doc["counts"]["active"], 1, "blacklisted and negative controls are not counted")
+        self.assertNotIn("162.159.192.9", text)
+        self.assertNotIn("abuse report", text)
+        self.assert_public(text)
+        names = os.listdir(os.path.join(self.public, lab.WEB_DETAILS_DIR))
+        self.assertEqual(names, [lab.web_detail_name(a)], "detail files only for public endpoints")
+
+    def test_only_active_verified_suspect_are_listed_the_rest_stays_counts_and_transitions(self):
+        listed = {s: self.add(f"162.159.192.{i}", state=s) for i, s in enumerate((lab.ACTIVE, lab.VERIFIED, lab.SUSPECT), 1)}
+        hidden = {s: self.add(f"162.159.193.{i}", state=s) for i, s in
+                  enumerate((lab.QUARANTINE, lab.DEAD, lab.DISCOVERED, lab.VERIFYING), 1)}
+        with self.store.transaction():
+            for k, (frm, to, cause) in enumerate(((lab.SUSPECT, lab.QUARANTINE, "TRAFFIC_FAILED"),
+                                                  (lab.QUARANTINE, lab.DEAD, "TIMEOUT"))):
+                eid = hidden[to]
+                self.store.conn.execute("INSERT INTO transition (ts, endpoint_id, from_state, to_state, cause, operation_id)"
+                                        " VALUES (?,?,?,?,?,?)", (NOW - 100 - k, eid, frm, to, cause, f"t{k}"))
+        self.export()
+        doc = self.overview()
+        self.assertEqual(sorted(e["state"] for e in doc["endpoints"]), ["ACTIVE", "SUSPECT", "VERIFIED"])
+        self.assertEqual(doc["counts"], {"active": 1, "verified": 1, "suspect": 1, "quarantine": 1, "dead": 1})
+        self.assertEqual({e["type"]: e["endpoint"] for e in doc["events"]},
+                         {"excluded": hidden[lab.QUARANTINE], "dead": hidden[lab.DEAD]}, "transition history stays")
+        names = sorted(os.listdir(os.path.join(self.public, lab.WEB_DETAILS_DIR)))
+        self.assertEqual(names, sorted(lab.web_detail_name(e) for e in listed.values()))
+        with self.store.transaction():  # an ACTIVE endpoint that moves to QUARANTINE loses its detail page
+            self.store.conn.execute("UPDATE endpoint SET state=? WHERE endpoint_id=?", (lab.QUARANTINE, listed[lab.ACTIVE]))
+        self.assertEqual(self.export(NOW + 60)["details_removed"], 1)
+        self.assertNotIn(lab.web_detail_name(listed[lab.ACTIVE]), os.listdir(os.path.join(self.public, lab.WEB_DETAILS_DIR)))
+
+    def test_sessions_fractions_window_and_meaning(self):
+        ids = [self.add(f"162.159.192.{i}", lab.OFFICIAL_PORTS[i % 4], state=lab.VERIFYING) for i in range(1, 6)]
+        self.probe(ids[0], ok, NOW - 60)
+        self.probe(ids[1], ok, NOW - 50)
+        self.probe(ids[2], retry_ok, NOW - 40)
+        self.probe(ids[3], traffic_fail, NOW - 30)
+        self.probe(ids[4], ok, NOW - lab.WEB_SESSIONS_WINDOW_S - 1)  # outside the 15-minute window
+        self.probe(ids[4], no_hs, NOW - 20)  # a handshake that never answered is a failed check
+        self.probe(ids[1], lambda: inconclusive(), NOW - 10, op="op-inconclusive")  # proves nothing: not counted
+        self.export()
+        s = self.overview()["sessions"]
+        self.assertEqual((s["firstSession"], s["retryRescued"], s["failed"], s["window"], s["samples"]),
+                         (0.4, 0.2, 0.4, "15m", 5))
+        self.assertAlmostEqual(s["firstSession"] + s["retryRescued"] + s["failed"], 1.0)
+
+    def test_sessions_ignore_negative_control_addresses_under_any_source_label(self):
+        a = self.add("162.159.192.1", state=lab.VERIFYING)
+        n = self.add("192.0.2.7", state=lab.VERIFYING, source=lab.SRC_CONSUMER)  # mislabelled control
+        self.probe(a, ok, NOW - 60)
+        self.probe(n, traffic_fail, NOW - 50)
+        self.export()
+        s = self.overview()["sessions"]
+        self.assertEqual((s["firstSession"], s["failed"], s["samples"]), (1.0, 0.0, 1))
+
+    def test_discovery_beyond_the_first_hundred_events_is_counted_in_full(self):
+        eid = self.add("162.159.192.1", state=lab.VERIFYING)
+        others = [self.add(f"162.159.192.{i}", state=lab.VERIFYING) for i in range(10, 15)]
+        with self.store.transaction():
+            self.store.conn.execute("INSERT INTO run (operation_id, kind, started_at, finished_at, status)"
+                                    " VALUES ('disc', 'discovery', ?, ?, 'completed')", (NOW - 5000, NOW - 4990))
+            for o in others:
+                self.store.conn.execute("INSERT INTO transition (ts, endpoint_id, from_state, to_state, cause, operation_id)"
+                                        " VALUES (?,?,?,?,?,?)", (NOW - 4995, o, lab.HANDSHAKE_OK, lab.ACTIVE, "verified", "disc"))
+            for k in range(130):  # newer events push the discovery run past the first 100
+                self.store.conn.execute("INSERT INTO transition (ts, endpoint_id, from_state, to_state, cause, operation_id)"
+                                        " VALUES (?,?,?,?,?,?)", (NOW - 10 - k, eid, lab.ACTIVE, lab.SUSPECT, "TIMEOUT", f"r{k}"))
+        self.export()
+        events = self.overview()["events"]
+        self.assertEqual(len(events), lab.WEB_MAX_EVENTS)
+        self.assertNotIn("discovery", [e["type"] for e in events], "older than the 100 newest events")
+        self.assertEqual(lab.WebModel(self.store, NOW).events()[-1]["type"], "suspect")
+        with self.store.transaction():
+            self.store.conn.execute("DELETE FROM transition WHERE operation_id LIKE 'r%' AND ts < ?", (NOW - 50,))
+        self.export()
+        disc = [e for e in self.overview()["events"] if e["type"] == "discovery"]
+        self.assertEqual(disc, [{"type": "discovery", "count": 5, "at": lab.iso(NOW - 4990)}])
+
+    def test_endpoint_session_https_and_reliability(self):
+        a, b, c, d = (self.add(f"162.159.192.{i}", state=lab.VERIFYING) for i in (1, 2, 3, 4))
+        for k, res in enumerate((ok, ok, retry_ok)):
+            self.probe(a, res, NOW - 600 + k * 120)
+        self.probe(b, ok, NOW - 300)
+        self.probe(b, traffic_fail, NOW - 200)
+        self.probe(b, lambda: inconclusive(), NOW - 100, op="op-inconclusive")  # proves nothing: ignored
+        self.probe(c, ok, NOW - 300)
+        self.probe(c, no_hs, NOW - 100)
+        self.probe(d, ok, NOW - lab.WEB_RELIABILITY_WINDOW_S - 10)  # outside the reliability window
+        self.export()
+        eps = {e["ip"]: e for e in self.overview()["endpoints"]}
+        self.assertEqual((eps["162.159.192.1"]["session"], eps["162.159.192.1"]["https"],
+                          eps["162.159.192.1"]["reliability"]), ("retry", "ok", 1.0))
+        self.assertEqual((eps["162.159.192.2"]["session"], eps["162.159.192.2"]["https"]), ("failed", "fail"))
+        self.assertIsNone(eps["162.159.192.2"]["reliability"], "2 meaningful probes < minimum sample")
+        self.assertEqual((eps["162.159.192.3"]["session"], eps["162.159.192.3"]["https"]), ("failed", None),
+                         "a failed handshake never tried HTTPS")
+        self.assertIsNone(eps["162.159.192.4"]["reliability"])
+        self.assertEqual(eps["162.159.192.4"]["session"], "first", "latest meaningful probe, even an old one")
+
+    def test_event_feed_mapping(self):
+        eid = self.add("162.159.192.1", state=lab.VERIFYING)
+        other = self.add("162.159.192.2", state=lab.VERIFYING)
+        rows = [(lab.SUSPECT, lab.ACTIVE, "verified", "restored"), (lab.VERIFIED, lab.ACTIVE, "verified", "promoted"),
+                (lab.ACTIVE, lab.SUSPECT, "HANDSHAKE_NO_RESPONSE", "suspect"),
+                (lab.ACTIVE, lab.VERIFIED, "pool_cap", "demoted"), (lab.SUSPECT, lab.QUARANTINE, "TRAFFIC_FAILED", "excluded"),
+                (lab.QUARANTINE, lab.DEAD, "TIMEOUT", "dead"), (lab.ACTIVE, lab.QUARANTINE, "operator", None),
+                (lab.QUARANTINE, lab.VERIFYING, "unquarantined", None), (lab.DEAD, lab.DISCOVERED, "reimported", None)]
+        with self.store.transaction():
+            for i, (frm, to, cause, _) in enumerate(rows):
+                self.store.conn.execute("INSERT INTO transition (ts, endpoint_id, from_state, to_state, cause, operation_id)"
+                                        " VALUES (?,?,?,?,?,?)", (NOW - 100 * (i + 1), eid, frm, to, cause, f"m{i}"))
+            for op in ("d1", "d2"):
+                self.store.conn.execute("INSERT INTO run (operation_id, kind, started_at, finished_at, status)"
+                                        " VALUES (?, 'discovery', ?, ?, 'completed')", (op, NOW - 50, NOW - 40))
+            for k in range(3):
+                self.store.conn.execute("INSERT INTO transition (ts, endpoint_id, from_state, to_state, cause, operation_id)"
+                                        " VALUES (?,?,?,?,?,?)", (NOW - 45, other, lab.HANDSHAKE_OK, lab.ACTIVE, "verified", "d1"))
+            self.store.conn.execute("INSERT INTO transition (ts, endpoint_id, from_state, to_state, cause, operation_id)"
+                                    " VALUES (?,?,?,?,?,?)", (NOW - 2 * 86400, eid, lab.VERIFIED, lab.ACTIVE, "verified", "old"))
+        self.export()
+        events = self.overview()["events"]
+        self.assertEqual(events[0], {"type": "discovery", "count": 3, "at": lab.iso(NOW - 40)})
+        self.assertEqual([e["type"] for e in events[1:]], [r[3] for r in rows if r[3]])
+        self.assertTrue(all(set(e) == {"type", "endpoint", "at"} for e in events[1:]))
+        self.assertNotIn("d2", json.dumps(events), "a discovery run that found nothing is not an event")
+        self.assert_public(json.dumps(events))
+
+    def test_active_history_from_runs_bounded_and_deterministic(self):
+        with self.store.transaction():
+            for k in range(2000):
+                ts = NOW - 86000 + k * 40
+                self.store.conn.execute("INSERT INTO run (operation_id, kind, started_at, finished_at, status, active_after)"
+                                        " VALUES (?, 'refresh', ?, ?, 'completed', ?)", (f"r{k}", ts, ts + 5, 20 + k % 7))
+            self.store.conn.execute("INSERT INTO run (operation_id, kind, started_at, finished_at, status, active_after)"
+                                    " VALUES ('old', 'refresh', ?, ?, 'completed', 99)", (NOW - 3 * 86400, NOW - 3 * 86400))
+        self.export()
+        hist = self.overview()["activeHistory"]
+        self.assertEqual(len(hist), lab.WEB_MAX_ACTIVE_HISTORY)
+        self.assertEqual(hist[-1], {"at": lab.iso(NOW - 86000 + 1999 * 40 + 5), "active": 20 + 1999 % 7})
+        self.assertNotIn(99, [p["active"] for p in hist], "older than 24 h is not exported")
+        with open(os.path.join(self.public, lab.WEB_OVERVIEW_FILE), "rb") as fh:
+            first = fh.read()
+        self.export()
+        with open(os.path.join(self.public, lab.WEB_OVERVIEW_FILE), "rb") as fh:
+            self.assertEqual(fh.read(), first, "same state, same bytes")
+
+    def test_detail_checks_stability_timeline_history_and_safe_last_error(self):
+        eid = self.add("162.159.192.1", state=lab.VERIFYING)
+        with self.store.transaction():  # known for a day before these probes
+            self.store.conn.execute("UPDATE endpoint SET first_seen_at=? WHERE endpoint_id=?", (NOW - 86400, eid))
+        for k in range(10):
+            self.probe(eid, retry_ok if k == 3 else ok, NOW - 3000 + k * 180)
+        self.probe(eid, traffic_fail, NOW - 900)  # ACTIVE -> SUSPECT, raw message mentions host paths
+        self.probe(eid, ok, NOW - 300)             # SUSPECT -> ACTIVE
+        self.export()
+        d = self.detail(eid)
+        self.assertEqual(set(d), {"schemaVersion", "generatedAt", "endpoint", "checks", "stability", "timeline",
+                                  "lastError", "historyBuckets", "historyEvents"})
+        self.assertEqual((d["endpoint"]["ip"], d["endpoint"]["port"]), ("162.159.192.1", 2408))
+        self.assertEqual(d["checks"], {"handshake": {"result": "ok", "at": lab.iso(NOW - 300)},
+                                       "tunnel": {"result": "ok", "at": lab.iso(NOW - 300)},
+                                       "https": {"result": "ok", "at": lab.iso(NOW - 300)}})
+        self.assertEqual(d["stability"], {"h1": round(11 / 12, 4), "h24": round(11 / 12, 4), "observations": 12})
+        self.assertEqual(d["lastError"], {"code": "traffic_failed", "at": lab.iso(NOW - 900)})
+        self.assertLessEqual(len(d["timeline"]), lab.WEB_TIMELINE_POINTS)
+        self.assertEqual(d["timeline"][-1]["state"], "ACTIVE")
+        self.assertIn("SUSPECT", [p["state"] for p in d["timeline"]])
+        for name, span, step in lab.WEB_HISTORY_RANGES:
+            buckets = d["historyBuckets"][name]
+            self.assertLessEqual(len(buckets), 120, name)
+            self.assertEqual(sum(b["first"] + b["retry"] + b["fail"] for b in buckets), 12, name)
+            self.assertEqual(sum(b["retry"] for b in buckets), 1, name)
+        self.assertEqual(d["historyEvents"][0], {"at": lab.iso(NOW - 300), "result": "first"})
+        self.assertEqual(d["historyEvents"][1], {"at": lab.iso(NOW - 900), "result": "fail", "error": "traffic_failed"})
+        self.assert_public(json.dumps(d))
+
+    def test_unknown_or_lab_side_error_codes_are_generic(self):
+        eid = self.add("162.159.192.1", state=lab.VERIFIED)
+        with self.store.transaction():
+            self.store.conn.execute("UPDATE endpoint SET last_error_code='SOMETHING_INTERNAL', last_error_at=? WHERE"
+                                    " endpoint_id=?", (NOW - 10, eid))
+        self.export()
+        self.assertEqual(self.detail(eid)["lastError"], {"code": "unknown", "at": lab.iso(NOW - 10)})
+
+    def test_limits_endpoints_and_size(self):
+        with self.store.transaction():
+            for prefix in ("162.159.192", "162.159.193"):
+                for i in range(256):
+                    for port in (2408, 500):
+                        self.store.upsert_candidate(lab.parse_endpoint(f"{prefix}.{i}", port), lab.SRC_CONSUMER, NOW)
+            self.store.conn.execute("UPDATE endpoint SET state=?", (lab.VERIFIED,))  # listed one by one
+        self.export()
+        doc = self.overview()
+        self.assertEqual(len(doc["endpoints"]), lab.WEB_MAX_ENDPOINTS)
+        self.assertEqual(len(os.listdir(os.path.join(self.public, lab.WEB_DETAILS_DIR))), lab.WEB_MAX_ENDPOINTS)
+        self.assertLess(os.path.getsize(os.path.join(self.public, lab.WEB_OVERVIEW_FILE)), lab.WEB_OVERVIEW_MAX_BYTES)
+        with self.assertRaises(ValueError):
+            lab._web_json({"x": "y" * 100}, 50)
+
+    def test_incremental_details_and_orphans(self):
+        a, b = self.add("162.159.192.1", state=lab.ACTIVE), self.add("162.159.192.2", state=lab.ACTIVE)
+        with self.store.transaction():  # last changed well before the export
+            self.store.conn.execute("UPDATE endpoint SET updated_at=?", (NOW - 100,))
+        self.assertEqual(self.export()["details_written"], 2)
+        with self.store.transaction():
+            self.store.set_meta("web_export_at", NOW)
+        self.assertEqual(self.export(NOW + 60)["details_written"], 0, "nothing changed, files are fresh")
+        self.probe(a, ok, NOW + 90)
+        self.assertEqual(self.export(NOW + 120)["details_written"], 1)
+        with self.store.transaction():
+            self.store.conn.execute("UPDATE endpoint SET manual_blacklist=1 WHERE endpoint_id=?", (b,))
+        stats = self.export(NOW + 180)
+        self.assertEqual(stats["details_removed"], 1)
+        self.assertFalse(os.path.exists(os.path.join(self.public, lab.WEB_DETAILS_DIR, lab.web_detail_name(b))))
+        old = time.time() - lab.WEB_DETAIL_MAX_AGE_S - 5
+        os.utime(os.path.join(self.public, lab.WEB_DETAILS_DIR, lab.web_detail_name(a)), (old, old))
+        self.assertEqual(self.export(NOW + 240)["details_written"], 1, "an untouched file is refreshed hourly")
+
+    def test_publish_exports_from_committed_state_and_failure_keeps_old_files(self):
+        eid = self.add("162.159.192.1", state=lab.VERIFYING)
+        runner = self.make_lab(FakeProbeEngine())
+        runner.run_batch([eid], "refresh")
+        self.assertEqual(self.overview()["endpoints"][0]["state"], "ACTIVE")
+        self.assertEqual(self.store.meta()["web_export_at"], str(NOW))
+        before = self.overview()
+        self.clock_value = NOW + 60
+        with mock.patch.object(lab, "export_web", side_effect=OSError(28, "No space left on device")):
+            out = runner.run_batch([eid], "refresh")
+        self.assertTrue(out.snapshot_ok, "a web export failure never fails the job")
+        self.assertEqual(self.overview(), before, "the previous file stays and ages out")
+        self.assertEqual(self.store.meta()["web_export_error"], "WEB_EXPORT_FAILED: OSError")
+        self.clock_value = NOW + 120
+        runner.run_batch([eid], "refresh")
+        self.assertNotIn("web_export_error", self.store.meta())
+        with mock.patch.object(lab.os, "replace", side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                lab.export_web(self.store, self.public, NOW + 180)
+        self.assertEqual(self.overview()["generatedAt"], lab.iso(NOW + 120), "no partially written JSON")
+        self.assertEqual([n for n in os.listdir(self.public) if n.startswith(".tmp-")], [])
+
+    def test_whole_export_is_secret_free(self):
+        a = self.add("162.159.192.1", state=lab.VERIFYING)
+        self.probe(a, traffic_fail, NOW - 100)
+        self.probe(a, ok, NOW - 50)
+        with self.store.transaction():
+            self.store.operator_event(a, "quarantine", "operator note /etc/secret", NOW - 10)
+        self.export()
+        for root, _, files in os.walk(self.public):
+            for name in files:
+                with open(os.path.join(root, name), encoding="utf-8") as fh:
+                    text = fh.read()
+                if name in (lab.WEB_OVERVIEW_FILE,) or root.endswith(lab.WEB_DETAILS_DIR):
+                    self.assert_public(text)
+
+    @unittest.skipUnless(os.environ.get("WEB_SAMPLE_OUT"), "set WEB_SAMPLE_OUT=<dir> to regenerate the website fixture")
+    def test_write_contract_sample_for_the_website(self):
+        """Deterministic sample of the real exporter output; the website tests serve it through /api/lab."""
+        ids = [self.add(f"162.159.192.{i}", lab.OFFICIAL_PORTS[i % 4], state=lab.VERIFYING) for i in range(1, 9)]
+        quarantined = self.add("162.159.193.20", 2408, state=lab.VERIFYING, source=lab.SRC_CF_ONE)
+        with self.store.transaction():  # known before the simulated hour, as on a real host
+            self.store.conn.execute("UPDATE endpoint SET first_seen_at=?", (NOW - 2 * 86400,))
+        engine = SimEngine(lambda eid: (no_hs() if eid == quarantined and self.clock_value > NOW - 1800 else
+                                        retry_ok() if (self.clock_value // 100) % 5 == 0 else ok()))
+        runner = self.make_lab(engine)
+        for k in range(36):
+            self.clock_value = NOW - 3600 + k * 100
+            runner.run_batch(ids + [quarantined], "refresh")
+        out = os.environ["WEB_SAMPLE_OUT"]
+        os.makedirs(out, exist_ok=True)
+        lab.export_web(self.store, out, self.clock_value)
+        for name in (lab.SNAPSHOT_FILE, lab.STATUS_FILE):  # the operational files of the same run (compatibility mode)
+            with open(os.path.join(self.public, name), "rb") as src, open(os.path.join(out, name), "wb") as dst:
+                dst.write(src.read())
+
+
 class ReportTests(LabFixture):
     def test_session_split_never_hides_a_rescue(self):
         a, b, c = (self.add(f"162.159.192.{i}", state=lab.VERIFYING) for i in (1, 2, 3))
