@@ -133,9 +133,18 @@ test('honest copy: the Lab never promises availability from the visitor network'
   assert.match(en.lab_disclaimer, /does not guarantee/);
   assert.match(ru.lab_info_note, /не гарантирует/);
   assert.equal(en.lab_disclaimer, 'Verification is performed from the project server and does not guarantee availability from your network.');
-  // Страница показывает реальные данные Lab, но генератор пул Lab не использует (до Phase D): тексты этого не утверждают.
-  for (const [lang, dict, re] of [['ru', ru, /используются генератором|доступн\S* генератор/i], ['en', en, /used by the generator|available to the generator/i]]) {
-    for (const [k, v] of Object.entries(dict)) if (k.startsWith('lab_')) assert.doesNotMatch(v, re, `${lang}.json ${k}`);
+  // Phase D: генератор берёт адреса из Lab только в явно выбранном режиме «Endpoint Lab — авто», по умолчанию —
+  // hostname. Тексты не утверждают, что пул использует генератор вообще, а каждый текст о генераторе называет режим.
+  for (const [lang, dict, re, generator, mode] of [
+    ['ru', ru, /используются генератором|доступн\S* генератор/i, /генератор/i, /«Endpoint Lab — авто»|hostname/],
+    ['en', en, /used by the generator|available to the generator/i, /generator/i, /“Endpoint Lab — auto”|hostname/],
+  ]) {
+    for (const [k, v] of Object.entries(dict)) {
+      if (!k.startsWith('lab_') || k === 'lab_meta_title') continue;
+      assert.doesNotMatch(v, re, `${lang}.json ${k}`);
+      if (generator.test(v)) assert.match(v, mode, `${lang}.json ${k} names the endpoint mode`);
+    }
+    assert.match(dict.lab_lead, mode, `${lang}.json lab_lead says which generator mode uses the pool`);
   }
 });
 

@@ -25,16 +25,24 @@
       : '';
   };
 
+  // Fixed English server warnings that the UI shows in the visitor's language (api/warp.js, Lab Auto).
+  const KNOWN_API_WARNINGS = [
+    ['Endpoint Lab: not enough fresh verified endpoints on port', 'lab_port_fallback'],
+    ['Endpoint Lab: only ', 'lab_partial_diversity'],
+  ];
+
   const normalizeWarnings = (input, defaultSource = 'api') => {
     const values = Array.isArray(input) ? input : input == null ? [] : [input];
     return values.flatMap((value) => {
       const message = warningMessage(value);
       if (!message) return [];
       if (typeof value !== 'object' || value == null) {
+        const known = KNOWN_API_WARNINGS.find(([prefix]) => message.startsWith(prefix));
         return [{
           level: 'warning',
           message,
           source: normalizeSource(defaultSource),
+          ...(known ? { code: known[1] } : {}),
         }];
       }
       const normalized = {
@@ -58,9 +66,12 @@
   const getEndpoint = (response, state) => {
     const firstConfig = Array.isArray(response.configs) ? response.configs[0] : null;
     const rawSource = firstConfig?.endpointSource || response.endpointSource;
-    const manual = state.warpEndpoint && state.warpEndpoint !== 'hostname';
+    const manual = state.warpEndpoint && state.warpEndpoint !== 'hostname' && state.warpEndpoint !== 'lab';
 
     if (manual) return { mode: 'manual', source: 'manual' };
+    // Lab Auto: a fresh endpoint from the Endpoint Lab pool. Only the server's answer counts as proof.
+    if (rawSource === 'lab') return { mode: 'lab', source: 'lab' };
+    if (state.warpEndpoint === 'lab') return { mode: 'lab', source: 'unknown' };
     // tcp_check: candidate from the built-in endpoint list that passed the TCP pre-check.
     if (rawSource === 'tcp_check') return { mode: 'auto', source: 'tcpCheck' };
     if (rawSource === 'fallback') return { mode: 'auto', source: 'fallback' };
@@ -260,7 +271,10 @@
                 : 'unknown',
       variants: actualCount,
       endpoint,
-      port: Number.isInteger(state.port) ? state.port : null,
+      // Lab Auto may use other verified ports than the requested one: show what the configs actually use.
+      port: endpoint.mode === 'lab' && Array.isArray(response.lab?.ports) && response.lab.ports.length
+        ? [...new Set(response.lab.ports.filter(Number.isInteger))].join(', ') || null
+        : Number.isInteger(state.port) ? state.port : null,
       routesSource,
       routeMode,
       presets,

@@ -33,7 +33,7 @@ const telemetryNow = () =>
     : Date.now();
 
 const getTelemetryContext = (mode, extra = {}) => {
-  const endpointMode = cfgState.warpEndpoint === 'hostname' ? 'hostname' : 'ip';
+  const endpointMode = ['hostname', 'lab'].includes(cfgState.warpEndpoint) ? cfgState.warpEndpoint : 'ip';
   const awg3 = mode === 'awg3' || mode === 'awg31';
   return {
     mode,
@@ -84,10 +84,26 @@ const buildWarpQueryString = (mode) => {
   params.set('cps', cfgState.cpsProtocol);
   params.set('port', String(cfgState.port));
   if (cfgState.configCount > 1) params.set('count', String(cfgState.configCount));
-  if (cfgState.warpEndpoint !== 'hostname') {
+  if (cfgState.warpEndpoint === 'lab') {
+    // Lab Auto: the server picks fresh Lab endpoints (the port is a preference) or answers lab_* — never hostname.
+    params.set('endpointMode', 'lab');
+  } else if (cfgState.warpEndpoint !== 'hostname') {
     params.set('peerEndpoint', `${cfgState.warpEndpoint}:${cfgState.port}`);
   }
   return params.toString();
+};
+
+/** Lab Auto refusals (HTTP 503 with a stable code): localized text instead of the server's Russian message. */
+const LAB_AUTO_ERRORS = {
+  lab_unavailable: ['err_lab_unavailable', 'Endpoint Lab сейчас недоступен. Lab Auto не создаёт конфигурацию без проверенных данных — выберите hostname в настройках endpoint.'],
+  lab_stale: ['err_lab_stale', 'Данные Endpoint Lab устарели. Lab Auto не создаёт конфигурацию без свежей проверки — выберите hostname в настройках endpoint.'],
+  lab_no_endpoints: ['err_lab_no_endpoints', 'В Endpoint Lab сейчас нет свежих проверенных endpoint\'ов. Выберите hostname в настройках endpoint или попробуйте позже.'],
+  lab_selection_failed: ['err_lab_selection_failed', 'Не удалось выбрать endpoint Endpoint Lab. Конфигурация не создана — выберите hostname в настройках endpoint.'],
+};
+
+const getApiErrorMessage = (data) => {
+  const lab = data && LAB_AUTO_ERRORS[data.error];
+  return lab ? t(lab[0], lab[1]) : data && data.message;
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -178,11 +194,11 @@ const generateConfig = async () => {
     const data = await parseJsonResponse(response);
 
     if (!response.ok) {
-      throw new Error(data.message || `${t('err_http_prefix', 'Ошибка HTTP:')} ${response.status}`);
+      throw new Error(getApiErrorMessage(data) || `${t('err_http_prefix', 'Ошибка HTTP:')} ${response.status}`);
     }
 
     if (!data.success) {
-      throw new Error(data.message || t('err_unknown_gen', 'Неизвестная ошибка при генерации конфигурации.'));
+      throw new Error(getApiErrorMessage(data) || t('err_unknown_gen', 'Неизвестная ошибка при генерации конфигурации.'));
     }
     if (!data.content) throw new Error(t('err_no_content', 'Отсутствует содержимое конфигурации.'));
 

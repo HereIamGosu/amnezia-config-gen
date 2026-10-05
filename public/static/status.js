@@ -13,7 +13,7 @@
 
 /* global t, setI18nText -- i18n.js */
 /* global makeIcon, openModal, telemetry -- common.js */
-/* exported fetchServiceStatus, renderHeroStatus, initHeroStatus, refreshHeroStatus, openStatusModal */
+/* exported fetchServiceStatus, renderHeroStatus, initHeroStatus, refreshHeroStatus, openStatusModal, renderLabAutoNote */
 
 /**
  * Fetch /api/status and show a banner only for measured problems (degraded/down).
@@ -260,8 +260,10 @@ const renderHeroCheckedAt = () => {
 
 // ── Строка «Endpoint Lab» в карточке ──
 // Свой опрос /api/lab общим адаптером LabData (30 с, пауза в скрытой вкладке, Retry-After); клик открывает
-// быстрый просмотр (lab-quick.js, атрибут data-lab-quick). Lab не участвует в генерации («Автовыбор» —
-// hostname Cloudflare), поэтому строка не входит в общий статус карточки и в предупреждение над шагами.
+// быстрый просмотр (lab-quick.js, атрибут data-lab-quick). Генератор берёт адреса из Lab только в режиме
+// «Endpoint Lab — авто», который посетитель выбирает сам; по умолчанию — hostname Cloudflare. Поэтому строка
+// не входит в общий статус карточки и в предупреждение над шагами, а состояние Lab для этого режима
+// показывает пояснение под выбором endpoint в настройках (renderLabAutoNote).
 // Опрос начинается, только когда /api/status подтвердил файлы Lab на этом развёртывании (lab.available):
 // без них /api/lab отвечает 503, а браузер пишет каждый ответ 5xx в консоль.
 
@@ -296,6 +298,37 @@ const renderHeroLab = () => {
   state.textContent = value;
   sub.textContent = detail;
   sub.hidden = !detail;
+  renderLabAutoNote();
+};
+
+// ── Пояснение к «Endpoint Lab — авто» в настройках ──
+// Видно, только когда выбран этот endpoint. Состояние — то же, что у строки Lab в карточке, без чисел
+// (подробности — на /lab). Решает всё равно сервер: без свежих данных Lab он отвечает ошибкой, не hostname.
+
+const LAB_AUTO_STATES = {
+  loading: ['labauto_state_loading', 'проверяем…'],
+  ok: ['labauto_state_ok', 'есть свежие проверенные endpoint\'ы'],
+  degraded: ['labauto_state_degraded', 'работает с ограничениями, свежие endpoint\'ы есть'],
+  stale: ['labauto_state_stale', 'данные устарели — генерация сейчас вернёт ошибку'],
+  empty: ['labauto_state_empty', 'нет свежих endpoint\'ов — генерация сейчас вернёт ошибку'],
+  unavailable: ['labauto_state_unavailable', 'недоступен — генерация сейчас вернёт ошибку'],
+};
+
+const renderLabAutoNote = () => {
+  const note = document.getElementById('labAutoNote');
+  const select = document.getElementById('warpEndpointSelect');
+  if (!note || !select) return;
+  const active = select.value === 'lab';
+  note.hidden = !active;
+  if (active) select.setAttribute('aria-describedby', 'labAutoNote');
+  else select.removeAttribute('aria-describedby');
+  const stateEl = document.getElementById('labAutoState');
+  if (!active || !stateEl) return;
+  const Core = window.LabCore;
+  const s = Core ? Core.statusSummary(heroLab, Date.now()) : { state: 'unavailable', tone: 'unknown' };
+  const [key, fallback] = LAB_AUTO_STATES[s.state] || LAB_AUTO_STATES.unavailable;
+  stateEl.className = `lab-auto-note__state lab-auto-note__state--${s.tone}`;
+  setI18nText(stateEl, key, fallback);
 };
 
 const startLabPoller = () => {

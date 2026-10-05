@@ -41,26 +41,42 @@ const buildConf = ({ variant = 1, port = 4500, endpoint = 'engage.cloudflareclie
 ].join('\n');
 
 /**
- * Успешный ответ /api/warp.
- * @param {{ mode?: string, count?: number, withLink?: boolean }} [options]
+ * Успешный ответ /api/warp. `lab` — ответ Lab Auto (endpointMode=lab): endpoint'ы из пула Lab, метаданные `lab`
+ * и предупреждения сервера, как в api/warp.js.
+ * @param {{ mode?: string, count?: number, withLink?: boolean,
+ *   lab?: { endpoints: Array<{ ip: string, port: number }>, requested?: number, requestedPort?: number|null } }} [options]
  */
-const warpSuccess = ({ mode = 'awg2', count = 1, withLink = mode !== 'awg3' } = {}) => {
-  const configs = Array.from({ length: count }, (_, idx) => {
-    const text = buildConf({ variant: idx + 1 });
+const warpSuccess = ({ mode = 'awg2', count = 1, withLink = mode !== 'awg3', lab = null } = {}) => {
+  const n = lab ? lab.endpoints.length : count;
+  const configs = Array.from({ length: n }, (_, idx) => {
+    const ep = lab ? lab.endpoints[idx] : { ip: 'engage.cloudflareclient.com', port: 4500 };
+    const text = buildConf({ variant: idx + 1, endpoint: ep.ip, port: ep.port });
     return {
       index: idx + 1,
       content: Buffer.from(text).toString('base64'),
       appliedExtras: { cps5: false, mobile: false, router: false },
-      endpointSource: 'hostname',
+      endpointSource: lab ? 'lab' : 'hostname',
       cpsRequested: 'auto',
       cpsResolved: 'quic',
       cpsStability: 'stable',
       vpnLink: withLink
-        ? buildVpnLink(text, { hostName: 'engage.cloudflareclient.com', dns1: '1.1.1.1', dns2: '1.0.0.1', mode })
+        ? buildVpnLink(text, { hostName: ep.ip, dns1: '1.1.1.1', dns2: '1.0.0.1', mode })
         : undefined,
     };
   });
   const warnings = [];
+  let labMeta;
+  if (lab) {
+    const requested = lab.requested ?? n;
+    const requestedPort = lab.requestedPort === undefined ? 4500 : lab.requestedPort;
+    const ports = lab.endpoints.map((e) => e.port);
+    const portMatched = requestedPort == null || ports.every((p) => p === requestedPort);
+    labMeta = { requested, selected: n, requestedPort, portMatched, ports };
+    if (!portMatched) {
+      warnings.push(`Endpoint Lab: not enough fresh verified endpoints on port ${requestedPort}; other verified ports were used (${[...new Set(ports)].join(', ')}).`);
+    }
+    if (n < requested) warnings.push(`Endpoint Lab: only ${n} distinct fresh verified endpoint(s) for ${requested} requested configs.`);
+  }
   if (mode === 'awg3') {
     warnings.push('vpn:// is unavailable for AWG 3.0 because its historical protocol_version is not confirmed; use the .conf export.');
   }
@@ -84,13 +100,21 @@ const warpSuccess = ({ mode = 'awg2', count = 1, withLink = mode !== 'awg3' } = 
     routesSource: 'full',
     routesTelemetrySource: 'full',
     ...(awg ? { awg } : {}),
-    ...(warnings.length ? { warning: warnings[0] } : {}),
+    ...(labMeta ? { lab: labMeta } : {}),
+    ...(warnings.length ? { warning: warnings.length === 1 ? warnings[0] : warnings } : {}),
     ...(compatibility ? { compatibility } : {}),
   };
 };
 
 /** Ответ /api/warp с ошибкой, как его отдаёт обработчик при сбое регистрации WARP. */
 const warpError = (message = 'Cloudflare API временно недоступен (e2e).') => ({ success: false, message });
+
+/** Отказ Lab Auto (HTTP 503 + Retry-After в api/warp.js): стабильный код и русское сообщение сервера. */
+const warpLabError = (code = 'lab_stale') => ({
+  success: false,
+  error: code,
+  message: `Сообщение сервера для ${code} (e2e): интерфейс показывает свой перевод по коду.`,
+});
 
 /** /api/healthcheck: все пробы успешны, время — «сейчас» (иначе снимок статуса считается устаревшим). */
 const healthcheckOk = () => ({
@@ -119,4 +143,4 @@ const iplistCount = (url) => {
   };
 };
 
-module.exports = { FAKE_PRIVATE_KEY, buildConf, warpSuccess, warpError, healthcheckOk, iplistCount };
+module.exports = { FAKE_PRIVATE_KEY, buildConf, warpSuccess, warpError, warpLabError, healthcheckOk, iplistCount };

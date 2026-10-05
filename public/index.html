@@ -501,7 +501,7 @@
                   <svg class="icon param-chip__icon" aria-hidden="true"><use href="#i-pin"/></svg>
                   <span class="param-chip__label">Endpoint</span>
                   <svg class="icon icon--sm param-chip__chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
-                  <span class="param-chip__value param-chip__value--accent" id="chipEndpoint" data-i18n="chip_endpoint_auto">Автовыбор</span>
+                  <span class="param-chip__value param-chip__value--accent" id="chipEndpoint" data-i18n="chip_endpoint_hostname">Hostname</span>
                 </button>
                 <button type="button" class="param-chip" data-settings-tab="extra" data-settings-focus="warpPortSelect" aria-haspopup="dialog">
                   <svg class="icon param-chip__icon" aria-hidden="true"><use href="#i-plug"/></svg>
@@ -1247,15 +1247,24 @@
               <div class="option-row option-row--stack">
                 <span class="option-row__text">
                   <label class="option-row__label" for="warpEndpointSelect" data-i18n="endpoint_label">Endpoint WARP</label>
-                  <span class="option-row__hint" data-i18n="endpoint_hint">IP вместо hostname — если DNS заблокирован</span>
+                  <span class="option-row__hint" data-i18n="endpoint_hint">Endpoint Lab — свежие проверенные IP; фиксированный IP — если DNS заблокирован</span>
                 </span>
                 <select id="warpEndpointSelect" class="select">
                   <option value="hostname" data-i18n="endpoint_option_hostname">engage.cloudflareclient.com (рекомендуется)</option>
+                  <option value="lab" data-i18n="endpoint_option_lab">Endpoint Lab — авто (проверенные IP)</option>
                   <option value="162.159.192.1">162.159.192.1</option>
                   <option value="162.159.195.1">162.159.195.1</option>
                   <option value="188.114.97.1">188.114.97.1</option>
                   <option value="188.114.99.1">188.114.99.1</option>
                 </select>
+                <p class="lab-auto-note" id="labAutoNote" hidden>
+                  <span class="lab-auto-note__line">
+                    <span data-i18n="labauto_state_label">Endpoint Lab сейчас:</span>
+                    <span class="lab-auto-note__state" id="labAutoState" data-i18n="labauto_state_loading">проверяем…</span>
+                  </span>
+                  <span class="lab-auto-note__line" data-i18n="labauto_note">Берёт только endpoint'ы, прошедшие проверку Lab в последние минуты. Порт — предпочтение: если на нём нет свежих endpoint'ов, будет другой проверенный порт и предупреждение. Без свежих данных Lab конфигурация не создаётся — hostname-режим работает без Lab.</span>
+                  <a class="lab-auto-note__link" href="/lab" data-href-en="/en/lab" data-i18n="labauto_link">Состояние Endpoint Lab</a>
+                </p>
               </div>
               <div class="option-row option-row--stack">
                 <span class="option-row__text">

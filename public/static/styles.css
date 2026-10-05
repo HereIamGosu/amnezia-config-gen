@@ -2686,6 +2686,37 @@ kbd {
   font-size: 12.5px;
 }
 
+/* «Endpoint Lab — авто»: состояние Lab и правило fail-closed под выбором endpoint (status.js renderLabAutoNote) */
+.lab-auto-note {
+  display: grid;
+  flex-basis: 100%;
+  gap: 4px;
+  margin: 0;
+  color: var(--color-text-2);
+  font-size: 12.5px;
+}
+
+.lab-auto-note[hidden] {
+  display: none;
+}
+
+.lab-auto-note__state {
+  font-weight: 600;
+}
+
+.lab-auto-note__state--ok {
+  color: #4ade80;
+}
+
+.lab-auto-note__state--degraded {
+  color: #fbbf24;
+}
+
+.lab-auto-note__link {
+  justify-self: start;
+  font-weight: 600;
+}
+
 .switch {
   position: relative;
   width: 40px;

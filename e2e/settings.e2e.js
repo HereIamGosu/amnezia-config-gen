@@ -20,7 +20,7 @@ e2eSuite('profile, step-2 chips and settings dialog', (openPage) => {
     assert.deepEqual(await chipTexts(page), {
       chipRouting: 'Полный туннель',
       chipDns: 'Cloudflare',
-      chipEndpoint: 'Автовыбор',
+      chipEndpoint: 'Hostname',
       chipPort: '4500',
       chipIpv6: 'Выключен',
       chipDevice: 'Универсальный',

@@ -36,7 +36,7 @@ const saveToHistory = (mode, decodedConfig, filename, snapshot = getResultStateS
     filename,
     routeMode: snapshot.routeMode,
     port: snapshot.port,
-    endpoint: snapshot.warpEndpoint === 'hostname' ? 'auto' : 'ip',
+    endpoint: snapshot.warpEndpoint === 'hostname' ? 'auto' : snapshot.warpEndpoint === 'lab' ? 'lab' : 'ip',
     mobile: snapshot.mobileMode,
     router: snapshot.routerMode,
   };
@@ -70,7 +70,8 @@ const historyTitle = (entry) => {
 
 const historyMeta = (entry) => {
   const parts = [formatHistoryTime(entry.ts)];
-  if (entry.endpoint) parts.push(`endpoint ${entry.endpoint === 'ip' ? 'IP' : 'auto'}`);
+  // Stored value 'auto' is the hostname mode (entries written before Lab Auto use it too).
+  if (entry.endpoint) parts.push(`endpoint ${{ ip: 'IP', lab: 'Lab' }[entry.endpoint] || 'hostname'}`);
   if (entry.port && Number(entry.port) !== 4500) parts.push(`port ${entry.port}`);
   if (entry.mobile || entry.router) parts.push(getDeviceLabel(!!entry.mobile, !!entry.router));
   return parts.join(' · ');

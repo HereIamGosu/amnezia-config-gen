@@ -13,6 +13,7 @@
 
 /* global t -- i18n.js */
 /* global parseJsonResponse, uiShell, openModal, debounce -- common.js */
+/* global renderLabAutoNote -- status.js */
 /* global getDnsLabel, getDeviceLabel -- result.js */
 /* global copySettingsLink, applySharedSettings -- settings-link.js */
 /* exported
@@ -172,8 +173,11 @@ const updateParamChips = () => {
     : t('routing_mode_full', 'Полный туннель'));
   setChip('chipDns', getDnsLabel(getSelectedDnsKey() || cfgState.dnsDefault));
   setChip('chipEndpoint', cfgState.warpEndpoint === 'hostname'
-    ? t('chip_endpoint_auto', 'Автовыбор')
-    : cfgState.warpEndpoint, 'accent');
+    ? t('chip_endpoint_hostname', 'Hostname')
+    : cfgState.warpEndpoint === 'lab'
+      ? t('chip_endpoint_lab', 'Endpoint Lab')
+      : cfgState.warpEndpoint, 'accent');
+  renderLabAutoNote();
   setChip('chipPort', String(cfgState.port));
   setChip('chipIpv6', cfgState.includeIpv6 ? t('chip_on', 'Включён') : t('chip_off', 'Выключен'),
     cfgState.includeIpv6 ? 'on' : null);

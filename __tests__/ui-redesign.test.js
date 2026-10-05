@@ -127,12 +127,12 @@ test('every key used by index.html and the generator scripts exists in both loca
 });
 
 test('parameter chips start from the real defaults, not from mockup values', () => {
-  // I6: IPv6 is off unless explicitly enabled; full tunnel; port 4500; hostname endpoint = auto choice.
+  // I6: IPv6 is off unless explicitly enabled; full tunnel; port 4500; hostname endpoint by default (Lab Auto is opt-in).
   assert.match(html, /id="chipIpv6" data-i18n="chip_off"/);
   assert.match(html, /id="chipRouting" data-i18n="routing_mode_full"/);
   assert.match(html, /id="chipPort">4500</);
   assert.match(html, /<select id="warpPortSelect"[^>]*>\s*<option value="4500"/);
-  assert.match(html, /id="chipEndpoint" data-i18n="chip_endpoint_auto"/);
+  assert.match(html, /id="chipEndpoint" data-i18n="chip_endpoint_hostname"/);
   assert.match(html, /<select id="warpEndpointSelect"[^>]*>\s*<option value="hostname"/);
   assert.match(html, /<input type="checkbox" class="switch" id="ipv6Toggle" \/>/, 'IPv6 toggle is unchecked by default');
   assert.match(settings, /const updateParamChips = \(\) =>/);

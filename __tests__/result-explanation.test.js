@@ -206,3 +206,47 @@ describe('buildResultSummary', () => {
     assert.equal(summary.awg.version, '3.0');
   });
 });
+
+describe('Lab Auto (Phase D)', () => {
+  const labResponse = (overrides = {}) => ({
+    success: true,
+    mode: 'awg2',
+    count: 1,
+    configs: [{ content: 'base64', endpointSource: 'lab' }],
+    lab: { requested: 1, selected: 1, requestedPort: 4500, portMatched: true, ports: [4500] },
+    ...overrides,
+  });
+
+  test('a Lab endpoint is reported as Lab Auto, never as manual or hostname', () => {
+    const summary = buildResultSummary(labResponse(), { warpEndpoint: 'lab', port: 4500, configCount: 1 });
+    assert.deepEqual(summary.endpoint, { mode: 'lab', source: 'lab' });
+    assert.equal(summary.port, '4500');
+    assert.deepEqual(summary.warnings, []);
+  });
+
+  test('a response without a Lab source for a Lab Auto request stays unverified', () => {
+    const summary = buildResultSummary(labResponse({ configs: [{ content: 'base64', endpointSource: 'hostname' }] }),
+      { warpEndpoint: 'lab', port: 4500 });
+    assert.deepEqual(summary.endpoint, { mode: 'lab', source: 'unknown' });
+  });
+
+  test('the port actually used and the Lab warnings get stable codes', () => {
+    const summary = buildResultSummary(labResponse({
+      count: 1,
+      lab: { requested: 3, selected: 1, requestedPort: 880, portMatched: false, ports: [2408] },
+      warning: [
+        'Endpoint Lab: not enough fresh verified endpoints on port 880; other verified ports were used (2408).',
+        'Endpoint Lab: only 1 distinct fresh verified endpoint(s) for 3 requested configs.',
+      ],
+    }), { warpEndpoint: 'lab', port: 880, configCount: 3 });
+    assert.equal(summary.port, '2408');
+    assert.deepEqual(summary.warnings.map((w) => w.code), ['lab_port_fallback', 'lab_partial_diversity', 'partial_generation']);
+  });
+
+  test('hostname responses keep their meaning', () => {
+    const summary = buildResultSummary({ success: true, mode: 'awg2', configs: [{ content: 'x', endpointSource: 'hostname' }] },
+      { warpEndpoint: 'hostname', port: 4500 });
+    assert.deepEqual(summary.endpoint, { mode: 'hostname', source: 'hostname' });
+    assert.equal(summary.port, 4500);
+  });
+});

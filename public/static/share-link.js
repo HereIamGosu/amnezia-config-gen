@@ -19,8 +19,8 @@
   const CPS_PROTOCOLS = Object.freeze(['auto', 'quic', 'dns', 'stun', 'dtls', 'sip', 'static']);
   /** Совпадает с PORT_ALLOWLIST в api/warp.js и списком #warpPortSelect (проверяет тест). */
   const PORTS = Object.freeze([4500, 2408, 500, 1701, 880, 8854]);
-  /** Варианты #warpEndpointSelect: hostname (автовыбор) или один из IP WARP. */
-  const ENDPOINTS = Object.freeze(['hostname', '162.159.192.1', '162.159.195.1', '188.114.97.1', '188.114.99.1']);
+  /** Варианты #warpEndpointSelect: hostname (по умолчанию), Endpoint Lab — авто или один из IP WARP. */
+  const ENDPOINTS = Object.freeze(['hostname', 'lab', '162.159.192.1', '162.159.195.1', '188.114.97.1', '188.114.99.1']);
   const COUNTS = Object.freeze([1, 2, 3]);
 
   const DEFAULTS = Object.freeze({

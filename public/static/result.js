@@ -155,7 +155,8 @@ const renderQuickSummary = () => {
 
   const endpoint = summary
     ? summaryValue('endpointMode', summary.endpoint.mode)
-    : (snap.warpEndpoint === 'hostname' ? t('chip_endpoint_auto', 'Автовыбор') : snap.warpEndpoint);
+    : ({ hostname: t('chip_endpoint_hostname', 'Hostname'), lab: t('chip_endpoint_lab', 'Endpoint Lab') }[snap.warpEndpoint]
+      || snap.warpEndpoint);
   const routes = snap.routeMode === ROUTE_MODES.SPLIT
     ? `${t('routing_mode_split', 'Выборочная')} · ${snap.routePresets.length}`
     : t('routing_mode_full', 'Полный туннель');
@@ -342,11 +343,13 @@ const summaryValue = (key, value) => {
       hostname: t('result_summary_endpoint_hostname', 'hostname'),
       auto: t('result_summary_endpoint_auto', 'auto'),
       manual: t('result_summary_endpoint_manual', 'manual'),
+      lab: t('result_summary_endpoint_lab', 'Endpoint Lab — авто'),
       unknown: t('result_summary_no_data', 'нет данных'),
     },
     endpointSource: {
       hostname: t('result_summary_endpoint_hostname', 'hostname'),
       manual: t('result_summary_endpoint_manual', 'manual'),
+      lab: t('result_summary_endpoint_lab_verified', 'проверен Endpoint Lab'),
       tcpCheck: t('result_summary_endpoint_tcp_check', 'встроенный список, проверка TCP'),
       fallback: t('result_summary_endpoint_fallback', 'fallback'),
       unknown: t('result_summary_no_data', 'нет данных'),
@@ -394,6 +397,10 @@ const warningText = (warning) => {
     allowed_ips_limit_disabled: t('risk_limit_disabled', 'Лимит AllowedIPs отключён.'),
     routes_fallback: t('risk_routes_fallback', 'Использован резервный источник маршрутов.'),
     routes_unknown: t('risk_routes_unknown', 'Источник маршрутов не указан.'),
+    lab_port_fallback: t('risk_lab_port_fallback',
+      'На выбранном порту не хватило свежих endpoint\'ов Lab: часть конфигов использует другой проверенный порт.'),
+    lab_partial_diversity: t('risk_lab_partial_diversity',
+      'В Endpoint Lab меньше разных свежих endpoint\'ов, чем запрошено конфигов: создано столько, сколько есть.'),
   };
   return byCode[warning.code] || warning.message || t('result_summary_no_data', 'нет данных');
 };
