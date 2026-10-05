@@ -7,6 +7,8 @@ import re
 import sqlite3
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from dataclasses import replace
 from unittest import mock
@@ -58,6 +60,7 @@ class FakeProbeEngine(lab.ProbeEngine):
         self.outcomes = outcomes or {}
         self.default = default
         self.calls = []
+        self.deadlines = []     # the deadline each call received, in call order
 
     def _next(self, eid):
         spec = self.outcomes.get(eid, self.default)
@@ -65,12 +68,14 @@ class FakeProbeEngine(lab.ProbeEngine):
             spec = spec.pop(0) if len(spec) > 1 else spec[0]
         return spec()
 
-    def probe_handshake(self, endpoint, ident, timeout_s=None):
+    def probe_handshake(self, endpoint, ident, timeout_s=None, deadline=None):
         self.calls.append(("probe", endpoint.endpoint_id, timeout_s))
+        self.deadlines.append(deadline)
         return self._next(endpoint.endpoint_id)
 
-    def deep_verify(self, endpoint, ident, timeout_s=None, targets=None):
+    def deep_verify(self, endpoint, ident, timeout_s=None, targets=None, deadline=None):
         self.calls.append(("verify", endpoint.endpoint_id, timeout_s))
+        self.deadlines.append(deadline)
         return self._next(endpoint.endpoint_id)
 
 
@@ -516,13 +521,15 @@ class SchedulerTests(LabFixture):
         self.assertEqual((row["state"], row["consecutive_failures"], row["last_error_code"]), (lab.DISCOVERED, 0, None))
 
     def test_lock_timing_invariants_hold(self):
-        disc_hold = max(lab.DISCOVERY_WALL_S) + lab.worst_case_probe_s(lab.DISCOVERY_HANDSHAKE_TIMEOUT_S) + lab.JOB_SLACK_S
+        # hard deadline: past the wall a run overruns by at most PROBE_OVERRUN_S (DeadlineTests prove the bound)
+        self.assertEqual(lab.PROBE_OVERRUN_S,
+                         max(lab.DEADLINE_CMD_FLOOR_S, lab.CURL_GRACE_S) + 2 * lab.TEARDOWN_TIMEOUT_S)
+        disc_hold = max(lab.DISCOVERY_WALL_S) + lab.PROBE_OVERRUN_S + lab.JOB_SLACK_S
         self.assertLess(disc_hold, lab.REFRESH_LOCK_WAIT_S)  # refresh always outlasts a discovery run
         with open(os.path.join(HERE, "systemd", "amnezia-endpoint-lab-refresh.service"), encoding="utf-8") as fh:
             unit = fh.read()
         timeout = int(re.search(r"^TimeoutStartSec=(\d+)$", unit, re.M).group(1))
-        refresh_total = (lab.REFRESH_LOCK_WAIT_S + lab.REFRESH_WALL_S
-                         + lab.worst_case_probe_s(lab.REFRESH_HANDSHAKE_TIMEOUT_S) + lab.JOB_SLACK_S)
+        refresh_total = lab.REFRESH_LOCK_WAIT_S + lab.REFRESH_WALL_S + lab.PROBE_OVERRUN_S + lab.JOB_SLACK_S
         self.assertLess(refresh_total, timeout)  # systemd never kills a refresh that waited and then ran
         with open(os.path.join(HERE, "systemd", "amnezia-endpoint-lab-discovery.service"), encoding="utf-8") as fh:
             disc_unit = fh.read()
@@ -910,6 +917,320 @@ class LinuxEngineTests(unittest.TestCase):
                 json.dump({"disabled_targets": ["https://evil.example"]}, fh)
             with self.assertRaises(lab.LabError):
                 lab.load_config(tmp)
+
+
+class TimedRunner(FakeRunner):
+    """FakeRunner on a shared simulated clock: a curl that times out takes its --max-time, other commands take
+    milliseconds. Records (argv, timeout, started, ended) so every command can be checked against the deadline."""
+
+    def __init__(self, t, **kw):
+        super().__init__(**kw)
+        self.t, self.log = t, []
+
+    def run(self, argv, input_text=None, check=True, timeout=lab.COMMAND_TIMEOUT_S):
+        start = self.t["now"]
+        res = super().run(argv, input_text, check, timeout)
+        if "curl" in argv:
+            cost = float(argv[argv.index("--max-time") + 1]) if res.returncode in lab.CURL_TIMEOUT_CODES else 0.05
+        else:
+            cost = 0.02 if "ping" in argv else 0.001
+        self.t["now"] += min(cost, timeout)
+        self.log.append((argv, timeout, start, self.t["now"]))
+        return res
+
+
+def timed_engine(t, runner):
+    def sleep(s):
+        t["now"] += s
+    eng = lab.LinuxWireGuardProbeEngine(runner, sleep=sleep, monotonic=lambda: t["now"])
+    eng.new_names = lambda: ("ael-abcdef", "aelabcdef")
+    return eng
+
+
+TEARDOWN = (["ip", "netns", "delete"], ["ip", "link", "delete"])
+
+
+class DeadlineEngineTests(unittest.TestCase):
+    """The probe engine never waits past the run deadline (plus the bounded overrun)."""
+
+    def probe(self, deadline_in, **runner_kw):
+        t = {"now": 100.0}
+        runner = TimedRunner(t, **runner_kw)
+        deadline = None if deadline_in is None else t["now"] + deadline_in
+        with tempfile.TemporaryDirectory() as tmp:
+            res = timed_engine(t, runner).deep_verify(lab.parse_endpoint("162.159.192.1", 2408), identity(tmp),
+                                                      lab.REFRESH_HANDSHAKE_TIMEOUT_S, deadline=deadline)
+        return res, runner, deadline, t["now"]
+
+    def assert_bounded(self, runner, deadline, ended):
+        grace = max(lab.DEADLINE_CMD_FLOOR_S, lab.CURL_GRACE_S)
+        for argv, timeout, start, end in runner.log:
+            if argv[:3] in TEARDOWN:
+                self.assertEqual(timeout, lab.TEARDOWN_TIMEOUT_S)
+                continue
+            self.assertLess(start, deadline, argv)                  # nothing new starts past the deadline
+            self.assertLessEqual(end, deadline + grace, argv)
+            if "curl" not in argv:
+                self.assertLessEqual(timeout, max(lab.DEADLINE_CMD_FLOOR_S, deadline - start) + 1e-9, argv)
+        self.assertLessEqual(ended, deadline + lab.PROBE_OVERRUN_S)
+        commands = [c[0] for c in runner.log]
+        self.assertIn(["ip", "netns", "delete", "ael-abcdef"], commands)              # torn down
+        self.assertIn(["ip", "link", "delete", "dev", "aelabcdef"], commands)
+
+    def test_budget_result_is_neither_an_endpoint_nor_a_lab_failure(self):
+        for res in (lab.ProbeResult(False, error_code=lab.BUDGET_EXHAUSTED),
+                    lab.ProbeResult(True, error_code=lab.BUDGET_EXHAUSTED)):
+            self.assertTrue(res.budget_exhausted)
+            self.assertFalse(res.endpoint_failure)
+            self.assertFalse(res.lab_failure)
+            self.assertFalse(res.inconclusive)
+
+    def test_handshake_wait_clamps_to_the_deadline(self):
+        res, runner, deadline, ended = self.probe(3, handshake_after=None)
+        self.assertEqual(res.error_code, lab.BUDGET_EXHAUSTED)
+        self.assertIn("handshake wait", res.message)                  # the wait itself was clamped
+        self.assertLessEqual(res.probe_completion_ms, (3 + lab.POLL_INTERVAL_S) * 1000)  # at most one poll late
+        self.assertFalse(res.endpoint_failure)
+        self.assert_bounded(runner, deadline, ended)
+        unbounded, _, _, _ = self.probe(None, handshake_after=None)   # the same endpoint without a deadline
+        self.assertEqual(unbounded.error_code, lab.HANDSHAKE_NO_RESPONSE)
+
+    def test_https_wait_clamps_to_the_deadline(self):
+        res, runner, deadline, ended = self.probe(6, failing_urls={"cdn-cgi": 28})
+        self.assertEqual(res.error_code, lab.BUDGET_EXHAUSTED)
+        self.assertEqual(res.target_results[-1], ("cf-1001", False, lab.BUDGET_EXHAUSTED))
+        times = [c[0][c[0].index("--max-time") + 1] for c in runner.log if "curl" in c[0]]
+        self.assertEqual(times[0], str(lab.TARGET_MAX_TIME_S))      # a full first wait
+        self.assertLess(float(times[1]), 2.0)                        # the second one only gets what is left
+        self.assert_bounded(runner, deadline, ended)
+
+    def test_second_session_is_not_started_without_budget(self):
+        # session #1 may start (>= MIN_SESSION_BUDGET_S left) but its handshake poll alone leaves less than that
+        res, runner, deadline, ended = self.probe(lab.MIN_SESSION_BUDGET_S + 0.05, failing_urls={"cdn-cgi": 35})
+        self.assertEqual(res.error_code, lab.BUDGET_EXHAUSTED)      # not TARGETS_UNREACHABLE (inconclusive)
+        self.assertFalse(res.inconclusive)
+        self.assertEqual(res.sessions, 1)
+        self.assertEqual(sum(c[0][:3] == ["ip", "netns", "add"] for c in runner.log), 1)
+        self.assert_bounded(runner, deadline, ended)
+
+    def test_no_session_starts_with_less_than_the_minimum_left(self):
+        res, runner, _, _ = self.probe(lab.MIN_SESSION_BUDGET_S - 0.1)
+        self.assertEqual(res.error_code, lab.BUDGET_EXHAUSTED)
+        self.assertEqual(runner.log, [])
+
+
+class TimedFakeEngine(FakeProbeEngine):
+    """FakeProbeEngine on a simulated clock: a probe costs cost(eid) seconds; one that would pass its deadline stops
+    there as BUDGET_EXHAUSTED, as the real engine does. timeline: (eid, start, end, deadline)."""
+
+    def __init__(self, t, outcomes=None, default=ok, cost=lambda eid: 1.0):
+        super().__init__(outcomes, default)
+        self.t, self.cost, self.timeline = t, cost, []
+
+    def deep_verify(self, endpoint, ident, timeout_s=None, targets=None, deadline=None):
+        start = self.t["now"]
+        res = super().deep_verify(endpoint, ident, timeout_s, targets, deadline)
+        c = self.cost(endpoint.endpoint_id)
+        if deadline is not None and start + c > deadline:
+            self.t["now"] = max(start, deadline)
+            res = lab.ProbeResult(False, error_code=lab.BUDGET_EXHAUSTED, message="simulated deadline")
+        else:
+            self.t["now"] = start + c
+        self.timeline.append((endpoint.endpoint_id, start, self.t["now"], deadline))
+        return res
+
+
+class DeadlineTests(LabFixture):
+    """One absolute deadline for every network step of a run: probes, controls, redo. No penalty without proof."""
+
+    def setUp(self):
+        super().setUp()
+        self.t = {"now": 1000.0}
+
+    def pool(self, n=8):
+        return [self.add(f"162.159.192.{i}", lab.OFFICIAL_PORTS[i % 4], lab.ACTIVE, successes=n - i)
+                for i in range(1, n + 1)]
+
+    def timed_lab(self, engine):
+        return lab.Lab(self.store, engine, identity_loader=lambda: identity(self.tmp.name),
+                       clock=lambda: self.clock_value, public_dir=self.public, monotonic=lambda: self.t["now"])
+
+    def assert_inside(self, engine, deadline):
+        for eid, start, end, dl in engine.timeline:
+            self.assertEqual(dl, deadline, eid)        # every call carries the run deadline
+            self.assertLessEqual(end, deadline, eid)
+
+    def test_every_network_step_gets_the_run_deadline(self):
+        ids = self.pool(6)
+        engine = TimedFakeEngine(self.t, {ids[3]: inconclusive})
+        self.timed_lab(engine).run_batch(ids[2:], "refresh", wall_s=45)
+        self.assertTrue(engine.timeline)
+        self.assert_inside(engine, 1000.0 + 45)
+
+    def test_controls_stop_at_the_deadline(self):
+        ids = self.pool(8)
+        c1, c2 = self.make_lab(FakeProbeEngine()).select_controls(NOW)
+        plan = [i for i in ids if i not in (c1, c2)]
+        engine = TimedFakeEngine(self.t, {plan[0]: inconclusive, c1: no_hs}, cost=lambda eid: 10.0)
+        before = self.failures()
+        out = self.timed_lab(engine).run_batch(plan, "refresh", wall_s=25)
+        self.assert_inside(engine, 1025.0)
+        self.assertEqual([e for e, *_ in engine.timeline], [plan[0], c1, c2])   # control #2 cut at the deadline
+        self.assertEqual(out.control.reason, lab.CONTROL_BUDGET_EXHAUSTED)
+        self.assertIsNone(out.control.global_ok)
+        self.assertEqual(self.failures(), before)       # neither the inconclusive probe nor control #1 is booked
+        self.assertEqual(set(self.states().values()), {lab.ACTIVE})
+        self.assertEqual((out.lab_health, out.lab_reason), (lab.LAB_DEGRADED, "BREAKER_BUDGET_EXHAUSTED"))
+
+    def test_no_control_probe_starts_without_the_minimum_left(self):
+        ids = self.pool(8)
+        c1, c2 = self.make_lab(FakeProbeEngine()).select_controls(NOW)
+        plan = [i for i in ids if i not in (c1, c2)]
+        engine = TimedFakeEngine(self.t, {plan[0]: inconclusive}, cost=lambda eid: 24.0)
+        out = self.timed_lab(engine).run_batch(plan, "refresh", wall_s=25)
+        self.assertEqual([e for e, *_ in engine.timeline], [plan[0]])   # 1 s left: no control is even started
+        self.assertEqual(out.control.reason, lab.CONTROL_BUDGET_EXHAUSTED)
+        self.assertEqual(out.control.results, {})
+
+    def test_redo_stops_at_the_deadline_and_books_nothing_unproven(self):
+        ids = self.pool(8)
+        c1, c2 = self.make_lab(FakeProbeEngine()).select_controls(NOW)
+        plan = [i for i in ids if i not in (c1, c2)][:5]
+        engine = TimedFakeEngine(self.t, {i: [no_hs, ok] for i in plan}, cost=lambda eid: 4.0)
+        before = self.failures()
+        out = self.timed_lab(engine).run_batch(plan, "refresh", wall_s=34)
+        self.assert_inside(engine, 1034.0)
+        self.assertTrue(out.control.global_ok)
+        redone = [e for e, *_ in engine.timeline[len(plan):] if e in plan]
+        self.assertLess(len(redone), len(plan))         # the deadline cut the redo short
+        self.assertEqual(self.failures(), before)       # nothing booked: redone ok, the rest unproven
+        self.assertEqual(set(self.states().values()), {lab.ACTIVE})
+        note = self.store.conn.execute("SELECT note FROM run ORDER BY id DESC LIMIT 1").fetchone()[0]
+        self.assertRegex(note, r"^budget_limited=[1-9]")
+
+    def test_anomaly_without_control_budget_books_no_penalty(self):
+        ids = self.pool(8)
+        c1, c2 = self.make_lab(FakeProbeEngine()).select_controls(NOW)
+        plan = [i for i in ids if i not in (c1, c2)][:5]
+        engine = TimedFakeEngine(self.t, {i: no_hs for i in plan}, cost=lambda eid: 9.0)
+        before = self.failures()
+        out = self.timed_lab(engine).run_batch(plan, "refresh", wall_s=30)
+        self.assert_inside(engine, 1030.0)
+        self.assertEqual(out.control.reason, lab.CONTROL_BUDGET_EXHAUSTED)
+        self.assertEqual(self.failures(), before)       # handshake failures in an anomaly need the breaker's verdict
+        self.assertEqual(set(self.states().values()), {lab.ACTIVE})
+        self.assertEqual(out.lab_reason, "BREAKER_BUDGET_EXHAUSTED")
+
+    def test_partial_results_are_committed_and_the_snapshot_published(self):
+        ids = self.pool(6)
+        engine = TimedFakeEngine(self.t, cost=lambda eid: 10.0)
+        before = {r["endpoint_id"]: r for r in self.store.all()}
+        out = self.timed_lab(engine).run_batch(ids, "refresh", wall_s=25)
+        self.assert_inside(engine, 1025.0)
+        done = [e for e, s, end, _ in engine.timeline if end - s == 10.0]
+        cut = [e for e, s, end, _ in engine.timeline if end - s < 10.0]
+        self.assertEqual((len(done), len(cut)), (2, 1))
+        after = {r["endpoint_id"]: r for r in self.store.all()}
+        for e in done:
+            self.assertEqual(after[e]["consecutive_successes"], before[e]["consecutive_successes"] + 1)
+        for e in cut + [i for i in ids if i not in done + cut]:   # cut short, or never started: untouched
+            self.assertEqual((after[e]["state"], after[e]["consecutive_successes"], after[e]["consecutive_failures"],
+                              after[e]["expires_at"]),
+                             (before[e]["state"], before[e]["consecutive_successes"],
+                              before[e]["consecutive_failures"], before[e]["expires_at"]))
+        obs = self.store.conn.execute("SELECT result, error_code FROM observation WHERE endpoint_id=? AND"
+                                      " probe_type='handshake'", (cut[0],)).fetchall()
+        self.assertEqual([tuple(o) for o in obs], [("suppressed", lab.BUDGET_EXHAUSTED)])
+        self.assertTrue(out.aborted)
+        self.assertTrue(out.snapshot_ok)
+        self.assertEqual(self.snapshot()["active_count"], 6)
+        status, note = self.store.conn.execute("SELECT status, note FROM run ORDER BY id DESC LIMIT 1").fetchone()
+        self.assertEqual((status, note), ("aborted", "budget_limited=1"))
+
+    def silent_controls_run(self, identity_check, wall_s):
+        """Three ACTIVE endpoints and both controls silent: the breaker asks the WARP API about the identity."""
+        ids = self.pool(8)
+        c1, c2 = self.make_lab(FakeProbeEngine()).select_controls(NOW)
+        plan = [i for i in ids if i not in (c1, c2)][:3]
+        engine = TimedFakeEngine(self.t, {i: no_hs for i in plan + [c1, c2]}, cost=lambda eid: 1.0)
+        runner = lab.Lab(self.store, engine, identity_loader=lambda: identity(self.tmp.name),
+                         clock=lambda: self.clock_value, public_dir=self.public, monotonic=lambda: self.t["now"],
+                         api=object())
+        with mock.patch.object(lab, "identity_api_check", identity_check):
+            started = time.monotonic()
+            out = runner.run_batch(plan, "refresh", wall_s=wall_s)
+        return out, time.monotonic() - started
+
+    def test_a_hanging_identity_api_never_holds_the_run(self):
+        release = threading.Event()
+        self.addCleanup(release.set)
+
+        def hanging(api, conf_dir=None):
+            release.wait(10)        # a blackholed API: DNS/connect never return in time
+            return "valid"
+        out, real_s = self.silent_controls_run(hanging, wall_s=8)   # 3 s left after the controls -> waits 1 s
+        self.assertLess(real_s, 4)
+        self.assertEqual(out.control.reason, "CONTROLS_SILENT")     # unknown, not a guess
+        self.assertNotIn("identity_api_checked_at", self.store.meta())
+
+    def test_identity_api_is_still_asked_when_time_allows(self):
+        out, _ = self.silent_controls_run(lambda api, conf_dir=None: "valid", wall_s=30)
+        self.assertEqual(out.control.reason, "WARP_UDP_UNREACHABLE")
+        self.assertEqual(self.store.meta()["identity_api_status"], "valid")
+
+    def real_engine_lab(self, **runner_kw):
+        runner = TimedRunner(self.t, **runner_kw)
+        return self.timed_lab(timed_engine(self.t, runner)), runner
+
+    def test_refresh_has_an_absolute_runtime_bound(self):
+        self.pool(12)
+        lab_, runner = self.real_engine_lab(failing_urls={"cdn-cgi": 28})   # every session handshakes, carries nothing
+        start = self.t["now"]
+        lab_.refresh(lab.Resources(10 ** 6, 0, 0.1, 2, 10 ** 10))
+        self.assertLessEqual(self.t["now"] - start, lab.REFRESH_WALL_S + lab.PROBE_OVERRUN_S)
+        deadline = start + lab.REFRESH_WALL_S
+        self.assertTrue(all(s < deadline for argv, _, s, _ in runner.log if argv[:3] not in TEARDOWN))
+        self.assertEqual(set(self.states().values()), {lab.ACTIVE})        # nothing proven, nothing booked
+
+    def test_discovery_has_an_absolute_runtime_bound(self):
+        ids = [self.add(f"162.159.192.{i}", lab.OFFICIAL_PORTS[i % 4]) for i in range(1, 13)]
+        lab_, runner = self.real_engine_lab(handshake_after=None)              # silent endpoints
+        start = self.t["now"]
+        wall = max(lab.DISCOVERY_WALL_S)
+        lab_.run_batch(ids, "discovery", lab.DISCOVERY_HANDSHAKE_TIMEOUT_S, wall, breaker=False)
+        self.assertLessEqual(self.t["now"] - start, wall + lab.PROBE_OVERRUN_S)
+        self.assertTrue(all(s < start + wall for argv, _, s, _ in runner.log if argv[:3] not in TEARDOWN))
+
+
+class HealthLabelTests(LabFixture):
+    """RCA 2026-10-05: a rescued probe (session #1 carried nothing, a fresh session reached the same target) is a
+    tunnel-session failure, not a target failure."""
+
+    def classify(self, results):
+        rows = [(f"162.159.192.{i}:2408", r, NOW) for i, r in enumerate(results, 1)]
+        return self.make_lab(FakeProbeEngine())._classify(rows, None, False, False, [])
+
+    def test_rescued_sessions_are_not_a_target_failure(self):
+        rescued = lab.ProbeResult(True, traffic_ok=True, sessions=2,
+                                  target_results=[("cf-1111", False, lab.HTTPS_TIMEOUT), ("cf-1111", True, None)])
+        self.assertEqual(self.classify([rescued, rescued, ok()]), (lab.LAB_DEGRADED, "SESSION_TRAFFIC_DEGRADED"))
+
+    def test_target_specific_failure_is_still_reported(self):
+        fell_through = lab.ProbeResult(True, traffic_ok=True, sessions=1,
+                                       target_results=[("cf-1111", False, lab.HTTPS_TIMEOUT), ("cf-1001", True, None)])
+        self.assertEqual(self.classify([fell_through, fell_through, ok()]),
+                         (lab.LAB_DEGRADED, "TARGET_FAILING:cf-1111"))
+
+    DEAD = lab.ProbeResult(True, error_code=lab.TRAFFIC_FAILED, sessions=2,
+                           target_results=[("cf-1111", False, lab.HTTPS_TIMEOUT)] * 2
+                           + [("cf-1001", False, lab.HTTPS_TIMEOUT), ("cf-www", False, lab.HTTPS_TIMEOUT)])
+
+    def test_a_few_dead_sessions_no_longer_flag_the_first_target(self):
+        # the old attempt count gave TARGET_FAILING:cf-1111 here (4 failed attempts >= half of 5 probes)
+        self.assertEqual(self.classify([self.DEAD, self.DEAD, ok(), ok(), ok()]), (lab.LAB_OK, "ok"))
+
+    def test_mostly_dead_sessions_are_a_session_problem_not_a_target_one(self):
+        self.assertEqual(self.classify([self.DEAD] * 3 + [ok(), ok()]), (lab.LAB_DEGRADED, "SESSION_TRAFFIC_DEGRADED"))
 
 
 class CleanupTests(unittest.TestCase):

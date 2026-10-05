@@ -222,14 +222,34 @@ cannot prove anything, endpoints keep their history and only age out by TTL.
 ## Scheduler
 
 systemd oneshot services + timers, no daemon. Both jobs share one `flock`. Refresh waits up to 90 s
-for it; discovery waits up to 40 s and then skips its slot. The wall budget is checked before each probe,
-so a job can overrun it by one worst-case probe (`worst_case_probe_s`: handshake timeout + 2 sessions ×
-(setup + 3 targets × 4 s) + 1 s, i.e. 32 s for discovery and 37 s for refresh). Discovery therefore holds
-the lock for at most 45 + 32 + 10 s slack = 87 s, less than refresh's 90 s wait, so refresh always wins. A
-refresh that waited the full 90 s and then overran takes at most 90 + 45 + 37 + 10 = 182 s, inside its
-`TimeoutStartSec=200`. `test_lock_timing_invariants_hold` checks both sums, reading the timeouts from the unit
-files. (Without that wait, discovery lost whole 30-minute slots to the
-rolling refresh.)
+for it; discovery waits up to 40 s and then skips its slot. (Without that wait, discovery lost whole
+30-minute slots to the rolling refresh.)
+
+**Hard deadline (2026-10-05).** A run's wall budget is one absolute monotonic deadline for every network
+step of the run. That covers planned probes, the second session, breaker controls and the anomaly redo.
+
+- **Inside a probe.** Every command, the handshake wait and `curl --max-time` are clamped to the time left.
+  No session, control or redo starts with less than 2 s left.
+- **What a cut-short step becomes.** A step that cannot finish in time ends as `BUDGET_EXHAUSTED`. That is a
+  scheduler condition, never an endpoint failure. The probe is recorded as `suppressed`, the endpoint keeps
+  its state, and its TTL decides. The run's `note` says `budget_limited=N`.
+- **Breaker short of time.** If the breaker has no time for a control, its verdict is unknown
+  (`CONTROL_BUDGET_EXHAUSTED`). Nothing that depends on the verdict is booked: inconclusive probes, and the
+  failures of an anomaly. The Lab reports `DEGRADED: BREAKER_BUDGET_EXHAUSTED`.
+- **Identity API check.** When both controls are silent, the breaker's WARP API check of the identity runs in
+  a daemon thread. The run waits for it only until 2 s before the deadline. Its own worst case is two attempts
+  with 20 s socket timeouts, and DNS has no timeout at all. An unfinished check leaves `CONTROLS_SILENT` and is
+  asked again by the next silent run.
+- **Bound past the deadline.** A run can only overrun by one bounded command already in flight plus the
+  teardown: `PROBE_OVERRUN_S` = max(0.5, 1) + 2 × 5 = 11 s.
+- **Lock bounds.** Discovery holds the lock for at most 45 + 11 + 10 s slack = 66 s, less than refresh's
+  90 s wait. A refresh that waited the full 90 s takes at most 90 + 45 + 11 + 10 = 156 s, inside its
+  `TimeoutStartSec=200`. The 10 s slack covers local work only: startup, DB commit, cap, snapshot.
+- **Tests.** `test_lock_timing_invariants_hold` checks both sums, reading the timeouts from the unit files.
+  `DeadlineEngineTests` and `DeadlineTests` prove the per-step clamps and the absolute bounds of refresh and
+  discovery.
+- **Before.** The wall was only checked before each loop probe, and the controls and redo after the loop ran
+  unbounded. One host run took 73.6 s through the redo, and the old formula (182 s) did not describe that path.
 
 | Job | Timer | Budget | Probes |
 | --- | --- | --- | --- |
@@ -341,7 +361,9 @@ Peak RSS ~34 MB per job.
 | All handshakes fail suddenly | unchanged | `UNAVAILABLE` (controls silent) | pool drains | Lab unavailable | automatic when the cause ends |
 | Handshake ok, no traffic (both sessions) | after a passing control: `TRAFFIC_FAILED` | OK | leaves pool | none | next refresh |
 | All verification targets down | unchanged | `UNAVAILABLE: VERIFICATION_TARGETS_UNAVAILABLE` | pool drains | Lab unavailable | automatic |
-| One target down | unchanged (quorum) | OK / `DEGRADED: TARGET_FAILING` | none | none | automatic |
+| One target down (it failed in probes where another target answered) | unchanged (quorum) | OK / `DEGRADED: TARGET_FAILING` | none | none | automatic |
+| Tunnel sessions carry no traffic (≥ half of the probes needed the second session; RCA 2026-10-05: the first target is tried first, so it used to be reported as `TARGET_FAILING`) | rescued by the second session | OK / `DEGRADED: SESSION_TRAFFIC_DEGRADED` | none | none | automatic |
+| Run deadline reached before a probe, control or redo could finish | unproven endpoints keep state until TTL | `DEGRADED: BREAKER_BUDGET_EXHAUSTED` when the breaker could not decide | none | none | automatic |
 | `wg` missing / module unavailable / netns fails | unchanged | `UNAVAILABLE` (`LOCAL_RESOURCE_ERROR`) | pool drains | Lab unavailable | operator |
 | Trigger cannot send | unchanged | `UNAVAILABLE`/`DEGRADED` (`LOCAL_RESOURCE_ERROR`) | pool drains | Lab unavailable | operator |
 | Cleanup fails / process killed mid-probe | unchanged, nothing recorded | — | none | none | startup sweep, `cleanup` |

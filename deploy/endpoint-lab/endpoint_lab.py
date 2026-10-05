@@ -44,6 +44,7 @@ import statistics
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from dataclasses import dataclass, field, replace
 
@@ -150,11 +151,21 @@ TARGET_ACTIVE, SOFT_FLOOR, MAX_ACTIVE = 24, 12, 48
 ACTIVE_HIGH = 28                    # hot working set: above this, park down to TARGET_ACTIVE (VERIFIED reserve)
 MAX_REFRESH_ENDPOINTS = 32
 REFRESH_WALL_S = 45
-# Lock timing invariants (a unit test checks them, including the unit file's TimeoutStartSec):
-#   discovery holds the lock at most max(DISCOVERY_WALL_S) + worst_case_probe_s(discovery) + slack
-#   < REFRESH_LOCK_WAIT_S, and REFRESH_LOCK_WAIT_S + REFRESH_WALL_S + worst_case_probe_s(refresh) + slack
-#   < the refresh unit's TimeoutStartSec. The wall budget is checked before each probe, so the last probe
-#   may overrun it by up to one worst-case probe.
+# Hard deadline: a run's wall budget is one absolute monotonic deadline for every network step of the run -
+# planned probes, second sessions, breaker controls and the anomaly redo. Every wait inside a probe (commands,
+# handshake wait, curl --max-time) is clamped to the time left; a step that cannot finish in time ends as
+# BUDGET_EXHAUSTED, which is never an endpoint failure. Past the deadline a run can only overrun by one bounded
+# command already in flight plus the probe teardown (PROBE_OVERRUN_S). Host data 2026-10-05: before this, the
+# wall was only checked before each loop probe, and the controls/redo after the loop ran unbounded (73.6 s).
+DEADLINE_CMD_FLOOR_S = 0.5          # the shortest timeout given to a command started just before the deadline
+CURL_GRACE_S = 1.0                  # subprocess timeout on top of curl --max-time near the deadline
+MIN_SESSION_BUDGET_S = 2.0          # no new tunnel session (probe, second session, control, redo) with less left
+TEARDOWN_TIMEOUT_S = 5              # each of the two teardown commands; teardown always runs
+PROBE_OVERRUN_S = max(DEADLINE_CMD_FLOOR_S, CURL_GRACE_S) + 2 * TEARDOWN_TIMEOUT_S
+# Lock timing invariants (a unit test checks them, including the units' TimeoutStartSec):
+#   discovery holds the lock at most max(DISCOVERY_WALL_S) + PROBE_OVERRUN_S + JOB_SLACK_S < REFRESH_LOCK_WAIT_S,
+#   and REFRESH_LOCK_WAIT_S + REFRESH_WALL_S + PROBE_OVERRUN_S + JOB_SLACK_S < the refresh unit's TimeoutStartSec.
+#   JOB_SLACK_S covers local work only (startup, DB commit, cap, snapshot); no network wait hides in it.
 REFRESH_LOCK_WAIT_S = 90
 JOB_SLACK_S = 10                    # startup, cleanup sweep, commit, snapshot
 # Rolling refresh holds the lock ~15-25% of the time; without waiting, discovery lost whole 30-min slots
@@ -213,10 +224,13 @@ LOCAL_RESOURCE_ERROR = "LOCAL_RESOURCE_ERROR"
 RATE_LIMITED = "RATE_LIMITED"
 CANCELLED = "CANCELLED"
 UNKNOWN = "UNKNOWN"
+# Scheduler condition, not an endpoint or Lab fault: the run deadline left no time to prove this endpoint.
+BUDGET_EXHAUSTED = "BUDGET_EXHAUSTED"
+CONTROL_BUDGET_EXHAUSTED = "CONTROL_BUDGET_EXHAUSTED"   # control verdict reason: no time to verify a control
 ERROR_CODES = (TIMEOUT, HANDSHAKE_NO_RESPONSE, HANDSHAKE_INVALID_OR_UNEXPECTED, TUNNEL_SETUP_FAILED,
                ROUTE_SETUP_FAILED, DNS_FAILED, HTTPS_TIMEOUT, HTTPS_TLS_FAILED, TRAFFIC_FAILED,
                TARGETS_UNREACHABLE, PROBE_IDENTITY_INVALID, PROBE_IDENTITY_AMBIGUOUS, LOCAL_RESOURCE_ERROR,
-               RATE_LIMITED, CANCELLED, UNKNOWN)
+               RATE_LIMITED, CANCELLED, UNKNOWN, BUDGET_EXHAUSTED)
 # Failures of the Lab itself: they never penalise an endpoint. UNKNOWN is treated as ours too.
 LAB_FAILURE_CODES = frozenset({TUNNEL_SETUP_FAILED, ROUTE_SETUP_FAILED, PROBE_IDENTITY_INVALID,
                                PROBE_IDENTITY_AMBIGUOUS, LOCAL_RESOURCE_ERROR, RATE_LIMITED, CANCELLED, UNKNOWN})
@@ -728,18 +742,25 @@ class ProbeResult:
         return self.handshake_ok and self.error_code == TARGETS_UNREACHABLE
 
     @property
+    def budget_exhausted(self) -> bool:
+        """The run deadline cut this probe short: nothing about the endpoint was proven."""
+        return self.error_code == BUDGET_EXHAUSTED
+
+    @property
     def endpoint_failure(self) -> bool:
-        return not self.ok and not self.lab_failure and not self.inconclusive
+        return not self.ok and not self.lab_failure and not self.inconclusive and not self.budget_exhausted
 
 
 class ProbeEngine:
-    """Network side of the Lab. Business logic depends only on this interface."""
+    """Network side of the Lab. Business logic depends only on this interface. `deadline` is an absolute
+    time.monotonic() value: the probe must not wait past it (see PROBE_OVERRUN_S)."""
 
-    def probe_handshake(self, endpoint: Endpoint, identity: Identity, timeout_s: float | None = None) -> ProbeResult:
+    def probe_handshake(self, endpoint: Endpoint, identity: Identity, timeout_s: float | None = None,
+                        deadline: float | None = None) -> ProbeResult:
         raise NotImplementedError
 
     def deep_verify(self, endpoint: Endpoint, identity: Identity, timeout_s: float | None = None,
-                    targets: list | None = None) -> ProbeResult:
+                    targets: list | None = None, deadline: float | None = None) -> ProbeResult:
         raise NotImplementedError
 
 
@@ -761,6 +782,7 @@ class LinuxWireGuardProbeEngine(ProbeEngine):
                  clock=now_s):
         self.runner = runner or CommandRunner()
         self.sleep, self.monotonic, self.clock = sleep, monotonic, clock
+        self._deadline: float | None = None     # absolute monotonic deadline of the current probe, if any
 
     # names are generated here, never derived from input
     @staticmethod
@@ -768,12 +790,27 @@ class LinuxWireGuardProbeEngine(ProbeEngine):
         token = secrets.token_hex(3)
         return f"{NS_PREFIX}{token}", f"{IF_PREFIX}{token}"
 
+    def _timeout(self, default: float) -> float:
+        """Timeout for one bounded command: never past the probe deadline (beyond a sub-second floor)."""
+        if self._deadline is None:
+            return default
+        left = self._deadline - self.monotonic()
+        if left <= 0:
+            raise LabError(BUDGET_EXHAUSTED, "run deadline reached")
+        return max(DEADLINE_CMD_FLOOR_S, min(default, left))
+
+    def _past_deadline(self) -> bool:
+        return self._deadline is not None and self.monotonic() >= self._deadline
+
+    def _cmd(self, argv: list[str], check: bool = True, timeout: float = COMMAND_TIMEOUT_S) -> CommandResult:
+        return self.runner.run(argv, check=check, timeout=self._timeout(timeout))
+
     def preflight(self) -> None:
-        self.runner.run(["wg", "--version"])
-        self.runner.run(["modprobe", "wireguard"])
+        self._cmd(["wg", "--version"])
+        self._cmd(["modprobe", "wireguard"])
 
     def _setup(self, ns: str, ifname: str, endpoint: Endpoint, identity: Identity) -> None:
-        r = self.runner.run
+        r = self._cmd
         try:
             r(["ip", "netns", "add", ns])
             r(["ip", "link", "add", "dev", ifname, "type", "wireguard"])
@@ -797,9 +834,9 @@ class LinuxWireGuardProbeEngine(ProbeEngine):
         self._assert_isolated(ns, ifname)
 
     def _assert_isolated(self, ns: str, ifname: str) -> None:
-        links = self.runner.run(["ip", "-n", ns, "-o", "link", "show"]).stdout
+        links = self._cmd(["ip", "-n", ns, "-o", "link", "show"]).stdout
         names = sorted(m.group(1) for m in re.finditer(r"^\d+:\s+([^:@\s]+)", links, re.M))
-        routes = [line.split() for line in self.runner.run(["ip", "-n", ns, "-4", "route", "show"]).stdout.splitlines()
+        routes = [line.split() for line in self._cmd(["ip", "-n", ns, "-4", "route", "show"]).stdout.splitlines()
                   if line.strip()]
         defaults = [r for r in routes if r and r[0] == "default"]
         if names != sorted(["lo", ifname]) or len(defaults) != 1 or defaults[0][:3] != ["default", "dev", ifname]:
@@ -807,40 +844,54 @@ class LinuxWireGuardProbeEngine(ProbeEngine):
 
     def _wg_counters(self, ns: str, ifname: str) -> tuple[int, int, int]:
         """(latest_handshake_s, rx_bytes, tx_bytes). Uses subcommands that never print the private key."""
-        hs = self.runner.run(["ip", "netns", "exec", ns, "wg", "show", ifname, "latest-handshakes"]).stdout.split()
-        tr = self.runner.run(["ip", "netns", "exec", ns, "wg", "show", ifname, "transfer"]).stdout.split()
+        hs = self._cmd(["ip", "netns", "exec", ns, "wg", "show", ifname, "latest-handshakes"]).stdout.split()
+        tr = self._cmd(["ip", "netns", "exec", ns, "wg", "show", ifname, "transfer"]).stdout.split()
         try:
             return int(hs[1]), int(tr[1]), int(tr[2])
         except (IndexError, ValueError):
             raise LabError(LOCAL_RESOURCE_ERROR, "unexpected wg show output") from None
 
     def _trigger(self, ns: str) -> None:
-        self.runner.run(["ip", "netns", "exec", ns, "ping", "-c", "1", "-W", "1", "-q", TRIGGER_TARGET],
-                        check=False, timeout=5)
+        self._cmd(["ip", "netns", "exec", ns, "ping", "-c", "1", "-W", "1", "-q", TRIGGER_TARGET],
+                  check=False, timeout=5)
 
-    def _await_handshake(self, ns: str, ifname: str, timeout_s: float) -> tuple[int | None, int]:
+    def _await_handshake(self, ns: str, ifname: str, timeout_s: float) -> tuple[int | None, int, bool]:
+        """(handshake timestamp or None, waited ms, cut short by the deadline)."""
         start = self.monotonic()
+        limit, clamped = timeout_s, False
+        if self._deadline is not None and self._deadline - start < timeout_s:
+            limit, clamped = max(0.0, self._deadline - start), True
         next_trigger = start
         while True:
             elapsed = self.monotonic() - start
-            if elapsed >= timeout_s:
-                return None, int(elapsed * 1000)
+            if elapsed >= limit:
+                return None, int(elapsed * 1000), clamped
             if self.monotonic() >= next_trigger:
                 self._trigger(ns)
                 next_trigger = self.monotonic() + TRIGGER_INTERVAL_S
             latest, _, _ = self._wg_counters(ns, ifname)
             if latest > 0:  # fresh interface: any handshake timestamp is from this probe
-                return latest, int((self.monotonic() - start) * 1000)
+                return latest, int((self.monotonic() - start) * 1000), False
             self.sleep(POLL_INTERVAL_S)
 
-    def _curl(self, ns: str, url: str, extra: list) -> tuple[int, str, dict]:
+    def _curl(self, ns: str, url: str, extra: list) -> tuple[int, str, dict, bool]:
+        """(curl exit code, body, write-out info, --max-time cut short by the deadline)."""
+        max_time, clamped, sub_timeout = float(TARGET_MAX_TIME_S), False, TARGET_MAX_TIME_S + 5
+        if self._deadline is not None:
+            left = self._deadline - self.monotonic()
+            if left < DEADLINE_CMD_FLOOR_S:
+                raise LabError(BUDGET_EXHAUSTED, "run deadline reached before the HTTPS check")
+            if left < max_time:
+                max_time, clamped = left, True
+            # unclamped curl keeps its usual +5 s guard while that still fits before the deadline
+            sub_timeout = min(TARGET_MAX_TIME_S + 5, left + CURL_GRACE_S)
         marker = "\n__AEL__"
         argv = ["ip", "netns", "exec", ns, "curl", "--silent", "--show-error", "--proto", "=https",
-                "--tlsv1.2", "--max-time", str(TARGET_MAX_TIME_S), "--max-filesize", str(HTTPS_MAX_BYTES),
-                "--output", "-", "--write-out",
+                "--tlsv1.2", "--max-time", f"{max_time:.2f}" if clamped else str(TARGET_MAX_TIME_S),
+                "--max-filesize", str(HTTPS_MAX_BYTES), "--output", "-", "--write-out",
                 marker + " %{http_code} %{ssl_verify_result} %{time_appconnect} %{time_total}",
                 *extra, url]
-        res = self.runner.run(argv, check=False, timeout=TARGET_MAX_TIME_S + 5)
+        res = self.runner.run(argv, check=False, timeout=sub_timeout)
         body, _, tail = res.stdout.rpartition(marker)
         parts = tail.split()
         info = {}
@@ -848,18 +899,26 @@ class LinuxWireGuardProbeEngine(ProbeEngine):
             if len(parts) == 4:
                 info = {"http_code": int(parts[0]), "ssl_verify_result": parts[1],
                         "time_appconnect_s": float(parts[2]), "time_total_s": float(parts[3])}
-        return res.returncode, body[:HTTPS_MAX_BYTES], info
+        return res.returncode, body[:HTTPS_MAX_BYTES], info, clamped
 
     def _teardown(self, ns: str, ifname: str) -> None:
-        self.runner.run(["ip", "netns", "delete", ns], check=False)       # destroys the moved interface
-        self.runner.run(["ip", "link", "delete", "dev", ifname], check=False)  # if it never moved
+        """Always runs, also past the deadline; bounded by 2 x TEARDOWN_TIMEOUT_S. Deleting the namespace destroys
+        the moved interface; the link delete covers an interface that never moved."""
+        self.runner.run(["ip", "netns", "delete", ns], check=False, timeout=TEARDOWN_TIMEOUT_S)
+        self.runner.run(["ip", "link", "delete", "dev", ifname], check=False, timeout=TEARDOWN_TIMEOUT_S)
 
     def _verify_traffic(self, ns: str, ifname: str, targets: list, result: ProbeResult,
                         give_up_on_timeout: bool = False) -> None:
         """Any-one quorum over the verification targets; each target is tried at most once."""
         for target in targets:
             _, rx0, tx0 = self._wg_counters(ns, ifname)
-            code, body, info = self._curl(ns, target.url, list(target.extra))
+            code, body, info, clamped = self._curl(ns, target.url, list(target.extra))
+            if clamped and code in CURL_TIMEOUT_CODES:
+                # cut short by the run deadline, not by the target: nothing is proven either way
+                result.target_results.append((target.name, False, BUDGET_EXHAUSTED))
+                result.error_code = BUDGET_EXHAUSTED
+                result.message = "run deadline reached during the HTTPS check"
+                return
             _, rx1, tx1 = self._wg_counters(ns, ifname)
             if code in CURL_TIMEOUT_CODES:
                 err = HTTPS_TIMEOUT
@@ -888,19 +947,32 @@ class LinuxWireGuardProbeEngine(ProbeEngine):
             f"{n}={e}" for n, _, e in result.target_results)
 
     def _run(self, endpoint: Endpoint, identity: Identity, deep: bool, timeout_s: float,
-             targets: list | None) -> ProbeResult:
+             targets: list | None, deadline: float | None = None) -> ProbeResult:
         """A deep probe gets a second, fresh session only when the first one handshook but no target
-        answered; a real endpoint fault fails both. Handshake failures are never retried here."""
-        earlier: list = []
-        last = MAX_SESSIONS_PER_PROBE if deep else 1
-        for session in range(1, last + 1):
-            result = self._session(endpoint, identity, deep, timeout_s, targets, may_give_up=session < last)
-            result.sessions = session
-            result.target_results = earlier + result.target_results
-            if not result.inconclusive:
-                return result
-            earlier = result.target_results
-        return result
+        answered; a real endpoint fault fails both. Handshake failures are never retried here. No session
+        starts with less than MIN_SESSION_BUDGET_S before the deadline: an unproven probe is BUDGET_EXHAUSTED
+        (a first session that handshook but carried nothing is not booked as inconclusive then)."""
+        self._deadline = deadline
+        try:
+            earlier: list = []
+            result: ProbeResult | None = None
+            last = MAX_SESSIONS_PER_PROBE if deep else 1
+            for session in range(1, last + 1):
+                if deadline is not None and deadline - self.monotonic() < MIN_SESSION_BUDGET_S:
+                    if result is None:
+                        return ProbeResult(False, error_code=BUDGET_EXHAUSTED,
+                                           message="run deadline: no time left for a tunnel session")
+                    return replace(result, error_code=BUDGET_EXHAUSTED,
+                                   message="run deadline: no time left for a second session")
+                result = self._session(endpoint, identity, deep, timeout_s, targets, may_give_up=session < last)
+                result.sessions = session
+                result.target_results = earlier + result.target_results
+                if not result.inconclusive:
+                    return result
+                earlier = result.target_results
+            return result
+        finally:
+            self._deadline = None
 
     def _session(self, endpoint: Endpoint, identity: Identity, deep: bool, timeout_s: float,
                  targets: list | None, may_give_up: bool = False) -> ProbeResult:
@@ -911,7 +983,10 @@ class LinuxWireGuardProbeEngine(ProbeEngine):
             self._setup(ns, ifname, endpoint, identity)
             evidence["namespace_isolated"] = True
             _, rx0, tx0 = self._wg_counters(ns, ifname)
-            latest, waited_ms = self._await_handshake(ns, ifname, timeout_s)
+            latest, waited_ms, cut_short = self._await_handshake(ns, ifname, timeout_s)
+            if latest is None and cut_short:
+                return ProbeResult(False, error_code=BUDGET_EXHAUSTED, probe_completion_ms=waited_ms,
+                                   message="run deadline reached during the handshake wait", evidence=evidence)
             if latest is None:
                 _, rx1, tx1 = self._wg_counters(ns, ifname)
                 evidence.update(rx_before=rx0, tx_before=tx0, rx_after=rx1, tx_after=tx1)
@@ -927,21 +1002,28 @@ class LinuxWireGuardProbeEngine(ProbeEngine):
             if deep:
                 self._verify_traffic(ns, ifname, list(targets or VERIFICATION_TARGETS), result,
                                      give_up_on_timeout=may_give_up and waited_ms >= SLOW_HANDSHAKE_MS)
-            _, rx1, tx1 = self._wg_counters(ns, ifname)
-            evidence.update(rx_before=rx0, tx_before=tx0, rx_after=rx1, tx_after=tx1)
-            result.traffic_bytes = (rx1 - rx0) + (tx1 - tx0)
+            try:  # byte accounting only: the verdict above already checked the counters it needs
+                _, rx1, tx1 = self._wg_counters(ns, ifname)
+                evidence.update(rx_before=rx0, tx_before=tx0, rx_after=rx1, tx_after=tx1)
+                result.traffic_bytes = (rx1 - rx0) + (tx1 - tx0)
+            except LabError as exc:
+                if exc.code != BUDGET_EXHAUSTED:
+                    raise
             return result
         except LabError as exc:
-            return ProbeResult(False, error_code=exc.code, message=str(exc), evidence=evidence)
+            # anything that broke once the deadline had passed was cut short by it, not by the endpoint
+            code = BUDGET_EXHAUSTED if self._past_deadline() else exc.code
+            return ProbeResult(False, error_code=code, message=str(exc), evidence=evidence)
         finally:  # also on KeyboardInterrupt / SIGTERM: tear down, then let the run abort unrecorded
             self._teardown(ns, ifname)
 
-    def probe_handshake(self, endpoint: Endpoint, identity: Identity, timeout_s: float | None = None) -> ProbeResult:
-        return self._run(endpoint, identity, False, timeout_s or REFRESH_HANDSHAKE_TIMEOUT_S, None)
+    def probe_handshake(self, endpoint: Endpoint, identity: Identity, timeout_s: float | None = None,
+                        deadline: float | None = None) -> ProbeResult:
+        return self._run(endpoint, identity, False, timeout_s or REFRESH_HANDSHAKE_TIMEOUT_S, None, deadline)
 
     def deep_verify(self, endpoint: Endpoint, identity: Identity, timeout_s: float | None = None,
-                    targets: list | None = None) -> ProbeResult:
-        return self._run(endpoint, identity, True, timeout_s or REFRESH_HANDSHAKE_TIMEOUT_S, targets)
+                    targets: list | None = None, deadline: float | None = None) -> ProbeResult:
+        return self._run(endpoint, identity, True, timeout_s or REFRESH_HANDSHAKE_TIMEOUT_S, targets, deadline)
 
 
 def find_stale_resources(netns_list: str, link_list: str) -> tuple[list[str], list[str]]:
@@ -1442,9 +1524,9 @@ def usage_snapshot() -> tuple[float, int]:
 # --- orchestration -----------------------------------------------------------------------------------------------
 @dataclass
 class ControlVerdict:
-    global_ok: bool | None          # True: a control passed; False: all controls failed; None: no controls
+    global_ok: bool | None          # True: a control passed; False: all controls failed; None: unknown
     results: dict                   # endpoint_id -> (ProbeResult, finished_at)
-    reason: str
+    reason: str                     # None comes with NO_CONTROLS or CONTROL_BUDGET_EXHAUSTED (no time left)
 
 
 @dataclass
@@ -1503,14 +1585,24 @@ class Lab:
                                 if chosen else "no ACTIVE endpoint available")
         return chosen
 
-    def control_check(self, identity: Identity, now: int) -> ControlVerdict:
+    def _time_left(self, deadline: float | None) -> float:
+        return float("inf") if deadline is None else deadline - self.monotonic()
+
+    def control_check(self, identity: Identity, now: int, deadline: float | None = None) -> ControlVerdict:
+        """Controls share the run deadline. Without time to verify a control the verdict is unknown
+        (global_ok None, CONTROL_BUDGET_EXHAUSTED): missing time is never evidence of a global failure."""
         controls = self.select_controls(now)
         if not controls:
             return ControlVerdict(None, {}, "NO_CONTROLS")
         results: dict = {}
         for cid in controls:
-            res = self.engine.deep_verify(parse_endpoint_id(cid), identity, REFRESH_HANDSHAKE_TIMEOUT_S, self.targets)
+            if self._time_left(deadline) < MIN_SESSION_BUDGET_S:
+                return ControlVerdict(None, results, CONTROL_BUDGET_EXHAUSTED)
+            res = self.engine.deep_verify(parse_endpoint_id(cid), identity, REFRESH_HANDSHAKE_TIMEOUT_S, self.targets,
+                                          deadline=deadline)
             results[cid] = (res, self.clock())
+            if res.budget_exhausted:
+                return ControlVerdict(None, results, CONTROL_BUDGET_EXHAUSTED)
             self._note_targets(res)
             if res.ok:
                 return ControlVerdict(True, results, f"control {cid} verified")
@@ -1524,12 +1616,33 @@ class Lab:
             if self.api is not None:
                 last = int(self.store.meta().get("identity_api_checked_at", "0") or 0)
                 if now - last >= IDENTITY_API_CHECK_INTERVAL_S:
-                    status = identity_api_check(self.api)
-                    self.store.set_meta("identity_api_status", status)
-                    self.store.set_meta("identity_api_checked_at", now)
-                    reason = {"invalid": PROBE_IDENTITY_INVALID, "valid": "WARP_UDP_UNREACHABLE",
-                              "unknown": "VPS_NETWORK_OR_API_UNREACHABLE"}[status]
+                    status = self._bounded_identity_check(deadline)
+                    if status is not None:   # None: no time left to ask; the next silent run asks again
+                        self.store.set_meta("identity_api_status", status)
+                        self.store.set_meta("identity_api_checked_at", now)
+                        reason = {"invalid": PROBE_IDENTITY_INVALID, "valid": "WARP_UDP_UNREACHABLE",
+                                  "unknown": "VPS_NETWORK_OR_API_UNREACHABLE"}[status]
         return ControlVerdict(False, results, reason)
+
+    def _bounded_identity_check(self, deadline: float | None) -> str | None:
+        """identity_api_check under the run deadline. Its own worst case (two attempts with 20 s socket timeouts,
+        DNS not covered at all) is far beyond PROBE_OVERRUN_S, so with a deadline it runs in a daemon thread that
+        the run waits for at most until MIN_SESSION_BUDGET_S before the deadline; an unfinished check returns None
+        and dies with the process. Without a deadline (manual commands) it runs inline."""
+        if deadline is None:
+            return identity_api_check(self.api)
+        wait = self._time_left(deadline) - MIN_SESSION_BUDGET_S
+        if wait <= 0:
+            return None
+        box: dict = {}
+
+        def check() -> None:
+            with contextlib.suppress(Exception):
+                box["status"] = identity_api_check(self.api)
+        worker = threading.Thread(target=check, name="identity-api-check", daemon=True)
+        worker.start()
+        worker.join(wait)
+        return box.get("status")
 
     # -- the batch with its circuit breaker
     def run_batch(self, endpoint_ids: list[str], kind: str = "manual", timeout_s: float = REFRESH_HANDSHAKE_TIMEOUT_S,
@@ -1542,6 +1655,7 @@ class Lab:
                 raise LabError(UNKNOWN, f"{eid} is blacklisted")
         operation_id = secrets.token_hex(8)
         started, start_mono = self.clock(), self.monotonic()
+        deadline = None if wall_s is None else start_mono + wall_s   # one hard deadline for every network step
         cpu0, _ = usage_snapshot()
         before = {eid: Store.to_row(self.store.get(eid)) for eid in endpoint_ids}
         results: list = []          # [(eid, result, finished_at)]
@@ -1558,16 +1672,17 @@ class Lab:
 
         def check() -> None:
             nonlocal verdict, verdict_at
-            verdict = self.control_check(identity, self.clock())
+            verdict = self.control_check(identity, self.clock(), deadline)
             verdict_at = len(results)
             control_runs.append(verdict)
         if identity is not None:
             bad_streak = 0
             for eid in endpoint_ids:
-                if wall_s is not None and self.monotonic() - start_mono > wall_s:
+                if self._time_left(deadline) < MIN_SESSION_BUDGET_S:
                     aborted = True  # budget spent: the rest simply ages
                     break
-                res = self.engine.deep_verify(parse_endpoint_id(eid), identity, timeout_s, self.targets)
+                res = self.engine.deep_verify(parse_endpoint_id(eid), identity, timeout_s, self.targets,
+                                              deadline=deadline)
                 results.append((eid, res, self.clock()))
                 self._note_targets(res)
                 was_active = before[eid].state == ACTIVE
@@ -1585,8 +1700,8 @@ class Lab:
         anomaly = len(prev_active) >= ANOMALY_MIN and len(failed_prev) >= max(ANOMALY_MIN,
                                                                                math.ceil(ANOMALY_SHARE * len(prev_active)))
         any_inconclusive = any(r.inconclusive for _, r, _ in results)
-        mass_failure = (len(results) >= ANOMALY_MIN and all(r.endpoint_failure or r.inconclusive
-                                                             for _, r, _ in results))
+        proven = [r for _, r, _ in results if not r.budget_exhausted]   # cut-short probes say nothing either way
+        mass_failure = (len(proven) >= ANOMALY_MIN and all(r.endpoint_failure or r.inconclusive for r in proven))
         if breaker and identity is not None and (anomaly or any_inconclusive or mass_failure):
             # A verdict is valid only for results obtained before it: anything bad that came later
             # (e.g. targets dying mid-batch) needs a fresh control check before it can be booked.
@@ -1595,19 +1710,27 @@ class Lab:
             if verdict is None or (verdict.global_ok is not False and bad_after):
                 check()
         global_ok = verdict.global_ok if verdict else True
+        unproven: set = set()   # failures the redo had no time to re-verify: kept unbooked, the TTL decides
         if breaker and identity is not None and verdict and global_ok is True and anomaly:
             # The path works again: re-verify the mass failure once instead of booking a transient blip.
             controlled = {c for run in control_runs for c in run.results}
             redo = [e for e in failed_prev if e not in controlled]
             index = {e: i for i, (e, _, _) in enumerate(results)}
             for eid in redo:
-                res = self.engine.deep_verify(parse_endpoint_id(eid), identity, timeout_s, self.targets)
+                if self._time_left(deadline) < MIN_SESSION_BUDGET_S:
+                    unproven.add(eid)
+                    continue
+                res = self.engine.deep_verify(parse_endpoint_id(eid), identity, timeout_s, self.targets,
+                                              deadline=deadline)
                 results[index[eid]] = (eid, res, self.clock())
-            if any(results[index[e]][1].inconclusive for e in redo):
+            if any(results[index[e]][1].inconclusive for e in redo if e not in unproven):
                 check()  # the re-check itself may have hit a fresh outage
                 global_ok = verdict.global_ok
+        # The breaker ran out of time: whatever depends on its verdict is not booked this run.
+        breaker_short = breaker and verdict is not None and verdict.reason == CONTROL_BUDGET_EXHAUSTED
         lab_failures = [r for _, r, _ in results if r.lab_failure]
-        no_controls_mass = breaker and mass_failure and verdict is not None and verdict.global_ok is None
+        no_controls_mass = (breaker and mass_failure and verdict is not None and verdict.global_ok is None
+                            and not breaker_short)
         recorded = []
         now = self.clock()
         try:
@@ -1617,10 +1740,14 @@ class Lab:
                     apply = True
                     if eid in controlled:
                         apply = False                       # its later control probe decides, never twice
+                    elif res.budget_exhausted or eid in unproven:
+                        apply = False                       # not proven before the deadline: state and TTL stay
                     elif res.ok or res.lab_failure:
                         pass
                     elif global_ok is False or no_controls_mass:
                         apply = False                       # Lab/global failure: no endpoint penalty
+                    elif breaker_short and (anomaly or mass_failure):
+                        apply = False                       # the breaker could not decide in time: no penalty
                     elif res.inconclusive:
                         if breaker and global_ok is True:
                             res = replace(res, error_code=TRAFFIC_FAILED,
@@ -1633,7 +1760,7 @@ class Lab:
                 for n, run in enumerate(control_runs):
                     for cid, (res, ts) in run.results.items():
                         apply = last_check[cid] == n        # one transition per control endpoint per batch
-                        if res.lab_failure:
+                        if res.lab_failure or res.budget_exhausted:
                             apply = False
                         elif not res.ok:
                             if run.global_ok is True:       # another control passed in that same check
@@ -1643,7 +1770,11 @@ class Lab:
                             else:
                                 apply = False
                         self.store.record(cid, res, True, ts, operation_id, apply_transition=apply, run_kind="control")
-                health, reason = self._classify(results, verdict, anomaly, no_controls_mass, lab_failures)
+                health, reason = self._classify(results, verdict, anomaly, no_controls_mass, lab_failures,
+                                                breaker_short)
+                budget_limited = (sum(r.budget_exhausted for _, r, _ in results) + len(unproven)
+                                  + sum(r.budget_exhausted for run in control_runs for r, _ in run.results.values()))
+                note = f"budget_limited={budget_limited}" if budget_limited or aborted else None
                 if breaker or (results and len(lab_failures) == len(results)):
                     self._set_health(health, reason, now)  # pool refreshes own the Lab health; discovery reports only
                 self._enforce_cap(now, operation_id)
@@ -1660,7 +1791,7 @@ class Lab:
                      sum(r.endpoint_failure for _, r in recorded), len(lab_failures),
                      sum(r.inconclusive for _, r, _ in results), active_after, int((cpu1 - cpu0) * 1000), rss,
                      res_now.mem_available_kb, res_now.swap_used_kb,
-                     sum((r.traffic_bytes or 0) for _, r, _ in results), None))
+                     sum((r.traffic_bytes or 0) for _, r, _ in results), note))
                 self.store.set_meta(f"last_{kind}_at", now)
                 self.store.set_meta("last_run_status", health)
                 self.store.set_meta("last_operation_id", operation_id)
@@ -1685,7 +1816,8 @@ class Lab:
                                  expires_at=None, active_since=None)
         return min(excess, len(ranked))
 
-    def _classify(self, results, verdict, anomaly, no_controls_mass, lab_failures) -> tuple[str, str]:
+    def _classify(self, results, verdict, anomaly, no_controls_mass, lab_failures,
+                  breaker_short: bool = False) -> tuple[str, str]:
         if results and len(lab_failures) == len(results):
             return LAB_UNAVAILABLE, lab_failures[0].error_code or UNKNOWN
         if verdict is not None and verdict.global_ok is False:
@@ -1696,17 +1828,28 @@ class Lab:
             return LAB_DEGRADED, "TRANSIENT_ANOMALY_RECHECKED"
         if lab_failures:
             return LAB_DEGRADED, lab_failures[0].error_code or UNKNOWN
+        if breaker_short and (anomaly or any(r.inconclusive for _, r, _ in results)):
+            return LAB_DEGRADED, "BREAKER_BUDGET_EXHAUSTED"
         if verdict is not None and verdict.global_ok is None and any(r.inconclusive for _, r, _ in results):
             return LAB_DEGRADED, "NO_CONTROLS"
+        # Target vs path (RCA 2026-10-05): every target is tried first in a fresh session, so a session that
+        # carries no traffic fails the first target too. A target counts as failing only on target-specific
+        # evidence - it failed inside a probe where another target answered. Sessions that reached nobody are a
+        # tunnel-session failure (the second session usually rescues them), reported as such.
+        probed = [r for _, r, _ in results if r.target_results and not r.budget_exhausted]
         failed_targets: dict = {}
-        probed = [r for _, r, _ in results if r.target_results]
         for r in probed:
-            for name, ok, _ in r.target_results:
-                if not ok:
-                    failed_targets[name] = failed_targets.get(name, 0) + 1
-        bad = sorted(n for n, c in failed_targets.items() if probed and c * 2 >= len(probed))
+            worked = {name for name, ok, _ in r.target_results if ok}
+            if not worked:
+                continue
+            for name in {n for n, ok, e in r.target_results if not ok and n not in worked and e != BUDGET_EXHAUSTED}:
+                failed_targets[name] = failed_targets.get(name, 0) + 1
+        bad = sorted(n for n, c in failed_targets.items() if c * 2 >= len(probed))
         if bad:
             return LAB_DEGRADED, "TARGET_FAILING:" + ",".join(bad)
+        first_session_lost = sum(1 for r in probed if r.sessions >= 2 or r.inconclusive)
+        if probed and first_session_lost * 2 >= len(probed):
+            return LAB_DEGRADED, "SESSION_TRAFFIC_DEGRADED"
         return LAB_OK, "ok"
 
     def _set_health(self, health: str, reason: str, now: int) -> None:
