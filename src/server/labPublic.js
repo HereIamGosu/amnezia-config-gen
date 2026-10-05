@@ -75,7 +75,8 @@ const canonicalEndpointId = (value) => {
   else {
     m = /^\[([0-9a-fA-F:.]{2,45})\]:(\d{1,5})$/.exec(value);
     if (!m || !net.isIPv6(m[1])) return null;
-    ip = m[1].toLowerCase();
+    // Canonical (compressed, lowercase) form: "2606:4700:0:0::1" and "2606:4700::1" are one endpoint.
+    ip = new URL(`http://[${m[1]}]/`).hostname.slice(1, -1);
   }
   const port = Number(m[2]);
   if (!isInt(port, 1, 65535)) return null;

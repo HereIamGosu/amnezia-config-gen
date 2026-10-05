@@ -221,6 +221,15 @@ test('compatibility details: only what ACTIVE proves, unknown endpoints are 404'
   assert.equal(call({ endpoint: '162.159.193.20:2408' }).status, 404, 'no longer ACTIVE: not in the pool');
 });
 
+test('endpoint ids are canonical: IPv6 compressed and lowercase, IPv4 as is', () => {
+  assert.equal(labPublic.canonicalEndpointId('[2606:4700:0:0:0:0:0:1]:2408'), '[2606:4700::1]:2408');
+  assert.equal(labPublic.canonicalEndpointId('[2606:4700:D0::A29F:C001]:500'), '[2606:4700:d0::a29f:c001]:500');
+  assert.equal(labPublic.canonicalEndpointId('162.159.192.1:2408'), '162.159.192.1:2408');
+  for (const bad of ['[::g]:1', '[2606:4700::1]', '2606:4700::1:2408', '[2606:4700::1]:70000']) {
+    assert.equal(labPublic.canonicalEndpointId(bad), null, bad);
+  }
+});
+
 test('the handler only reads its fixed directory: the request never picks a path', () => {
   const code = (file) => fs.readFileSync(path.join(root, file), 'utf8').split('\n')
     .filter((line) => !/^\s*(\/\/|\/\*\*|\*)/.test(line)).join('\n');
