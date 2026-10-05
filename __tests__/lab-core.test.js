@@ -49,6 +49,14 @@ test('valid overview becomes a view model without issues', () => {
   assert.equal(r.view.status, 'ok');
   assert.equal(r.view.endpoints[0].id, '162.159.192.18:2408');
   assert.equal(r.view.sessions.finalSuccess, 0.98);
+  assert.equal(r.view.sessions.samples, null, 'no sample size in the input: unknown, not 0');
+});
+
+test('sessions keep the sample size and the window of the contract', () => {
+  const s = (over) => norm(overview({ sessions: { firstSession: 0.8, retryRescued: 0.2, failed: 0, window: '15m', samples: 129, ...over } })).view.sessions;
+  assert.deepEqual([s({}).samples, s({}).window], [129, '15m']);
+  for (const bad of [0, -1, 1.5, '129', 1e8]) assert.equal(s({ samples: bad }).samples, null, String(bad));
+  assert.equal(s({ window: '1h' }).window, null);
 });
 
 test('malformed top level is rejected, not rendered', () => {
@@ -71,6 +79,14 @@ test('broken sections become null (partial data) and are reported', () => {
   assert.equal(r.view.freshness, null);
   assert.equal(r.view.activeHistory, null);
   assert.ok(r.issues.includes('counts') && r.issues.includes('sessions') && r.issues.includes('activeHistory:missing'));
+});
+
+test('null sections are "no data" by contract, not a validation failure', () => {
+  const r = norm(overview({ sessions: null, counts: null }));
+  assert.equal(r.ok, true);
+  assert.equal(r.view.sessions, null);
+  assert.equal(r.view.counts, null);
+  assert.deepEqual(r.issues, [], 'no "data failed validation" alert for an empty window or hidden counts');
 });
 
 test('endpoint items: invalid dropped, duplicates dropped, states normalized, list bounded', () => {

@@ -141,7 +141,12 @@
     const sum = firstSession + retryRescued + failed;
     // Доли одного окна должны складываться в единицу (с запасом на округление бэкенда).
     if (Math.abs(sum - 1) > 0.02) return null;
-    return { firstSession, retryRescued, failed, finalSuccess: Math.min(1, firstSession + retryRescued) };
+    return {
+      firstSession, retryRescued, failed, finalSuccess: Math.min(1, firstSession + retryRescued),
+      // Основание долей: число проверок окна. Без него доли показываются, но «из скольких» неизвестно.
+      samples: isInt(raw.samples, 1, LIMITS.observations) ? raw.samples : null,
+      window: raw.window === '15m' ? '15m' : null,
+    };
   };
 
   const normalizeActiveHistory = (raw, now) => {
@@ -234,7 +239,8 @@
 
     const issues = [];
     const section = (name, value) => {
-      if (raw[name] !== undefined && value === null) issues.push(name);
+      // null в контракте — «данных нет» (нет наблюдений, счётчики скрыты), а не сбой проверки.
+      if (raw[name] !== undefined && raw[name] !== null && value === null) issues.push(name);
       if (raw[name] === undefined) issues.push(`${name}:missing`);
       return value;
     };

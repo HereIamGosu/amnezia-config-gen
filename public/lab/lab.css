@@ -588,6 +588,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+.lab-quality__basis {
+  margin: 12px 0 0;
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
 .lab-stack {
   display: flex;
   gap: 2px;

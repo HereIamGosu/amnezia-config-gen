@@ -27,6 +27,7 @@ e2eSuite('Endpoint Lab on real /api/lab data', (openPage) => {
       active: document.querySelector('[data-metric="active"] [data-value]').textContent,
       fresh: document.getElementById('labFreshWindow').textContent,
       final: document.getElementById('labQualityFinal').textContent,
+      basis: document.getElementById('labQualityBasis').hidden ? null : document.getElementById('labQualityBasis').textContent,
       chart: !!document.querySelector('#labChartFrame svg'),
       events: document.querySelectorAll('#labActivityList .lab-event').length,
       rows: document.querySelectorAll('#labTableBody tr.lab-tr').length,
@@ -38,6 +39,7 @@ e2eSuite('Endpoint Lab on real /api/lab data', (openPage) => {
     assert.equal(info.active, String(overview.counts.active));
     assert.match(info.fresh, /7 мин/);
     assert.equal(info.final, '100%');
+    assert.equal(info.basis, `${overview.sessions.samples} проверок за последние 15 минут`, 'the base of the shares');
     assert.equal(info.chart, true);
     assert.ok(info.events > 0);
     assert.equal(info.rows, overview.endpoints.length);

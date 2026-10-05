@@ -155,7 +155,10 @@ const projectCounts = (c) => {
 
 const projectSessions = (s) => {
   if (!isObject(s) || !isFraction(s.firstSession) || !isFraction(s.retryRescued) || !isFraction(s.failed)) return null;
-  return { firstSession: s.firstSession, retryRescued: s.retryRescued, failed: s.failed, window: s.window === '15m' ? '15m' : null };
+  return {
+    firstSession: s.firstSession, retryRescued: s.retryRescued, failed: s.failed,
+    window: s.window === '15m' ? '15m' : null, samples: isInt(s.samples, 1, 1e7) ? s.samples : null,
+  };
 };
 
 const projectEvent = (e) => {
@@ -300,6 +303,7 @@ const compatOverview = (c) => {
         retryRescued: Number((s.second_session_rescued / n).toFixed(4)),
         failed: Number((s.both_sessions_failed / n).toFixed(4)),
         window: '15m',
+        samples: n, // the denominator of these shares (the lab-status.json counters, see the spec)
       };
     }
   }

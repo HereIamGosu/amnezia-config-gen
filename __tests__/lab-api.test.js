@@ -61,6 +61,37 @@ test('full mode: overview is the exporter contract, valid for the page, no-store
   assertPublic(o);
 });
 
+test('one contract: exporter files pass /api/lab unchanged and the page keeps every field', () => {
+  writeLabPublic(dir);
+  const disk = (rel) => JSON.parse(fs.readFileSync(path.join(dir, rel), 'utf8'));
+  const overview = disk('web-overview.json');
+  const o = call().json;
+  assert.deepEqual(o, overview, 'the API validates the overview and passes it as written: nothing dropped, nothing added');
+  const view = Core.normalizeOverview(o, Date.now()).view;
+  assert.equal(view.sessions.samples, overview.sessions.samples);
+  assert.equal(view.sessions.window, '15m');
+  const fileRange = { all: '30d', '24h': '24h', '7d': '7d', '30d': '30d' };
+  for (const e of overview.endpoints) {
+    const id = `${e.ip}:${e.port}`;
+    const { historyBuckets, historyEvents, ...detail } = disk(path.join('web-endpoints', labPublic.detailFileName(id)));
+    for (const range of Object.keys(fileRange)) {
+      const { history, ...rest } = call({ endpoint: id, range }).json;
+      assert.deepEqual(rest, detail, `${id}: details as written`);
+      assert.deepEqual(history.buckets, historyBuckets[fileRange[range]], `${id} ${range}: the exporter's buckets`);
+      if (range === 'all') assert.deepEqual(history.events, historyEvents);
+      const v = Core.normalizeEndpointDetails({ ...rest, history }, Date.now()).view;
+      for (const k of ['handshake', 'tunnel', 'https']) {  // null in the file: the check did not run
+        assert.equal(v.checks[k] ? v.checks[k].result : null, detail.checks[k] ? detail.checks[k].result : null, `${id}: checks.${k} kept`);
+      }
+      assert.deepEqual([v.stability.h1, v.stability.h24, v.stability.observations], [detail.stability.h1, detail.stability.h24, detail.stability.observations]);
+      assert.equal(v.timeline.length, detail.timeline.length, `${id}: timeline kept`);
+      assert.equal(v.lastError ? v.lastError.code : null, detail.lastError ? detail.lastError.code : null);
+      assert.equal(v.history.buckets.length, history.buckets.length);
+      assert.equal(v.history.events.length, history.events.length);
+    }
+  }
+});
+
 test('HEAD answers like GET without a body; other methods are 405', () => {
   writeLabPublic(dir);
   const head = call({}, { method: 'HEAD' });
@@ -103,6 +134,9 @@ test('compatibility mode: only real data from active-pool.json + lab-status.json
   assert.deepEqual(o.counts, { active: 8, verified: 0, suspect: 0, quarantine: 0, dead: 1 });
   assert.equal(o.freshness.activeTtlSec, 420, 'derived from expires_at - lab_verified_at of the pool');
   assert.deepEqual([o.sessions.firstSession, o.sessions.retryRescued, o.sessions.failed], [0.8, 0.2, 0]);
+  const split = readFixture('lab-status.json').stats_15m.sessions;
+  assert.equal(o.sessions.samples, split.first_session_ok + split.second_session_rescued + split.both_sessions_failed,
+    'the denominator of the shares');
   const norm = Core.normalizeOverview(o, Date.now());
   assert.equal(norm.ok, true);
   assert.equal(norm.view.coverage, 'active-only');
@@ -116,7 +150,11 @@ test('compatibility counts are hidden while blacklisted endpoints would be count
   const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
   doc.pool.blacklisted = 2;
   fs.writeFileSync(file, JSON.stringify(doc));
-  assert.equal(call().json.counts, null);
+  const o = call().json;
+  assert.equal(o.counts, null);
+  // Compatibility mode has no history and no events by design (":missing"); nothing else may be reported.
+  assert.deepEqual(Core.normalizeOverview(o, Date.now()).issues.sort(), ['activeHistory:missing', 'events:missing'],
+    'hidden counts are "no data", not "failed validation"');
 });
 
 test('broken files: controlled 503 lab_malformed, never a raw file or stack', () => {

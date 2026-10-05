@@ -340,6 +340,16 @@
     setText(legend.querySelector('[data-q="first"]'), s ? Core.formatPercent(s.firstSession, PAGE_LANG) : '—');
     setText(legend.querySelector('[data-q="retry"]'), s ? Core.formatPercent(s.retryRescued, PAGE_LANG) : '—');
     setText(legend.querySelector('[data-q="fail"]'), s ? Core.formatPercent(s.failed, PAGE_LANG) : '—');
+    // Основание долей: 100% из трёх проверок и из трёхсот выглядят одинаково без числа.
+    const basis = $('labQualityBasis');
+    const n = s && s.window === '15m' ? s.samples : null;
+    basis.hidden = n === null;
+    setText(basis, n === null ? '' : Core.plural(PAGE_LANG, n, {
+      one: t('lab_quality_basis_one', { n: Core.formatCount(n, PAGE_LANG) }),
+      few: t('lab_quality_basis_few', { n: Core.formatCount(n, PAGE_LANG) }),
+      many: t('lab_quality_basis_many', { n: Core.formatCount(n, PAGE_LANG) }),
+      other: t('lab_quality_basis_other', { n: Core.formatCount(n, PAGE_LANG) }),
+    }));
   };
 
   // ── График ACTIVE (SVG, без библиотек) ─────────────────────────
