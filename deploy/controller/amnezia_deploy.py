@@ -54,12 +54,16 @@ MEMORY_BYTES = 256 * 1024 * 1024
 NANO_CPUS = 1_000_000_000
 PIDS_LIMIT = 128
 
-# Endpoint Lab shadow mode (Phase C), off by default: when the operator creates the flag file and the Lab's
-# public snapshot directory exists, new slots get that directory read-only plus the shadow env. Nothing else
-# may be mounted into a slot (constraint_problems). Takes effect on the next container start.
+# Endpoint Lab public data (3.0): when the Lab's secret-free public directory exists on the host, new slots get
+# it read-only at /run/endpoint-lab for /api/lab, /lab and Lab Auto. The operator can withhold it with the
+# ENDPOINT_LAB_PUBLIC_OFF flag (the site then answers 503 lab_not_available / a controlled Lab Auto error).
+# Shadow mode (Phase C diagnostics) is a separate switch: the ENDPOINT_SHADOW_FLAG file adds only the shadow env
+# on top of that mount; shadow off never removes the mount. Nothing else may be mounted into a slot
+# (constraint_problems). Both take effect on the next container start.
 ENDPOINT_SHADOW_FLAG = "/etc/amnezia-deploy/endpoint-shadow"
+ENDPOINT_LAB_PUBLIC_OFF = "/etc/amnezia-deploy/endpoint-lab-public-off"
 ENDPOINT_LAB_PUBLIC = "/var/lib/amnezia-endpoint-lab/public"
-ENDPOINT_SHADOW_MOUNT = "/run/endpoint-lab"
+ENDPOINT_SHADOW_MOUNT = "/run/endpoint-lab"   # the mount point (historical name; it is the Lab public mount)
 
 HEALTH_DEADLINE_S = 90  # image HEALTHCHECK: interval 30s, start period 10s
 PUBLIC_PROPAGATION_S = 15
@@ -407,16 +411,25 @@ def constraint_problems(info, slot):
     return problems
 
 
+def endpoint_lab_public_enabled():
+    """The read-only Lab mount: whenever the Lab publishes on this host, unless the operator withholds it."""
+    return os.path.isdir(ENDPOINT_LAB_PUBLIC) and not os.path.exists(ENDPOINT_LAB_PUBLIC_OFF)
+
+
 def endpoint_shadow_enabled():
-    return os.path.exists(ENDPOINT_SHADOW_FLAG) and os.path.isdir(ENDPOINT_LAB_PUBLIC)
+    """Shadow diagnostics need the public mount; the flag alone never creates a mount."""
+    return os.path.exists(ENDPOINT_SHADOW_FLAG) and endpoint_lab_public_enabled()
 
 
-def run_args(slot, cand, shadow=False):
+def run_args(slot, cand, shadow=False, lab_public=None):
+    """`lab_public` defaults to `shadow` for callers of the Phase C signature: shadow always implies the mount."""
     name, port = SLOTS[slot]["name"], SLOTS[slot]["port"]
+    lab_public = shadow if lab_public is None else (lab_public or shadow)
     extra = []
+    if lab_public:
+        extra = ["--mount", f"type=bind,src={ENDPOINT_LAB_PUBLIC},dst={ENDPOINT_SHADOW_MOUNT},readonly"]
     if shadow:
-        extra = ["--mount", f"type=bind,src={ENDPOINT_LAB_PUBLIC},dst={ENDPOINT_SHADOW_MOUNT},readonly",
-                 "-e", "ENDPOINT_SHADOW=lab", "-e", f"ENDPOINT_LAB_POOL_PATH={ENDPOINT_SHADOW_MOUNT}/active-pool.json"]
+        extra += ["-e", "ENDPOINT_SHADOW=lab", "-e", f"ENDPOINT_LAB_POOL_PATH={ENDPOINT_SHADOW_MOUNT}/active-pool.json"]
     return [
         "run", "-d", "--name", name, "--restart", "unless-stopped",
         "-p", f"127.0.0.1:{port}:3000",
@@ -771,7 +784,8 @@ def _bring_up(sysm, op, slot, cand, legacy_name=None):
         op.stage("START_CANDIDATE")
         name = SLOTS[slot]["name"]
         if not reuse:
-            sysm.docker(*run_args(slot, cand, shadow=endpoint_shadow_enabled()))
+            sysm.docker(*run_args(slot, cand, shadow=endpoint_shadow_enabled(),
+                                  lab_public=endpoint_lab_public_enabled()))
         info = sysm.docker_inspect(name)
         problems = constraint_problems(info or {}, slot)
         if problems:

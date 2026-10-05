@@ -295,6 +295,7 @@ class CandidateTests(Base):
         self.assertIn("ENDPOINT_SHADOW=lab", shadow)
         self.assertIn(f"ENDPOINT_LAB_POOL_PATH={ad.ENDPOINT_SHADOW_MOUNT}/active-pool.json", shadow)
         self.assertEqual(shadow[-1], plain[-1])
+        self.assertEqual(ad.run_args("green", cand, shadow=True, lab_public=False), shadow)  # shadow needs the mount
         with tempfile.TemporaryDirectory() as tmp:
             flag, public = os.path.join(tmp, "endpoint-shadow"), os.path.join(tmp, "public")
             with mock.patch.object(ad, "ENDPOINT_SHADOW_FLAG", flag), mock.patch.object(ad, "ENDPOINT_LAB_PUBLIC", public):
@@ -303,6 +304,28 @@ class CandidateTests(Base):
                 self.assertFalse(ad.endpoint_shadow_enabled())  # no Lab snapshot dir: never mount a missing path
                 os.makedirs(public)
                 self.assertTrue(ad.endpoint_shadow_enabled())
+
+    def test_lab_public_mount_does_not_depend_on_shadow(self):
+        cand = ad.Candidate(SHA_A, "sha256:" + "1" * 64, None)
+        lab = ad.run_args("green", cand, lab_public=True)
+        self.assertEqual(lab.count("--mount"), 1)
+        self.assertEqual(lab[lab.index("--mount") + 1],
+                         f"type=bind,src={ad.ENDPOINT_LAB_PUBLIC},dst={ad.ENDPOINT_SHADOW_MOUNT},readonly")
+        self.assertFalse(any("ENDPOINT_" in a for a in lab))  # page/API only: the generator stays on hostname
+        self.assertEqual(ad.run_args("green", cand, shadow=True, lab_public=True).count("--mount"), 1)
+        with tempfile.TemporaryDirectory() as tmp:
+            flag, public = os.path.join(tmp, "endpoint-shadow"), os.path.join(tmp, "public")
+            off = os.path.join(tmp, "endpoint-lab-public-off")
+            with mock.patch.object(ad, "ENDPOINT_SHADOW_FLAG", flag), mock.patch.object(ad, "ENDPOINT_LAB_PUBLIC", public), \
+                    mock.patch.object(ad, "ENDPOINT_LAB_PUBLIC_OFF", off):
+                self.assertFalse(ad.endpoint_lab_public_enabled())  # no Lab on the host: no mount
+                os.makedirs(public)
+                self.assertTrue(ad.endpoint_lab_public_enabled())  # on without the shadow flag
+                self.assertFalse(ad.endpoint_shadow_enabled())
+                open(off, "w").close()
+                self.assertFalse(ad.endpoint_lab_public_enabled())  # owner switch: /api/lab answers 503
+                open(flag, "w").close()
+                self.assertFalse(ad.endpoint_shadow_enabled())  # shadow never mounts what the owner turned off
 
     def test_constraints_allow_only_the_read_only_lab_mount(self):
         good = container_info("x", 13101, SHA_A, "d")

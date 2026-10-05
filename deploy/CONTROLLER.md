@@ -66,22 +66,28 @@ Both slots run with production hardening: read-only rootfs, `/tmp` tmpfs, `cap_d
 `NODE_ENV=production`, `APP_REVISION=<sha>`, restart `unless-stopped`. The controller verifies
 these on the running container before it is used.
 
-Endpoint Lab shadow mode (off by default): if `/etc/amnezia-deploy/endpoint-shadow` exists **and**
-`/var/lib/amnezia-endpoint-lab/public` exists, newly started slots get that directory as a read-only
-bind mount at `/run/endpoint-lab` plus `ENDPOINT_SHADOW=lab` and
-`ENDPOINT_LAB_POOL_PATH=/run/endpoint-lab/active-pool.json`. It is the only mount a slot may have:
-the constraint check rejects any other mount, a writable one, or another source. The flag takes effect
-on the next container start (next deploy); removing it and redeploying turns shadow mode off. Shadow
-mode never changes responses (see `deploy/ENDPOINT_LAB.md` on the Endpoint Lab branch).
+Endpoint Lab public data (3.0): if `/var/lib/amnezia-endpoint-lab/public` exists, newly started slots get
+that directory as a read-only bind mount at `/run/endpoint-lab`. The site reads only its secret-free files
+(`/api/lab`, `/lab`, Lab Auto in the generator). It is the only mount a slot may have: the constraint check
+rejects any other mount, a writable one, or another source. To withhold it, create
+`/etc/amnezia-deploy/endpoint-lab-public-off`; slots started after that run without the mount, `/api/lab`
+answers 503 `lab_not_available` and Lab Auto returns its controlled error.
+
+Endpoint Lab shadow mode (Phase C diagnostics, off by default) is a separate switch: if
+`/etc/amnezia-deploy/endpoint-shadow` exists and the public mount is enabled, new slots also get
+`ENDPOINT_SHADOW=lab` and `ENDPOINT_LAB_POOL_PATH=/run/endpoint-lab/active-pool.json`. Removing the flag removes
+only that env at the next container start; it never removes the public mount. Both switches take effect on the
+next container start (next deploy). Shadow mode never changes responses (see `deploy/ENDPOINT_LAB.md`).
 
 Shadow runbook. The installed controller is not updated by a merge: copy `deploy/controller/amnezia_deploy.py`
 to `/usr/local/sbin/amnezia-deploy` between `amnezia-deploy pause` and `amnezia-deploy resume` (back up the old
 file first; `install.sh` would also disable the CD timer) and check `grep -c ENDPOINT_SHADOW_FLAG` on it. Then
 `touch /etc/amnezia-deploy/endpoint-shadow`; the next deploy of a new digest starts the slot with the mount. Check
 on the active slot: exactly one mount, `RW=false`, the same `CapDrop`/`ReadonlyRootfs`/`User`, and
-`[endpoint-shadow]` lines in `docker logs` every 10 minutes. To turn it off quickly: `rm` the flag, then
-`amnezia-deploy rollback`; the previous release comes up without the mount (its container predates the flag, or
-it is recreated while the flag is absent). Any later deploy without the flag starts slots without it.
+`[endpoint-shadow]` lines in `docker logs` every 10 minutes. To turn shadow off: `rm` the flag; the next deploy
+starts slots without the shadow env. A rollback reuses the previous container only while it is still running and
+healthy, with the mount and env it was started with; otherwise the slot is recreated with the current switches.
+To drop the mount itself, create `endpoint-lab-public-off` before the next deploy.
 
 `/etc/nginx/sites-available/amnezia-web` includes `/etc/nginx/amnezia-deploy/upstream.conf`
 (`upstream amnezia_backend { server 127.0.0.1:<port>; }`). That file is the only nginx file the
