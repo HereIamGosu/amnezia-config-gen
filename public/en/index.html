@@ -40,6 +40,10 @@
     <script defer src="/static/live-status.js?v=2.7.4"></script>
     <script defer src="/static/share-link.js?v=2.7.4"></script>
     <script defer src="/static/ui-shell.js?v=2.7.4"></script>
+    <!-- Endpoint Lab: адаптер данных и быстрый просмотр (строка в карточке статуса); /lab/* без ?v= — ревалидируются -->
+    <script defer src="/lab/lab-core.js"></script>
+    <script defer src="/lab/lab-data.js"></script>
+    <script defer src="/lab/lab-quick.js"></script>
     <!-- Генератор: классические скрипты с общей глобальной областью, порядок важен (script.js — последним) -->
     <script defer src="/static/i18n.js?v=2.7.4"></script>
     <script defer src="/static/common.js?v=2.7.4"></script>
@@ -229,6 +233,8 @@
       <symbol id="i-laptop" viewBox="0 0 24 24"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/></symbol>
       <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
       <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
+      <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
       <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></symbol>
       <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
       <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
@@ -360,8 +366,19 @@
               <li class="status-row"><span class="state-icon state-icon--loading"></span><span class="status-row__name" data-i18n="status_row_generator">Generator API</span><span class="status-row__state"></span></li>
               <li class="status-row"><span class="state-icon state-icon--loading"></span><span class="status-row__name" data-i18n="status_row_warp_api">WARP registration</span><span class="status-row__state"></span></li>
               <li class="status-row"><span class="state-icon state-icon--loading"></span><span class="status-row__name" data-i18n="status_row_engage">WARP endpoint</span><span class="status-row__state"></span></li>
-              <li class="status-row"><span class="state-icon state-icon--loading"></span><span class="status-row__name" data-i18n="status_row_pool">Endpoint pool</span><span class="status-row__state"></span></li>
               <li class="status-row"><span class="state-icon state-icon--loading"></span><span class="status-row__name" data-i18n="status_row_cidr">CIDR source</span><span class="status-row__state"></span></li>
+              <!-- Endpoint Lab: свой источник (/api/lab), в общий статус не входит; открывает быстрый просмотр -->
+              <li class="status-row status-row--lab" id="statusLabRow">
+                <button type="button" class="status-lab" id="statusLabBtn" data-lab-quick="off" aria-haspopup="dialog">
+                  <span class="state-icon state-icon--loading" id="statusLabIcon"></span>
+                  <span class="status-row__name">Endpoint Lab</span>
+                  <span class="status-lab__value">
+                    <span class="status-row__state" id="statusLabState"></span>
+                    <span class="status-lab__sub" id="statusLabSub"></span>
+                  </span>
+                  <svg class="icon icon--sm status-lab__chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                </button>
+              </li>
             </ul>
             <div class="status-panel__foot">
               <span id="statusCheckedAt" data-i18n="status_not_checked">Checking…</span>

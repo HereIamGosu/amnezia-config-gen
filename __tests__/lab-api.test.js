@@ -115,6 +115,33 @@ test('no Lab files (Vercel, forks, no mount): 503 lab_not_available with Retry-A
   assert.equal(r.headers['cache-control'], 'no-store');
 });
 
+test('isPublished: any public Lab file means the Lab is wired into this deployment, even a broken one', () => {
+  const empty = tempLabDir();
+  try {
+    assert.equal(labPublic.isPublished(empty), false);
+    assert.equal(labPublic.isPublished(path.join(empty, 'missing')), false);
+    fs.mkdirSync(path.join(empty, labPublic.FILES.overview));
+    assert.equal(labPublic.isPublished(empty), false, 'a directory named like the file is not a file');
+  } finally {
+    fs.rmSync(empty, { recursive: true, force: true });
+  }
+  for (const name of [labPublic.FILES.overview, labPublic.FILES.pool, labPublic.FILES.status]) {
+    const one = tempLabDir();
+    try {
+      fs.writeFileSync(path.join(one, name), 'not json');
+      assert.equal(labPublic.isPublished(one), true, `${name}: /api/lab then answers 503 lab_malformed, a real failure`);
+    } finally {
+      fs.rmSync(one, { recursive: true, force: true });
+    }
+  }
+});
+
+test('the public directory comes only from an absolute ENDPOINT_LAB_PUBLIC_DIR, otherwise the read-only mount', () => {
+  assert.equal(labPublic.resolvePublicDir(undefined), '/run/endpoint-lab');
+  assert.equal(labPublic.resolvePublicDir('relative/dir'), '/run/endpoint-lab');
+  assert.equal(labPublic.resolvePublicDir(dir), path.resolve(dir));
+});
+
 test('compatibility mode: only real data from active-pool.json + lab-status.json', () => {
   writeLabPublic(dir, { mode: 'compat' });
   const r = call();

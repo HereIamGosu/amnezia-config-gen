@@ -5,16 +5,14 @@
 // Reads only the Lab's secret-free public directory, mounted read-only by the deploy controller at
 // /run/endpoint-lab. ENDPOINT_LAB_PUBLIC_DIR (absolute path, process environment at start-up) overrides it
 // for local runs and tests; no request ever chooses a path. Without the files (Vercel, forks, Lab not
-// mounted) the answer is 503 lab_not_available and the generator is unaffected.
+// mounted) the answer is 503 lab_not_available and the generator is unaffected: its page learns that from
+// /api/status (lab.available) and does not ask.
 
 'use strict';
 
-const path = require('path');
-const { LabDataError, RANGES, RETRY_AFTER_S, canonicalEndpointId, loadOverview, loadEndpoint } = require('../src/server/labPublic');
-
-const DEFAULT_DIR = '/run/endpoint-lab';
-
-const resolveDir = (value) => (typeof value === 'string' && path.isAbsolute(value) ? path.resolve(value) : DEFAULT_DIR);
+const {
+  LabDataError, RANGES, RETRY_AFTER_S, canonicalEndpointId, resolvePublicDir, loadOverview, loadEndpoint,
+} = require('../src/server/labPublic');
 
 const send = (req, res, status, body, extraHeaders = {}) => {
   res.statusCode = status;
@@ -36,7 +34,7 @@ const queryValue = (query, key) => {
 };
 
 /** Handler factory: the directory is fixed when the server starts (tests pass their own). */
-const createLabHandler = ({ dir = resolveDir(process.env.ENDPOINT_LAB_PUBLIC_DIR), now = Date.now } = {}) => (req, res) => {
+const createLabHandler = ({ dir = resolvePublicDir(process.env.ENDPOINT_LAB_PUBLIC_DIR), now = Date.now } = {}) => (req, res) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.setHeader('Allow', 'GET, HEAD');
     fail(req, res, 405, 'method_not_allowed');

@@ -1,7 +1,8 @@
 // public/static/status.js
 //
 // Статус сервисов: баннер о проблемах WARP-endpoint (/api/status), карточка «Статус системы» в hero
-// и модал статуса. Один поллер window.LiveStatus на страницу кормит и карточку, и модал.
+// и модал статуса. Один поллер window.LiveStatus на страницу кормит и карточку, и модал; строка
+// «Endpoint Lab» в карточке — отдельный опрос /api/lab (window.LabData, public/lab/lab-data.js).
 //
 // Классический скрипт (defer), не модуль: верхнеуровневые const/let/функции всех скриптов генератора
 // живут в одной глобальной лексической области. Порядок загрузки — в public/index.html:
@@ -137,7 +138,6 @@ const HERO_STATUS_ROWS = [
   { key: 'generator', label: ['status_row_generator', 'Генератор API'] },
   { key: 'warp_api', label: ['status_row_warp_api', 'Регистрация WARP'] },
   { key: 'warp_engage', label: ['status_row_engage', 'WARP endpoint'] },
-  { key: 'endpoint_pool', label: ['status_row_pool', 'Пул endpoint\'ов'] },
   { key: 'cidr_source', label: ['status_row_cidr', 'Источник CIDR'], optional: true },
 ];
 
@@ -191,7 +191,10 @@ const renderHeroStatus = () => {
     rows = HERO_STATUS_ROWS.map((row) => ({ ...row, state: 'loading' }));
   }
 
-  list.textContent = '';
+  // Строка Endpoint Lab постоянна (своя кнопка и свой опрос): перерисовываются только строки /api/status
+  // перед ней, иначе кнопка в фокусе теряла бы его при каждом ответе.
+  const labRow = document.getElementById('statusLabRow');
+  list.querySelectorAll('.status-row:not(.status-row--lab)').forEach((li) => li.remove());
   rows.forEach((row) => {
     const li = document.createElement('li');
     li.className = 'status-row';
@@ -205,8 +208,9 @@ const renderHeroStatus = () => {
     state.className = `status-row__state status-row__state--${row.state}`;
     if (row.state !== 'loading') state.textContent = getStateLabel(row.state);
     li.append(icon, name, state);
-    list.appendChild(li);
+    list.insertBefore(li, labRow);
   });
+  renderHeroLab();
 
   const overall = heroStatus.kind === 'loading' ? 'loading' : computeOverall(rows.map((row) => row.state));
   const dotClass = `dot dot--${overall === 'unknown' ? 'unknown' : overall}`;
@@ -254,11 +258,91 @@ const renderHeroCheckedAt = () => {
     : t('status_checked_minutes', 'Проверено {n} мин назад').replace('{n}', String(minutes));
 };
 
+// ── Строка «Endpoint Lab» в карточке ──
+// Свой опрос /api/lab общим адаптером LabData (30 с, пауза в скрытой вкладке, Retry-After); клик открывает
+// быстрый просмотр (lab-quick.js, атрибут data-lab-quick). Lab не участвует в генерации («Автовыбор» —
+// hostname Cloudflare), поэтому строка не входит в общий статус карточки и в предупреждение над шагами.
+// Опрос начинается, только когда /api/status подтвердил файлы Lab на этом развёртывании (lab.available):
+// без них /api/lab отвечает 503, а браузер пишет каждый ответ 5xx в консоль.
+
+let labPoller = null;
+/** Последний результат LabData ({ kind, view }); null — первый ответ ещё не пришёл. */
+let heroLab = null;
+
+const LAB_ROW_ICONS = { ok: 'i-check', degraded: 'i-alert', unknown: 'i-help' };
+
+const renderHeroLab = () => {
+  const icon = document.getElementById('statusLabIcon');
+  const state = document.getElementById('statusLabState');
+  const sub = document.getElementById('statusLabSub');
+  if (!icon || !state || !sub) return;
+  const Core = window.LabCore;
+  const now = Date.now();
+  const s = Core ? Core.statusSummary(heroLab, now) : { state: 'unavailable', tone: 'unknown', active: null, at: null };
+  icon.className = `state-icon state-icon--${s.tone}`;
+  icon.textContent = '';
+  if (s.tone !== 'loading') icon.appendChild(makeIcon(LAB_ROW_ICONS[s.tone]));
+  const active = s.active === null ? '' : t('status_lab_active', '{n} ACTIVE').replace('{n}', String(s.active));
+  const ago = s.at === null ? '' : Core.formatAgo(now - s.at, t);
+  const [value, detail] = {
+    loading: ['', ''],
+    ok: [active, ago],
+    degraded: [t('status_lab_limited', 'Ограничен'), active],
+    stale: [t('status_lab_stale', 'Данные устарели'), ago],
+    empty: [t('status_lab_empty', 'Нет ACTIVE'), ago],
+    unavailable: [t('status_lab_unavailable', 'Недоступен'), ''],
+  }[s.state];
+  state.className = `status-row__state status-row__state--${s.tone}`;
+  state.textContent = value;
+  sub.textContent = detail;
+  sub.hidden = !detail;
+};
+
+const startLabPoller = () => {
+  if (!window.LabData || !window.LabCore) {
+    heroLab = { kind: 'error' };
+    renderHeroLab();
+    return;
+  }
+  const source = window.LabData.createLabSource({ fetchImpl: window.fetch.bind(window) });
+  labPoller = window.LabData.createPoller({
+    load: source.loadOverview,
+    // Разовый сбой запроса не прячет последние данные: их возраст растёт, и через несколько минут
+    // statusSummary сам покажет «Данные устарели». «Недоступен» — пока хороших данных не было.
+    onResult: (result) => {
+      if (result.kind === 'ok' || !heroLab || heroLab.kind !== 'ok') heroLab = result;
+      renderHeroLab();
+    },
+    doc: document,
+  });
+  labPoller.start();
+};
+
+/**
+ * available — lab.available из /api/status: true — опрашиваем /api/lab; false или неизвестно — без запросов:
+ * строка «Недоступен», быстрый просмотр (data-lab-quick="off") сразу говорит, что Lab не подключён.
+ */
+const syncHeroLab = (available) => {
+  const btn = document.getElementById('statusLabBtn');
+  if (btn) btn.dataset.labQuick = available === true ? '' : 'off';
+  if (available === true) {
+    if (!labPoller) startLabPoller();
+    return;
+  }
+  if (labPoller) labPoller.stop();
+  labPoller = null;
+  heroLab = { kind: 'not-connected' };
+  renderHeroLab();
+};
+
 const initHeroStatus = () => {
+  // Только подпись «… назад» у строки Lab — без сетевых запросов.
+  setInterval(renderHeroLab, 5_000);
   if (!window.LiveStatus) {
     heroStatus = { kind: 'error', error: new Error('live-status.js not loaded'), at: Date.now() };
     renderHeroStatus();
     renderStatusModalError(heroStatus.error);
+    syncHeroLab(null);
     return;
   }
   statusPoller = window.LiveStatus.createPoller({
@@ -270,11 +354,14 @@ const initHeroStatus = () => {
     },
     onData: (snapshot) => {
       heroStatus = { kind: 'data', snapshot, at: Date.now() };
+      syncHeroLab(snapshot.lab.available);
       renderHeroStatus();
       renderStatusModal(snapshot);
     },
     onError: (error, meta) => {
       heroStatus = { kind: 'error', error, at: Date.now() };
+      // Сбой /api/status не останавливает уже идущий опрос Lab; до первого ответа — без запросов к Lab.
+      if (!labPoller) syncHeroLab(null);
       renderHeroStatus();
       renderStatusModalError(error, meta);
     },
@@ -286,6 +373,7 @@ const initHeroStatus = () => {
 
 /** Ручное обновление: перезапуск поллера соблюдает минимальный интервал между запросами. */
 const refreshHeroStatus = () => {
+  if (labPoller) labPoller.refresh();
   if (!statusPoller) return;
   statusPoller.stop();
   statusPoller.start();

@@ -110,6 +110,33 @@ test('/api/status reports unknown when the status cannot be computed', async () 
   }
 });
 
+test('/api/status says whether Endpoint Lab files are published here (lab.available), also when the status fails', async () => {
+  const fs = require('node:fs');
+  const { writeLabPublic, tempLabDir } = require('./helpers/lab-public');
+  for (const m of ['../api/status', '../api/warp', '../src/server/endpointCache']) delete require.cache[require.resolve(m)];
+  const registry = require('../src/server/endpointCache');
+  const original = registry.getTopEndpoints;
+  const dir = tempLabDir();
+  const statusOf = async () => {
+    const res = makeRes();
+    await require('../api/status').createStatusHandler({ labDir: dir })({ method: 'GET', url: '/api/status', query: {}, headers: {} }, res);
+    return res.body;
+  };
+  try {
+    assert.deepEqual((await statusOf()).lab, { available: false }, 'no files: the page does not request /api/lab');
+    writeLabPublic(dir);
+    assert.deepEqual((await statusOf()).lab, { available: true });
+    registry.getTopEndpoints = async () => { throw new Error('registry unavailable'); };
+    const failed = await statusOf();
+    assert.equal(failed.status, 'unknown');
+    assert.deepEqual(failed.lab, { available: true }, 'the Lab flag does not depend on the endpoint registry');
+  } finally {
+    registry.getTopEndpoints = original;
+    fs.rmSync(dir, { recursive: true, force: true });
+    delete require.cache[require.resolve('../api/status')];
+  }
+});
+
 test('main page banner appears only for measured problems and is localized', () => {
   const fs = require('node:fs');
   const path = require('node:path');

@@ -3,7 +3,8 @@
 // Быстрый просмотр Endpoint Lab (макеты «из генератора»): сводка + переход на /lab. Самостоятельный модуль:
 // окно строится при первом открытии (не дублирует разметку страницы), данные — тем же адаптером
 // LabData, модальное окно — общий UiShell. Нужны lab-core.js и lab-data.js раньше этого файла.
-// Подключение на любой странице сайта: элементу-кнопке дать атрибут data-lab-quick.
+// Подключение на любой странице сайта: элементу-кнопке дать атрибут data-lab-quick (на главной — строка
+// «Endpoint Lab» в карточке «Статус системы»).
 // На странице Lab окно доступно только для локальной проверки: /lab?quick=1 на localhost.
 
 'use strict';
@@ -236,6 +237,31 @@
     render();
   }
 
+  // Стили окна — в lab.css: на странице Lab он уже подключён, на других страницах подгружается при первом
+  // открытии (все его правила привязаны к классам Lab, __tests__/lab-entry.test.js). Окно открывается
+  // после загрузки стилей, но ждёт их не дольше STYLES_TIMEOUT_MS.
+  const LAB_CSS = '/lab/lab.css';
+  const STYLES_TIMEOUT_MS = 3000;
+  let stylesReady = null;
+
+  const ensureStyles = () => {
+    if (stylesReady) return stylesReady;
+    if (doc.querySelector(`link[rel="stylesheet"][href="${LAB_CSS}"]`)) {
+      stylesReady = Promise.resolve();
+      return stylesReady;
+    }
+    stylesReady = new Promise((resolve) => {
+      const link = doc.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = LAB_CSS;
+      link.addEventListener('load', resolve);
+      link.addEventListener('error', resolve);
+      win.setTimeout(resolve, STYLES_TIMEOUT_MS);
+      doc.head.appendChild(link);
+    });
+    return stylesReady;
+  };
+
   const loadStrings = async () => {
     if (strings) return;
     try {
@@ -246,14 +272,18 @@
     }
   };
 
+  // data-lab-quick="off": страница уже знает, что файлов Lab на этом развёртывании нет (/api/status,
+  // lab.available) — окно сразу говорит «не подключён», без запроса, на который /api/lab ответил бы 503.
   const open = async (opener, { fixture = null, fixtures = null } = {}) => {
     if (!win.UiShell) return;
-    await loadStrings();
+    await Promise.all([loadStrings(), ensureStyles()]);
     if (!source) source = Data.createLabSource({ fetchImpl: win.fetch.bind(win), fixture, fixtures });
+    const offline = !!(opener && opener.dataset && opener.dataset.labQuick === 'off');
     lastResult = { kind: 'loading' };
     render();
     win.UiShell.openModal(MODAL_ID, opener || null);
-    if (!source.connected) {
+    if (offline || !source.connected) {
+      lastView = null;
       lastResult = { kind: 'not-connected' };
       render();
     } else {

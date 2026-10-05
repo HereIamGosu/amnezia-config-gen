@@ -947,6 +947,54 @@ kbd {
   color: #fca5a5;
 }
 
+/* Endpoint Lab: вся строка — кнопка быстрого просмотра; второй строкой — возраст данных или число ACTIVE */
+.status-row--lab {
+  display: block;
+  padding: 0;
+}
+
+.status-lab {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto 16px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.status-lab:hover .status-row__name {
+  color: var(--color-blue-hover);
+}
+
+.status-lab__value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.status-lab__sub {
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+}
+
+.status-lab__chevron {
+  color: var(--color-text-muted);
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.status-lab:hover .status-lab__chevron {
+  color: var(--color-blue-hover);
+  transform: translateX(2px);
+}
+
 .state-icon {
   display: inline-flex;
   align-items: center;
@@ -3357,6 +3405,10 @@ kbd {
 
   .status-row:nth-child(2) {
     border-top: 0;
+  }
+
+  .status-row--lab {
+    grid-column: 1 / -1;
   }
 
   .param-grid {

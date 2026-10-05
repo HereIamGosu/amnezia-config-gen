@@ -408,6 +408,27 @@
     return 'ok';
   };
 
+  const STATUS_TONES = { ok: 'ok', degraded: 'degraded', stale: 'degraded', empty: 'degraded' };
+
+  /**
+   * Строка «Endpoint Lab» в карточке статуса генератора: результат загрузки → тон значка, состояние,
+   * число свежих ACTIVE и момент для «… назад» (у устаревших данных — последняя успешная проверка).
+   * Lab не участвует в генерации, поэтому его недоступность — серый «unknown», а не ошибка.
+   */
+  const statusSummary = (result, now) => {
+    if (!result || result.kind === 'loading') return { state: 'loading', tone: 'loading', active: null, at: null };
+    const state = result.kind === 'ok' ? deriveLabState(result.view, now) : 'unavailable';
+    if (!STATUS_TONES[state]) return { state: 'unavailable', tone: 'unknown', active: null, at: null };
+    const view = result.view;
+    const lastSuccess = view.freshness ? view.freshness.lastSuccessAt : null;
+    return {
+      state,
+      tone: STATUS_TONES[state],
+      active: freshActiveCount(view, now),
+      at: state === 'stale' && lastSuccess !== null ? lastSuccess : view.generatedAt,
+    };
+  };
+
   // ── Форматирование ─────────────────────────────────────────────
 
   /** Подставляет {name} из vars; неизвестные плейсхолдеры остаются как есть. */
@@ -598,6 +619,7 @@
     isStale,
     freshActiveCount,
     deriveLabState,
+    statusSummary,
     interpolate,
     plural,
     formatPercent,

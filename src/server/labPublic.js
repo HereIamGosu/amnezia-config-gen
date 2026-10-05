@@ -421,6 +421,24 @@ const compatDetail = (c, endpointId) => {
 
 // ── Entry points ──────────────────────────────────────────────
 
+const DEFAULT_DIR = '/run/endpoint-lab';
+
+/** The public directory: an absolute ENDPOINT_LAB_PUBLIC_DIR (fixed at process start), else the read-only mount. */
+const resolvePublicDir = (value) => (typeof value === 'string' && path.isAbsolute(value) ? path.resolve(value) : DEFAULT_DIR);
+
+/**
+ * Whether this deployment publishes Lab files at all (no reading, no validation). Without them (Vercel, forks,
+ * no mount) /api/lab answers 503 lab_not_available; /api/status passes this flag so the generator page does not
+ * ask for data that cannot exist. A present but broken file still counts: that 503 is a real failure.
+ */
+const isPublished = (dir) => [FILES.overview, FILES.pool, FILES.status].some((name) => {
+  try {
+    return fs.statSync(path.join(dir, name)).isFile();
+  } catch {
+    return false;
+  }
+});
+
 /** @returns {object} browser overview (full or compatibility). Throws LabDataError. */
 const loadOverview = (dir, nowMs = Date.now()) => {
   const full = readJson(path.join(dir, FILES.overview), MAX_BYTES.overview);
@@ -445,8 +463,11 @@ module.exports = {
   RANGES,
   RETRY_AFTER_S,
   LabDataError,
+  DEFAULT_DIR,
   canonicalEndpointId,
   detailFileName,
+  resolvePublicDir,
+  isPublished,
   loadOverview,
   loadEndpoint,
   _cache: cache,

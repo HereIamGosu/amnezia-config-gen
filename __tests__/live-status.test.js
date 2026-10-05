@@ -54,6 +54,14 @@ test('buildSnapshot maps live API payloads to service cards', () => {
   assert.equal(snap.services[1].latencyMs, null);
 });
 
+test('buildSnapshot passes on whether Endpoint Lab is published; anything but a boolean is unknown', () => {
+  assert.deepEqual(LiveStatus.buildSnapshot({ ...STATUS, lab: { available: true } }, HEALTH).lab, { available: true });
+  assert.deepEqual(LiveStatus.buildSnapshot({ ...STATUS, lab: { available: false } }, HEALTH).lab, { available: false });
+  for (const lab of [undefined, null, 'yes', {}, { available: 'true' }]) {
+    assert.deepEqual(LiveStatus.buildSnapshot({ ...STATUS, lab }, HEALTH).lab, { available: null }, JSON.stringify(lab));
+  }
+});
+
 test('buildSnapshot omits the CIDR card when the probe is absent and maps down to error', () => {
   const health = { ...HEALTH, services: { api: HEALTH.services.api, engage: HEALTH.services.engage } };
   const snap = LiveStatus.buildSnapshot({ ...STATUS, status: 'down' }, health);

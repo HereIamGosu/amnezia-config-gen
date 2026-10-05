@@ -188,6 +188,27 @@ test('one DEAD endpoint does not make the Lab unavailable', () => {
   assert.equal(Core.deriveLabState(view, NOW), 'ok');
 });
 
+test('status row summary: tone, fresh ACTIVE count and the moment to show, per load result', () => {
+  const ok = (raw) => ({ kind: 'ok', view: norm(raw).view });
+  const summary = (result) => Core.statusSummary(result, NOW);
+  const loading = { state: 'loading', tone: 'loading', active: null, at: null };
+  assert.deepEqual(summary(null), loading);
+  assert.deepEqual(summary({ kind: 'loading' }), loading);
+
+  assert.deepEqual(summary(ok(overview())), { state: 'ok', tone: 'ok', active: 1, at: NOW - 20e3 }, 'age of the snapshot');
+  assert.deepEqual(summary(ok(overview({ status: 'degraded', endpoints: [endpoint(), endpoint({ ip: '1.1.1.1' })] }))),
+    { state: 'degraded', tone: 'degraded', active: 2, at: NOW - 20e3 });
+  assert.deepEqual(summary(ok(overview({ endpoints: [endpoint({ state: 'VERIFIED' })] }))),
+    { state: 'empty', tone: 'degraded', active: 0, at: NOW - 20e3 });
+  assert.deepEqual(summary(ok(overview({
+    freshness: { lastSuccessAt: iso(NOW - 11 * 60e3), oldestActiveVerifiedAt: null, activeTtlSec: 420 },
+  }))), { state: 'stale', tone: 'degraded', active: 1, at: NOW - 11 * 60e3 }, 'stale: age of the last successful check');
+
+  const down = { state: 'unavailable', tone: 'unknown', active: null, at: null };
+  assert.deepEqual(summary(ok(overview({ status: 'unavailable' }))), down, 'Lab says it is down: no counts');
+  for (const kind of ['error', 'malformed', 'not-connected']) assert.deepEqual(summary({ kind }), down, kind);
+});
+
 test('ACTIVE and VERIFIED stay distinct; expired ACTIVE is shown as EXPIRED', () => {
   const [active, verified, expired] = norm(overview({
     endpoints: [endpoint(), endpoint({ ip: '1.1.1.2', state: 'VERIFIED' }), endpoint({ ip: '1.1.1.3', expiresAt: iso(NOW - 5e3) })],

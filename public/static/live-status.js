@@ -112,7 +112,10 @@
       measured: statusData.health_source === 'runtime',
     });
 
-    return { checkedAt: new Date(checkedAt).toISOString(), services: list };
+    // Whether this deployment publishes Endpoint Lab files: only then does the page request /api/lab.
+    const labAvailable = statusData.lab && typeof statusData.lab.available === 'boolean' ? statusData.lab.available : null;
+
+    return { checkedAt: new Date(checkedAt).toISOString(), services: list, lab: { available: labAvailable } };
   };
 
   const loadSnapshot = async ({ fetchImpl = globalScope.fetch.bind(globalScope), timeoutMs = DEFAULTS.timeoutMs, maxDataAgeMs } = {}) => {

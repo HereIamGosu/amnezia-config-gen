@@ -1,16 +1,21 @@
 // api/status.js
 // Public status endpoint — no auth, no IP leakage.
 // State semantics (ok | degraded | down | unknown): src/server/endpointStatus.js.
+// lab.available: whether this deployment publishes Endpoint Lab files (src/server/labPublic.js isPublished);
+// the generator page requests /api/lab only when it is true.
 
 const { getTopEndpoints } = require('../src/server/endpointCache');
 const { portState, overallState, isMeasured, MESSAGES } = require('../src/server/endpointStatus');
+const { isPublished, resolvePublicDir } = require('../src/server/labPublic');
 const { PORT_ALLOWLIST } = require('./warp').__internals;
 
 const SELECTABLE = ['active', 'candidate', 'manual_whitelist'];
 
-const handler = async (req, res) => {
+/** Handler factory: the Lab directory is fixed when the server starts (tests pass their own). */
+const createStatusHandler = ({ labDir = resolvePublicDir(process.env.ENDPOINT_LAB_PUBLIC_DIR) } = {}) => async (req, res) => {
   res.setHeader('X-Robots-Tag', 'noindex, nofollow');
   res.setHeader('Cache-Control', 'no-store');
+  const lab = { available: isPublished(labDir) };
 
   try {
     // Per-port candidates from the endpoint registry (counts only, never IPs).
@@ -40,6 +45,7 @@ const handler = async (req, res) => {
       health_source: measured ? 'runtime' : 'none',
       message: MESSAGES[status],
       cache_source: 'fallback', // static registry; field kept for response compatibility
+      lab,
     });
   } catch {
     // Failing to compute the status is not evidence that endpoints are failing.
@@ -51,8 +57,11 @@ const handler = async (req, res) => {
       health_source: 'none',
       message: 'Status could not be computed',
       cache_source: 'fallback',
+      lab,
     });
   }
 };
 
+const handler = createStatusHandler();
+handler.createStatusHandler = createStatusHandler;
 module.exports = handler;
