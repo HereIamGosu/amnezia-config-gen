@@ -1,14 +1,18 @@
 // src/server/endpointProvider.js
-// Endpoint providers (Endpoint Lab, Phase C).
+// Endpoint providers (Endpoint Lab, Phases C and D).
 //
-// BuiltinEndpointProvider is today's behaviour (hostname / built-in list) and stays the default.
+// BuiltinEndpointProvider is the hostname / built-in list behaviour and stays the default (endpointMode=hostname).
 // LabEndpointProvider reads the Endpoint Lab's read-only snapshot (active-pool.json, schema 2) and selects
-// fresh, lab-verified endpoints. In Phase C it runs only in shadow mode: ShadowRecorder computes what the Lab
-// provider would choose for a real generation request, after the response has been sent, and keeps aggregate
-// counters only. It never changes a response, never probes the network per request and never stores user data
-// (no IPs of users, no configs, no keys). Counters are logged as one aggregate line per interval.
+// fresh, lab-verified endpoints. It never probes the network per request and never stores user data.
 //
-// Enabled only by environment (forks, Vercel and local runs are unaffected):
+// Phase D, Lab Auto (endpointMode=lab in /api/warp): selectForGeneration() is the generator's choice, fail-closed
+// with stable public error codes; there is no fallback to hostname. The pool is the same read-only mount that
+// /api/lab reads (labPublic.resolvePublicDir).
+//
+// Shadow mode (Phase C diagnostics): ShadowRecorder computes what the Lab provider would choose for a
+// hostname-mode request, after the response has been sent, and keeps aggregate counters only. It never changes a
+// response, does not observe Lab Auto requests (those are real selections, not counterfactuals) and logs one
+// aggregate line per interval. Enabled only by environment (forks, Vercel and local runs are unaffected):
 //   ENDPOINT_SHADOW=lab  ENDPOINT_LAB_POOL_PATH=/run/endpoint-lab/active-pool.json
 
 'use strict';
@@ -30,6 +34,18 @@ const MAX_FUTURE_SKEW_MS = 60 * 1000;
 const ENDPOINT_TTL_MS = 7 * 60 * 1000;   // Lab ACTIVE TTL, used to scale freshness
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 const SHADOW_FLUSH_MS = 10 * 60 * 1000;
+
+// Lab Auto public error codes (what a user may see) and the provider reasons behind them. A file that is
+// missing, oversized, not JSON or fails validation is one public case: the Lab data cannot be used now.
+const LAB_AUTO_ERROR_CODES = Object.freeze(['lab_unavailable', 'lab_stale', 'lab_no_endpoints']);
+const LAB_AUTO_ERRORS = Object.freeze({
+  snapshot_missing: 'lab_unavailable',
+  snapshot_too_large: 'lab_unavailable',
+  snapshot_invalid_json: 'lab_unavailable',
+  snapshot_rejected: 'lab_unavailable',
+  snapshot_stale: 'lab_stale',
+  pool_empty: 'lab_no_endpoints',
+});
 
 const sameKeys = (obj, keys) => obj && typeof obj === 'object' && !Array.isArray(obj)
   && Object.keys(obj).length === keys.length && keys.every((k) => Object.prototype.hasOwnProperty.call(obj, k));
@@ -185,6 +201,30 @@ class LabEndpointProvider {
     return { available: true, ageSec: snap.ageSec, labStatus: snap.labStatus, portMatched, requested: n,
       distinct: endpoints.length, endpoints };
   }
+
+  /**
+   * Lab Auto (Phase D): select() under the generator's fail-closed rules. Freshness is checked here, at the
+   * moment of selection (snapshot and every endpoint must be unexpired). A Lab that reports itself `unavailable`
+   * cannot vouch for its pool, so it is refused even while endpoints are inside their TTL. Port and diversity
+   * semantics are select()'s: requested port first, shortfall from other Lab ports, distinct IPs, fewer
+   * endpoints rather than duplicates. Never throws.
+   * @param {{ count?: number, port?: number|null }} req
+   * @returns {{ ok: false, code: string } | { ok: true, requested: number, distinct: number, portMatched: boolean,
+   *   ageSec: number, labStatus: string, endpoints: Array<{ ip: string, port: number }> }}
+   */
+  selectForGeneration(req = {}) {
+    let r;
+    try {
+      r = this.select(req);
+    } catch {
+      return { ok: false, code: 'lab_unavailable' };
+    }
+    if (!r.available) return { ok: false, code: LAB_AUTO_ERRORS[r.reason] || 'lab_unavailable' };
+    if (r.labStatus === 'unavailable') return { ok: false, code: 'lab_unavailable' };
+    if (!r.endpoints.length) return { ok: false, code: 'lab_no_endpoints' };
+    return { ok: true, requested: r.requested, distinct: r.distinct, portMatched: r.portMatched, ageSec: r.ageSec,
+      labStatus: r.labStatus, endpoints: r.endpoints.map(({ ip, port }) => ({ ip, port })) };
+  }
 }
 
 // Snapshot age buckets (seconds) for the shadow summary.
@@ -283,6 +323,7 @@ module.exports = {
   SNAPSHOT_SCHEMA_VERSION,
   OFFICIAL_PORTS,
   MAX_SNAPSHOT_BYTES,
+  LAB_AUTO_ERROR_CODES,
   validateLabSnapshot,
   BuiltinEndpointProvider,
   LabEndpointProvider,

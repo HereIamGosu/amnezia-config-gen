@@ -108,6 +108,7 @@ These rules are non-obvious, easy to break, and silently fatal. They are enforce
 | **I8** | When both `mobile=1` and `router=1` are set, `mobile` is applied first, then `router` caps via `Math.min`/`Math.max`. Router caps win on overlap (e.g. final `Jc = 2`). | Composition rule applied in `applyRouterModeCaps` after `applyMobileModeOverrides`. |
 | **I9** | `cps5=1` adds `I2`–`I5` for AWG 2.0/3.x when `I1` is non-empty. | Legacy mode and AWG modes without `I1` must not emit partial CPS chains. |
 | **I10** | `vpn://` must survive the Qt `qCompress` round-trip and identify the payload as a ready third-party AWG profile. | Prevents AmneziaVPN from treating the import as a protocol-installation flow. |
+| **I11** | Lab Auto (`endpointMode=lab`) changes only `Endpoint`: for the same request every other field, its order and the response metadata match hostname mode (keys, junk sizes and CPS packets are random in both). Without usable Lab data it answers `503 lab_*` before any WARP registration and never falls back to hostname. | Lab endpoints are chosen per request from a pool verified minutes ago; a silent hostname fallback would hide that the requested verification did not happen. |
 
 ## API
 
@@ -125,6 +126,7 @@ Parameters via query string (`GET`) or JSON body fields (`POST`). Body field nam
 | `template` | See [Templates](#templates) |
 | `peerEndpoint`, `endpoint` | Full `host:port` for `Endpoint` (used as-is when given) |
 | `warpPort` | UDP port for `engage…` or IP fallback (default for WARP templates: **4500**; classic wgcf often: **2408**) |
+| `endpointMode` | `hostname` (default, unchanged behaviour) or `lab` — Lab Auto: each config gets a distinct fresh ACTIVE endpoint of the Endpoint Lab. The requested port is a preference: the Lab verifies 2408/500/1701/4500, a shortfall on that port is filled from other verified ports and reported. Fewer distinct endpoints than `count` → fewer configs plus a warning, never duplicates. Only for WARP templates; not with `peerEndpoint`. |
 | `persistentKeepalive`, `keepalive` | Integer for older modes; strict integer or `min-max` range for AWG 3.x (default `25-35`) |
 | `rekeyAfterTime`, `rekeyTimeout`, `rejectAfterTime`, `keepaliveTimeout`, `maxHandshakeAttempts` | AWG 3.x strict integer/range overrides; defaults: `100-120`, `3-7`, `150-180`, `5-15`, `15-20` |
 | `contentPaddingAddition` | AWG 3.x encrypted payload padding; defaults to `10-100`; `off`, `0`, or `0-0` disables it; accepts a strict `0..65535` integer/range |
@@ -141,6 +143,8 @@ Parameters via query string (`GET`) or JSON body fields (`POST`). Body field nam
 | `link` | `1` — include `vpnLink: "vpn://..."` in JSON response for AmneziaVPN one-tap import |
 
 Errors: JSON `{ success: false, message }`; HTTP 4xx/5xx as appropriate.
+
+Lab Auto adds `endpointSource: "lab"` per config and `lab: { requested, selected, requestedPort, portMatched, ports }`. Its refusals are `{ success: false, error, message }`: `400 invalid_endpoint_mode`, `400 endpoint_mode_conflict` (with `peerEndpoint`), `400 lab_template_unsupported` (non-WARP template); `503 lab_unavailable` (no or unusable Lab data, or the Lab reports itself unavailable), `503 lab_stale`, `503 lab_no_endpoints` with `Retry-After: 60`. Freshness is decided once, before registration; the request then keeps those endpoints.
 
 ### `GET` `/api/iplist`
 

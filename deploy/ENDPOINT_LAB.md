@@ -6,11 +6,12 @@
 Endpoint Lab is a **separate privileged host subsystem**. It proves that a WARP `IP:UDP-port` works
 with stock WireGuard and keeps a small, fresh, secret-free pool of such endpoints. The public web
 container (`amnezia-web-*`) is not involved: it stays non-root, read-only, `cap_drop ALL`, with no host
-networking and no Docker socket. A later phase mounts only the public snapshot into it, read-only.
+networking and no Docker socket. It gets only the public directory, read-only (`deploy/CONTROLLER.md`).
 
-**Status (Phase B):** autonomous operation from systemd timers (refresh + bounded discovery), circuit
-breaker, monitoring. The generator does **not** read the snapshot yet. `api/warp.js`, the deploy
-controller, nginx, `/api/status`, Metrika and the UI are unchanged.
+**Status (3.0, Phase D):** autonomous operation from systemd timers (refresh + bounded discovery), circuit
+breaker, monitoring, public web export. The website reads the public directory read-only for `/api/lab`, `/lab`
+and the generator's **Lab Auto** mode (`endpointMode=lab`, see "Product semantics"); the default hostname mode
+does not read it.
 
 ```text
 candidates (seeds, /24 cursor, operator file) → endpoint-lab refresh/discovery → WG handshake → HTTPS via tunnel
@@ -403,12 +404,12 @@ Rollback (never touches amneziawg/`awg0` or the identity):
 3. Restore `lab.db` from `backups/` if a migration has to be undone.
 4. Run `endpoint-lab cleanup`.
 
-## Alerts during Phase B
+## Alerts
 
-The generator does not depend on the Lab yet, so Lab problems are **warnings**, never "site down": timer
-stopped, snapshot stale, identity invalid/ambiguous, Lab `UNAVAILABLE`, pool below the soft floor for a
-long time. Individual endpoint flaps are never alerted. Severity can rise after the generator cutover
-(Phase D).
+The default generator mode does not depend on the Lab, so Lab problems are **warnings**, never "site down":
+timer stopped, snapshot stale, identity invalid/ambiguous, Lab `UNAVAILABLE`, pool below the soft floor for a
+long time. Each of them makes Lab Auto answer `503 lab_*` until the pool is fresh again, which is visible to
+users who chose that mode. Individual endpoint flaps are never alerted.
 
 ## Level of evidence
 
@@ -424,14 +425,23 @@ The Lab records observations about exact endpoints and never extrapolates them t
 - The Phase A candidate set was hand-picked (24/24 passed), so it does not estimate the yield of any range.
 - All latencies are VPS → WARP. None of them is a user latency.
 
-## Future product semantics (design only, not implemented)
+## Product semantics (3.0, Phase D)
 
-After the generator cutover, the official site offers two explicit endpoint modes:
+The site offers two explicit endpoint modes (`/api/warp` `endpointMode`; API details in README):
 
-- **Auto — Lab verified:** only fresh `ACTIVE` endpoints from the snapshot. With no fresh pool, this mode
-  returns a controlled error (503 in the API, a clear UI message), never a silent switch to an unverified
-  endpoint.
-- **Cloudflare hostname (compatibility):** `engage.cloudflareclient.com:<port>`, chosen by the user,
-  independent of the Lab and never labelled "lab verified".
+- **Lab Auto** (`lab`): `src/server/endpointProvider.js` `LabEndpointProvider.selectForGeneration()` reads
+  `active-pool.json` from the read-only mount and hands out only endpoints that are unexpired at the moment of
+  selection, from a snapshot that is unexpired, valid (`validateLabSnapshot`, the mirror of `validate_snapshot`)
+  and not `lab_status: unavailable`. One selection per request, before any WARP registration; distinct IPs per
+  config; the requested port first, a shortfall from other verified ports, reported. With no usable pool the API
+  answers `503 lab_unavailable | lab_stale | lab_no_endpoints` and the UI says so; there is never a silent switch to
+  hostname. Invariant I11 and `__tests__/lab-auto.test.js` hold this.
+- **Cloudflare hostname (compatibility, default)** (`hostname`): `engage.cloudflareclient.com:<port>`, the 2.7.4
+  behaviour, independent of the Lab and never labelled "lab verified".
 
-Forks, Vercel and local runs keep the built-in/hostname behaviour.
+Forks, Vercel and local runs without the mount keep hostname working; Lab Auto there answers `lab_unavailable`.
+
+Shadow mode (Phase C) stays as a diagnostic switch (`ENDPOINT_SHADOW_FLAG`, `deploy/CONTROLLER.md`): it computes
+what the Lab would pick for **hostname-mode** requests after the response and logs aggregate counters only. It never
+observes Lab Auto requests, so its counters are not Lab Auto selection metrics. Removing it is a separate decision:
+the `[endpoint-shadow]` log lines are read by the operator's shadow checks.

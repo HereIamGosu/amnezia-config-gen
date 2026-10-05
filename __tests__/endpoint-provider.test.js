@@ -134,6 +134,55 @@ test('a short requested port is filled from other ports with distinct IPs', () =
   assert.equal(r.portMatched, false);
 });
 
+// ── Lab Auto (Phase D): selectForGeneration ───────────────────────────────────────
+
+test('Lab Auto selection hands out only fresh ACTIVE ip/port pairs', () => {
+  const doc = snapshot([...POOL, endpoint('162.159.192.9', 2408, { expiresIn: -5 })]);
+  const r = providerFor(doc).provider.selectForGeneration({ count: 3, port: 2408 });
+  assert.equal(r.ok, true);
+  assert.equal(r.requested, 3);
+  assert.equal(r.distinct, 3);
+  for (const e of r.endpoints) {
+    assert.deepEqual(Object.keys(e).sort(), ['ip', 'port']);
+    assert.notEqual(e.ip, '162.159.192.9', 'an expired endpoint is never selected');
+  }
+  assert.equal(new Set(r.endpoints.map((e) => e.ip)).size, 3);
+});
+
+test('Lab Auto selection fails closed with public codes only', () => {
+  const missing = new LabEndpointProvider({ path: '/nope', stat: () => { throw new Error('ENOENT'); } });
+  const cases = [
+    [missing, 'lab_unavailable'],
+    [providerFor(snapshot(POOL), { size: MAX_SNAPSHOT_BYTES + 1 }).provider, 'lab_unavailable'],
+    [providerFor('{"schema_version": 2, "endpoi').provider, 'lab_unavailable'],
+    [providerFor(snapshot(POOL, { lab_status: 'x' })).provider, 'lab_unavailable'],
+    [providerFor(snapshot([...POOL, { ...endpoint('162.159.192.7', 2408), note: 'x' }])).provider, 'lab_unavailable'],
+    [providerFor(snapshot(POOL, { lab_status: 'unavailable' })).provider, 'lab_unavailable'],
+    [providerFor(snapshot(POOL, { expires_at: iso(NOW - 1) })).provider, 'lab_stale'],
+    [providerFor(snapshot([])).provider, 'lab_no_endpoints'],
+    [providerFor(snapshot([endpoint('162.159.192.1', 2408, { expiresIn: -1 })], { expires_at: iso(NOW + 60000) })).provider, 'lab_no_endpoints'],
+    [{ select: () => { throw new Error('/run/endpoint-lab/active-pool.json: EIO'); } }, 'lab_unavailable'],
+  ];
+  for (const [provider, code] of cases) {
+    const r = LabEndpointProvider.prototype.selectForGeneration.call(provider, { count: 1 });
+    assert.deepEqual(r, { ok: false, code });
+  }
+  const degraded = providerFor(snapshot(POOL, { lab_status: 'degraded' })).provider.selectForGeneration({ count: 1 });
+  assert.equal(degraded.ok, true, 'degraded Lab still vouches for endpoints it verified within their TTL');
+});
+
+test('Lab Auto selection keeps the provider port and diversity contract', () => {
+  const single = providerFor(snapshot([endpoint('162.159.192.1', 2408)])).provider;
+  assert.deepEqual(single.selectForGeneration({ count: 1 }).endpoints, [{ ip: '162.159.192.1', port: 2408 }]);
+  const short = single.selectForGeneration({ count: 3 });
+  assert.equal(short.ok, true);
+  assert.equal(short.distinct, 1, 'fewer endpoints rather than duplicates');
+  const fallback = single.selectForGeneration({ count: 1, port: 880 });
+  assert.equal(fallback.portMatched, false);
+  assert.equal(fallback.endpoints[0].port, 2408);
+  assert.equal(providerFor(snapshot(POOL)).provider.selectForGeneration({ count: 1, port: 500 }).endpoints[0].port, 500);
+});
+
 test('builtin provider is the default and the factory needs explicit env', () => {
   assert.equal(new BuiltinEndpointProvider().name, 'builtin');
   assert.equal(createShadowFromEnv({}), null);

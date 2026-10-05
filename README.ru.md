@@ -108,6 +108,7 @@ npm start    # vercel dev → http://localhost:3000
 | **I8** | Если одновременно `mobile=1` и `router=1`, сначала применяется `mobile`, потом `router` через `Math.min`/`Math.max`. На пересечении побеждает `router` (например, итог `Jc = 2`). | Правило композиции реализовано в `applyRouterModeCaps` после `applyMobileModeOverrides`. |
 | **I9** | `cps5=1` добавляет `I2`–`I5` для AWG 2.0/3.x при непустом `I1`. | Legacy и режимы AWG без `I1` не должны выдавать неполную CPS-цепочку. |
 | **I10** | `vpn://` проходит Qt `qCompress` round-trip и помечает payload как готовый сторонний AWG-профиль. | AmneziaVPN не должна переводить импорт готового конфига в сценарий установки протокола. |
+| **I11** | Lab Auto (`endpointMode=lab`) меняет только `Endpoint`: для того же запроса остальные поля, их порядок и метаданные ответа совпадают с hostname-режимом (ключи, размеры junk и CPS-пакеты случайны в обоих). Без пригодных данных Lab — `503 lab_*` до регистрации WARP и никогда не hostname. | Endpoint Lab выбирается на запрос из пула, проверенного минуты назад; молчаливая подмена на hostname скрыла бы, что запрошенной проверки не было. |
 
 ## API
 
@@ -125,6 +126,7 @@ npm start    # vercel dev → http://localhost:3000
 | `template` | См. [Шаблоны](#шаблоны) |
 | `peerEndpoint`, `endpoint` | Полная строка `host:port` для `Endpoint` (если задана — используется как есть) |
 | `warpPort` | UDP-порт для `engage…` или IP-fallback (для WARP-шаблонов по умолчанию **4500**; для классического wgcf часто **2408**) |
+| `endpointMode` | `hostname` (по умолчанию, поведение не меняется) или `lab` — Lab Auto: каждый конфиг получает отдельный свежий ACTIVE endpoint Endpoint Lab. Запрошенный порт — предпочтение: Lab проверяет 2408/500/1701/4500, нехватка на этом порту добирается другими проверенными портами с предупреждением. Разных endpoint'ов меньше, чем `count` → меньше конфигов и предупреждение, без повторов. Только для WARP-шаблонов; несовместим с `peerEndpoint`. |
 | `persistentKeepalive`, `keepalive` | Для старых режимов integer; для AWG 3.x строгий integer или `min-max` (default `25-35`) |
 | `rekeyAfterTime`, `rekeyTimeout`, `rejectAfterTime`, `keepaliveTimeout`, `maxHandshakeAttempts` | Строгие AWG 3.x integer/range overrides; defaults: `100-120`, `3-7`, `150-180`, `5-15`, `15-20` |
 | `contentPaddingAddition` | Padding внутри шифрованного AWG 3.x payload; default `10-100`; `off`, `0` или `0-0` отключает; допустим строгий integer/range `0..65535` |
@@ -141,6 +143,8 @@ npm start    # vercel dev → http://localhost:3000
 | `link` | `1` — добавить в JSON-ответ поле `vpnLink: "vpn://..."` для импорта в AmneziaVPN одним тапом |
 
 Ошибки: JSON `{ success: false, message }`; коды 4xx/5xx по ситуации.
+
+Lab Auto добавляет `endpointSource: "lab"` в каждый конфиг и `lab: { requested, selected, requestedPort, portMatched, ports }`. Отказы — `{ success: false, error, message }`: `400 invalid_endpoint_mode`, `400 endpoint_mode_conflict` (вместе с `peerEndpoint`), `400 lab_template_unsupported` (не WARP-шаблон); `503 lab_unavailable` (данных Lab нет, они непригодны или Lab сам сообщает о недоступности), `503 lab_stale`, `503 lab_no_endpoints` с `Retry-After: 60`. Свежесть решается один раз, до регистрации; дальше запрос использует выбранные endpoint'ы.
 
 ### `GET` `/api/iplist`
 

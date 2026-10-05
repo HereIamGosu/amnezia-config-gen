@@ -18,11 +18,12 @@ const { buildVpnLink } = require('../src/server/vpnLinkBuilder');
 const { getCompatibilityForGeneration } = require('../src/server/clientCompatibility');
 const { getTopEndpoints } = require('../src/server/endpointCache');
 const { checkTcpLatency, pickBestEndpoint } = require('../src/server/endpointHealth');
-const { createShadowFromEnv } = require('../src/server/endpointProvider');
+const { createShadowFromEnv, LabEndpointProvider, LAB_AUTO_ERROR_CODES } = require('../src/server/endpointProvider');
+const { FILES: LAB_FILES, resolvePublicDir } = require('../src/server/labPublic');
 
 /**
- * Endpoint Lab shadow mode (Phase C): null unless ENDPOINT_SHADOW=lab and ENDPOINT_LAB_POOL_PATH are set.
- * It observes Auto requests after the response is sent and never influences what the user receives.
+ * Endpoint Lab shadow mode (Phase C diagnostics): null unless ENDPOINT_SHADOW=lab and ENDPOINT_LAB_POOL_PATH are
+ * set. It observes hostname-mode requests after the response is sent and never influences what the user receives.
  */
 let endpointShadow = createShadowFromEnv();
 
@@ -33,6 +34,45 @@ const observeEndpointShadow = (count, warpExtras) => {
   } catch {
     /* shadow mode never affects generation */
   }
+};
+
+/**
+ * Lab Auto (Phase D, `endpointMode=lab`): endpoints come only from the Endpoint Lab's fresh ACTIVE pool, read
+ * from the same read-only mount as /api/lab. Without usable Lab data the request fails with a stable code;
+ * there is no fallback to hostname. `hostname` (the default) is the 2.7.4 behaviour, unchanged.
+ */
+const ENDPOINT_MODES = ['hostname', 'lab'];
+const LAB_AUTO_RETRY_AFTER_S = 60;
+const LAB_AUTO_MESSAGES = Object.freeze({
+  lab_unavailable: 'Endpoint Lab сейчас недоступен. Lab Auto не выдаёт конфигурацию без проверенных данных; hostname-режим работает без Lab.',
+  lab_stale: 'Данные Endpoint Lab устарели. Lab Auto не выдаёт конфигурацию без свежей проверки; hostname-режим работает без Lab.',
+  lab_no_endpoints: 'В Endpoint Lab сейчас нет свежих проверенных endpoint\'ов. Lab Auto не выдаёт конфигурацию; hostname-режим работает без Lab.',
+  lab_selection_failed: 'Не удалось выбрать endpoint Endpoint Lab. Конфигурация не выдана; hostname-режим работает без Lab.',
+});
+
+let labProvider = null;
+const getLabProvider = () => {
+  if (!labProvider) {
+    labProvider = new LabEndpointProvider({
+      path: path.join(resolvePublicDir(process.env.ENDPOINT_LAB_PUBLIC_DIR), LAB_FILES.pool),
+    });
+  }
+  return labProvider;
+};
+
+/** `endpointMode`: absent or empty → `hostname`. Returns null for any other unknown value (HTTP 400). */
+const parseEndpointMode = (v) => {
+  if (v == null) return 'hostname';
+  const s = String(v).trim().toLowerCase();
+  if (!s) return 'hostname';
+  return ENDPOINT_MODES.includes(s) ? s : null;
+};
+
+const labAutoError = (code, statusCode) => {
+  const err = new Error(LAB_AUTO_MESSAGES[code]);
+  err.statusCode = statusCode;
+  err.labCode = code;
+  return err;
 };
 const { buildAwg3Interface } = require('../src/server/awg/configBuilder');
 const {
@@ -1161,6 +1201,8 @@ const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false } 
  * @param {{ includeIpv6?: boolean }} [routeOpts]
  */
 const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '', warpExtras = {}, routeOpts = {}) => {
+  const labEndpoint = routeOpts.endpointMode === 'lab' ? routeOpts.labEndpoint : null;
+  if (routeOpts.endpointMode === 'lab' && !labEndpoint) throw labAutoError('lab_selection_failed', 500);
   const { privKey, pubKey } = generateKeys();
   const regBody = {
     install_id: '',
@@ -1203,7 +1245,11 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
   // Otherwise run TCP pre-check against registry candidates to pick the best IP endpoint.
   let peerEndpoint;
   let endpointSource = 'hostname';
-  if (warpExtras.peerEndpoint) {
+  if (labEndpoint) {
+    // Lab Auto: the endpoint selected from the Lab pool before registration; no other source can apply.
+    peerEndpoint = `${labEndpoint.ip}:${labEndpoint.port}`;
+    endpointSource = 'lab';
+  } else if (warpExtras.peerEndpoint) {
     peerEndpoint = warpExtras.peerEndpoint;
   } else if (warpExtras.engageHost) {
     const port = warpExtras.warpPort != null ? warpExtras.warpPort : WARP_DEFAULT_ENGAGE_UDP_PORT;
@@ -1283,6 +1329,7 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
       presetsUsed: presetKeys.length,
       appliedExtras: { cps5: canApplyExtraCps, mobile: Boolean(routeOpts.mobileMode) },
       endpointSource,
+      labEndpoint: labEndpoint ? { ip: labEndpoint.ip, port: labEndpoint.port } : null,
       cps: { requested: cps.requested, resolved: cps.resolved, stability: cps.stability },
     },
   };
@@ -1290,16 +1337,19 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
 
 /**
  * Generate 1–3 configs, each from a different /24 subnet (when possible).
+ * Lab Auto (`routeOpts.labEndpoints`): one config per selected Lab endpoint, in selection order.
  * Returns `{ configs: Array<{text,meta}>, warning?: string }`.
  */
 const generateMultipleWarpConfigs = async (count, mode, presetKeys, dnsKey, warpExtras, routeOpts) => {
-  const n = Math.min(3, Math.max(1, Number.parseInt(String(count), 10) || 1));
+  const { labEndpoints = null, ...baseOpts } = routeOpts;
+  const n = labEndpoints ? labEndpoints.length : Math.min(3, Math.max(1, Number.parseInt(String(count), 10) || 1));
   const usedCidrs = [];
   const results = [];
 
   for (let i = 0; i < n; i += 1) {
     const opts = {
-      ...routeOpts,
+      ...baseOpts,
+      labEndpoint: labEndpoints ? labEndpoints[i] : null,
       excludeCidrs: [...usedCidrs],
       onEndpointChosen: (cidr24) => { if (cidr24 && cidr24 !== 'unknown') usedCidrs.push(cidr24); },
     };
@@ -1376,7 +1426,8 @@ const handler = async (req, res) => {
     const tmpl = resolveTemplateOptions(templateRaw);
     if (tmpl.forceLegacy) mode = 'legacy';
     else if (tmpl.mode) mode = tmpl.mode;
-    const warpExtras = mergeTemplateIntoExtras(collectWarpGenExtras(req, body, mode), tmpl);
+    const requestExtras = collectWarpGenExtras(req, body, mode);
+    const warpExtras = mergeTemplateIntoExtras(requestExtras, tmpl);
     delete warpExtras.forceLegacy;
     delete warpExtras.mode;
 
@@ -1388,6 +1439,35 @@ const handler = async (req, res) => {
         res.status(400).json({ success: false, error: portCheck.error, allowedPorts: portCheck.allowedPorts });
         return;
       }
+    }
+
+    // ── endpointMode (Phase D) ────────────────────────────────────────────────────
+    const endpointMode = parseEndpointMode(body.endpointMode ?? pickQuery(req, 'endpointMode'));
+    if (!endpointMode) {
+      res.status(400).json({
+        success: false,
+        error: 'invalid_endpoint_mode',
+        message: 'Invalid endpoint mode. Allowed values: hostname, lab.',
+        allowedEndpointModes: ENDPOINT_MODES,
+      });
+      return;
+    }
+    if (endpointMode === 'lab' && warpExtras.peerEndpoint) {
+      res.status(400).json({
+        success: false,
+        error: 'endpoint_mode_conflict',
+        message: 'Lab Auto selects the endpoint itself; remove peerEndpoint or use endpointMode=hostname.',
+      });
+      return;
+    }
+    // Lab endpoints are Cloudflare WARP endpoints: only templates built for the WARP peer can use them.
+    if (endpointMode === 'lab' && !tmpl.engageHost) {
+      res.status(400).json({
+        success: false,
+        error: 'lab_template_unsupported',
+        message: 'Lab Auto is available only for WARP templates (legacy, AWG 2.0, AWG 3.0, AWG 3.1, wgcf).',
+      });
+      return;
     }
 
     const ipv6Param = pickQuery(req, 'ipv6');
@@ -1441,7 +1521,27 @@ const handler = async (req, res) => {
       : presetKeys;
     // ─────────────────────────────────────────────────────────────────────────────
 
+    // Lab Auto: freshness is decided once, here, before any WARP registration. The request then uses exactly
+    // these endpoints even if the snapshot expires while it runs; it never re-selects or switches source.
+    const requestedPort = requestExtras.warpPort;
+    let labSelection = null;
+    if (endpointMode === 'lab') {
+      labSelection = getLabProvider().selectForGeneration({ count, port: requestedPort });
+      if (!labSelection.ok || !labSelection.endpoints.length) {
+        let code = labSelection.ok ? 'lab_no_endpoints' : labSelection.code;
+        if (!LAB_AUTO_ERROR_CODES.includes(code)) code = 'lab_unavailable';
+        res.setHeader('Retry-After', String(LAB_AUTO_RETRY_AFTER_S));
+        res.status(503).json({ success: false, error: code, message: LAB_AUTO_MESSAGES[code] });
+        return;
+      }
+      routeOpts.endpointMode = 'lab';
+      routeOpts.labEndpoints = labSelection.endpoints;
+    }
+
     const { configs, warning } = await generateMultipleWarpConfigs(count, mode, effectivePresetKeys, dnsKey, warpExtras, routeOpts);
+    if (endpointMode === 'lab' && configs.some(({ meta }) => meta.endpointSource !== 'lab' || !meta.labEndpoint)) {
+      throw labAutoError('lab_selection_failed', 500);  // a Lab Auto request never succeeds with another source
+    }
 
     const dnsParts = String(getDnsString(dnsKey || DNS_DEFAULT_KEY)).split(',').map((s) => s.trim()).filter(Boolean);
     const endpointHost = warpExtras.peerEndpoint
@@ -1452,7 +1552,8 @@ const handler = async (req, res) => {
       const encoded = Buffer.from(text).toString('base64');
       let vpnLink;
       if (wantLink && mode !== AWG3_MODE) {
-        vpnLink = buildVpnLink(text, { hostName: endpointHost, dns1: dnsParts[0], dns2: dnsParts[1], mode });
+        const hostName = meta.labEndpoint ? meta.labEndpoint.ip : endpointHost;
+        vpnLink = buildVpnLink(text, { hostName, dns1: dnsParts[0], dns2: dnsParts[1], mode });
       }
       return {
         index: idx + 1,
@@ -1469,6 +1570,24 @@ const handler = async (req, res) => {
 
     const responseWarnings = [];
     if (warning) responseWarnings.push(warning);
+    let lab;
+    if (labSelection) {
+      const ports = configs.map(({ meta }) => meta.labEndpoint.port);
+      const portMatched = requestedPort == null || ports.every((p) => p === requestedPort);
+      lab = {
+        requested: count,
+        selected: labSelection.endpoints.length,
+        requestedPort: requestedPort ?? null,
+        portMatched,
+        ports,
+      };
+      if (!portMatched) {
+        responseWarnings.push(`Endpoint Lab: not enough fresh verified endpoints on port ${requestedPort}; other verified ports were used (${[...new Set(ports)].join(', ')}).`);
+      }
+      if (labSelection.endpoints.length < count) {
+        responseWarnings.push(`Endpoint Lab: only ${labSelection.endpoints.length} distinct fresh verified endpoint(s) for ${count} requested configs.`);
+      }
+    }
     if (wantLink && mode === AWG3_MODE) {
       responseWarnings.push('vpn:// is unavailable for AWG 3.0 because its historical protocol_version is not confirmed; use the .conf export.');
     }
@@ -1523,12 +1642,18 @@ const handler = async (req, res) => {
       routesPresets: effectivePresetKeys.length ? effectivePresetKeys : undefined,
       presetSitesCount: firstMeta.sitesResolved || undefined,
       ...(awg ? { awg } : {}),
+      ...(lab ? { lab } : {}),
       ...(responseWarnings.length ? { warning: responseWarnings.length === 1 ? responseWarnings[0] : responseWarnings } : {}),
       ...(compatibility ? { compatibility } : {}),
     });
-    observeEndpointShadow(count, warpExtras); // after the response: aggregate counters only
+    // After the response, aggregate counters only; Lab Auto requests are real selections, not shadow samples.
+    if (endpointMode === 'hostname') observeEndpointShadow(count, warpExtras);
   } catch (error) {
     console.error('Ошибка генерации конфигурации:', error);
+    if (error.labCode) {
+      res.status(error.statusCode).json({ success: false, error: error.labCode, message: error.message });
+      return;
+    }
     const sc = error.statusCode;
     const code =
       typeof sc === 'number' && sc >= 400 && sc < 600 ? sc : 500;
@@ -1549,6 +1674,10 @@ const handler = async (req, res) => {
 module.exports = handler;
 module.exports.__internals = {
   setEndpointShadow: (shadow) => { endpointShadow = shadow; },
+  setLabProvider: (provider) => { labProvider = provider; },
+  parseEndpointMode,
+  ENDPOINT_MODES,
+  LAB_AUTO_MESSAGES,
   buildInterfaceLegacy,
   buildInterfaceAwg2,
   buildInterfaceAwg2WarpSafe,
