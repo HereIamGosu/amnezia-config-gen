@@ -41,7 +41,8 @@ e2eSuite('Endpoint Lab on real /api/lab data', (openPage) => {
     // first + retry over every deep check, handshake failures included (the sample has 10 of 90)
     const s = overview.sessions;
     assert.ok(s.failed > 0, 'the sample includes failed checks');
-    assert.equal(info.final, await page.evaluate((v) => window.LabCore.formatPercent(v, 'ru'), Math.min(1, s.firstSession + s.retryRescued)));
+    assert.deepEqual([s.samples, s.firstSession, s.retryRescued], [90, 0.7111, 0.1778], 'the regenerated exporter sample');
+    assert.equal(info.final, '89%', '(64 first + 16 retry) of 90 checks, not 100% of the 80 that had a handshake');
     assert.equal(info.basis, `${overview.sessions.samples} проверок за 15 минут до обновления`, 'the base of the shares');
     assert.equal(info.chart, true);
     assert.ok(info.events > 0);
