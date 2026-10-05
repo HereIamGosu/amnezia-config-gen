@@ -24,11 +24,12 @@ const stubWarp = (page, respond) => {
   return requests;
 };
 
-/** Открывает настройки на вкладке «Дополнительно» и выбирает endpoint (нативный список — через change). */
+/** Открывает настройки (сводка шага 2), вкладку «Дополнительно» и выбирает endpoint (нативный список — через change). */
 const chooseEndpoint = async (page, value) => {
   if (!await page.evaluate(() => document.getElementById('settingsModal').classList.contains('is-open'))) {
-    await page.click('.param-chip[data-settings-focus="warpEndpointSelect"]');
+    await page.click('#paramSummary');
     await page.waitFor(() => document.getElementById('settingsModal').classList.contains('is-open'));
+    await page.click('#tab-extra');
   }
   await page.evaluate((v) => {
     const sel = document.getElementById('warpEndpointSelect');
@@ -67,6 +68,10 @@ e2eSuite('Lab Auto in the generator', (openPage) => {
       await page.click('label.radio-label:has(input[name="configCount"][value="2"])');
       await closeSettings(page);
       assert.equal(await page.evaluate(() => document.getElementById('chipEndpoint').textContent), 'Endpoint Lab');
+      assert.deepEqual(await page.evaluate(() => ({
+        changed: document.querySelector('.param-summary__item[data-param="endpoint"]').classList.contains('param-summary__item--changed'),
+        state: document.getElementById('paramSummaryState').textContent,
+      })), { changed: true, state: 'Изменено: Endpoint, Число конфигов' }, 'Lab Auto is a non-default choice in the step-2 summary');
 
       await page.click('#generateButton');
       await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success', { message: 'success view' });

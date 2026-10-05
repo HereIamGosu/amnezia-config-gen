@@ -1349,69 +1349,101 @@ kbd {
   font-size: 12.5px;
 }
 
-/* Чипы параметров */
-.param-grid {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.param-chip {
-  position: relative;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 4px 10px;
-  min-height: 64px;
-  padding: 10px 24px 10px 12px;
+/* Сводка параметров шага 2: одна кнопка открывает настройки, изменённые значения выделены */
+.param-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px 12px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface);
+  color: inherit;
   text-align: left;
+  cursor: pointer;
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
-.param-chip:hover {
+.param-summary:hover {
   border-color: var(--color-border-strong);
   background: var(--color-surface-2);
 }
 
-.param-chip__icon {
-  grid-row: span 2;
-  color: var(--color-blue-hover);
+.param-summary__list {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px 16px;
 }
 
-.param-chip__label {
+.param-summary__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+.param-summary__icon {
+  grid-row: span 2;
+  color: var(--color-text-muted);
+}
+
+.param-summary__label {
   overflow: hidden;
-  font-size: 13px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.param-summary__value {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 13.5px;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.param-chip__chevron {
-  position: absolute;
-  top: 12px;
-  right: 8px;
-  width: 14px;
-  height: 14px;
-  color: var(--color-text-muted);
-}
-
-.param-chip__value {
-  overflow: hidden;
-  color: var(--color-text-2);
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.param-chip__value--on {
-  color: #4ade80;
-}
-
-.param-chip__value--accent {
+.param-summary__item--changed .param-summary__icon,
+.param-summary__item--changed .param-summary__value {
   color: var(--color-blue-hover);
+}
+
+.param-summary__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+}
+
+.param-summary__state {
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+}
+
+.param-summary__state--changed {
+  color: var(--color-blue-hover);
+}
+
+.param-summary__edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--color-blue-hover);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.param-summary:hover .param-summary__edit {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 /* ───────────────────────── Результат ───────────────────────── */
@@ -3442,7 +3474,7 @@ kbd {
     grid-column: 1 / -1;
   }
 
-  .param-grid {
+  .param-summary__list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -3749,14 +3781,12 @@ kbd {
     transform: translateY(-50%);
   }
 
-  .param-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .param-summary {
+    padding: 12px 12px 10px;
   }
 
-  .param-chip {
-    min-height: 58px;
-    /* Справа запас под шеврон: многоточие подписи не упирается в него */
-    padding: 8px 26px 8px 10px;
+  .param-summary__list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .step--generate {
@@ -3989,35 +4019,37 @@ kbd {
 }
 
 @media (max-width: 440px) {
-  /* Чипы параметров — список «подпись — значение» в одну колонку, без многоточий */
-  .param-grid {
+  /* Сводка — список «подпись — значение» в одну колонку, без многоточий */
+  .param-summary__list {
     grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
+    gap: 8px;
   }
 
   /* Подпись слева, значение справа; длинное значение целиком переносится под подпись */
-  .param-chip {
+  .param-summary__item {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
     gap: 2px 8px;
-    min-height: 44px;
-    padding: 8px 26px 8px 12px;
   }
 
-  .param-chip__icon,
-  .param-chip__label {
+  .param-summary__icon,
+  .param-summary__label {
     flex: none;
   }
 
-  .param-chip__value {
+  .param-summary__label {
+    font-size: 13px;
+  }
+
+  .param-summary__value {
     max-width: 100%;
     margin-left: auto;
     text-align: right;
+    white-space: normal;
   }
 
-  .param-chip__chevron {
-    top: calc(50% - 7px);
+  .param-summary__foot {
+    min-height: 40px;
   }
 }
 

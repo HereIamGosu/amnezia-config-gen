@@ -1,4 +1,4 @@
-// e2e/settings.e2e.js — профиль, чипы шага 2, окно настроек и ссылка с настройками.
+// e2e/settings.e2e.js — профиль, сводка шага 2, окно настроек и ссылка с настройками.
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -10,10 +10,16 @@ const chipTexts = (page) => page.evaluate(() => Object.fromEntries(
     .map((id) => [id, document.getElementById(id).textContent.trim()]),
 ));
 
+/** Строка состояния и выделенные (изменённые) пункты сводки. */
+const summaryState = (page) => page.evaluate(() => ({
+  text: document.getElementById('paramSummaryState').textContent.trim(),
+  changed: Array.from(document.querySelectorAll('.param-summary__item--changed')).map((el) => el.dataset.param),
+}));
+
 const settingsOpen = () => document.getElementById('settingsModal').classList.contains('is-open');
 
-e2eSuite('profile, step-2 chips and settings dialog', (openPage) => {
-  test('profile choice is remembered; chips start from the real defaults', async () => {
+e2eSuite('profile, step-2 summary and settings dialog', (openPage) => {
+  test('profile choice is remembered; the summary starts from the real defaults', async () => {
     const page = await openPage();
     await page.goto('/');
     assert.equal(await page.evaluate(() => document.querySelector('[name="awgProfile"]:checked').value), 'awg2', 'AWG 2.0 by default');
@@ -25,6 +31,7 @@ e2eSuite('profile, step-2 chips and settings dialog', (openPage) => {
       chipIpv6: 'Выключен',
       chipDevice: 'Универсальный',
     });
+    assert.deepEqual(await summaryState(page), { text: 'Все параметры по умолчанию', changed: [] });
 
     await page.click('label.profile-card:has(#profileAwg3)');
     assert.equal(await page.evaluate(() => document.getElementById('profileAwg3').checked), true);
@@ -34,12 +41,12 @@ e2eSuite('profile, step-2 chips and settings dialog', (openPage) => {
     await page.assertClean();
   });
 
-  test('settings changes are reflected by the chips', async () => {
+  test('settings changes are reflected by the summary and named in its state line', async () => {
     const page = await openPage();
     await page.goto('/');
 
     // Маршруты: выборочный режим и два направления
-    await page.click('.param-chip[data-settings-tab="routes"]');
+    await page.click('#paramSummary');
     await page.waitFor(settingsOpen);
     await page.click('#routeModeSplit');
     await page.click('#routeTilesSocial .cfg-tile:has(input[value="youtube"])');
@@ -75,35 +82,34 @@ e2eSuite('profile, step-2 chips and settings dialog', (openPage) => {
       chipIpv6: 'Выключен',
       chipDevice: 'Смартфон',
     });
+    assert.deepEqual(await summaryState(page), {
+      text: 'Изменено: Маршрутизация, DNS, Endpoint, Порт WARP, Устройство',
+      changed: ['routing', 'dns', 'endpoint', 'port', 'device'],
+    });
     await page.assertClean();
   });
 
-  test('every chip opens settings on its own tab and returns focus on Escape', async () => {
+  test('the summary is the only entry: any spot opens settings on the first tab, Escape returns focus', async () => {
     const page = await openPage();
     await page.goto('/');
-    const chips = await page.evaluate(() => Array.from(document.querySelectorAll('.param-chip')).map((chip, i) => ({
-      index: i + 1,
-      tab: chip.dataset.settingsTab,
-      focus: chip.dataset.settingsFocus || null,
-    })));
-    assert.equal(chips.length, 6);
-    for (const chip of chips) {
-      const selector = `.param-grid .param-chip:nth-child(${chip.index})`;
-      await page.click(selector);
-      await page.waitFor(settingsOpen, { message: `settings open from chip ${chip.index}` });
-      const state = await page.evaluate(() => {
-        const tab = document.querySelector('#settingsModal [role="tab"][aria-selected="true"]');
-        const panel = document.getElementById(tab.getAttribute('aria-controls'));
-        return { tab: tab.id, panelVisible: !panel.hidden && panel.offsetHeight > 0, active: document.activeElement.id };
-      });
-      assert.equal(state.tab, `tab-${chip.tab}`, `chip ${chip.index} opens tab ${chip.tab}`);
-      assert.ok(state.panelVisible, `panel of tab ${chip.tab} visible`);
-      if (chip.focus) assert.equal(state.active, chip.focus, `chip ${chip.index} focuses #${chip.focus}`);
+    assert.equal(await page.evaluate(() => document.querySelectorAll('#stepParamsBody button').length), 1,
+      'one button in step 2');
+    // Клик по значению внутри карточки — это тот же вход, что и «Изменить параметры»
+    for (const target of ['#chipPort', '#paramSummaryEdit']) {
+      await page.click(target);
+      await page.waitFor(settingsOpen, { message: `settings open from ${target}` });
+      const tab = await page.evaluate(() => document.querySelector('#settingsModal [role="tab"][aria-selected="true"]').id);
+      assert.equal(tab, 'tab-routes', `${target} opens the first tab`);
+      await page.click('#tab-extra');
       await page.press('Escape');
       await page.waitFor(() => !document.getElementById('settingsModal').classList.contains('is-open'));
-      assert.ok(await page.evaluate((sel) => document.activeElement === document.querySelector(sel), selector),
-        `focus returns to chip ${chip.index}`);
+      assert.equal(await page.evaluate(() => document.activeElement.id), 'paramSummary', 'focus returns to the summary');
     }
+    const name = await page.evaluate(() => {
+      const btn = document.getElementById('paramSummary');
+      return document.getElementById(btn.getAttribute('aria-labelledby')).textContent.trim();
+    });
+    assert.equal(name, 'Изменить параметры', 'short accessible name; values come as the description');
     await page.assertClean();
   });
 
@@ -115,7 +121,7 @@ e2eSuite('profile, step-2 chips and settings dialog', (openPage) => {
         const toggle = document.querySelector('#stepParams [data-step-toggle]');
         if (toggle.getAttribute('aria-expanded') === 'false') toggle.click();
       });
-      await page.click('.param-chip[data-settings-tab="routes"]');
+      await page.click('#paramSummary');
       await page.waitFor(settingsOpen);
       const heights = {};
       for (const tab of ['tab-dnscps', 'tab-extra', 'tab-routes', 'tab-extra']) {
@@ -155,8 +161,12 @@ e2eSuite('profile, step-2 chips and settings dialog', (openPage) => {
       chipIpv6: 'Выключен',
       chipDevice: 'Смартфон',
     });
+    assert.deepEqual(await summaryState(page), {
+      text: 'Изменено: Маршрутизация, DNS, Endpoint, Порт WARP, Устройство, Число конфигов',
+      changed: ['routing', 'dns', 'endpoint', 'port', 'device'],
+    }, 'a change outside the summary (number of configs) is still named');
 
-    await page.click('.param-chip[data-settings-tab="routes"]');
+    await page.click('#paramSummary');
     await page.waitFor(settingsOpen);
     await page.click('#settingsShareLink');
     const copied = await page.waitFor(() => window.__e2e.clipboard[0], { message: 'settings link copied' });
