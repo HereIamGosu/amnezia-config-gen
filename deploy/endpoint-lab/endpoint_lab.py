@@ -1486,6 +1486,8 @@ WEB_TIMELINE_POINTS = 96
 WEB_HISTORY_RANGES = (("24h", 24 * 3600, 15 * 60), ("7d", 7 * 86400, 2 * 3600), ("30d", 30 * 86400, 12 * 3600))
 WEB_DETAIL_MAX_AGE_S = 3600                       # an untouched detail file is rewritten at least hourly
 WEB_DETAIL_ROTATE_PER_RUN = 12                    # untouched files refreshed per publish (bounds the job time)
+WEB_DETAIL_WRITES_PER_RUN = 32                    # detail files written per publish at most (cold export converges)
+WEB_DETAIL_WRITE_BUDGET_S = 2.0                   # and no more than this much time on detail files per publish
 WEB_OVERVIEW_MAX_BYTES = 2 * 1024 * 1024
 WEB_DETAIL_MAX_BYTES = 256 * 1024
 WEB_DETAIL_NAME_RE = re.compile(r"^[0-9a-f]{32}\.json$")
@@ -1762,10 +1764,15 @@ def _web_json(doc: dict, limit: int) -> bytes:
     return data
 
 
-def export_web(store: Store, public_dir: str, now: int, rotate: int = WEB_DETAIL_ROTATE_PER_RUN) -> dict:
-    """Overview always; detail files for endpoints changed since the last export, missing ones, and the
+def export_web(store: Store, public_dir: str, now: int, rotate: int = WEB_DETAIL_ROTATE_PER_RUN,
+               max_writes: int | None = None, write_budget_s: float | None = None) -> dict:
+    """Overview always; detail files that are missing or older than their endpoint's last change, and the
     `rotate` oldest others once they are older than WEB_DETAIL_MAX_AGE_S. Orphans (no longer public) are
-    removed. Every file is written atomically; a failure leaves the previous files to age out."""
+    removed. At most WEB_DETAIL_WRITES_PER_RUN files and WEB_DETAIL_WRITE_BUDGET_S per run: what is left is
+    reported as deferred (`complete` False) and written by the next runs. Every file is written atomically; a
+    failure leaves the previous files to age out."""
+    max_writes = WEB_DETAIL_WRITES_PER_RUN if max_writes is None else max_writes
+    write_budget_s = WEB_DETAIL_WRITE_BUDGET_S if write_budget_s is None else write_budget_s
     started = time.monotonic()
     model = WebModel(store, now)
     overview = model.overview()
@@ -1774,7 +1781,6 @@ def export_web(store: Store, public_dir: str, now: int, rotate: int = WEB_DETAIL
     os.makedirs(details_dir, mode=0o755, exist_ok=True)
     if os.stat(details_dir).st_mode & 0o777 != 0o755:
         os.chmod(details_dir, 0o755)
-    since = int(model.meta.get("web_export_at", "0") or 0)
     listed = {web_detail_name(e["ip"] + ":" + str(e["port"])): e for e in overview["endpoints"]}
     by_name = {web_detail_name(r["endpoint_id"]): r for r in model.rows}
     existing = {}
@@ -1788,18 +1794,38 @@ def export_web(store: Store, public_dir: str, now: int, rotate: int = WEB_DETAIL
             with contextlib.suppress(FileNotFoundError):
                 os.unlink(os.path.join(details_dir, name))
             removed += 1
-    due, stale = [], []
+    # Freshness per file: a detail file's mtime is set to the Lab clock of the export that wrote it, so it is due
+    # again only when its endpoint changed after that (updated_at > mtime), or when it is missing. A deferred
+    # file therefore stays due until a later run writes it; nothing global has to wait for a complete export.
+    missing, changed, stale = [], [], []
     for name in listed:
         rec = by_name[name]
-        if name not in existing or (rec["updated_at"] or 0) >= since:
-            due.append(name)
-        elif existing[name] < time.time() - WEB_DETAIL_MAX_AGE_S:  # file age: wall clock, like the mtime
+        if name not in existing:
+            missing.append(name)
+        elif (rec["updated_at"] or 0) > int(existing[name]):
+            changed.append(name)
+        elif existing[name] < now - WEB_DETAIL_MAX_AGE_S:
             stale.append(name)
     stale.sort(key=lambda n: existing[n])
-    for name in due + stale[:rotate]:
-        _atomic_write(os.path.join(details_dir, name), _web_json(model.detail(by_name[name]), WEB_DETAIL_MAX_BYTES), 0o644)
-    return {"endpoints": len(overview["endpoints"]), "details_written": len(due) + len(stale[:rotate]),
-            "details_removed": removed, "duration_ms": int((time.monotonic() - started) * 1000)}
+    # Bounded cost per run (a cold export would otherwise write every detail in one job): missing files first,
+    # ACTIVE before SUSPECT before VERIFIED; then changed ones, oldest change first; hourly rotation only with
+    # capacity left.
+    priority = {ACTIVE: 0, SUSPECT: 1, VERIFIED: 2}
+    missing.sort(key=lambda n: (priority.get(by_name[n]["state"], 3), n))
+    changed.sort(key=lambda n: (by_name[n]["updated_at"] or 0, n))
+    plan = (missing + changed + stale[:rotate])[:max(0, max_writes)]
+    done = set()
+    for name in plan:
+        if time.monotonic() - started > write_budget_s:
+            break
+        path = os.path.join(details_dir, name)
+        _atomic_write(path, _web_json(model.detail(by_name[name]), WEB_DETAIL_MAX_BYTES), 0o644)
+        os.utime(path, (now, now))
+        done.add(name)
+    deferred = sum(n not in done for n in missing + changed)
+    return {"endpoints": len(overview["endpoints"]), "details_written": len(done), "details_deferred": deferred,
+            "complete": deferred == 0, "details_removed": removed,
+            "duration_ms": int((time.monotonic() - started) * 1000)}
 
 
 # --- host resources ------------------------------------------------------------------------------------------
@@ -2228,7 +2254,7 @@ class Lab:
         files stay (and age out) and a code without details is kept in lab_meta."""
         try:
             stats = export_web(self.store, self.public_dir, now)
-        except (OSError, sqlite3.Error, ValueError) as exc:
+        except Exception as exc:  # noqa: BLE001 - best effort after COMMIT: any export bug must not fail the job
             log(f"endpoint-lab: web export failed: {type(exc).__name__}")
             with contextlib.suppress(sqlite3.Error):
                 with self.store.transaction():
@@ -2239,6 +2265,7 @@ class Lab:
             with self.store.transaction():
                 self.store.set_meta("web_export_at", now)
                 self.store.set_meta("web_export_ms", stats["duration_ms"])
+                self.store.set_meta("web_export_deferred", stats["details_deferred"])
                 self.store.conn.execute("DELETE FROM lab_meta WHERE key IN ('web_export_error', 'web_export_error_at')")
         return stats
 

@@ -88,6 +88,8 @@ with "Peer netns reference is invalid". When the service ends, the namespace dis
 | `/var/lib/amnezia-endpoint-lab/backups/` | 0700 | DB copies taken automatically before each migration |
 | `/var/lib/amnezia-endpoint-lab/public/active-pool.json` | 0644 | snapshot for the future read-only mount |
 | `/var/lib/amnezia-endpoint-lab/public/lab-status.json` | 0644 | status + 15-min stats for monitoring (no IPs, no secrets); rewritten after every job |
+| `/var/lib/amnezia-endpoint-lab/public/web-overview.json` | 0644 | website export (Public Contract v1): counts, freshness, sessions, ≤ 500 endpoints listed one by one (ACTIVE/VERIFIED/SUSPECT only), events; ≤ 2 MB |
+| `/var/lib/amnezia-endpoint-lab/public/web-endpoints/<sha256(id)[:32]>.json` | 0644 (dir 0755) | one detail file per listed endpoint (≤ 256 KB); none for QUARANTINE/DEAD/DISCOVERED, negative controls or blacklisted endpoints; error codes through an allowlist. Best effort after the DB commit: an export failure never fails the job (`lab_meta.web_export_error` = type only). Bounded per run: ≤ 32 files and ≤ 2 s of detail writes, missing files first; a file is rewritten when its endpoint changed after the file's mtime (set to the Lab clock), so a cold export converges over a few runs |
 
 `/var/lib/amnezia-endpoint-lab` is 0700 and `public/` is 0755. A future bind mount of `public/` alone
 works, because the mount source is resolved by root (dockerd). The DB never becomes readable for it.

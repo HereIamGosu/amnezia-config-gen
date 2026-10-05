@@ -1691,7 +1691,8 @@ class WebExportTests(LabFixture):
                     for port in (2408, 500):
                         self.store.upsert_candidate(lab.parse_endpoint(f"{prefix}.{i}", port), lab.SRC_CONSUMER, NOW)
             self.store.conn.execute("UPDATE endpoint SET state=?", (lab.VERIFIED,))  # listed one by one
-        self.export()
+        # size limits, not the per-run write cap (test_cold_export_is_bounded_and_converges): no caps here
+        self.export(max_writes=lab.WEB_MAX_ENDPOINTS, write_budget_s=3600)
         doc = self.overview()
         self.assertEqual(len(doc["endpoints"]), lab.WEB_MAX_ENDPOINTS)
         self.assertEqual(len(os.listdir(os.path.join(self.public, lab.WEB_DETAILS_DIR))), lab.WEB_MAX_ENDPOINTS)
@@ -1717,6 +1718,65 @@ class WebExportTests(LabFixture):
         old = time.time() - lab.WEB_DETAIL_MAX_AGE_S - 5
         os.utime(os.path.join(self.public, lab.WEB_DETAILS_DIR, lab.web_detail_name(a)), (old, old))
         self.assertEqual(self.export(NOW + 240)["details_written"], 1, "an untouched file is refreshed hourly")
+
+    def test_cold_export_is_bounded_and_converges(self):
+        ids = [self.add(f"162.159.192.{i}", lab.OFFICIAL_PORTS[i % 4], state=lab.ACTIVE if i <= 5 else lab.VERIFIED)
+               for i in range(1, 26)]
+        details = os.path.join(self.public, lab.WEB_DETAILS_DIR)
+        runner = self.make_lab(FakeProbeEngine())
+        with mock.patch.object(lab, "WEB_DETAIL_WRITES_PER_RUN", 10):
+            first = runner.publish_web(NOW)
+            self.assertEqual((first["details_written"], first["details_deferred"], first["complete"]), (10, 15, False))
+            self.assertEqual(len(os.listdir(details)), 10)
+            self.assertTrue(all(os.path.exists(os.path.join(details, lab.web_detail_name(e))) for e in ids[:5]),
+                            "ACTIVE details are written first")
+            runs = 1
+            complete = False
+            while not complete:
+                complete = runner.publish_web(NOW + 60 * runs)["complete"]
+                runs += 1
+                self.assertLess(runs, 5, "a cold export converges in ceil(25 / 10) runs")
+        self.assertEqual(runs, 3, "ceil(25 / 10) = 3 publishes")
+        self.assertEqual(len(os.listdir(details)), 25)
+        timed = self.export(NOW + 600, max_writes=100, write_budget_s=0.0)   # no time left: the overview still goes out
+        self.assertLessEqual(timed["details_written"], 1)
+
+    def test_steady_changes_above_the_cap_still_progress(self):
+        ids = [self.add(f"162.159.192.{i}", lab.OFFICIAL_PORTS[i % 4], state=lab.ACTIVE) for i in range(1, 13)]
+        runner = self.make_lab(FakeProbeEngine())
+        details = os.path.join(self.public, lab.WEB_DETAILS_DIR)
+        runner.publish_web(NOW)                                        # all 12 files exist
+        with self.store.transaction():                                 # every endpoint changes after that export
+            self.store.conn.execute("UPDATE endpoint SET updated_at=?", (NOW + 10,))
+        before = {e: os.stat(os.path.join(details, lab.web_detail_name(e))).st_mtime_ns for e in ids}
+        with mock.patch.object(lab, "WEB_DETAIL_WRITES_PER_RUN", 5):
+            stats = [runner.publish_web(NOW + 60 * k) for k in (1, 2, 3)]
+        self.assertEqual([s["details_written"] for s in stats], [5, 5, 2], "no file is starved by the cap")
+        self.assertTrue(stats[-1]["complete"])
+        self.assertTrue(all(os.stat(os.path.join(details, lab.web_detail_name(e))).st_mtime_ns > before[e]
+                            for e in ids))
+
+    def test_publish_web_survives_any_exception(self):
+        eid = self.add("162.159.192.1", state=lab.VERIFYING)
+        runner = self.make_lab(FakeProbeEngine())
+        with mock.patch.object(lab, "export_web", side_effect=KeyError("162.159.192.1:2408")):
+            out = runner.run_batch([eid], "refresh")
+        self.assertTrue(out.snapshot_ok)
+        self.assertEqual(self.states()[eid], lab.ACTIVE, "the committed batch stays")
+        meta = self.store.meta()
+        self.assertEqual(meta["web_export_error"], "WEB_EXPORT_FAILED: KeyError")   # type only, never the message
+        self.assertNotIn("162.159.192.1", meta["web_export_error"])
+
+    def test_deferred_changes_stay_due_until_a_complete_export(self):
+        a = self.add("162.159.192.1", state=lab.ACTIVE)
+        b = self.add("162.159.192.2", 500, state=lab.ACTIVE)
+        runner = self.make_lab(FakeProbeEngine())
+        with mock.patch.object(lab, "WEB_DETAIL_WRITES_PER_RUN", 1):
+            runner.publish_web(NOW)                     # one of two written: incomplete
+            self.assertEqual(self.store.meta()["web_export_deferred"], "1")
+            runner.publish_web(NOW + 60)                # the missing one is always due, whatever `since` says
+        self.assertTrue(all(os.path.exists(os.path.join(self.public, lab.WEB_DETAILS_DIR, lab.web_detail_name(e)))
+                            for e in (a, b)))
 
     def test_publish_exports_from_committed_state_and_failure_keeps_old_files(self):
         eid = self.add("162.159.192.1", state=lab.VERIFYING)
