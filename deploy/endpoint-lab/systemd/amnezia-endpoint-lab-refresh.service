@@ -1,0 +1,28 @@
+# Endpoint Lab refresh: re-verify the pool, circuit breaker, snapshot. Installed disabled by install.sh.
+# Every hardening option below was tested on the Lab host (see deploy/ENDPOINT_LAB.md, "systemd").
+[Unit]
+Description=Endpoint Lab: refresh the verified WARP endpoint pool
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/endpoint-lab refresh
+TimeoutStartSec=200
+Nice=10
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/amnezia-endpoint-lab /run
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_ADMIN CAP_NET_RAW CAP_SYS_MODULE
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+LockPersonality=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+ProtectClock=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+MemoryMax=128M
+TasksMax=64
