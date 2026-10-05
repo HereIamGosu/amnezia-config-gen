@@ -149,7 +149,8 @@
   };
 
   const overviewBase = (now, { status, counts, sessions, seed, generatedAgo = 20e3, lastSuccessAgo = 14e3, oldestAgo = 3 * MIN + 12e3, stale, historyEnd, kind }) => {
-    const byState = { ACTIVE: counts.active, VERIFIED: counts.verified, SUSPECT: counts.suspect, QUARANTINE: counts.quarantine, DEAD: counts.dead };
+    // Как в контракте: поштучно только ACTIVE, VERIFIED, SUSPECT; QUARANTINE и DEAD — только в счётчиках.
+    const byState = { ACTIVE: counts.active, VERIFIED: counts.verified, SUSPECT: counts.suspect };
     return {
       schemaVersion: 1,
       status,

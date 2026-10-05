@@ -38,7 +38,10 @@ e2eSuite('Endpoint Lab on real /api/lab data', (openPage) => {
     assert.equal(info.badge, false);
     assert.equal(info.active, String(overview.counts.active));
     assert.match(info.fresh, /7 мин/);
-    assert.equal(info.final, '100%');
+    // first + retry over every deep check, handshake failures included (the sample has 10 of 90)
+    const s = overview.sessions;
+    assert.ok(s.failed > 0, 'the sample includes failed checks');
+    assert.equal(info.final, await page.evaluate((v) => window.LabCore.formatPercent(v, 'ru'), Math.min(1, s.firstSession + s.retryRescued)));
     assert.equal(info.basis, `${overview.sessions.samples} проверок за 15 минут до обновления`, 'the base of the shares');
     assert.equal(info.chart, true);
     assert.ok(info.events > 0);
@@ -79,7 +82,9 @@ e2eSuite('Endpoint Lab on real /api/lab data', (openPage) => {
       activity: document.getElementById('labActivityEmpty').textContent,
     }));
     assert.equal(info.state, 'ok');
-    assert.match(info.note, /только для ACTIVE/);
+    assert.match(info.note, /только пул ACTIVE/);
+    assert.equal(await page.evaluate(() => document.getElementById('labQualityFinal').textContent), '—', 'compat publishes no session shares');
+    assert.equal(await page.evaluate(() => document.querySelector('[data-metric="verified"] [data-value]').textContent), '—', 'no operational counts');
     assert.deepEqual(info.states, ['ACTIVE']);
     assert.match(info.chart, /пока недоступна/, 'no invented history');
     assert.match(info.activity, /недоступен/, 'no invented events');

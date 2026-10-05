@@ -4,11 +4,13 @@
 //
 //   full mode:           web-overview.json + web-endpoints/<sha256(id)[:32]>.json   (Lab exporter, contract v1)
 //   compatibility mode:  active-pool.json (schema 2) + lab-status.json (schema 1) → a partial overview with
-//                        real data only (ACTIVE endpoints, counts, freshness, 15-minute sessions); no history,
-//                        no events, no non-ACTIVE list. coverage: "active-only".
+//                        what these files prove: status, freshness, the fresh ACTIVE list. Counts and sessions
+//                        are null (the operational counters have another meaning); no history, no events.
+//                        coverage: "active-only".
 //
 // Every file is untrusted: size-checked before parsing, validated, and re-projected onto the browser contract
-// (only known keys leave this module). Contract: docs/specs/endpoint-lab-frontend.md.
+// (only known keys leave this module). What the projection removes as invalid is listed in `partial`, so the
+// page can say that part of the data failed validation. Contract: docs/specs/endpoint-lab-frontend.md.
 
 'use strict';
 
@@ -35,6 +37,11 @@ const MAX_BYTES = Object.freeze({
 const LIMITS = Object.freeze({ endpoints: 500, events: 100, activeHistory: 1500, timeline: 96, buckets: 120, detailEvents: 100 });
 const STATUSES = ['ok', 'degraded', 'unavailable'];
 const STATES = ['ACTIVE', 'VERIFIED', 'SUSPECT', 'QUARANTINE', 'DEAD', 'DISCOVERED', 'CHECKING'];
+// Listed one by one; the other states are public only as counts and as transitions in the event feed.
+const PUBLIC_STATES = ['ACTIVE', 'VERIFIED', 'SUSPECT'];
+// The exporter's public error codes (endpoint_lab.WEB_ERROR_CODES); anything else becomes "unknown".
+const ERROR_CODES = ['timeout', 'handshake_no_response', 'handshake_invalid', 'dns_failed', 'https_timeout',
+  'https_tls_failed', 'traffic_failed', 'targets_unreachable', 'unknown'];
 const EVENT_TYPES = ['restored', 'promoted', 'discovery', 'suspect', 'excluded', 'demoted', 'dead'];
 const SESSIONS = ['first', 'retry', 'failed'];
 const CHECK_RESULTS = ['ok', 'fail'];
@@ -60,8 +67,6 @@ const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 const isInt = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
 const isFraction = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1;
 const isIso = (v) => typeof v === 'string' && ISO_RE.test(v) && Number.isFinite(Date.parse(v));
-const isoOrNull = (v) => (isIso(v) ? v : null);
-const pick = (v, allowed) => (typeof v === 'string' && allowed.includes(v) ? v : null);
 
 // RFC 5737 TEST-NET-1 is the Lab's negative control: never public, whatever a file says.
 const isNegativeControlIp = (ip) => net.isIPv4(ip) && ip.startsWith('192.0.2.');
@@ -125,19 +130,48 @@ const readJson = (file, maxBytes) => {
 
 // ── Projection onto the browser contract ──────────────────────
 
-const projectEndpoint = (e) => {
-  if (!isObject(e) || typeof e.ip !== 'string' || !(net.isIPv4(e.ip) || net.isIPv6(e.ip)) || !isInt(e.port, 1, 65535)) return null;
+/** Sections where the projection removed something invalid: the response's `partial` list. */
+const partialSet = () => {
+  const set = new Set();
+  return { mark: (section) => () => set.add(section), list: () => [...set].sort() };
+};
+
+/** Optional field: absent or null stays null; a present value must pass `ok`, otherwise it is dropped and reported. */
+const opt = (v, ok, bad) => {
+  if (v === undefined || v === null) return null;
+  if (ok(v)) return v;
+  bad();
+  return null;
+};
+
+const isToken = (v) => typeof v === 'string' && TOKEN_RE.test(v);
+const publicErrorCode = (v) => (ERROR_CODES.includes(v) ? v : 'unknown');
+
+/**
+ * One endpoint item, or null when it is dropped. Policy drops are silent (the negative control, states that are
+ * public only as counts); an invalid item or field calls bad().
+ */
+const projectEndpoint = (e, bad) => {
+  if (!isObject(e) || typeof e.ip !== 'string' || !(net.isIPv4(e.ip) || net.isIPv6(e.ip)) || !isInt(e.port, 1, 65535)) {
+    bad();
+    return null;
+  }
   if (isNegativeControlIp(e.ip) || e.source === NEGATIVE_SOURCE) return null;
+  if (!STATES.includes(e.state)) {
+    bad();
+    return null;
+  }
+  if (!PUBLIC_STATES.includes(e.state)) return null;
   return {
     ip: e.ip,
     port: e.port,
-    state: pick(e.state, STATES) || 'UNKNOWN',
-    source: typeof e.source === 'string' && TOKEN_RE.test(e.source) ? e.source : null,
-    lastVerifiedAt: isoOrNull(e.lastVerifiedAt),
-    expiresAt: isoOrNull(e.expiresAt),
-    session: pick(e.session, SESSIONS),
-    https: pick(e.https, CHECK_RESULTS),
-    reliability: isFraction(e.reliability) ? e.reliability : null,
+    state: e.state,
+    source: opt(e.source, isToken, bad),
+    lastVerifiedAt: opt(e.lastVerifiedAt, isIso, bad),
+    expiresAt: opt(e.expiresAt, isIso, bad),
+    session: opt(e.session, (v) => SESSIONS.includes(v), bad),
+    https: opt(e.https, (v) => CHECK_RESULTS.includes(v), bad),
+    reliability: opt(e.reliability, isFraction, bad),
   };
 };
 
@@ -147,28 +181,57 @@ const bounded = (list, limit, what) => {
   return list;
 };
 
-const projectCounts = (c) => {
-  if (!isObject(c)) return null;
+const projectCounts = (c, bad) => {
+  if (c === undefined || c === null) return null;
   const keys = ['active', 'verified', 'suspect', 'quarantine', 'dead'];
-  return keys.every((k) => isInt(c[k], 0, 100000)) ? Object.fromEntries(keys.map((k) => [k, c[k]])) : null;
+  if (isObject(c) && keys.every((k) => isInt(c[k], 0, 100000))) return Object.fromEntries(keys.map((k) => [k, c[k]]));
+  bad();
+  return null;
 };
 
-const projectSessions = (s) => {
-  if (!isObject(s) || !isFraction(s.firstSession) || !isFraction(s.retryRescued) || !isFraction(s.failed)) return null;
+const projectFreshness = (f, bad) => {
+  if (f === undefined || f === null) return null;
+  if (!isObject(f)) {
+    bad();
+    return null;
+  }
   return {
-    firstSession: s.firstSession, retryRescued: s.retryRescued, failed: s.failed,
-    window: s.window === '15m' ? '15m' : null, samples: isInt(s.samples, 1, 1e7) ? s.samples : null,
+    lastSuccessAt: opt(f.lastSuccessAt, isIso, bad),
+    oldestActiveVerifiedAt: opt(f.oldestActiveVerifiedAt, isIso, bad),
+    activeTtlSec: opt(f.activeTtlSec, (v) => isInt(v, 1, 7 * 86400), bad),
+    validUntil: opt(f.validUntil, isIso, bad),
   };
 };
 
-const projectEvent = (e) => {
-  if (!isObject(e) || !isIso(e.at)) return null;
-  const type = pick(e.type, EVENT_TYPES);
-  if (!type) return null;
-  if (type === 'discovery') return isInt(e.count, 0, 100000) ? { type, count: e.count, at: e.at } : null;
+const projectSessions = (s, bad) => {
+  if (s === undefined || s === null) return null;
+  if (!isObject(s) || !isFraction(s.firstSession) || !isFraction(s.retryRescued) || !isFraction(s.failed)) {
+    bad();
+    return null;
+  }
+  return {
+    firstSession: s.firstSession, retryRescued: s.retryRescued, failed: s.failed,
+    window: opt(s.window, (v) => v === '15m', bad), samples: opt(s.samples, (v) => isInt(v, 1, 1e7), bad),
+  };
+};
+
+const projectEvent = (e, bad) => {
+  if (!isObject(e) || !isIso(e.at) || !EVENT_TYPES.includes(e.type)) {
+    bad();
+    return null;
+  }
+  if (e.type === 'discovery') {
+    if (isInt(e.count, 0, 100000)) return { type: e.type, count: e.count, at: e.at };
+    bad();
+    return null;
+  }
   const id = canonicalEndpointId(e.endpoint);
-  if (!id || isNegativeControlIp(id.replace(/:\d+$/, ''))) return null;
-  return { type, endpoint: id, at: e.at };
+  if (!id) {
+    bad();
+    return null;
+  }
+  if (isNegativeControlIp(id.replace(/:\d+$/, ''))) return null;
+  return { type: e.type, endpoint: id, at: e.at };
 };
 
 /** Shared top-level checks for the exporter files (fail closed on the frame, drop bad items). */
@@ -185,71 +248,100 @@ const projectOverview = (doc, nowMs) => {
   const endpoints = bounded(doc.endpoints, LIMITS.endpoints, 'endpoints');
   const events = bounded(doc.events, LIMITS.events, 'events');
   const history = bounded(doc.activeHistory, LIMITS.activeHistory, 'activeHistory');
-  const f = isObject(doc.freshness) ? doc.freshness : null;
-  return {
+  const p = partialSet();
+  const keep = (section, ok) => (item) => {
+    if (!ok(item)) p.mark(section)();
+    return ok(item);
+  };
+  const point = (pt) => isObject(pt) && isIso(pt.at) && isInt(pt.active, 0, 100000);
+  const out = {
     schemaVersion: SCHEMA_VERSION,
     status: doc.status,
     generatedAt: doc.generatedAt,
     coverage: 'full',
-    counts: projectCounts(doc.counts),
-    freshness: f ? {
-      lastSuccessAt: isoOrNull(f.lastSuccessAt),
-      oldestActiveVerifiedAt: isoOrNull(f.oldestActiveVerifiedAt),
-      activeTtlSec: isInt(f.activeTtlSec, 1, 7 * 86400) ? f.activeTtlSec : null,
-    } : null,
-    sessions: projectSessions(doc.sessions),
-    activeHistory: history ? history.filter((p) => isObject(p) && isIso(p.at) && isInt(p.active, 0, 100000))
-      .map((p) => ({ at: p.at, active: p.active })) : null,
-    events: events ? events.map(projectEvent).filter(Boolean) : null,
-    endpoints: endpoints ? endpoints.map(projectEndpoint).filter(Boolean) : null,
+    counts: projectCounts(doc.counts, p.mark('counts')),
+    freshness: projectFreshness(doc.freshness, p.mark('freshness')),
+    sessions: projectSessions(doc.sessions, p.mark('sessions')),
+    activeHistory: history ? history.filter(keep('activeHistory', point)).map((pt) => ({ at: pt.at, active: pt.active })) : null,
+    events: events ? events.map((e) => projectEvent(e, p.mark('events'))).filter(Boolean) : null,
+    endpoints: endpoints ? endpoints.map((e) => projectEndpoint(e, p.mark('endpoints'))).filter(Boolean) : null,
     retryAfterSec: isInt(doc.retryAfterSec, 1, 3600) ? doc.retryAfterSec : RETRY_AFTER_S,
   };
+  const partial = p.list();
+  return partial.length ? { ...out, partial } : out;
 };
 
-const projectCheck = (c) => (isObject(c) && pick(c.result, CHECK_RESULTS) ? { result: c.result, at: isoOrNull(c.at) } : null);
+const projectCheck = (c, bad) => {
+  if (c === undefined || c === null) return null;
+  if (isObject(c) && CHECK_RESULTS.includes(c.result)) return { result: c.result, at: opt(c.at, isIso, bad) };
+  bad();
+  return null;
+};
 
+/** @returns {object|null} null when the endpoint is not listed one by one (not public); throws when malformed. */
 const projectDetail = (doc, endpointId, range, nowMs) => {
   checkFrame(doc, nowMs);
-  const endpoint = projectEndpoint(doc.endpoint);
-  if (!endpoint || endpointIdOf(endpoint.ip, endpoint.port) !== endpointId) {
+  const p = partialSet();
+  let invalid = false;
+  const endpoint = projectEndpoint(doc.endpoint, () => {
+    invalid = true;
+    p.mark('endpoint')();
+  });
+  if (!endpoint) {
+    if (invalid) throw new LabDataError('lab_malformed', 'detail endpoint');
+    return null; // the negative control, or a state that is public only as counts and transitions
+  }
+  if (endpointIdOf(endpoint.ip, endpoint.port) !== endpointId) {
     throw new LabDataError('lab_malformed', 'detail does not belong to the requested endpoint');
   }
+  const present = (v) => v !== undefined && v !== null;
   const timeline = bounded(doc.timeline, LIMITS.timeline, 'timeline');
+  if (present(doc.historyBuckets) && !isObject(doc.historyBuckets)) p.mark('history')();
   const buckets = isObject(doc.historyBuckets) ? bounded(doc.historyBuckets[RANGE_BUCKETS[range]], LIMITS.buckets, 'buckets') : null;
   const events = bounded(doc.historyEvents, LIMITS.detailEvents, 'historyEvents');
   const since = RANGES[range] === null ? -Infinity : nowMs - RANGES[range];
-  const checks = isObject(doc.checks) ? {
-    handshake: projectCheck(doc.checks.handshake),
-    tunnel: projectCheck(doc.checks.tunnel),
-    https: projectCheck(doc.checks.https),
-  } : null;
-  const st = isObject(doc.stability) ? doc.stability : null;
-  let lastError = null;
-  if (isObject(doc.lastError)) {
-    lastError = typeof doc.lastError.code === 'string' && TOKEN_RE.test(doc.lastError.code)
-      ? { code: doc.lastError.code, at: isoOrNull(doc.lastError.at) } : { code: 'unknown', at: isoOrNull(doc.lastError.at) };
-  }
-  return {
+  let checks = null;
+  if (isObject(doc.checks)) {
+    const bad = p.mark('checks');
+    checks = { handshake: projectCheck(doc.checks.handshake, bad), tunnel: projectCheck(doc.checks.tunnel, bad), https: projectCheck(doc.checks.https, bad) };
+  } else if (present(doc.checks)) p.mark('checks')();
+  let stability = null;
+  if (isObject(doc.stability)) {
+    const bad = p.mark('stability');
+    const st = doc.stability;
+    stability = { h1: opt(st.h1, isFraction, bad), h24: opt(st.h24, isFraction, bad), observations: opt(st.observations, (v) => isInt(v, 0, 1e7), bad) };
+  } else if (present(doc.stability)) p.mark('stability')();
+  // lastError: absent = unknown (the key stays absent), null = no error recorded, an object = the last error.
+  let lastError;
+  if (doc.lastError === null) lastError = null;
+  else if (isObject(doc.lastError)) {
+    if (typeof doc.lastError.code !== 'string') p.mark('lastError')();
+    lastError = { code: publicErrorCode(doc.lastError.code), at: opt(doc.lastError.at, isIso, p.mark('lastError')) };
+  } else if (doc.lastError !== undefined) p.mark('lastError')();
+  const keep = (section, ok) => (item) => {
+    if (!ok(item)) p.mark(section)();
+    return ok(item);
+  };
+  const out = {
     schemaVersion: SCHEMA_VERSION,
     generatedAt: doc.generatedAt,
     endpoint,
     checks,
-    stability: st ? {
-      h1: isFraction(st.h1) ? st.h1 : null,
-      h24: isFraction(st.h24) ? st.h24 : null,
-      observations: isInt(st.observations, 0, 10000000) ? st.observations : null,
-    } : null,
-    timeline: timeline ? timeline.filter((p) => isObject(p) && isIso(p.at)).map((p) => ({ at: p.at, state: pick(p.state, STATES) || 'UNKNOWN' })) : null,
-    lastError,
+    stability,
+    timeline: timeline ? timeline.filter(keep('timeline', (pt) => isObject(pt) && isIso(pt.at) && STATES.includes(pt.state)))
+      .map((pt) => ({ at: pt.at, state: pt.state })) : null,
+    ...(lastError === undefined ? {} : { lastError }),
     history: {
       range,
-      buckets: buckets ? buckets.filter((b) => isObject(b) && isIso(b.at) && ['first', 'retry', 'fail'].every((k) => isInt(b[k], 0, 100000)))
+      buckets: buckets ? buckets.filter(keep('history', (b) => isObject(b) && isIso(b.at) && ['first', 'retry', 'fail'].every((k) => isInt(b[k], 0, 100000))))
         .map((b) => ({ at: b.at, first: b.first, retry: b.retry, fail: b.fail })) : [],
-      events: events ? events.filter((e) => isObject(e) && isIso(e.at) && pick(e.result, HISTORY_RESULTS) && Date.parse(e.at) >= since)
-        .map((e) => (e.result === 'fail' && typeof e.error === 'string' && TOKEN_RE.test(e.error)
-          ? { at: e.at, result: e.result, error: e.error } : { at: e.at, result: e.result })) : [],
+      events: events ? events.filter(keep('history', (e) => isObject(e) && isIso(e.at) && HISTORY_RESULTS.includes(e.result)))
+        .filter((e) => Date.parse(e.at) >= since)
+        .map((e) => (e.result === 'fail' && e.error !== undefined ? { at: e.at, result: e.result, error: publicErrorCode(e.error) } : { at: e.at, result: e.result })) : [],
     },
   };
+  const partial = p.list();
+  return partial.length ? { ...out, partial } : out;
 };
 
 // ── Compatibility mode: active-pool.json + lab-status.json ────
@@ -275,51 +367,34 @@ const readCompat = (dir, nowMs) => {
 };
 
 /**
- * Partial overview from the operational files. Only what they prove: no non-ACTIVE list, no history,
- * no events, no per-endpoint session or reliability. ACTIVE implies https "ok": the Lab sets ACTIVE only
- * after a TLS-verified HTTPS request through the tunnel (endpoint_lab.apply_outcome / deep_verify).
+ * Partial overview from the operational files. Only what they prove: status, freshness and the fresh ACTIVE
+ * list (ACTIVE implies https "ok": the Lab sets ACTIVE only after a TLS-verified HTTPS request through the
+ * tunnel, endpoint_lab.apply_outcome / deep_verify). Not published: counts (lab-status.json counts every row,
+ * the negative control included), sessions (stats_15m.sessions uses another definition than the contract),
+ * history, events, per-endpoint session and reliability. Missing data shows less, never a guessed number.
  */
 const compatOverview = (c) => {
   const st = c.status;
   const health = isObject(st.lab) && typeof st.lab.health === 'string' ? st.lab.health.toLowerCase() : null;
   const status = STATUSES.includes(health) ? health : c.snapshot.labStatus;
   const generatedAtMs = Math.min(c.snapshot.generatedAtMs, c.statusAtMs);
-  const pool = isObject(st.pool) ? st.pool : {};
-  const states = isObject(pool.states) ? pool.states : null;
-  // Per-state counts include blacklisted endpoints in lab-status.json; show them only when there are none.
-  const counts = states && pool.blacklisted === 0 ? projectCounts({
-    active: states.ACTIVE || 0, verified: states.VERIFIED || 0, suspect: states.SUSPECT || 0,
-    quarantine: states.QUARANTINE || 0, dead: states.DEAD || 0,
-  }) : null;
   const fr = isObject(st.freshness) ? st.freshness : {};
   const ttls = new Set(c.snapshot.endpoints.map((e) => Math.round((e.expiresAtMs - e.verifiedAtMs) / 1000)));
-  const s = isObject(st.stats_15m) && isObject(st.stats_15m.sessions) ? st.stats_15m.sessions : null;
-  let sessions = null;
-  if (s && [s.first_session_ok, s.second_session_rescued, s.both_sessions_failed].every((v) => isInt(v, 0, 1e7))) {
-    const n = s.first_session_ok + s.second_session_rescued + s.both_sessions_failed;
-    if (n > 0) {
-      sessions = {
-        firstSession: Number((s.first_session_ok / n).toFixed(4)),
-        retryRescued: Number((s.second_session_rescued / n).toFixed(4)),
-        failed: Number((s.both_sessions_failed / n).toFixed(4)),
-        window: '15m',
-        samples: n, // the denominator of these shares (the lab-status.json counters, see the spec)
-      };
-    }
-  }
   const iso = (ms) => new Date(ms).toISOString().replace('.000Z', 'Z');
   return {
     schemaVersion: SCHEMA_VERSION,
     status,
     generatedAt: iso(generatedAtMs),
     coverage: 'active-only',
-    counts,
+    counts: null,
     freshness: {
       lastSuccessAt: ageToIso(c.statusAtMs, fr.newest_active_verified_s),
       oldestActiveVerifiedAt: ageToIso(c.statusAtMs, fr.oldest_active_verified_s),
       activeTtlSec: ttls.size === 1 ? [...ttls][0] : null,
+      // the pool proves its list until expires_at: later the page shows STALE, not "no endpoints"
+      validUntil: iso(c.snapshot.expiresAtMs),
     },
-    sessions,
+    sessions: null,
     endpoints: c.snapshot.endpoints.filter((e) => !isNegativeControlIp(e.ip)).map((e) => ({
       ip: e.ip, port: e.port, state: 'ACTIVE', source: TOKEN_RE.test(e.sourceClass) ? e.sourceClass : null,
       lastVerifiedAt: iso(e.verifiedAtMs), expiresAt: iso(e.expiresAtMs),

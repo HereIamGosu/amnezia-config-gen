@@ -237,16 +237,18 @@
       updated.hidden = true;
     }
 
+    // «В пуле есть свежие endpoint'ы» — только когда их число доказано (список или счётчики), а не неизвестно.
+    const noteKind = spec.note === 'ok' && !(view && Core.freshActiveCount(view, now()) > 0) ? null : spec.note;
     const note = $('labStatusNote');
-    note.hidden = !spec.note;
-    if (spec.note) {
-      note.dataset.kind = spec.note;
+    note.hidden = !noteKind;
+    if (noteKind) {
+      note.dataset.kind = noteKind;
       const noteIcon = note.querySelector('.lab-status__note-icon');
       noteIcon.textContent = '';
-      noteIcon.appendChild(icon(spec.note === 'ok' ? 'i-arrow-down-circle' : 'i-info', 'icon'));
-      setText($('labStatusNoteTitle'), spec.note === 'ok' ? t('lab_note_ok_title') : '');
-      $('labStatusNoteTitle').hidden = spec.note !== 'ok';
-      setText($('labStatusNoteText'), spec.note === 'ok' ? t('lab_note_ok_text') : t('lab_note_hostname'));
+      noteIcon.appendChild(icon(noteKind === 'ok' ? 'i-arrow-down-circle' : 'i-info', 'icon'));
+      setText($('labStatusNoteTitle'), noteKind === 'ok' ? t('lab_note_ok_title') : '');
+      $('labStatusNoteTitle').hidden = noteKind !== 'ok';
+      setText($('labStatusNoteText'), noteKind === 'ok' ? t('lab_note_ok_text') : t('lab_note_hostname'));
     }
     $('labStatusActions').hidden = !(spec.retry && source && source.connected);
   };
@@ -698,7 +700,8 @@
     select.value = current;
   };
 
-  const FILTER_STATES = ['ACTIVE', 'VERIFIED', 'SUSPECT', 'QUARANTINE', 'DEAD', 'DISCOVERED', 'CHECKING'];
+  // Поштучно публикуются только эти состояния; остальные — счётчики и события.
+  const FILTER_STATES = ['ACTIVE', 'VERIFIED', 'SUSPECT'];
 
   const renderFilters = () => {
     const list = (ui.view && ui.view.endpoints) || [];
@@ -955,6 +958,7 @@
       body.appendChild(el('p', 'lab-empty', ui.detailsError ? t(ui.detailsError) : t('lab_loading')));
       return;
     }
+    if (dv.partial) body.appendChild(el('p', 'lab-empty', t('lab_alert_partial')));
 
     body.appendChild(el('h3', 'lab-section-title', t('lab_details_last_check')));
     const checkGrid = el('div', 'lab-checkgrid');

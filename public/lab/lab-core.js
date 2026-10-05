@@ -58,6 +58,11 @@
   const isInt = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
   const isFraction = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1;
 
+  // Разделы, о которых API сообщает в partial: из них он вырезал невалидные данные.
+  const OVERVIEW_SECTIONS = ['counts', 'freshness', 'sessions', 'activeHistory', 'events', 'endpoints'];
+  const DETAIL_SECTIONS = ['endpoint', 'checks', 'stability', 'timeline', 'lastError', 'history'];
+  const partialOf = (raw, known) => (Array.isArray(raw.partial) ? [...new Set(raw.partial.filter((s) => known.includes(s)))] : []);
+
   /** Метка времени ISO-8601 → мс; null для неразборчивой или заметно «будущей». */
   const parseTime = (value, now) => {
     if (typeof value !== 'string' || value.length > 40) return null;
@@ -131,6 +136,8 @@
       lastSuccessAt: parseTime(raw.lastSuccessAt, now),
       oldestActiveVerifiedAt: parseTime(raw.oldestActiveVerifiedAt, now),
       activeTtlSec: isInt(ttl, 1, LIMITS.ttlSec) ? ttl : null,
+      // Момент в будущем, как expiresAt endpoint'а: без проверки «не из будущего».
+      validUntil: typeof raw.validUntil === 'string' && Number.isFinite(Date.parse(raw.validUntil)) ? Date.parse(raw.validUntil) : null,
     };
   };
 
@@ -249,6 +256,9 @@
     };
     const endpoints = section('endpoints', normalizeEndpoints(raw.endpoints, now));
     if (endpoints && endpoints.dropped) issues.push(`endpoints:dropped:${endpoints.dropped}`);
+    // Что API вырезал как невалидное, страница должна сказать, а не молча показать меньше.
+    const partial = partialOf(raw, OVERVIEW_SECTIONS);
+    for (const name of partial) issues.push(`partial:${name}`);
     return {
       ok: true,
       issues,
@@ -261,6 +271,7 @@
         activeHistory: section('activeHistory', normalizeActiveHistory(raw.activeHistory, now)),
         events: section('events', normalizeEvents(raw.events, now)),
         endpoints: endpoints ? endpoints.list : null,
+        endpointsPartial: partial.includes('endpoints'),
         retryAfterSec: isInt(raw.retryAfterSec, 1, 3600) ? raw.retryAfterSec : null,
         // active-only: режим совместимости API — список содержит только ACTIVE (нет истории и событий).
         coverage: raw.coverage === 'active-only' ? 'active-only' : 'full',
@@ -343,13 +354,19 @@
         // Нет поля — неизвестно (режим совместимости); null — ошибок не было.
         lastErrorKnown: raw.lastError !== undefined,
         history: raw.history === undefined ? null : normalizeHistory(raw.history, now),
+        // API вырезал часть подробностей как невалидные.
+        partial: partialOf(raw, DETAIL_SECTIONS).length > 0,
       },
     };
   };
 
   // ── Состояние Lab ──────────────────────────────────────────────
 
-  const isExpired = (ep, now) => ep.state === 'ACTIVE' && ep.expiresAt !== null && ep.expiresAt <= now;
+  // Правило контракта: отсутствие данных уменьшает детализацию, но никогда не превращается в положительное
+  // утверждение. Неизвестное — null или «—», а не красивое недоказанное число.
+
+  /** ACTIVE без срока годности свежим не считается: свежесть доказывает только expiresAt. */
+  const isExpired = (ep, now) => ep.state === 'ACTIVE' && (ep.expiresAt === null || ep.expiresAt <= now);
 
   /** Состояние для показа: ACTIVE с истёкшим сроком — EXPIRED (уже не считается свежим). */
   const displayState = (ep, now) => (isExpired(ep, now) ? 'EXPIRED' : ep.state);
@@ -357,14 +374,22 @@
   const isStale = (view, now) => {
     if (now - view.generatedAt > SNAPSHOT_STALE_MS) return true;
     const f = view.freshness;
+    // validUntil — до какого момента backend ручается за данные (истёкший пул режима совместимости — STALE,
+    // а не «нет endpoint'ов»).
+    if (f && f.validUntil !== null && now > f.validUntil) return true;
     if (f && f.lastSuccessAt !== null && f.activeTtlSec !== null) return now - f.lastSuccessAt > f.activeTtlSec * 1000;
     return false;
   };
 
-  /** Свежие ACTIVE: из списка, если он есть (сроки проверяются по часам браузера), иначе из счётчиков. */
+  /**
+   * Свежие ACTIVE. Есть список (даже пустой) — только по нему, сроки по часам браузера. Счётчики — лишь когда
+   * списка нет совсем: в них ACTIVE считается по состоянию, без проверки срока.
+   */
   const freshActiveCount = (view, now) => {
-    if (Array.isArray(view.endpoints) && view.endpoints.length) {
-      return view.endpoints.filter((ep) => ep.state === 'ACTIVE' && !isExpired(ep, now)).length;
+    if (Array.isArray(view.endpoints)) {
+      const fresh = view.endpoints.filter((ep) => ep.state === 'ACTIVE' && !isExpired(ep, now)).length;
+      // Из неполного списка (API вырезал невалидные элементы) число — нижняя граница: ноль там значит «неизвестно».
+      return fresh === 0 && view.endpointsPartial ? null : fresh;
     }
     return view.counts ? view.counts.active : null;
   };

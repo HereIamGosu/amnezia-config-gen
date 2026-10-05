@@ -46,7 +46,8 @@ e2eSuite('Endpoint Lab page', (openPage) => {
     }));
     assert.equal(first.active, '24');
     assert.equal(first.final, '98%');
-    assert.match(first.count, /25 из 84/);
+    // 24 ACTIVE + 44 VERIFIED + 1 SUSPECT: QUARANTINE and DEAD are counts only, never listed
+    assert.match(first.count, /25 из 69/);
 
     await page.click('#labTable th[data-sort="reliability"] .lab-th-btn');
     const sorted = await page.evaluate(() => ({

@@ -56,8 +56,8 @@ public/lab/lab-data.js → lab-core.js (проверка) → lab.js (отрис
   "generatedAt": "2026-10-04T18:29:40Z",
   "coverage": "full",
   "counts": { "active": 24, "verified": 44, "suspect": 1, "quarantine": 3, "dead": 12 },
-  "freshness": { "lastSuccessAt": "…", "oldestActiveVerifiedAt": "…", "activeTtlSec": 420 },
-  "sessions": { "firstSession": 0.73, "retryRescued": 0.25, "failed": 0.02, "window": "15m" },
+  "freshness": { "lastSuccessAt": "…", "oldestActiveVerifiedAt": "…", "activeTtlSec": 420, "validUntil": "…" },
+  "sessions": { "firstSession": 0.71, "retryRescued": 0.18, "failed": 0.11, "window": "15m", "samples": 90 },
   "activeHistory": [{ "at": "…", "active": 24 }],
   "events": [{ "type": "restored", "endpoint": "162.159.192.18:2408", "at": "…" },
              { "type": "discovery", "count": 3, "at": "…" }],
@@ -68,30 +68,37 @@ public/lab/lab-data.js → lab-core.js (проверка) → lab.js (отрис
 ```
 
 Обязательны `schemaVersion`, `status`, `generatedAt`. Публичны только endpoint'ы, у которых `source ≠
-negative_control`, адрес вне `192.0.2.0/24` и нет ручного blacklist (`web_publishable`). Время — ISO-8601 UTC.
+negative_control`, адрес вне `192.0.2.0/24` и нет ручного blacklist (`web_publishable`). Поштучно — в списке
+`endpoints` и файлах деталей — только состояния ACTIVE, VERIFIED, SUSPECT (`WEB_PUBLIC_STATES`); QUARANTINE, DEAD,
+DISCOVERED и CHECKING видны только в `counts` и в событиях. Время — ISO-8601 UTC.
+
+**Главное правило контракта:** отсутствие данных уменьшает детализацию страницы и никогда не превращается в
+положительное утверждение. Неизвестное — `null` или «—», а не красивое, но недоказанное число.
 
 | Поле | Смысл и формула |
 |---|---|
 | `status` | `lab_meta.lab_health` в нижнем регистре (`OK`/`DEGRADED`/`UNAVAILABLE`), как в `active-pool.json` |
 | `generatedAt` | момент экспорта (часы Lab) |
 | `coverage` | `full` — экспортёр; `active-only` — режим совместимости (ниже) |
-| `counts.*` | число публичных endpoint'ов в состоянии `ACTIVE`/`VERIFIED`/`SUSPECT`/`QUARANTINE`/`DEAD` по зафиксированному состоянию БД. `active` считает и ACTIVE с истёкшим сроком: страница сама считает свежие по `expiresAt` |
+| `counts.*` | число публичных endpoint'ов в состоянии `ACTIVE`/`VERIFIED`/`SUSPECT`/`QUARANTINE`/`DEAD` по зафиксированному состоянию БД — агрегат, в том числе по состояниям, которых нет в списке. `active` считает и ACTIVE с истёкшим сроком, поэтому свежие страница считает только по списку (`expiresAt`); к `counts.active` она обращается, лишь когда списка нет совсем (`endpoints: null`) |
 | `freshness.lastSuccessAt` | `max(last_traffic_ok_at)` по публичным endpoint'ам — последняя успешная глубокая проверка |
 | `freshness.oldestActiveVerifiedAt` | `min(last_traffic_ok_at)` по eligible ACTIVE (`is_eligible`: ACTIVE, не blacklist, срок не истёк) |
 | `freshness.activeTtlSec` | константа Lab `ACTIVE_TTL_S` (сейчас 420) |
-| `sessions` | окно 15 минут, наблюдения `traffic` публичных endpoint'ов (без negative control по source и по `192.0.2.0/24`, без blacklist): `firstSession = ok ∧ sessions≠2` (ok без числа сессий считается первой, как в корзинах истории), `retryRescued = ok ∧ sessions=2`, `failed = fail` (сбой, засчитанный endpoint'у), каждая доля делится на их сумму; `samples` — эта сумма. Inconclusive, suppressed и сбои самого Lab не входят — в отличие от `both_sessions_failed` в `lab-status.json`. Нет наблюдений — `null`, а не 0/0/0 |
+| `freshness.validUntil` | до какого момента backend ручается за данные: экспортёр — `generatedAt + SNAPSHOT_TTL_S` (180 с, как `expires_at` у `active-pool.json`), режим совместимости — `expires_at` пула. Позже страница показывает STALE |
+| `sessions` | окно 15 минут, все значимые результаты глубоких проверок публичных endpoint'ов (без negative control по source и по `192.0.2.0/24`, без blacklist): `firstSession` — traffic ok с первой туннельной сессии (ok без числа сессий считается первой), `retryRescued` — traffic ok со второй, `failed` — traffic fail или handshake без ответа. Доли делятся на их сумму; `samples` — эта сумма, то есть число проверок. «Итоговый успех» = `firstSession + retryRescued` — успех всей проверки. Определение то же, что у `reliability`, `session` и корзин истории. Inconclusive, suppressed и сбои самого Lab не входят. Ограничение: ручная проба оператора `probe` (только handshake) в таблице наблюдений неотличима от сбоя handshake глубокой проверки и считается так же — как и в `reliability`. Нет наблюдений — `null`, а не 0/0/0 |
 | `activeHistory` | `run.active_after` за 24 ч (refresh, discovery, manual), по `finished_at`; ≤ 1500 точек, при избытке — равномерное прореживание с сохранением последней |
 | `events` | `transition` за 24 ч, ≤ 100, новые первыми; правила ниже |
 | `retryAfterSec` | `REFRESH_INTERVAL_S` (60): чаще опрашивать бессмысленно |
 
 Состояния endpoint'а: `ACTIVE`, `VERIFIED`, `SUSPECT`, `QUARANTINE`, `DEAD`, `DISCOVERED`; переходные `PROBING`,
-`HANDSHAKE_OK`, `VERIFYING` публикуются как `CHECKING`. Порядок списка: ACTIVE, VERIFIED, SUSPECT, CHECKING,
-QUARANTINE, DEAD, DISCOVERED, внутри — по IP и порту; не больше 500.
+`HANDSHAKE_OK`, `VERIFYING` публикуются как `CHECKING`. В списке — только ACTIVE, VERIFIED, SUSPECT в этом порядке,
+внутри — по IP и порту; не больше 500. Остальные состояния встречаются в `timeline` и событиях как история
+переходов. Деталь endpoint'а в другом состоянии — 404.
 
 | Поле endpoint'а | Смысл |
 |---|---|
-| `lastVerifiedAt` | `last_traffic_ok_at` — последняя успешная глубокая проверка (handshake + TLS-проверенный HTTPS через туннель) |
-| `expiresAt` | только у ACTIVE: `expires_at` (= `lastVerifiedAt + ACTIVE_TTL_S`) |
+| `lastVerifiedAt` | `last_traffic_ok_at` — последняя **успешная** глубокая проверка (handshake + TLS-проверенный HTTPS через туннель); страница подписывает «Последний успех»: `session` и `https` в той же строке — результат последней пробы, она могла быть позже |
+| `expiresAt` | только у ACTIVE: `expires_at` (= `lastVerifiedAt + ACTIVE_TTL_S`). ACTIVE без `expiresAt` страница свежим не считает |
 | `session` | по последнему значимому результату глубокой проверки: `first` — traffic ok с первой туннельной сессии, `retry` — ok со второй, `failed` — сбой, засчитанный endpoint'у (traffic fail или failed handshake); `null` — проверок не было или число сессий неизвестно |
 | `https` | по тому же результату: `ok` — HTTPS прошёл (для ACTIVE это следует из определения), `fail` — traffic fail, `null` — handshake не удался и HTTPS не пробовали |
 | `reliability` | доля успешных значимых глубоких проверок за последний час: `traffic ok / (traffic ok + traffic fail + handshake fail)`; при выборке меньше 3 — `null` |
@@ -139,9 +146,14 @@ QUARANTINE, DEAD, DISCOVERED, внутри — по IP и порту; не бо�
 | `checks` | последняя значимая глубокая проверка: `handshake` — её результат; `tunnel` — `ok` только если через туннель прошёл HTTPS, иначе `null` (отдельно Lab туннель не проверяет); `https` — `ok`/`fail`, `null` после неудачного handshake |
 | `stability.h1`, `h24` | формула `reliability` за 1 ч и 24 ч (минимум 3 проверки, иначе `null`); `observations` — число значимых проверок за 24 ч |
 | `timeline` | состояние на 96 моментах через 15 минут (24 ч) по таблице `transition`; моменты до появления endpoint'а пропускаются |
-| `lastError` | `null` — ошибок не было; `{code, at}` — код из allowlist (`timeout`, `handshake_no_response`, `handshake_invalid`, `dns_failed`, `https_timeout`, `https_tls_failed`, `traffic_failed`, `targets_unreachable`), всё прочее — `unknown`. Сырые сообщения не экспортируются: в них бывают детали хоста. Поля нет — неизвестно (режим совместимости), страница пишет «нет данных», а не «нет» |
+| `lastError` | `null` — ошибок не было; `{code, at}` — код из allowlist (`timeout`, `handshake_no_response`, `handshake_invalid`, `dns_failed`, `https_timeout`, `https_tls_failed`, `traffic_failed`, `targets_unreachable`), всё прочее — `unknown`; API сводит код к тому же allowlist ещё раз (и `error` в `history.events`). Сырые сообщения не экспортируются: в них бывают детали хоста. Поля нет — неизвестно (режим совместимости или неполный файл): API сохраняет отсутствие, страница пишет «нет данных», а не «нет» |
 | `history.buckets` | значимые проверки по корзинам: 24h — 15 минут, 7d — 2 часа, 30d и all — 12 часов; `first`/`retry`/`fail` как в `session`; корзины только от первой проверки до сейчас, без выдуманных нулей до неё; ≤ 120 |
 | `history.events` | до 100 последних значимых проверок в пределах диапазона; у `fail` — `error`-код |
+
+`partial` (в ответе API, у сводки и у детали) — разделы, из которых API вырезал невалидные данные: элемент или поле
+не прошли проверку. Экспортёр это поле не пишет; нет поля — API ничего не выбросил. Фильтры политики (negative
+control, состояния вне списка) в `partial` не попадают. По `partial` страница пишет «Часть данных Lab не прошла
+проверку» — над сводкой или в окне деталей.
 
 Наблюдения на хосте хранятся 14 дней (`OBSERVATION_RETENTION_S`), поэтому `30d` и `all` показывают не больше 14 дней.
 
@@ -151,15 +163,19 @@ QUARANTINE, DEAD, DISCOVERED, внутри — по IP и порту; не бо�
 собирает сводку только из того, что эти файлы доказывают:
 
 - `status` — `lab.health`; `generatedAt` — более ранний из двух `generated_at` (честная устарелость);
-- `counts` — `pool.states`, но только при `pool.blacklisted = 0` (иначе в них попали бы blacklist), иначе `null`;
+- `counts` — `null`: `pool.states` в `lab-status.json` считает все строки, включая negative control и blacklist.
+  Пока Lab не публикует очищенный агрегат (`public_states`), счётчики не показываются; ACTIVE страница считает по
+  списку;
 - `freshness` — `generated_at − newest/oldest_active_verified_s`; `activeTtlSec` — `expires_at − lab_verified_at`,
-  если он одинаков у всех endpoint'ов пула, иначе `null`;
-- `sessions` — `stats_15m.sessions` (там `both_sessions_failed` включает inconclusive: это семантика Lab-status);
-  `samples` — сумма трёх счётчиков, то есть знаменатель этих долей;
+  если он одинаков у всех endpoint'ов пула, иначе `null`; `validUntil` — `expires_at` пула: позже список ничего
+  не доказывает, и страница показывает STALE, а не «нет активных endpoint'ов» (это утверждало бы, что Lab работает);
+- `sessions` — `null`: `stats_15m.sessions` считает по другому определению (только traffic, suppressed и
+  inconclusive в «не прошли», без фильтра negative control и blacklist). Показывать его под теми же именами нельзя;
+  после обновления Lab оба режима отдают одно определение;
 - `endpoints` — только свежие ACTIVE из `active-pool.json` (проверка `validateLabSnapshot` провайдера):
   `https = ok` (ACTIVE ставится только после TLS-проверенного HTTPS через туннель), `session` и `reliability` — `null`;
-- `activeHistory`, `events` не отдаются; `coverage: "active-only"` — страница пишет над списком «Подробный список
-  пока доступен только для ACTIVE endpoint'ов»;
+- `activeHistory`, `events` не отдаются; `coverage: "active-only"` — страница пишет над списком «Пока Lab публикует
+  только пул ACTIVE: счётчики других состояний, качество проверок и история появятся после обновления Lab»;
 - детали — только для endpoint'а из свежего пула: `endpoint` и три `checks` со временем `lab_verified_at`; без
   `stability`, `timeline`, `history`, `lastError`. Остальные — 404, страница пишет «больше недоступны».
 
@@ -175,18 +191,20 @@ QUARANTINE, DEAD, DISCOVERED, внутри — по IP и порту; не бо�
 | снимок старый, но валидный | **200** со старыми данными | STALE: данные видны, свежих ACTIVE 0 (истёкшие не считаются ACTIVE) |
 | метод не GET/HEAD | 405 `method_not_allowed`, `Allow: GET, HEAD` | — |
 
-`null` значит «данных нет» только там, где его пишет контракт: `sessions` (нет наблюдений за окно) и `counts` в
-режиме совместимости (счётчики скрыты). Страница показывает «—» без предупреждения. В остальных разделах `null`
-означает, что API вырезал испорченный раздел экспорта, и страница пишет «Часть данных Lab не прошла проверку». Тот же
-текст — для раздела, который не прошёл проверку `LabCore`. Ограничение: испорченные `sessions` в файле экспортёра
-API тоже сводит к `null`, и страница их от пустого окна не отличит; формат экспортёра держат его тесты.
+`null` значит «данных нет» там, где его пишет контракт: `sessions` (нет наблюдений за окно), `counts` и `sessions`
+в режиме совместимости. Страница показывает «—» без предупреждения. Что API вырезал как невалидное, он перечисляет
+в `partial`, и страница пишет «Часть данных Lab не прошла проверку»; тот же текст — для раздела, который не прошёл
+проверку `LabCore`, и для `null` там, где контракт `null` не предусматривает. Без списка и без счётчиков число
+свежих ACTIVE неизвестно: страница показывает «—» и не пишет «в пуле есть свежие endpoint'ы». Из списка с
+`partial: ["endpoints", …]` число свежих — лишь нижняя граница: больше нуля — показывается, ноль — «неизвестно».
 
-STALE определяет страница: `generatedAt` старше 5 минут или `lastSuccessAt` старше `activeTtlSec`. Отдельного
-`expiresAt` в контракте нет: этих двух полей и сроков endpoint'ов достаточно.
+STALE определяет страница: `generatedAt` старше 5 минут, текущий момент позже `freshness.validUntil` или
+`lastSuccessAt` старше `activeTtlSec`.
 
 Все ответы `/api/lab`: `Content-Type: application/json; charset=utf-8`, `Cache-Control: no-store`,
-`X-Robots-Tag: noindex, nofollow`. Опрос страницы — раз в 30 с, в скрытой вкладке остановлен; `Retry-After` и
-`retryAfterSec` удлиняют паузу, но не ускоряют опрос.
+`X-Robots-Tag: noindex, nofollow`. Опрос страницы — раз в 30 с или реже: `retryAfterSec`
+(экспортёр и API отдают 60) и `Retry-After` удлиняют паузу, поэтому на практике раз в 60 с; в скрытой вкладке
+опрос остановлен.
 
 ## Лимиты и замеры
 
@@ -254,6 +272,10 @@ WEB_SAMPLE_OUT=<путь>/__tests__/fixtures/lab-public \
 - «Окно актуальности» берётся из данных (`activeTtlSec`, 7 минут), а не «до 24 часов» из макета.
 - Подпись «HTTPS traffic (cloudflare.com)» сокращена до «HTTPS traffic»: целевой хост проверки в контракте не передаётся.
 - Подписи про генератор нейтральны до Phase D (см. «Тексты»).
+- `lastVerifiedAt` подписан «Последний успех», а не «Проверен»: это время последней успешной проверки.
+- Событие `demoted` — «переведён в резерв · Пул ACTIVE заполнен»: единственная причина в экспортёре — `pool_cap`.
+- Отложено отдельно: свой source для адресов, найденных discovery (сейчас `consumer_official_seed`, на странице
+  «Official seed»), и сдвиг часов браузера больше 5 минут (позже — по серверному времени или заголовку `Date`).
 - Под долями качества — их основание («129 проверок за 15 минут до обновления», `sessions.samples`: окно кончается в `generatedAt`, поэтому в STALE подпись остаётся верной); в макете его нет,
   но без него 100% из трёх проверок и из трёхсот выглядят одинаково.
 - Иллюстрация hero — астронавт из макета; панель «WARP Endpoints / WireGuard / Tunnel / HTTPS» сверстана текстом.

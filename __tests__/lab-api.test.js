@@ -131,30 +131,90 @@ test('compatibility mode: only real data from active-pool.json + lab-status.json
     assert.equal(e.session, null);
     assert.equal(e.reliability, null);
   }
-  assert.deepEqual(o.counts, { active: 8, verified: 0, suspect: 0, quarantine: 0, dead: 1 });
+  // lab-status.json counts every row (the negative control too) and its session counters use another
+  // definition: neither is published as a contract field.
+  assert.equal(o.counts, null);
+  assert.equal(o.sessions, null);
   assert.equal(o.freshness.activeTtlSec, 420, 'derived from expires_at - lab_verified_at of the pool');
-  assert.deepEqual([o.sessions.firstSession, o.sessions.retryRescued, o.sessions.failed], [0.8, 0.2, 0]);
-  const split = readFixture('lab-status.json').stats_15m.sessions;
-  assert.equal(o.sessions.samples, split.first_session_ok + split.second_session_rescued + split.both_sessions_failed,
-    'the denominator of the shares');
+  const poolDoc = JSON.parse(fs.readFileSync(path.join(dir, 'active-pool.json'), 'utf8'));
+  assert.equal(Date.parse(o.freshness.validUntil), Date.parse(poolDoc.expires_at), 'the pool vouches for its list until expires_at');
   const norm = Core.normalizeOverview(o, Date.now());
   assert.equal(norm.ok, true);
   assert.equal(norm.view.coverage, 'active-only');
+  assert.deepEqual(norm.issues.sort(), ['activeHistory:missing', 'events:missing'], 'no data is not "failed validation"');
+  assert.equal(Core.freshActiveCount(norm.view, Date.now()), o.endpoints.length, 'ACTIVE comes from the list');
   assertPublic(o);
   assert.doesNotMatch(r.body, /probe identity|PROBE_IDENTITY|scheduler|matches_install/);
 });
 
-test('compatibility counts are hidden while blacklisted endpoints would be counted in them', () => {
-  writeLabPublic(dir, { mode: 'compat' });
-  const file = path.join(dir, 'lab-status.json');
-  const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
-  doc.pool.blacklisted = 2;
-  fs.writeFileSync(file, JSON.stringify(doc));
+test('compatibility: an expired pool is STALE with 0 fresh ACTIVE, never "Lab works" or old counts', () => {
+  writeLabPublic(dir, { mode: 'compat', ageMs: 200e3 }); // the pool expires 180 s after it was written
   const o = call().json;
-  assert.equal(o.counts, null);
-  // Compatibility mode has no history and no events by design (":missing"); nothing else may be reported.
-  assert.deepEqual(Core.normalizeOverview(o, Date.now()).issues.sort(), ['activeHistory:missing', 'events:missing'],
-    'hidden counts are "no data", not "failed validation"');
+  assert.deepEqual([o.endpoints, o.counts, o.sessions], [[], null, null]);
+  assert.ok(Date.parse(o.freshness.validUntil) < Date.now());
+  const view = Core.normalizeOverview(o, Date.now()).view;
+  assert.equal(Core.freshActiveCount(view, Date.now()), 0);
+  assert.equal(Core.deriveLabState(view, Date.now()), 'stale', 'not "empty": that would claim the Lab keeps searching');
+  for (const blacklisted of [0, 3]) { // the operational counters never return, whatever lab-status.json says
+    const file = path.join(dir, 'lab-status.json');
+    fs.writeFileSync(file, JSON.stringify({ ...JSON.parse(fs.readFileSync(file, 'utf8')), pool: { blacklisted, states: { ACTIVE: 23, DEAD: 1 } } }));
+    assert.equal(call().json.counts, null);
+  }
+});
+
+test('what the API removes as invalid is reported in "partial"; policy filters are silent', () => {
+  writeLabPublic(dir);
+  const file = path.join(dir, 'web-overview.json');
+  const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const clean = call().json;
+  assert.equal(clean.partial, undefined, 'real exporter output: nothing removed');
+  const [first] = doc.endpoints;
+  fs.writeFileSync(file, JSON.stringify({
+    ...doc,
+    counts: { active: 'many' },
+    freshness: { ...doc.freshness, lastSuccessAt: 'yesterday' },
+    events: [...doc.events, { type: 'teleported', at: doc.generatedAt }],
+    endpoints: [...doc.endpoints.map((e) => ({ ...e, port: 0 })),
+      { ...first, ip: '192.0.2.7' }, { ...first, ip: '162.159.192.211', state: 'QUARANTINE' }, { ...first, ip: '162.159.192.212', state: 'DEAD' }],
+  }));
+  const o = call().json;
+  assert.deepEqual(o.partial, ['counts', 'endpoints', 'events', 'freshness']);
+  assert.deepEqual(o.endpoints, [], 'invalid items dropped; the negative control and QUARANTINE/DEAD dropped by policy');
+  const n = Core.normalizeOverview(o, Date.now());
+  assert.ok(n.issues.includes('partial:endpoints'));
+  assert.equal(Core.freshActiveCount(n.view, Date.now()), null, 'a list the API emptied: unknown, never counts.active');
+  // only policy drops: no partial at all
+  fs.writeFileSync(file, JSON.stringify({ ...doc, endpoints: [...doc.endpoints, { ...first, ip: '192.0.2.8' }, { ...first, ip: '162.159.192.213', state: 'DEAD' }] }));
+  assert.equal(call().json.partial, undefined);
+});
+
+test('details: only ACTIVE, VERIFIED, SUSPECT; error codes from the allowlist; absent lastError stays unknown', () => {
+  writeLabPublic(dir);
+  const overview = call().json;
+  const id = firstId(overview);
+  const df = path.join(dir, 'web-endpoints', labPublic.detailFileName(id));
+  const det = JSON.parse(fs.readFileSync(df, 'utf8'));
+  for (const state of ['QUARANTINE', 'DEAD', 'DISCOVERED', 'CHECKING']) {
+    fs.writeFileSync(df, JSON.stringify({ ...det, endpoint: { ...det.endpoint, state } }));
+    assert.equal(call({ endpoint: id }).status, 404, `${state}: public only as counts and transitions`);
+  }
+  fs.writeFileSync(df, JSON.stringify({ ...det, lastError: { code: 'internal_db_path_x', at: det.generatedAt },
+    historyEvents: [{ at: det.generatedAt, result: 'fail', error: 'internal_db_path_x' }] }));
+  let d = call({ endpoint: id }).json;
+  assert.equal(d.lastError.code, 'unknown', 'a code outside the allowlist is "unknown"');
+  assert.equal(d.history.events[0].error, 'unknown');
+  assert.equal(d.partial, undefined, 'normalising a code is policy, not invalid data');
+  const { lastError, ...withoutLastError } = det;
+  assert.ok(lastError === null || typeof lastError === 'object');
+  fs.writeFileSync(df, JSON.stringify(withoutLastError));
+  d = call({ endpoint: id }).json;
+  assert.equal('lastError' in d, false, 'absent stays absent');
+  assert.equal(Core.normalizeEndpointDetails(d, Date.now()).view.lastErrorKnown, false, 'the page says "no data", not "no errors"');
+  // the timeline is at its 96-point limit: replace a point rather than append (over the limit is lab_malformed)
+  fs.writeFileSync(df, JSON.stringify({ ...det, lastError: 'boom', timeline: [...det.timeline.slice(1), { at: 'x', state: 'ACTIVE' }] }));
+  d = call({ endpoint: id }).json;
+  assert.deepEqual(d.partial, ['lastError', 'timeline']);
+  assert.equal(Core.normalizeEndpointDetails(d, Date.now()).view.partial, true);
 });
 
 test('a broken section of the export reaches the page as an issue; an empty session window does not', () => {
@@ -165,7 +225,7 @@ test('a broken section of the export reaches the page as an issue; an empty sess
   const o = call().json;
   assert.deepEqual([o.endpoints, o.counts, o.sessions], [null, null, null], 'the API cuts what it cannot validate');
   const { issues } = Core.normalizeOverview(o, Date.now());
-  assert.ok(issues.includes('endpoints') && issues.includes('counts'), 'the page warns that data failed validation');
+  assert.ok(issues.includes('endpoints') && issues.includes('counts') && issues.includes('partial:counts'), 'the page warns that data failed validation');
   assert.ok(!issues.includes('sessions'), 'no observations in the window is not a failure');
 });
 

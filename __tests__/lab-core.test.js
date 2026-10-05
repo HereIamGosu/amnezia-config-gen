@@ -152,6 +152,37 @@ test('Lab state: unavailable > stale > empty > degraded > ok', () => {
   assert.equal(Core.deriveLabState(v(overview({ status: 'degraded', endpoints: [] , counts: { active: 0, verified: 1, suspect: 0, quarantine: 0, dead: 3 } })), NOW), 'empty');
 });
 
+test('missing data never becomes a positive claim: fresh ACTIVE only from the list when a list exists', () => {
+  const v = (raw) => norm(raw).view;
+  const counts = { active: 23, verified: 0, suspect: 0, quarantine: 0, dead: 0 };
+  const empty = v(overview({ endpoints: [], counts }));
+  assert.equal(Core.freshActiveCount(empty, NOW), 0, 'an empty list is 0, never counts.active');
+  assert.equal(Core.deriveLabState(empty, NOW), 'empty');
+  assert.equal(Core.freshActiveCount(v(overview({ endpoints: null, counts })), NOW), 23, 'counts only when there is no list at all');
+  const cut = v(overview({ endpoints: [], counts, partial: ['endpoints'] }));
+  assert.equal(Core.freshActiveCount(cut, NOW), null, 'an empty list the API cut is unknown, not 0 and not counts');
+  assert.equal(Core.deriveLabState(cut, NOW), 'ok', 'the status stays what the Lab reported; the page shows "—" and the alert');
+  assert.equal(Core.freshActiveCount(v(overview({ partial: ['endpoints'] })), NOW), 1, 'what remains is a proven lower bound');
+  assert.equal(Core.freshActiveCount(v(overview({ endpoints: undefined, counts })), NOW), 23);
+  const noExpiry = v(overview({ endpoints: [endpoint({ expiresAt: null })] }));
+  assert.equal(Core.freshActiveCount(noExpiry, NOW), 0, 'ACTIVE without expiresAt is not fresh');
+  assert.equal(Core.displayState(noExpiry.endpoints[0], NOW), 'EXPIRED');
+  // validUntil: the backend vouches for the data until then (an expired compatibility pool is STALE, not "empty")
+  const fresh = { lastSuccessAt: iso(NOW - 30e3), oldestActiveVerifiedAt: null, activeTtlSec: 420 };
+  const expiredPool = v(overview({ coverage: 'active-only', counts: null, endpoints: [], freshness: { ...fresh, validUntil: iso(NOW - 20e3) } }));
+  assert.equal(Core.deriveLabState(expiredPool, NOW), 'stale');
+  assert.equal(Core.deriveLabState(v(overview({ freshness: { ...fresh, validUntil: iso(NOW + 60e3) } })), NOW), 'ok');
+});
+
+test('"partial" from the API becomes an issue (the page warns); unknown section names are ignored', () => {
+  const r = norm(overview({ partial: ['endpoints', 'counts', 'nonsense', 'endpoints'] }));
+  assert.deepEqual(r.issues.filter((i) => i.startsWith('partial:')).sort(), ['partial:counts', 'partial:endpoints']);
+  assert.deepEqual(norm(overview()).issues, []);
+  const detail = (over) => Core.normalizeEndpointDetails({ schemaVersion: 1, endpoint: endpoint(), ...over }, NOW).view;
+  assert.equal(detail({ partial: ['timeline'] }).partial, true);
+  assert.equal(detail({}).partial, false);
+});
+
 test('one DEAD endpoint does not make the Lab unavailable', () => {
   const view = norm(overview({ endpoints: [endpoint(), endpoint({ ip: '1.1.1.1', state: 'DEAD' })] })).view;
   assert.equal(Core.deriveLabState(view, NOW), 'ok');
