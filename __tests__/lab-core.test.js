@@ -81,12 +81,18 @@ test('broken sections become null (partial data) and are reported', () => {
   assert.ok(r.issues.includes('counts') && r.issues.includes('sessions') && r.issues.includes('activeHistory:missing'));
 });
 
-test('null sections are "no data" by contract, not a validation failure', () => {
-  const r = norm(overview({ sessions: null, counts: null }));
-  assert.equal(r.ok, true);
-  assert.equal(r.view.sessions, null);
-  assert.equal(r.view.counts, null);
-  assert.deepEqual(r.issues, [], 'no "data failed validation" alert for an empty window or hidden counts');
+test('null is "no data" only where the contract writes it; elsewhere the API cut a broken section', () => {
+  const noWindow = norm(overview({ sessions: null }));
+  assert.equal(noWindow.view.sessions, null);
+  assert.deepEqual(noWindow.issues, [], 'no observations in the window: no "failed validation" alert');
+  const hidden = norm(overview({ coverage: 'active-only', counts: null }));
+  assert.equal(hidden.view.counts, null);
+  assert.deepEqual(hidden.issues, [], 'compatibility mode hid the counts: no alert');
+  for (const name of ['counts', 'freshness', 'endpoints', 'events', 'activeHistory']) {
+    const r = norm(overview({ [name]: null }));
+    assert.equal(r.ok, true, name);
+    assert.ok(r.issues.includes(name), `${name}: null in full mode is a section the API refused`);
+  }
 });
 
 test('endpoint items: invalid dropped, duplicates dropped, states normalized, list bounded', () => {

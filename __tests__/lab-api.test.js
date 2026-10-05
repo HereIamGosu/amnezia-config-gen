@@ -157,6 +157,18 @@ test('compatibility counts are hidden while blacklisted endpoints would be count
     'hidden counts are "no data", not "failed validation"');
 });
 
+test('a broken section of the export reaches the page as an issue; an empty session window does not', () => {
+  writeLabPublic(dir);
+  const file = path.join(dir, 'web-overview.json');
+  const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
+  fs.writeFileSync(file, JSON.stringify({ ...doc, endpoints: null, counts: { active: 'many' }, sessions: null }));
+  const o = call().json;
+  assert.deepEqual([o.endpoints, o.counts, o.sessions], [null, null, null], 'the API cuts what it cannot validate');
+  const { issues } = Core.normalizeOverview(o, Date.now());
+  assert.ok(issues.includes('endpoints') && issues.includes('counts'), 'the page warns that data failed validation');
+  assert.ok(!issues.includes('sessions'), 'no observations in the window is not a failure');
+});
+
 test('broken files: controlled 503 lab_malformed, never a raw file or stack', () => {
   writeLabPublic(dir);
   const overview = path.join(dir, 'web-overview.json');

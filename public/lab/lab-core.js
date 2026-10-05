@@ -238,9 +238,12 @@
     if (generatedAt === null) return { ok: false, reason: 'generatedAt' };
 
     const issues = [];
+    // Где контракт сам пишет null — «данных нет», а не сбой проверки: sessions — нет наблюдений за окно,
+    // counts — режим совместимости скрыл счётчики. В остальных разделах null значит, что API вырезал
+    // испорченный раздел, и предупреждение уместно.
+    const nullable = new Set(['sessions', ...(raw.coverage === 'active-only' ? ['counts'] : [])]);
     const section = (name, value) => {
-      // null в контракте — «данных нет» (нет наблюдений, счётчики скрыты), а не сбой проверки.
-      if (raw[name] !== undefined && raw[name] !== null && value === null) issues.push(name);
+      if (raw[name] !== undefined && value === null && !(raw[name] === null && nullable.has(name))) issues.push(name);
       if (raw[name] === undefined) issues.push(`${name}:missing`);
       return value;
     };
