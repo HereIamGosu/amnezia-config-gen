@@ -199,7 +199,9 @@ control, состояния вне списка) в `partial` не попада�
 `partial: ["endpoints", …]` число свежих — лишь нижняя граница: больше нуля — показывается, ноль — «неизвестно».
 
 STALE определяет страница: `generatedAt` старше 5 минут, текущий момент позже `freshness.validUntil` или
-`lastSuccessAt` старше `activeTtlSec`.
+`lastSuccessAt` старше `activeTtlSec`. Пустой список в STALE подписан «Свежего списка нет: данные Lab устарели», список,
+который API урезал до пустого, — «Список endpoint'ов сейчас недоступен»; «Lab пока не опубликовал ни одного
+endpoint'а» — только когда пустой список действительно пришёл от Lab.
 
 Все ответы `/api/lab`: `Content-Type: application/json; charset=utf-8`, `Cache-Control: no-store`,
 `X-Robots-Tag: noindex, nofollow`. Опрос страницы — раз в 30 с или реже: `retryAfterSec`

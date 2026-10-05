@@ -585,6 +585,7 @@
   "lab_endpoints_nodata": "Список endpoint'ов появится, когда Lab опубликует данные.",
   "lab_endpoints_unavailable": "Список endpoint'ов сейчас недоступен.",
   "lab_endpoints_empty": "Lab пока не опубликовал ни одного endpoint'а.",
+  "lab_endpoints_stale": "Свежего списка нет: данные Lab устарели.",
   "lab_endpoints_no_match": "Нет endpoint'ов по выбранным фильтрам.",
   "lab_row_menu_aria": "Действия с endpoint'ом",
   "lab_row_menu_for": "Действия: {endpoint}",

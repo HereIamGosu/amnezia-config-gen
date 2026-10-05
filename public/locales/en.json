@@ -585,6 +585,7 @@
   "lab_endpoints_nodata": "The endpoint list will appear once the Lab publishes data.",
   "lab_endpoints_unavailable": "The endpoint list is not available right now.",
   "lab_endpoints_empty": "The Lab has not published any endpoints yet.",
+  "lab_endpoints_stale": "No fresh list: the Lab data is out of date.",
   "lab_endpoints_no_match": "No endpoints match the selected filters.",
   "lab_row_menu_aria": "Endpoint actions",
   "lab_row_menu_for": "Actions: {endpoint}",

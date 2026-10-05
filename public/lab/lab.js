@@ -740,7 +740,8 @@
     let emptyKey = null;
     if (!view) emptyKey = ui.labState === 'loading' ? null : 'lab_endpoints_nodata';
     else if (!view.endpoints) emptyKey = 'lab_endpoints_unavailable';
-    else if (!all.length) emptyKey = 'lab_endpoints_empty';
+    // Пустой список — не всегда «Lab ничего не опубликовал»: устаревший или урезанный API список ничего не доказывает.
+    else if (!all.length) emptyKey = ui.labState === 'stale' ? 'lab_endpoints_stale' : view.endpointsPartial ? 'lab_endpoints_unavailable' : 'lab_endpoints_empty';
     else if (!filtered.length) emptyKey = 'lab_endpoints_no_match';
 
     empty.textContent = '';
