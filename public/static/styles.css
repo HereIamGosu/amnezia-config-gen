@@ -1828,72 +1828,282 @@ kbd {
   color: var(--color-text-2);
 }
 
-/* Карточка совместимости (данные /api/warp) */
+/* Карточка совместимости (данные /api/warp, разметку строит result.js): «Работает» и «Под вопросом» —
+   плитки приложений, «Не подходит напрямую» — свёрнутый список чипов по причине */
 .compat-card {
   margin-top: 18px;
-  padding: 16px;
+  padding: 18px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface);
 }
 
+.compat-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 14px;
+}
+
 .compat-card__title {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 15px;
   font-weight: 700;
 }
 
-.compat-card__format {
-  margin-bottom: 10px;
-  color: var(--color-text-2);
-  font-size: 13px;
-}
-
-.compat-card__group {
-  margin-top: 10px;
-}
-
-.compat-card__group-title {
-  margin: 0 0 6px;
-  color: var(--color-text-2);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.compat-card__list {
-  display: grid;
-  gap: 6px;
+.compat-card__formats,
+.compat-chips,
+.compat-apps,
+.compat-platforms {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.compat-card__item {
+.compat-card__formats {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 10px;
-  font-size: 13px;
+  gap: 6px;
 }
 
-.compat-card__client {
+/* Скрытая группа не занимает колонку: оставшаяся растягивается на всю ширину. min(): на экране 320 px
+   колонка не шире карточки. */
+.compat-card__groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: 12px;
+}
+
+.compat-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface-2);
+}
+
+.compat-group[hidden],
+.compat-other[hidden],
+.compat-card__notes[hidden] {
+  display: none;
+}
+
+.compat-group--ok {
+  border-top: 2px solid var(--color-success);
+}
+
+.compat-group--maybe {
+  border-top: 2px solid var(--color-warning);
+}
+
+.compat-group__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.compat-apps {
+  display: grid;
+  gap: 8px;
+}
+
+.compat-app {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+/* Логотипы AmneziaVPN и AmneziaWG — значки приложений из их репозиториев (64×64 WebP), атрибуция:
+   docs/research/external-source-license-audit.md. У остальных клиентов — монограмма. */
+.compat-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 10px;
+  background: var(--color-surface-3) center / cover no-repeat;
+  color: var(--color-text-2);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.compat-logo--amnezia_vpn {
+  background-image: url("data:image/webp;base64,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");
+}
+
+.compat-logo--amneziawg_client {
+  background-image: url("data:image/webp;base64,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");
+}
+
+.compat-app__body {
+  min-width: 0;
+}
+
+.compat-app__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.compat-app__name {
+  margin-right: 2px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.compat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px 2px 3px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-2);
+  font-size: 12px;
   font-weight: 600;
 }
 
-.compat-card__meta {
-  color: var(--color-text-muted);
+.compat-chip--format {
+  padding: 1px 8px;
+  border-color: transparent;
+  background: var(--color-cyan-soft);
+  color: var(--color-cyan);
+  font-size: 11.5px;
 }
 
-.compat-card__warnings {
-  margin-top: 10px;
+.compat-chip .compat-logo {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  font-size: 9px;
 }
 
-.compat-card__warning {
+.compat-platforms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 6px;
+}
+
+.compat-platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--color-text-2);
+  font-size: 12px;
+}
+
+.compat-platform .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.compat-app__note {
   margin: 6px 0 0;
-  color: #fde68a;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.compat-other {
+  margin-top: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface-2);
+}
+
+.compat-other__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  list-style: none;
+  cursor: pointer;
+}
+
+.compat-other__summary::-webkit-details-marker {
+  display: none;
+}
+
+.compat-other__summary:focus-visible {
+  border-radius: var(--radius);
+  box-shadow: var(--ring);
+  outline: none;
+}
+
+.compat-other__count {
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--color-surface-3);
+  color: var(--color-text-2);
+  font-size: 11.5px;
+}
+
+.compat-other__chevron {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  transition: transform 0.15s ease;
+}
+
+.compat-other[open] .compat-other__chevron {
+  transform: rotate(180deg);
+}
+
+.compat-other__body {
+  display: grid;
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+
+.compat-other__reason {
+  margin: 0 0 6px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.compat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.compat-card__notes {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.compat-card__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  color: var(--color-text-2);
   font-size: 12.5px;
+}
+
+.compat-card__note .icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--color-cyan);
 }
 
 /* ───────────────────────── Нижние карточки ───────────────────────── */

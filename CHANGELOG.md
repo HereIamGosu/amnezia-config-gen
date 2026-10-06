@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+### Changed
+- The "Compatibility" card after generation is redesigned: "Works" and "Uncertain" groups with app tiles (the AmneziaVPN and AmneziaWG app icons, monograms for other clients), import formats and platform icons; "Not directly supported" is a collapsed list of chips grouped by reason; one note with an icon replaces the repeated warnings. The AWG 3.1 client note appears only for AWG 3.x profiles. Image sources and licenses: `docs/research/external-source-license-audit.md`.
+
+### Fixed
+- The Endpoint Lab quick view on the generator page requests the interface dictionary with the asset version, like the rest of the site (missed in 3.0.1); a test now scans every browser script for unversioned dictionary requests.
+
 ## [3.0.1] - 2026-10-07
 
 ### Fixed

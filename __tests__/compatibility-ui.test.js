@@ -109,7 +109,8 @@ test('asset cache keys use the package version', () => {
 
 test('index.html has the compatibility card with all sections, hidden by default', () => {
   const html = read('public/index.html');
-  assert.match(html, /<section id="compatibilityCard" class="compat-card" aria-live="polite" hidden>/);
+  assert.match(html, /<section id="compatibilityCard" class="compat-card" aria-live="polite" aria-labelledby="compatTitle" hidden>/);
+  assert.match(html, /<details id="compatNotRecommended" class="compat-other" hidden>/, '"not directly supported" is a collapsed block');
   assert.match(html, /id="compatRecommended"/);
   assert.match(html, /id="compatExperimental"/);
   assert.match(html, /id="compatNotRecommended"/);
@@ -126,7 +127,10 @@ test('the result panel renders and can hide the compatibility card', () => {
   // Fallback: card hidden when compatibility summary is missing/invalid.
   assert.match(result, /card\.hidden = true;/);
   // Card is driven by the API response, not hardcoded client lists.
-  assert.match(script, /data\.compatibility \|\| null/);
+  assert.match(script, /lastCompatibility = data\.compatibility \? \{ \.\.\.data\.compatibility, mode: data\.mode \} : null;/);
+  // Only the two Amnezia clients carry logos; the rest get monograms, never a third-party image.
+  assert.match(result, /const COMPAT_LOGOS = new Set\(\['amnezia_vpn', 'amneziawg_client'\]\);/);
+  assert.doesNotMatch(result, /\(\?<[=!]/, 'no regex lookbehind: older Safari would reject the whole file');
 });
 
 test('script.js does not break existing result actions', () => {

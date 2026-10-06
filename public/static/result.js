@@ -619,23 +619,109 @@ const localizeCompatText = (text) => {
   return text;
 };
 
-const compatListItem = (primary, secondary) => {
-  const li = document.createElement('li');
-  li.className = 'compat-card__item';
-  const name = document.createElement('span');
-  name.className = 'compat-card__client';
-  name.textContent = primary;
-  li.appendChild(name);
-  if (secondary) {
-    const meta = document.createElement('span');
-    meta.className = 'compat-card__meta';
-    meta.textContent = secondary;
-    li.appendChild(meta);
+// ── Карточка «Совместимость» ──
+// Три группы из ответа /api/warp: «Работает» (recommended) и «Под вопросом» (experimental) — плитки с иконкой
+// приложения, форматами и платформами; «Не подходит напрямую» (notRecommended) — свёрнутый список чипов по
+// причине. Логотипы есть только у AmneziaVPN и AmneziaWG (в styles.css), у остальных клиентов — монограмма.
+// Строки сервера попадают в DOM только как текст.
+
+const COMPAT_LOGOS = new Set(['amnezia_vpn', 'amneziawg_client']);
+
+const COMPAT_PLATFORMS = {
+  windows: ['i-windows', 'Windows'],
+  macos: ['i-apple', 'macOS'],
+  linux: ['i-linux', 'Linux'],
+  android: ['i-android', 'Android'],
+  ios: ['i-apple', 'iOS'],
+};
+
+// Причины из src/server/clientCompatibility.js (REASONS) → подпись группы чипов.
+const COMPAT_REASON_GROUPS = [
+  ['Direct export is not implemented', 'compat_group_no_exporter', 'Нет прямого экспорта'],
+  ['Research/documentation target only', 'compat_group_research', 'Только исследование'],
+  ['No supported import path', 'compat_group_no_path', 'Нет пути импорта для этого профиля'],
+];
+
+const AWG3X_NOTE_PREFIX = 'AWG 3.x requires';
+
+/** Монограмма клиента без логотипа: две буквы из частей имени (sing-box → SB, OpenClash → OC). */
+const compatMonogram = (name) => {
+  // Без lookbehind в регулярке: старые Safari не разбирают его, и падал бы весь файл.
+  const parts = String(name).replace(/([a-z])([A-Z])/g, '$1 $2').split(/[^A-Za-z0-9]+/).filter(Boolean);
+  const letters = parts.length > 1 ? parts[0][0] + parts[1][0] : String(name).slice(0, 1);
+  return letters.toUpperCase();
+};
+
+const compatIcon = (client) => {
+  const icon = document.createElement('span');
+  icon.setAttribute('aria-hidden', 'true');
+  if (COMPAT_LOGOS.has(client.clientId)) {
+    icon.className = `compat-logo compat-logo--${client.clientId}`;
+  } else {
+    icon.className = 'compat-logo compat-logo--mono';
+    icon.textContent = compatMonogram(client.name || client.clientId || '?');
   }
+  return icon;
+};
+
+/** Короткие пометки к плитке: vpn:// — только если он есть; требование AWG 3.1 — только для профилей 3.x. */
+const compatNotes = (client, mode) => {
+  const notes = [];
+  if ((client.exports || []).includes('vpnlink')) notes.push(t('compat_note_vpnlink', 'vpn:// — импорт в одно касание'));
+  const awg3x = mode === 'awg3' || mode === 'awg31';
+  if (awg3x && (client.notes || []).some((n) => typeof n === 'string' && n.startsWith(AWG3X_NOTE_PREFIX))) {
+    notes.push(t('compat_note_awg3x', 'Нужна версия клиента с поддержкой AWG 3.1'));
+  }
+  return notes;
+};
+
+const compatAppItem = (client, notes) => {
+  const li = document.createElement('li');
+  li.className = 'compat-app';
+  li.dataset.client = client.clientId || '';
+  li.appendChild(compatIcon(client));
+
+  const body = document.createElement('div');
+  body.className = 'compat-app__body';
+  const head = document.createElement('div');
+  head.className = 'compat-app__head';
+  const name = document.createElement('span');
+  name.className = 'compat-app__name';
+  name.textContent = client.name || client.clientId || '';
+  head.appendChild(name);
+  (client.exports || []).forEach((ex) => {
+    const chip = document.createElement('span');
+    chip.className = 'compat-chip compat-chip--format';
+    chip.textContent = COMPAT_FORMAT_LABELS[ex] || ex;
+    head.appendChild(chip);
+  });
+  body.appendChild(head);
+
+  const platforms = (client.platforms || []).filter((p) => Object.prototype.hasOwnProperty.call(COMPAT_PLATFORMS, p));
+  if (platforms.length) {
+    const list = document.createElement('ul');
+    list.className = 'compat-platforms';
+    platforms.forEach((p) => {
+      const [icon, label] = COMPAT_PLATFORMS[p];
+      const item = document.createElement('li');
+      item.className = 'compat-platform';
+      item.append(makeIcon(icon, 'icon icon--fill'), label);
+      list.appendChild(item);
+    });
+    body.appendChild(list);
+  }
+
+  notes.forEach((text) => {
+    const note = document.createElement('p');
+    note.className = 'compat-app__note';
+    note.textContent = text;
+    body.appendChild(note);
+  });
+  li.appendChild(body);
   return li;
 };
 
-const fillCompatGroup = (groupId, listId, items, buildItem) => {
+const fillCompatGroup = (groupId, listId, items, notesOf) => {
   const group = document.getElementById(groupId);
   const list = document.getElementById(listId);
   if (!group || !list) return;
@@ -644,14 +730,56 @@ const fillCompatGroup = (groupId, listId, items, buildItem) => {
     group.hidden = true;
     return;
   }
-  items.forEach((entry) => list.appendChild(buildItem(entry)));
+  items.forEach((client) => list.appendChild(compatAppItem(client, notesOf(client))));
   group.hidden = false;
+};
+
+/** «Не подходит напрямую»: чипы, сгруппированные по причине; блок свёрнут, состояние раскрытия сохраняется. */
+const fillCompatOther = (items) => {
+  const box = document.getElementById('compatNotRecommended');
+  const list = document.getElementById('compatNotRecommendedList');
+  const count = document.getElementById('compatNotRecommendedCount');
+  if (!box || !list) return;
+  list.textContent = '';
+  if (!Array.isArray(items) || items.length === 0) {
+    box.hidden = true;
+    return;
+  }
+  const groups = new Map();
+  items.forEach((client) => {
+    const reason = typeof client.reason === 'string' ? client.reason : '';
+    const known = COMPAT_REASON_GROUPS.find(([prefix]) => reason.startsWith(prefix));
+    const key = known ? known[1] : reason;
+    if (!groups.has(key)) groups.set(key, { label: known ? t(known[1], known[2]) : localizeCompatText(reason), clients: [] });
+    groups.get(key).clients.push(client);
+  });
+  groups.forEach(({ label, clients }) => {
+    const group = document.createElement('div');
+    group.className = 'compat-other__group';
+    const title = document.createElement('p');
+    title.className = 'compat-other__reason';
+    title.textContent = label;
+    const chips = document.createElement('ul');
+    chips.className = 'compat-chips';
+    clients.forEach((client) => {
+      const chip = document.createElement('li');
+      chip.className = 'compat-chip';
+      chip.dataset.client = client.clientId || '';
+      chip.append(compatIcon(client), client.name || client.clientId || '');
+      chips.appendChild(chip);
+    });
+    group.append(title, chips);
+    list.appendChild(group);
+  });
+  if (count) count.textContent = String(items.length);
+  box.hidden = false;
 };
 
 /**
  * Renders the post-generation compatibility card from the /api/warp
- * `compatibility` summary. When the summary is missing/invalid, the card is
- * hidden and generation actions (download/preview/vpn://) keep working.
+ * `compatibility` summary (plus `mode`, which script.js adds from the response).
+ * When the summary is missing/invalid, the card is hidden and generation
+ * actions (download/preview/vpn://) keep working.
  */
 const renderCompatibilityCard = (compatibility) => {
   const card = document.getElementById('compatibilityCard');
@@ -672,8 +800,9 @@ const renderCompatibilityCard = (compatibility) => {
   const experimental = compatibility.experimental || [];
   const notRecommended = compatibility.notRecommended || [];
   const warnings = compatibility.warnings || [];
+  const mode = compatibility.mode;
 
-  // Format line: union of usable exports across recommended + experimental.
+  // Форматы: объединение того, что реально можно импортировать в «Работает» и «Под вопросом».
   const formatEl = document.getElementById('compatFormat');
   if (formatEl) {
     const formats = new Set();
@@ -681,37 +810,33 @@ const renderCompatibilityCard = (compatibility) => {
       (c.exports || []).forEach((ex) => formats.add(COMPAT_FORMAT_LABELS[ex] || ex));
     });
     if (formats.size === 0) formats.add('.conf');
-    formatEl.textContent = `${t('compat_format', 'Формат')}: ${[...formats].join(', ')}`;
+    formatEl.textContent = '';
+    formats.forEach((label) => {
+      const chip = document.createElement('li');
+      chip.className = 'compat-chip compat-chip--format';
+      chip.textContent = label;
+      formatEl.appendChild(chip);
+    });
   }
 
-  fillCompatGroup('compatRecommended', 'compatRecommendedList', recommended, (c) => {
-    const platforms = (c.platforms || []).join(', ');
-    return compatListItem(c.name || c.clientId, platforms);
-  });
+  fillCompatGroup('compatRecommended', 'compatRecommendedList', recommended, (c) => compatNotes(c, mode));
+  fillCompatGroup('compatExperimental', 'compatExperimentalList', experimental,
+    () => [t('compat_maybe_hint', 'Зависит от версии клиента. Если туннель не поднимается, возьмите клиент из группы «Работает».')]);
+  fillCompatOther(notRecommended);
 
-  fillCompatGroup('compatExperimental', 'compatExperimentalList', experimental, (c) => {
-    const warn = (c.warnings || [])[0];
-    return compatListItem(c.name || c.clientId, warn ? localizeCompatText(warn) : '');
-  });
-
-  fillCompatGroup('compatNotRecommended', 'compatNotRecommendedList', notRecommended, (c) => (
-    compatListItem(c.name || c.clientId, localizeCompatText(c.reason || ''))
-  ));
-
+  // Общие пояснения. Совет про версию клиента уже стоит у плиток «Под вопросом» — без повтора.
   const warnEl = document.getElementById('compatWarnings');
   if (warnEl) {
     warnEl.textContent = '';
-    if (warnings.length) {
-      warnings.forEach((w) => {
-        const p = document.createElement('p');
-        p.className = 'compat-card__warning';
-        p.textContent = localizeCompatText(w);
-        warnEl.appendChild(p);
-      });
-      warnEl.hidden = false;
-    } else {
-      warnEl.hidden = true;
-    }
+    const shown = warnings.filter((w) => typeof w === 'string'
+      && !(experimental.length && w.startsWith('Compatibility depends on the client')));
+    shown.forEach((w) => {
+      const p = document.createElement('p');
+      p.className = 'compat-card__note';
+      p.append(makeIcon('i-info', 'icon icon--sm'), localizeCompatText(w));
+      warnEl.appendChild(p);
+    });
+    warnEl.hidden = shown.length === 0;
   }
 
   card.hidden = false;

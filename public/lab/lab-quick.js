@@ -262,10 +262,18 @@
     return stylesReady;
   };
 
+  // Словарь — с версией ассетов страницы (?v= у скриптов из static/), как в i18n.js и lab.js: после релиза
+  // браузер не подставляет из кэша словарь прошлой версии, где нет ключей lab_*.
+  const localeRequestUrl = () => {
+    const script = doc.querySelector('script[src*="static/"][src*="?v="]');
+    const match = script && /[?&]v=([^&#]+)/.exec(script.getAttribute('src'));
+    return `/locales/${PAGE_LANG}.json${match ? `?v=${encodeURIComponent(match[1])}` : ''}`;
+  };
+
   const loadStrings = async () => {
     if (strings) return;
     try {
-      const res = await fetch(`/locales/${PAGE_LANG}.json`);
+      const res = await fetch(localeRequestUrl());
       strings = res.ok ? await res.json() : {};
     } catch {
       strings = {};

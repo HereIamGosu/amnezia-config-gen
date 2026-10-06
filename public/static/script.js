@@ -230,7 +230,8 @@ const generateConfig = async () => {
       lastResultSummary = resultExplanation.buildResultSummary(data, resultState);
       renderResultExplanation(lastResultSummary);
     }
-    lastCompatibility = data.compatibility || null;
+    // Режим ответа нужен карточке: пометка про AWG 3.1 только у профилей 3.x.
+    lastCompatibility = data.compatibility ? { ...data.compatibility, mode: data.mode } : null;
     renderCompatibilityCard(lastCompatibility);
 
     // Несколько вариантов (count = 2–3) показываются переключателем в панели результата.

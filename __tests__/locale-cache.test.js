@@ -22,11 +22,32 @@ test('locale dictionaries are revalidated on every request', () => {
 });
 
 test('the generator and the Lab request the dictionary with the page asset version', () => {
-  for (const file of ['public/static/i18n.js', 'public/lab/lab.js']) {
+  for (const file of ['public/static/i18n.js', 'public/lab/lab.js', 'public/lab/lab-quick.js']) {
     const src = read(file);
     assert.match(src, /querySelector\('script\[src\*="static\/"\]\[src\*="\?v="\]'\)/, file);
     assert.match(src, /fetch\(localeRequestUrl\(/, file);
-    assert.doesNotMatch(src, /fetch\(`\/locales\//, `${file}: no unversioned dictionary request`);
+  }
+});
+
+test('no browser script requests a dictionary without the version', () => {
+  // 3.0.1 missed lab-quick.js (the Lab quick view on the generator page): scan every script, not a list.
+  const scripts = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(path.join(root, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) walk(rel);
+      else if (entry.name.endsWith('.js')) scripts.push(rel);
+    }
+  };
+  walk('public');
+  assert.ok(scripts.length > 10, 'found the browser scripts');
+  for (const file of scripts) {
+    const src = read(file);
+    assert.doesNotMatch(src, /fetch\(\s*[`'"]\/?locales\//, `${file}: dictionary requested at a fixed address`);
+    // A code line that builds a /locales/ address must also add the version (the URL helpers do it on one line).
+    for (const line of src.split('\n').filter((l) => /[`'"]\/?locales\//.test(l) && !/^\s*(\/\/|\*)/.test(l))) {
+      assert.match(line, /\?v=/, `${file}: dictionary address without the version: ${line.trim()}`);
+    }
   }
 });
 

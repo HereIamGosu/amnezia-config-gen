@@ -106,6 +106,67 @@ e2eSuite('generation (stubbed /api/warp)', (openPage) => {
     await page.assertClean();
   });
 
+  test('compatibility card: works / uncertain tiles with logos, collapsed "not directly" chips by reason', async () => {
+    const page = await openPage({ width: 1440, height: 900 });
+    await page.goto('/');
+    stubWarp(page, (u) => ({ json: fixtures.warpSuccess({ mode: u.searchParams.get('mode') }) }), 200);
+    const card = () => {
+      const tiles = (id) => [...document.querySelectorAll(`#${id} .compat-app`)].map((li) => ({
+        client: li.dataset.client,
+        logo: li.querySelector('.compat-logo').className,
+        mono: li.querySelector('.compat-logo').textContent,
+        platforms: [...li.querySelectorAll('.compat-platform')].map((p) => p.textContent),
+        formats: [...li.querySelectorAll('.compat-chip--format')].map((c) => c.textContent),
+        notes: [...li.querySelectorAll('.compat-app__note')].map((n) => n.textContent),
+      }));
+      const other = document.getElementById('compatNotRecommended');
+      return {
+        hidden: document.getElementById('compatibilityCard').hidden,
+        formats: [...document.querySelectorAll('#compatFormat .compat-chip')].map((c) => c.textContent),
+        works: tiles('compatRecommendedList'),
+        maybe: tiles('compatExperimentalList'),
+        otherOpen: other.open,
+        otherCount: document.getElementById('compatNotRecommendedCount').textContent,
+        reasons: [...other.querySelectorAll('.compat-other__reason')].map((r) => r.textContent),
+        chips: [...other.querySelectorAll('.compat-chip')].map((c) => `${c.querySelector('.compat-logo').textContent}:${c.dataset.client}`),
+        notes: [...document.querySelectorAll('#compatWarnings .compat-card__note')].map((n) => n.textContent),
+      };
+    };
+
+    await page.click('#generateButton');
+    await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success');
+    const awg2 = await page.evaluate(card);
+    assert.equal(awg2.hidden, false);
+    assert.deepEqual(awg2.formats, ['.conf', 'vpn://']);
+    assert.deepEqual(awg2.works.map((c) => c.client), ['amnezia_vpn', 'amneziawg_client']);
+    assert.match(awg2.works[0].logo, /compat-logo--amnezia_vpn/, 'AmneziaVPN has its logo');
+    assert.match(awg2.works[1].logo, /compat-logo--amneziawg_client/, 'AmneziaWG has its logo');
+    assert.deepEqual(awg2.works[0].platforms, ['Windows', 'macOS', 'Linux', 'Android', 'iOS']);
+    assert.deepEqual(awg2.works[0].formats, ['.conf', 'vpn://']);
+    assert.deepEqual(awg2.works[0].notes, ['vpn:// — импорт в одно касание'], 'no AWG 3.1 note for AWG 2.0');
+    assert.deepEqual(awg2.maybe.map((c) => [c.client, c.mono]), [['wg_tunnel', 'WT']], 'monogram without a logo');
+    assert.match(awg2.maybe[0].notes[0], /^Зависит от версии клиента/);
+    assert.equal(awg2.otherOpen, false, 'not directly supported starts collapsed');
+    assert.equal(awg2.otherCount, '9');
+    assert.deepEqual(awg2.reasons, ['Нет прямого экспорта', 'Только исследование']);
+    assert.ok(awg2.chips.includes('SB:sing_box') && awg2.chips.includes('OC:openclash'), awg2.chips.join(' '));
+    assert.equal(awg2.notes.length, 1, 'the client-version advice is not repeated below the tiles');
+    assert.match(awg2.notes[0], /Cloudflare WARP peer/);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'no horizontal scroll');
+
+    await page.click('#compatNotRecommended summary');
+    assert.equal(await page.evaluate(() => document.getElementById('compatNotRecommended').open), true, 'expands on click');
+
+    await page.click('label.profile-card:has(#profileAwg31)');
+    await page.click('#generateButton');
+    await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success'
+      && document.querySelectorAll('#compatRecommendedList .compat-app__note').length > 1);
+    const awg31 = await page.evaluate(card);
+    assert.ok(awg31.works.every((c) => c.notes.includes('Нужна версия клиента с поддержкой AWG 3.1')), 'AWG 3.x note on 3.x profiles');
+    assert.equal(awg31.otherOpen, true, 'the expanded state survives a new result');
+    await page.assertClean();
+  });
+
   test('AWG 3.0: vpn:// is unavailable and the UI says why', async () => {
     const page = await openPage();
     await page.goto('/');
