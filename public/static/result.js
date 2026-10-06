@@ -105,15 +105,20 @@ const stopResultProgress = () => {
 };
 
 const showResultLoading = () => {
+  const retry = document.getElementById('resultHostnameRetry');
+  if (retry) retry.hidden = true;
   showResultView('loading');
   startResultProgress();
   scrollResultIntoView();
 };
 
-const showResultError = (message) => {
+/** labRefusal: Lab Auto отказал (503 lab_*) — показать кнопку «Сгенерировать через hostname». */
+const showResultError = (message, { labRefusal = false } = {}) => {
   stopResultProgress();
   const text = document.getElementById('resultErrorText');
   if (text) text.textContent = message;
+  const retry = document.getElementById('resultHostnameRetry');
+  if (retry) retry.hidden = !labRefusal;
   showResultView('error');
 };
 

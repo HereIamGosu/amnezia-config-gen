@@ -15,7 +15,7 @@
 /* global copyText, toast -- common.js */
 /* global
    cfgState, ROUTE_MODES, getSelectedRouteIds, getSelectedDnsKey, forEachRouteTile, updateTileActiveClass,
-   applyMobileModeCascade -- settings.js */
+   applyMobileModeCascade, endpointDefault, chooseEndpoint -- settings.js */
 /* global getSelectedProfile -- script.js */
 /* exported shareLink, applySharedSettings, copySettingsLink */
 
@@ -31,7 +31,8 @@ const getShareState = () => ({
   ipv6: cfgState.includeIpv6,
   cps: cfgState.cpsProtocol,
   cps5: cfgState.extraCps,
-  endpoint: cfgState.warpEndpoint,
+  // Endpoint по умолчанию («авто»: Lab, когда он здоров) в ссылку не пишется — только явный выбор
+  endpoint: endpointDefault.explicit ? cfgState.warpEndpoint : (shareLink ? shareLink.DEFAULTS.endpoint : 'lab'),
   port: cfgState.port,
   count: cfgState.configCount,
 });
@@ -103,11 +104,7 @@ const applySharedSettings = () => {
     if (cps5Toggle) cps5Toggle.checked = s.cps5;
   }
 
-  if (s.endpoint) {
-    cfgState.warpEndpoint = s.endpoint;
-    const select = document.getElementById('warpEndpointSelect');
-    if (select) select.value = s.endpoint;
-  }
+  if (s.endpoint) chooseEndpoint(s.endpoint);
 
   if (s.port) {
     cfgState.port = s.port;

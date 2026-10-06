@@ -29,7 +29,8 @@
     cps: 'auto',
     cps5: false,
     port: 4500,
-    endpoint: 'hostname',
+    // «Авто»: без endpoint в ссылке страница берёт Endpoint Lab, когда он здоров, иначе hostname
+    endpoint: 'lab',
     ipv6: false,
     count: 1,
   });

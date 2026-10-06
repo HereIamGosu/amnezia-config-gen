@@ -2417,14 +2417,21 @@ kbd {
 
 /* ───────────────────────── Модальные окна ───────────────────────── */
 
+/* Высота — по видимой области (dvh; vh — запасной вариант): в Safari на iPhone 100vh больше видимой
+   области, и высокое окно выталкивало шапку с крестиком за край экрана. Окно центрируется через
+   margin: auto — если оно всё же выше экрана, верх остаётся доступным, а затемнение прокручивается.
+   cursor: pointer нужен iOS: иначе тап по затемнению не даёт click, и окно не закрывается. */
 .modal {
   position: fixed;
   inset: 0;
   z-index: 60;
   display: none;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  cursor: pointer;
   background: rgba(3, 5, 8, 0.72);
   -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
@@ -2440,6 +2447,9 @@ kbd {
   flex-direction: column;
   width: min(760px, 100%);
   max-height: min(860px, calc(100vh - 48px));
+  max-height: min(860px, calc(100dvh - 48px));
+  margin: auto;
+  cursor: auto;
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-xl);
   background: linear-gradient(180deg, #0f151d, #080b0f);
@@ -2454,6 +2464,7 @@ kbd {
 
 .settings-modal .modal__dialog {
   height: min(860px, calc(100vh - 48px));
+  height: min(860px, calc(100dvh - 48px));
 }
 
 .modal__dialog--narrow {
@@ -2939,6 +2950,11 @@ kbd {
 }
 
 .lab-auto-note[hidden] {
+  display: none;
+}
+
+/* hostname выбран умолчанием, потому что у Lab нет свежих адресов: описание режима Lab Auto не к месту */
+.lab-auto-note--fallback [data-i18n="labauto_note"] {
   display: none;
 }
 
@@ -3740,8 +3756,8 @@ kbd {
     font-size: 12px;
   }
 
-  .site-header__actions .lang-switcher,
-  .header-icon-link {
+  /* Значок GitHub остаётся в шапке и на телефоне: пункта «GitHub» в меню больше нет */
+  .site-header__actions .lang-switcher {
     display: none;
   }
 
@@ -4041,15 +4057,17 @@ kbd {
   }
 
   .modal {
-    align-items: flex-end;
     padding: 0;
   }
 
+  /* Лист снизу: прижат к низу, пока помещается; иначе — к верху, и крестик виден */
   .modal__dialog,
   .modal__dialog--wide,
   .modal__dialog--narrow {
     width: 100%;
     max-height: 92vh;
+    max-height: 92dvh;
+    margin: auto 0 0;
     border-bottom: 0;
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     animation: sheet-in 0.2s ease-out;
@@ -4081,6 +4099,7 @@ kbd {
 
   .settings-modal .modal__dialog {
     height: 92vh;
+    height: 92dvh;
   }
 
   .option-row--stack .select {

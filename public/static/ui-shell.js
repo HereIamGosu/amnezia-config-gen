@@ -102,8 +102,9 @@
   });
 
   // Клик по затемнению закрывает окно; нажатие, начатое внутри окна, — нет (выделение текста).
+  // pointerdown, а не mousedown: на iPhone тап по затемнению не всегда даёт mouse-события.
   let pressStartedOnBackdrop = false;
-  doc.addEventListener('mousedown', (ev) => {
+  doc.addEventListener('pointerdown', (ev) => {
     pressStartedOnBackdrop = ev.target.classList && ev.target.classList.contains('modal');
   });
   doc.addEventListener('click', (ev) => {

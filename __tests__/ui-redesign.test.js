@@ -82,7 +82,7 @@ test('every modal uses the shared shell: dialog role, labelled title, localized 
   const modals = [...html.matchAll(/<div id="([^"]+)" class="modal\b[^"]*" role="dialog" aria-modal="true" aria-labelledby="([^"]+)" aria-hidden="true">/g)];
   const ids = modals.map((m) => m[1]);
   assert.deepEqual(ids.sort(), [
-    'configPreviewModal', 'disclaimerModal', 'faqModal', 'historyModal', 'instructionModal', 'modal',
+    'communityModal', 'configPreviewModal', 'disclaimerModal', 'faqModal', 'historyModal', 'instructionModal', 'modal',
     'privacyModal', 'resultInfoModal', 'settingsModal', 'statusModal',
   ].sort());
   assert.equal((html.match(/class="modal\b/g) || []).length, modals.length, 'no modal outside the shared shell');

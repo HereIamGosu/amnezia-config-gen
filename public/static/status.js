@@ -13,6 +13,7 @@
 
 /* global t, setI18nText -- i18n.js */
 /* global makeIcon, openModal, telemetry -- common.js */
+/* global endpointDefault, syncDefaultEndpoint -- settings.js */
 /* exported fetchServiceStatus, renderHeroStatus, initHeroStatus, refreshHeroStatus, openStatusModal, renderLabAutoNote */
 
 /**
@@ -295,7 +296,8 @@ const heroLabView = () => {
     empty: [t('status_lab_empty', 'Нет ACTIVE'), ago],
     unavailable: [t('status_lab_unavailable', 'Недоступен'), ''],
   }[s.state];
-  return { tone: s.tone, value, detail };
+  // Lab Auto создаёт конфиг, только когда у Lab есть свежие ACTIVE-адреса: ok и degraded
+  return { tone: s.tone, value, detail, state: s.state, ready: s.state === 'ok' || s.state === 'degraded' };
 };
 
 const paintLabState = (icon, state, view) => {
@@ -327,6 +329,8 @@ const renderHeroLab = () => {
   sub.textContent = view.detail;
   sub.hidden = !view.detail;
   renderStatusModalLab();
+  // Endpoint по умолчанию следует за Lab: свежий пул — Endpoint Lab, иначе hostname (если посетитель не выбрал сам)
+  if (typeof syncDefaultEndpoint === 'function') syncDefaultEndpoint(view.ready);
   renderLabAutoNote();
 };
 
@@ -347,17 +351,24 @@ const renderLabAutoNote = () => {
   const note = document.getElementById('labAutoNote');
   const select = document.getElementById('warpEndpointSelect');
   if (!note || !select) return;
-  const active = select.value === 'lab';
-  note.hidden = !active;
-  if (active) select.setAttribute('aria-describedby', 'labAutoNote');
-  else select.removeAttribute('aria-describedby');
-  const stateEl = document.getElementById('labAutoState');
-  if (!active || !stateEl) return;
   const Core = window.LabCore;
   const s = Core ? Core.statusSummary(heroLab, Date.now()) : { state: 'unavailable', tone: 'unknown' };
-  const [key, fallback] = LAB_AUTO_STATES[s.state] || LAB_AUTO_STATES.unavailable;
+  const active = select.value === 'lab';
+  // hostname выбран умолчанием, потому что у подключённого Lab сейчас нет свежих адресов: говорим почему.
+  // На развёртывании без Lab (форк, Vercel) пояснения нет — там hostname и есть единственный вариант.
+  const fallback = !active && select.value === 'hostname' && !endpointDefault.explicit
+    && heroLab !== null && heroLab.kind !== 'not-connected' && ['stale', 'empty', 'unavailable'].includes(s.state);
+  note.hidden = !active && !fallback;
+  note.classList.toggle('lab-auto-note--fallback', fallback);
+  if (!note.hidden) select.setAttribute('aria-describedby', 'labAutoNote');
+  else select.removeAttribute('aria-describedby');
+  const stateEl = document.getElementById('labAutoState');
+  if (note.hidden || !stateEl) return;
+  const [key, text] = fallback
+    ? ['labauto_state_fallback', 'нет свежих проверенных адресов — поэтому выбран hostname']
+    : LAB_AUTO_STATES[s.state] || LAB_AUTO_STATES.unavailable;
   stateEl.className = `lab-auto-note__state lab-auto-note__state--${s.tone}`;
-  setI18nText(stateEl, key, fallback);
+  setI18nText(stateEl, key, text);
 };
 
 const startLabPoller = () => {

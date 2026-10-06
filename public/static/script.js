@@ -18,7 +18,8 @@
    renderResultExplanation, lastCompatibility:writable, renderCompatibilityCard, showResult, getModeSuccessLabel,
    showResultError, initResultPanel -- result.js */
 /* global
-   cfgState, getSelectedRouteIds, ROUTE_MODES, getSelectedDnsKey, getResultStateSnapshot, initSettingsPanel -- settings.js */
+   cfgState, getSelectedRouteIds, ROUTE_MODES, getSelectedDnsKey, getResultStateSnapshot, initSettingsPanel,
+   chooseEndpoint, updateParamChips -- settings.js */
 /* global shareLink -- settings-link.js */
 /* global saveToHistory, renderHistoryPanel, HISTORY_KEY -- history.js */
 /* exported getSelectedProfile */
@@ -104,6 +105,13 @@ const LAB_AUTO_ERRORS = {
 const getApiErrorMessage = (data) => {
   const lab = data && LAB_AUTO_ERRORS[data.error];
   return lab ? t(lab[0], lab[1]) : data && data.message;
+};
+
+/** Ошибка ответа /api/warp; отказ Lab Auto помечен — панель ошибки предложит hostname явной кнопкой. */
+const apiError = (data, fallback) => {
+  const error = new Error(getApiErrorMessage(data) || fallback);
+  error.labRefusal = Boolean(data && LAB_AUTO_ERRORS[data.error]);
+  return error;
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -194,11 +202,11 @@ const generateConfig = async () => {
     const data = await parseJsonResponse(response);
 
     if (!response.ok) {
-      throw new Error(getApiErrorMessage(data) || `${t('err_http_prefix', 'Ошибка HTTP:')} ${response.status}`);
+      throw apiError(data, `${t('err_http_prefix', 'Ошибка HTTP:')} ${response.status}`);
     }
 
     if (!data.success) {
-      throw new Error(getApiErrorMessage(data) || t('err_unknown_gen', 'Неизвестная ошибка при генерации конфигурации.'));
+      throw apiError(data, t('err_unknown_gen', 'Неизвестная ошибка при генерации конфигурации.'));
     }
     if (!data.content) throw new Error(t('err_no_content', 'Отсутствует содержимое конфигурации.'));
 
@@ -270,7 +278,7 @@ const generateConfig = async () => {
       ? t('err_timeout', 'Превышено время ожидания ответа. Попробуйте ещё раз.')
       : error.message;
     status.textContent = `${t('err_prefix', 'Ошибка:')} ${message}`;
-    showResultError(message);
+    showResultError(message, { labRefusal: Boolean(error && error.labRefusal) });
   } finally {
     generationInFlight = false;
     button.disabled = false;
@@ -293,6 +301,15 @@ document.addEventListener('DOMContentLoaded', () => {
     generateButton.addEventListener('click', () => generateConfig());
   } else {
     console.error('Кнопка "generateButton" не найдена.');
+  }
+  // Отказ Lab Auto: «Сгенерировать через hostname» — явный выбор посетителя, не тихая подмена
+  const hostnameRetry = document.getElementById('resultHostnameRetry');
+  if (hostnameRetry) {
+    hostnameRetry.addEventListener('click', () => {
+      chooseEndpoint('hostname');
+      updateParamChips();
+      generateConfig();
+    });
   }
   initResultPanel();
 

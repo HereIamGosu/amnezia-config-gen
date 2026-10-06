@@ -44,8 +44,8 @@ e2eSuite('mobile layout', (openPage) => {
         await page.goto(path);
         await assertNoOverflow(page, 'initial');
 
-        await page.tap('#stepParams [data-step-toggle]');
-        await page.waitFor(() => !document.getElementById('stepParams').classList.contains('is-collapsed'));
+        assert.equal(await page.evaluate(() => document.getElementById('stepParams').classList.contains('is-collapsed')), false,
+          'step 2 is expanded on a phone by default');
         await page.tap('#paramSummary');
         await page.waitFor(isOpen, { args: ['settingsModal'] });
         for (const tab of ['tab-routes', 'tab-dnscps', 'tab-extra']) {

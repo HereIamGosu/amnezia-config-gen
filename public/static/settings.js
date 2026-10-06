@@ -18,7 +18,8 @@
 /* global copySettingsLink, applySharedSettings -- settings-link.js */
 /* exported
    ROUTE_MODES, cfgState, forEachRouteTile, getSelectedRouteIds, updateParamChips, applyMobileModeCascade,
-   getSelectedDnsKey, getResultStateSnapshot, updateCidrCounter, updateTileActiveClass, initSettingsPanel */
+   getSelectedDnsKey, getResultStateSnapshot, updateCidrCounter, updateTileActiveClass, initSettingsPanel,
+   endpointDefault, chooseEndpoint, syncDefaultEndpoint */
 
 /**
  * Maximum safe number of IPv4 CIDR routes in AllowedIPs.
@@ -147,7 +148,36 @@ const openSettingsModal = ({ opener = null } = {}) => {
 
 /** Умолчания те же, что у ссылки с настройками (share-link.js загружается раньше). */
 const PARAM_DEFAULTS = (window.ShareLink && window.ShareLink.DEFAULTS)
-  || { device: 'universal', cps: 'auto', cps5: false, port: 4500, endpoint: 'hostname', ipv6: false, count: 1 };
+  || { device: 'universal', cps: 'auto', cps5: false, port: 4500, endpoint: 'lab', ipv6: false, count: 1 };
+
+// ── Endpoint по умолчанию ──
+// Endpoint Lab — по умолчанию, когда у него есть свежие ACTIVE-адреса: их видит строка Lab в карточке статуса,
+// и status.js сообщает об этом через syncDefaultEndpoint. Пока это неизвестно, когда Lab без свежих данных
+// и на развёртывании без Lab — hostname. Выбор посетителя (список в настройках, endpoint в ссылке, кнопка
+// «через hostname» в ошибке) автоматически больше не меняется. Сервер Lab Auto по-прежнему fail-closed.
+const endpointDefault = { explicit: false, labReady: false };
+
+const defaultEndpoint = () => (endpointDefault.labReady ? 'lab' : 'hostname');
+
+const setEndpointValue = (value) => {
+  cfgState.warpEndpoint = value;
+  const select = document.getElementById('warpEndpointSelect');
+  if (select) select.value = value;
+};
+
+/** Явный выбор посетителя: после него умолчание endpoint не переключается. */
+const chooseEndpoint = (value) => {
+  endpointDefault.explicit = true;
+  setEndpointValue(value);
+};
+
+/** Состояние Lab изменилось: без явного выбора endpoint следует за ним. */
+const syncDefaultEndpoint = (labReady) => {
+  endpointDefault.labReady = Boolean(labReady);
+  if (endpointDefault.explicit || cfgState.warpEndpoint === defaultEndpoint()) return;
+  setEndpointValue(defaultEndpoint());
+  updateParamChips();
+};
 
 /**
  * Сводка шага 2 — всегда фактическое состояние cfgState, а не картинка из макета. Значения, отличные
@@ -179,7 +209,7 @@ const updateParamChips = () => {
     ? t('chip_endpoint_hostname', 'Hostname')
     : cfgState.warpEndpoint === 'lab'
       ? t('chip_endpoint_lab', 'Endpoint Lab')
-      : cfgState.warpEndpoint, cfgState.warpEndpoint !== PARAM_DEFAULTS.endpoint, 'Endpoint');
+      : cfgState.warpEndpoint, cfgState.warpEndpoint !== defaultEndpoint(), 'Endpoint');
   renderLabAutoNote();
   setItem('chipPort', String(cfgState.port), Number(cfgState.port) !== PARAM_DEFAULTS.port, t('chip_port', 'Порт WARP'));
   setItem('chipIpv6', cfgState.includeIpv6 ? t('chip_on', 'Включён') : t('chip_off', 'Выключен'),
@@ -643,7 +673,7 @@ const initSettingsPanel = async () => {
     if (warpEndpointSelect) {
       warpEndpointSelect.value = cfgState.warpEndpoint;
       warpEndpointSelect.addEventListener('change', () => {
-        cfgState.warpEndpoint = warpEndpointSelect.value;
+        chooseEndpoint(warpEndpointSelect.value);
       });
     }
 
@@ -669,7 +699,9 @@ const initSettingsPanel = async () => {
         cfgState.cpsProtocol = 'auto';
         cfgState.warpPort = 4500;
         cfgState.port = 4500;
-        cfgState.warpEndpoint = 'hostname';
+        // Сброс возвращает endpoint к умолчанию: Lab, если он сейчас здоров, иначе hostname
+        endpointDefault.explicit = false;
+        cfgState.warpEndpoint = defaultEndpoint();
         cfgState.extraCps = false;
         cfgState.mobileMode = false;
         cfgState.configCount = 1;
@@ -681,7 +713,7 @@ const initSettingsPanel = async () => {
         const autoRadio = document.querySelector('[name="cpsProtocol"][value="auto"]');
         if (autoRadio) autoRadio.checked = true;
         if (warpPortSelect) warpPortSelect.value = '4500';
-        if (warpEndpointSelect) warpEndpointSelect.value = 'hostname';
+        if (warpEndpointSelect) warpEndpointSelect.value = cfgState.warpEndpoint;
         const cps5ToggleReset = document.getElementById('cps5Toggle');
         if (cps5ToggleReset) cps5ToggleReset.checked = false;
         const mobileToggleReset = document.getElementById('mobileModeToggle');

@@ -288,7 +288,6 @@
             <span data-i18n="nav_history">История</span>
             <span id="historyCount" class="count-badge"></span>
           </button>
-          <a class="site-nav__link" href="https://github.com/HereIamGosu/amnezia-config-gen" target="_blank" rel="noopener noreferrer">GitHub</a>
         </nav>
 
         <div class="site-header__actions">
@@ -480,7 +479,7 @@
                 <h2 class="step__title" id="stepParamsTitle" data-i18n-html="step2_title">Настройте параметры <span class="step__title-note">(опционально)</span></h2>
                 <p class="step__subtitle" data-i18n="step2_subtitle">Оставьте по умолчанию или настройте под свои задачи.</p>
               </div>
-              <button type="button" class="step__toggle" data-step-toggle data-collapse-mobile aria-expanded="true" aria-controls="stepParamsBody" aria-label="Свернуть или развернуть шаг" data-i18n-aria-label="step_toggle_aria">
+              <button type="button" class="step__toggle" data-step-toggle aria-expanded="true" aria-controls="stepParamsBody" aria-label="Свернуть или развернуть шаг" data-i18n-aria-label="step_toggle_aria">
                 <svg class="icon" aria-hidden="true"><use href="#i-chevron-down"/></svg>
               </button>
             </div>
@@ -567,6 +566,7 @@
               <p class="result-state__title" data-i18n="result_error_title">Не удалось сгенерировать</p>
               <p class="result-state__text" id="resultErrorText"></p>
               <p class="result-state__text" data-i18n="result_error_hint">Попробуйте позже или смените endpoint и порт в настройках.</p>
+              <button type="button" class="btn btn--blue btn--sm result-state__action" id="resultHostnameRetry" data-i18n="result_retry_hostname" hidden>Сгенерировать через hostname</button>
             </div>
           </div>
 
@@ -764,14 +764,14 @@
         </article>
 
         <article class="card info-card" id="community">
-          <a class="info-card__head" href="https://t.me/amnezia_config" data-tg-channel target="_blank" rel="noopener noreferrer">
+          <button type="button" class="info-card__head" data-open-modal="communityModal">
             <svg class="icon icon--lg" aria-hidden="true"><use href="#i-users"/></svg>
             <span class="info-card__titles">
               <span class="info-card__title" data-i18n="community_title">Сообщество</span>
               <span class="info-card__sub">Telegram · GitHub · Discord</span>
             </span>
             <svg class="icon info-card__chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
-          </a>
+          </button>
           <div class="info-card__body community">
             <div class="community__lead">
               <span class="tg-mark"><svg class="icon icon--fill icon--lg" aria-hidden="true"><use href="#i-telegram"/></svg></span>
@@ -1126,6 +1126,37 @@
       </div>
     </div>
 
+    <!-- Сообщество: на телефоне карточка показывает только заголовок, Telegram, GitHub и Discord — здесь -->
+    <div id="communityModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="communityModalHeading" aria-hidden="true">
+      <div class="modal__dialog modal__dialog--narrow">
+        <header class="modal__header">
+          <span class="modal__icon"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg></span>
+          <div class="modal__titles">
+            <h2 id="communityModalHeading" class="modal__title" data-i18n="community_title">Сообщество</h2>
+            <p class="modal__subtitle">Telegram · GitHub · Discord</p>
+          </div>
+          <button type="button" class="modal__close" data-close-modal aria-label="Закрыть" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </header>
+        <div class="modal__body community">
+                <div class="community__lead">
+                  <span class="tg-mark"><svg class="icon icon--fill icon--lg" aria-hidden="true"><use href="#i-telegram"/></svg></span>
+                  <p data-i18n="community_text">Обсуждение клиентов, endpoint'ов и сетевых проблем.</p>
+                </div>
+                <a class="btn btn--blue btn--block" href="https://t.me/amnezia_config" data-tg-channel target="_blank" rel="noopener noreferrer" data-i18n="community_open_telegram">Открыть Telegram</a>
+                <div class="community__links">
+                  <a class="btn" href="https://github.com/HereIamGosu/amnezia-config-gen" target="_blank" rel="noopener noreferrer">
+                    <svg class="icon icon--fill" aria-hidden="true"><use href="#i-github"/></svg>
+                    <span data-i18n="community_github">GitHub проекта</span>
+                  </a>
+                  <a class="btn btn--icon" href="https://discord.gg/sZTgtD7SyB" target="_blank" rel="noopener noreferrer" aria-label="Discord">
+                    <svg class="icon icon--fill" aria-hidden="true"><use href="#i-discord"/></svg>
+                  </a>
+                </div>
+
+        </div>
+      </div>
+    </div>
+
     <!-- Настройки конфигурации -->
     <div id="settingsModal" class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle" aria-hidden="true">
       <div class="modal__dialog modal__dialog--wide">
@@ -1270,8 +1301,8 @@
                   <span class="option-row__hint" data-i18n="endpoint_hint">Endpoint Lab — свежие проверенные IP; фиксированный IP — если DNS заблокирован</span>
                 </span>
                 <select id="warpEndpointSelect" class="select">
-                  <option value="hostname" data-i18n="endpoint_option_hostname">engage.cloudflareclient.com (рекомендуется)</option>
-                  <option value="lab" data-i18n="endpoint_option_lab">Endpoint Lab — авто (проверенные IP)</option>
+                  <option value="hostname" data-i18n="endpoint_option_hostname">engage.cloudflareclient.com (hostname)</option>
+                  <option value="lab" data-i18n="endpoint_option_lab">Endpoint Lab — авто (проверенные IP, рекомендуется)</option>
                   <option value="162.159.192.1">162.159.192.1</option>
                   <option value="162.159.195.1">162.159.195.1</option>
                   <option value="188.114.97.1">188.114.97.1</option>

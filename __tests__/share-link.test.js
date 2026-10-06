@@ -50,7 +50,8 @@ const DEFAULT_STATE = {
   ipv6: false,
   cps: 'auto',
   cps5: false,
-  endpoint: 'hostname',
+  // «Авто»: settings-link.js передаёт DEFAULTS.endpoint, пока посетитель не выбрал endpoint сам
+  endpoint: 'lab',
   port: 4500,
   count: 1,
 };
@@ -124,6 +125,8 @@ test('device names map to the mobile/router toggles and back', () => {
 
 test('the canonical link carries only non-default values in a stable order', () => {
   assert.equal(ShareLink.buildShareQuery(DEFAULT_STATE), '');
+  // Явный выбор hostname попадает в ссылку: у получателя он не сменится на Lab
+  assert.equal(ShareLink.buildShareQuery({ ...DEFAULT_STATE, endpoint: 'hostname' }), 'endpoint=hostname');
   assert.equal(
     ShareLink.buildShareUrl('https://awgconfig.com/?utm_source=tg&profile=legacy#faq', DEFAULT_STATE),
     'https://awgconfig.com/',

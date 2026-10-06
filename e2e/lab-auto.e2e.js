@@ -71,7 +71,7 @@ e2eSuite('Lab Auto in the generator', (openPage) => {
       assert.deepEqual(await page.evaluate(() => ({
         changed: document.querySelector('.param-summary__item[data-param="endpoint"]').classList.contains('param-summary__item--changed'),
         state: document.getElementById('paramSummaryState').textContent,
-      })), { changed: true, state: 'Изменено: Endpoint, Число конфигов' }, 'Lab Auto is a non-default choice in the step-2 summary');
+      })), { changed: false, state: 'Изменено: Число конфигов' }, 'with a fresh Lab pool, Lab Auto is the default in the step-2 summary');
 
       await page.click('#generateButton');
       await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success', { message: 'success view' });
@@ -89,7 +89,7 @@ e2eSuite('Lab Auto in the generator', (openPage) => {
     }
   });
 
-  test('Lab refusal: localized error, no hostname retry, the choice stays Lab Auto (RU and EN)', async () => {
+  test('Lab refusal: localized error, the choice stays Lab Auto, hostname only by an explicit button (RU and EN)', async () => {
     for (const [url, text] of [['/', /Данные Endpoint Lab устарели/], ['/en', /Endpoint Lab data is stale/]]) {
       const page = await openPage({ width: 1440, height: 900 });
       await page.goto(url);
@@ -109,8 +109,76 @@ e2eSuite('Lab Auto in the generator', (openPage) => {
       assert.doesNotMatch(shown.error, /e2e/, 'the UI shows its own translation, not the server text');
       assert.deepEqual([shown.endpoint, shown.chip, shown.history], ['lab', 'Endpoint Lab', '']);
       assert.equal(requests.length, 1, 'no automatic second request in hostname mode');
+      assert.equal(await page.evaluate(() => document.getElementById('resultHostnameRetry').hidden), false, 'the hostname button is offered');
+
+      // Только по нажатию: hostname выбирается явно, второй запрос уходит без endpointMode=lab
+      page.route((u) => u.pathname === '/api/warp', (u) => { requests.push(u); return { delayMs: 200, json: fixtures.warpSuccess() }; });
+      await page.click('#resultHostnameRetry');
+      await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success', { message: 'hostname result' });
+      assert.equal(requests.length, 2);
+      assert.equal(requests[1].searchParams.get('endpointMode'), null, 'the retry is a plain hostname request');
+      assert.equal(await page.evaluate(() => document.getElementById('warpEndpointSelect').value), 'hostname');
+      assert.equal(await page.evaluate(() => document.getElementById('resultHostnameRetry').hidden), true);
       await page.assertClean();
     }
+  });
+
+  test('default endpoint: Endpoint Lab with a fresh pool, hostname with a reason otherwise; a visitor choice sticks', async () => {
+    const summary = () => ({
+      endpoint: document.getElementById('warpEndpointSelect').value,
+      chip: document.getElementById('chipEndpoint').textContent,
+      changed: document.querySelector('.param-summary__item[data-param="endpoint"]').classList.contains('param-summary__item--changed'),
+      state: document.getElementById('paramSummaryState').textContent,
+      note: document.getElementById('labAutoNote').hidden ? null : document.getElementById('labAutoState').textContent.trim(),
+    });
+    // Свежий пул: Lab — умолчание, не «изменение»; запрос идёт в Lab Auto
+    writeLabPublic(LAB_DIR);
+    try {
+      const page = await openPage({ width: 1440, height: 900 });
+      await page.goto('/');
+      await page.waitFor(() => document.getElementById('warpEndpointSelect').value === 'lab', { message: 'Lab chosen by default' });
+      assert.deepEqual(await page.evaluate(summary), {
+        endpoint: 'lab', chip: 'Endpoint Lab', changed: false, state: 'Все параметры по умолчанию', note: 'есть свежие проверенные endpoint\'ы',
+      });
+      const requests = stubWarp(page, () => ({ json: fixtures.warpSuccess({ count: 1, lab: { endpoints: LAB_ENDPOINTS.slice(0, 1) } }) }));
+      await page.click('#generateButton');
+      await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success');
+      assert.equal(requests[0].searchParams.get('endpointMode'), 'lab');
+
+      // Явный выбор hostname не меняется при следующих ответах Lab и становится «изменением»
+      await chooseEndpoint(page, 'hostname');
+      await closeSettings(page);
+      // Следующий ответ Lab: renderHeroLab — функция страницы (status.js), её вызывает и таймер карточки
+      await page.evaluate(() => renderHeroLab()); // eslint-disable-line no-undef
+      assert.deepEqual(await page.evaluate(summary), {
+        endpoint: 'hostname', chip: 'Hostname', changed: true, state: 'Изменено: Endpoint', note: null,
+      });
+      await page.assertClean('fresh Lab');
+    } finally {
+      clearLab();
+    }
+
+    // Устаревшие данные Lab: hostname и объяснение под выбором; без Lab вообще — hostname без пояснения
+    writeLabPublic(LAB_DIR, { ageMs: 3_600_000 });
+    try {
+      const page = await openPage({ width: 1440, height: 900 });
+      await page.goto('/');
+      await page.waitFor(() => !document.getElementById('labAutoNote').hidden, { message: 'fallback reason shown' });
+      assert.deepEqual(await page.evaluate(summary), {
+        endpoint: 'hostname', chip: 'Hostname', changed: false, state: 'Все параметры по умолчанию',
+        note: 'нет свежих проверенных адресов — поэтому выбран hostname',
+      });
+      await page.assertClean('stale Lab');
+    } finally {
+      clearLab();
+    }
+    const page = await openPage({ width: 1440, height: 900 });
+    await page.goto('/');
+    await page.waitFor(() => document.getElementById('statusLabState').textContent === 'Недоступен', { message: 'no Lab here' });
+    assert.deepEqual(await page.evaluate(summary), {
+      endpoint: 'hostname', chip: 'Hostname', changed: false, state: 'Все параметры по умолчанию', note: null,
+    });
+    await page.assertClean('no Lab');
   });
 
   test('port fallback and fewer endpoints are explained in the visitor language', async () => {

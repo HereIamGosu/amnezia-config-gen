@@ -10,8 +10,13 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 ### Changed
 - The "Compatibility" card after generation is redesigned: "Works" and "Uncertain" groups with app tiles (the AmneziaVPN and AmneziaWG app icons, monograms for other clients), import formats and platform icons; "Not directly supported" is a collapsed list of chips grouped by reason; one note with an icon replaces the repeated warnings. The AWG 3.1 client note appears only for AWG 3.x profiles. Image sources and licenses: `docs/research/external-source-license-audit.md`.
 
+- Endpoint Lab is the default WARP endpoint in the interface while its pool is fresh (the same state the status card shows); while that is unknown, when the Lab has no fresh data and on deployments without the Lab, the hostname is selected and the note under the choice says why. A visitor's choice (settings, a settings link, the error button) is never switched automatically. A Lab refusal offers an explicit "Generate with the hostname" button; the server stays fail-closed and the API default stays the hostname. Settings links omit the endpoint while it is the default and carry an explicit choice, including the hostname.
+- Phone: step 2 "Adjust parameters" starts expanded; the "Community" card opens a dialog with Telegram, GitHub and Discord instead of going straight to Telegram.
+- The header has no "GitHub" menu item: the GitHub icon next to the language switch, now also visible on phones, is the link.
+
 ### Fixed
 - The Endpoint Lab quick view on the generator page requests the interface dictionary with the asset version, like the rest of the site (missed in 3.0.1); a test now scans every browser script for unversioned dictionary requests.
+- iPhone: dialogs could not be closed. In Safari 100vh is taller than the visible area, so a tall bottom sheet (settings, FAQ, guide) pushed its header with the close button above the screen, and a tap on the backdrop sent no click to the plain backdrop element. Dialog heights now follow the visible area (dvh), a dialog that does not fit keeps its top reachable and the backdrop scrolls, and the backdrop closes on tap (cursor: pointer, pointerdown). Every dialog of every page is checked at iPhone 14 Pro sizes (`e2e/mobile-dialogs.e2e.js`).
 
 ## [3.0.1] - 2026-10-07
 
