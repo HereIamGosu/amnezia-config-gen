@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
-## [3.0.0] - 2026-10-06
+## [3.0.0] - 2026-10-07
 
 ### Added
 - Endpoint Lab: a host subsystem on the project server (`deploy/endpoint-lab`, installed separately with `install.sh`) that proves Cloudflare WARP `IP:port` endpoints with a real WireGuard handshake and HTTPS traffic through the tunnel, keeps a small pool of fresh verified endpoints (ACTIVE, 7-minute TTL) and publishes only secret-free files: `active-pool.json`, `lab-status.json`, `web-overview.json` and per-endpoint details for ACTIVE, VERIFIED and SUSPECT endpoints. Its negative control and blacklisted addresses are never published; error codes are an allowlist.
