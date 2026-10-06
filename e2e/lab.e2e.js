@@ -128,16 +128,16 @@ e2eSuite('Endpoint Lab page', (openPage) => {
     await page.assertClean('/en/lab');
   });
 
-  test('header Instructions / FAQ open the dialog on the generator, closing it returns to the Lab', async () => {
+  test('header FAQ opens the dialog on the generator, closing it returns to the Lab; no Instructions item', async () => {
     const dialogOpen = (id) => document.getElementById(id).classList.contains('is-open');
     for (const [from, key, modal, home] of [
-      ['/lab?fixture=healthy', 'nav_instructions', 'instructionModal', '/'],
       ['/lab?fixture=healthy', 'nav_faq', 'faqModal', '/'],
-      ['/en/lab?fixture=healthy', 'nav_instructions', 'instructionModal', '/en'],
+      ['/en/lab?fixture=healthy', 'nav_faq', 'faqModal', '/en'],
     ]) {
       const page = await openPage({ width: 1440, height: 900 });
       await page.goto(from, { app: false });
       await page.waitFor(() => document.getElementById('labMain').dataset.labState === 'ok', { message: 'Lab page ready' });
+      assert.equal(await page.evaluate(() => document.querySelectorAll('.site-nav a[href*="#instructions"]').length), 0, 'no Instructions item');
       await page.click(`.site-nav a[data-i18n="${key}"]`);
       await page.waitFor((p, id) => location.pathname === p && !!document.getElementById(id)
         && document.getElementById(id).classList.contains('is-open'), { args: [home, modal], message: `${modal} open on ${home}` });
@@ -150,12 +150,12 @@ e2eSuite('Endpoint Lab page', (openPage) => {
 
     // Opened directly (no Lab page before it): closing the dialog stays on the generator.
     const direct = await openPage();
-    await direct.goto('/#instructions');
-    await direct.waitFor(dialogOpen, { args: ['instructionModal'] });
+    await direct.goto('/#faq');
+    await direct.waitFor(dialogOpen, { args: ['faqModal'] });
     await direct.press('Escape');
-    await direct.waitFor((id) => !document.getElementById(id).classList.contains('is-open'), { args: ['instructionModal'] });
+    await direct.waitFor((id) => !document.getElementById(id).classList.contains('is-open'), { args: ['faqModal'] });
     await direct.sleep(600);
     assert.equal(await direct.evaluate(() => location.pathname), '/', 'no navigation without a Lab referrer');
-    await direct.assertClean('/#instructions');
+    await direct.assertClean('/#faq');
   });
 });

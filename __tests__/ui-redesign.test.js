@@ -208,7 +208,9 @@ test('header items open dialogs on the page instead of leaving it; no duplicate 
   assert.match(html, /id="statusModalBtn"/, 'the status panel still opens the status dialog');
   assert.match(script, /closest\('\[data-status-link\]'\)/, 'the FAQ status link opens the status dialog');
   assert.match(en.faq_a5, /data-status-link/, 'the FAQ status link opens the dialog too');
-  assert.match(html, /<a class="site-nav__link" href="#instructions" data-open-modal="instructionModal"/);
+  // «Инструкции» убраны из шапки: это окно, его открывают карточка «Инструкции» и «Ещё» в панели результата.
+  assert.doesNotMatch(nav, /nav_instructions|instructionModal/, 'no Instructions item in the header');
+  assert.match(html, /<button type="button" class="info-card__head" data-open-modal="instructionModal">/, 'the guide card opens the dialog');
   assert.doesNotMatch(html, /id="settingsToggle"/, 'the step 2 summary already opens the settings');
   assert.doesNotMatch(html, /data-result-action="regenerate"/, 'the generate button is right above the result');
   assert.doesNotMatch(html, /class="result__links"/, 'the compatibility card is right below the result');
