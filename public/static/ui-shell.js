@@ -311,11 +311,42 @@
 
   const openFromHash = () => {
     const hash = globalScope.location.hash;
-    if (!hash) return;
+    if (!hash) return null;
     const trigger = Array.from(doc.querySelectorAll('[data-open-modal]')).find((el) => el.getAttribute('href') === hash);
-    if (trigger) openModal(trigger.getAttribute('data-open-modal'), trigger);
+    if (!trigger) return null;
+    const id = trigger.getAttribute('data-open-modal');
+    openModal(id, trigger);
+    return id;
   };
-  openFromHash();
+
+  // «Инструкции» и «FAQ» в шапке страницы Lab ведут сюда (/#instructions, /#faq): окна живут на главной.
+  // Посетитель не собирался уходить со страницы Lab, поэтому закрытие такого окна возвращает его туда:
+  // назад по истории, а если истории нет (ссылка открыта в новой вкладке) — переходом на адрес Lab.
+  // Откуда пришли, говорит referrer (Referrer-Policy: strict-origin-when-cross-origin отдаёт полный адрес
+  // внутри сайта); переходы по якорям на самой главной (hashchange) не возвращают никуда.
+  const labReferrer = () => {
+    try {
+      const ref = new URL(doc.referrer);
+      return ref.origin === globalScope.location.origin && /^\/(en\/)?lab\/?$/.test(ref.pathname) ? ref.href : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const deepLinked = openFromHash();
+  const returnTo = deepLinked ? labReferrer() : null;
+  if (returnTo) {
+    const modal = getModal(deepLinked);
+    const arrivedHash = globalScope.location.hash;
+    const back = (ev) => {
+      if (ev.target !== modal) return;
+      modal.removeEventListener('modal:close', back);
+      // Якорь сменился — на главной появились свои записи истории, и «назад» привело бы не на Lab.
+      if (globalScope.history.length > 1 && globalScope.location.hash === arrivedHash) globalScope.history.back();
+      else globalScope.location.assign(returnTo);
+    };
+    modal.addEventListener('modal:close', back);
+  }
   globalScope.addEventListener('hashchange', openFromHash);
 
   globalScope.UiShell = { openModal, closeModal, isOpen, selectTab, toast };

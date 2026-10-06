@@ -127,4 +127,35 @@ e2eSuite('Endpoint Lab page', (openPage) => {
     assert.equal(await page.evaluate(() => localStorage.getItem('lang')), 'ru');
     await page.assertClean('/en/lab');
   });
+
+  test('header Instructions / FAQ open the dialog on the generator, closing it returns to the Lab', async () => {
+    const dialogOpen = (id) => document.getElementById(id).classList.contains('is-open');
+    for (const [from, key, modal, home] of [
+      ['/lab?fixture=healthy', 'nav_instructions', 'instructionModal', '/'],
+      ['/lab?fixture=healthy', 'nav_faq', 'faqModal', '/'],
+      ['/en/lab?fixture=healthy', 'nav_instructions', 'instructionModal', '/en'],
+    ]) {
+      const page = await openPage({ width: 1440, height: 900 });
+      await page.goto(from, { app: false });
+      await page.waitFor(() => document.getElementById('labMain').dataset.labState === 'ok', { message: 'Lab page ready' });
+      await page.click(`.site-nav a[data-i18n="${key}"]`);
+      await page.waitFor((p, id) => location.pathname === p && !!document.getElementById(id)
+        && document.getElementById(id).classList.contains('is-open'), { args: [home, modal], message: `${modal} open on ${home}` });
+      await page.press('Escape');
+      await page.waitFor((p) => location.pathname + location.search === p && document.readyState === 'complete',
+        { args: [from], message: `back on ${from}` });
+      await page.waitFor(() => document.getElementById('labMain').dataset.labState === 'ok', { message: 'Lab page shown again' });
+      await page.assertClean(`${from} → ${key} → back`);
+    }
+
+    // Opened directly (no Lab page before it): closing the dialog stays on the generator.
+    const direct = await openPage();
+    await direct.goto('/#instructions');
+    await direct.waitFor(dialogOpen, { args: ['instructionModal'] });
+    await direct.press('Escape');
+    await direct.waitFor((id) => !document.getElementById(id).classList.contains('is-open'), { args: ['instructionModal'] });
+    await direct.sleep(600);
+    assert.equal(await direct.evaluate(() => location.pathname), '/', 'no navigation without a Lab referrer');
+    await direct.assertClean('/#instructions');
+  });
 });
