@@ -2,7 +2,7 @@
 
 [English](./README.md) | [Русский](./README.ru.md)
 
-Web UI and HTTP API for building `.conf` files for the **AmneziaWG** client (WireGuard with Amnezia obfuscation extensions). Primary use case: **Cloudflare WARP** profiles — registers a fresh WARP device via Cloudflare's official API, returns the keys and tunnel parameters, optionally narrows `AllowedIPs` to selected domain presets.
+Web UI and HTTP API for building `.conf` files for the **AmneziaWG** client (WireGuard with Amnezia obfuscation extensions). Primary use case: **Cloudflare WARP** profiles — registers a fresh WARP device via Cloudflare's official API, returns the keys and tunnel parameters, optionally narrows `AllowedIPs` to selected domain presets. Since 3.0 the endpoint can also come from **Endpoint Lab** — the project's own check of WARP endpoints.
 
 | | |
 | --- | --- |
@@ -11,18 +11,22 @@ Web UI and HTTP API for building `.conf` files for the **AmneziaWG** client (Wir
 | **Source code** | <https://github.com/HereIamGosu/amnezia-config-gen> |
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
-[![Node.js ≥20](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
+[![Node.js 22](https://img.shields.io/badge/node-22.x-brightgreen)](https://nodejs.org/)
 [![CI](https://github.com/HereIamGosu/amnezia-config-gen/actions/workflows/ci.yml/badge.svg)](https://github.com/HereIamGosu/amnezia-config-gen/actions/workflows/ci.yml)
 [![Latest Release](https://img.shields.io/github/v/release/HereIamGosu/amnezia-config-gen)](https://github.com/HereIamGosu/amnezia-config-gen/releases/latest)
 [![Last Commit](https://img.shields.io/github/last-commit/HereIamGosu/amnezia-config-gen)](https://github.com/HereIamGosu/amnezia-config-gen/commits/main)
 [![Open Issues](https://img.shields.io/github/issues/HereIamGosu/amnezia-config-gen)](https://github.com/HereIamGosu/amnezia-config-gen/issues)
 
-![App screenshot](https://i.imgur.com/xjgNNQX.png)
+![AmneziaWG Config Generator 3.0: profile choice, parameter summary and system status](docs/images/awgconfig-3.0-en.png)
 
 ## Features
 
 - Explicit routing mode selection: full tunnel (all traffic) or split tunnel (selected presets only)
 - Four config formats: **Legacy**, **AWG 2.0**, **AWG 3.0**, and **AWG 3.1** (`mode=legacy|awg2|awg3|awg31`). AWG 3.x modes use a WARP-safe client-side profile.
+- Up to three configs per request (`count=1..3`), each with its own WARP registration and keys.
+- **Endpoint Lab** (`/lab`, `/en/lab`, `GET /api/lab`): a read-only view of Cloudflare WARP endpoints (`IP:UDP port`) that the project server checks with a real WireGuard handshake and HTTPS traffic through the tunnel. An endpoint that passes is ACTIVE for 7 minutes and has to pass again to stay. The checks run from the project server, so they show that an endpoint works from there, not from every network.
+- **Lab Auto** (`endpointMode=lab`, opt-in): every config gets its own fresh ACTIVE endpoint from the Lab, with distinct IPs. Without fresh Lab data no config is created (`503 lab_*`), never a silent fallback. The default stays the hostname `engage.cloudflareclient.com` with the chosen port, as in 2.7.4.
+- Dark interface in Russian (`/`) and English (`/en`); the language follows the address. The "System status" card shows the generator API, WARP registration, the WARP endpoint, the CIDR source and the Endpoint Lab.
 - Route presets: tile-selectable domain bundles → aggregated IPv4 (or IPv4+IPv6) CIDRs in `AllowedIPs`. With no selection, defaults to `0.0.0.0/0`; `::/0` is added only when IPv6 is explicitly enabled.
 - DNS presets for the `DNS` line in the config.
 - One-click `.conf` download for import into AmneziaWG and compatible clients.
@@ -38,8 +42,8 @@ The channel does not promise universal connectivity in any network. The material
 
 ## Requirements
 
-- **Node.js ≥ 20** (LTS).
-- **Vercel CLI** for local serverless functions: `npm i -g vercel` or `npx vercel dev`.
+- **Node.js 22** (`engines` in `package.json`).
+- **Vercel CLI** only for `npm start` (`vercel dev`): `npm i -g vercel` or `npx vercel dev`.
 
 No `.env` is required — the app calls Cloudflare's public WARP API directly.
 
@@ -47,10 +51,14 @@ No `.env` is required — the app calls Cloudflare's public WARP API directly.
 
 ```bash
 npm install
-npm start    # vercel dev → http://localhost:3000
+npm start          # vercel dev → http://localhost:3000
+# or the same runtime as production, without Vercel:
+node server.js     # http://localhost:3000 (PORT, HOST)
 ```
 
-If you open the static files in `public/` without `vercel dev`, the UI loads presets from `public/static/presets-fallback.json` but `/api/iplist` and `/api/warp` won't work.
+If you open the static files in `public/` without a server, the UI loads presets from `public/static/presets-fallback.json` but `/api/iplist` and `/api/warp` won't work.
+
+Endpoint Lab data is not part of the repository. Locally, `/lab` reports that the Lab data is unavailable, `/api/lab` answers `503 lab_not_available` and Lab Auto answers `503 lab_unavailable`; the hostname mode works. To see the Lab locally, point `ENDPOINT_LAB_PUBLIC_DIR` (absolute path, read at start-up) to a copy of the Lab public directory.
 
 ## Deploy
 
@@ -59,8 +67,13 @@ once, tested, and published to GHCR by digest; the server pulls the verified ima
 traffic blue/green with an automatic rollback. Details: [`deploy/CI_CD.md`](deploy/CI_CD.md),
 [`deploy/CONTROLLER.md`](deploy/CONTROLLER.md).
 
+Endpoint Lab runs on the same server as a separate host service (`deploy/endpoint-lab/`); the web
+container only gets the Lab's secret-free public directory, mounted read-only. Details:
+[`deploy/ENDPOINT_LAB.md`](deploy/ENDPOINT_LAB.md).
+
 Forks keep working on **Vercel** as before: connect the repository in the Vercel dashboard or run
-`vercel` / `vercel --prod` from the project root.
+`vercel` / `vercel --prod` from the project root. A fork has no Endpoint Lab: the generator works in
+the hostname mode, `/lab` reports that the Lab data is unavailable.
 
 ## Privacy-safe telemetry
 
@@ -75,22 +88,30 @@ Only bounded product metadata is allowed: mode, requested/produced counts, endpo
 | Path | Purpose |
 |---|---|
 | `public/index.html` | UI entry point (Russian, `/`) |
-| `public/en/index.html` | English page (`/en`), generated by `npm run seo:en` — do not edit |
+| `public/en/index.html`, `public/en/lab/index.html` | English pages (`/en`, `/en/lab`), generated by `npm run seo:en` — do not edit |
+| `public/lab/` | Endpoint Lab page (`/lab`): markup, styles and scripts |
 | `public/404.html`, `robots.txt`, `sitemap.xml`, `llms.txt`, `.well-known/security.txt` | Error page and files for search engines, AI search and security reports |
-| `public/static/*.js`, `styles.css` | Frontend: `script.js` (generation and wiring) plus `i18n.js`, `common.js`, `status.js`, `result.js`, `settings.js`, `settings-link.js`, `history.js`, `share-link.js`, `ui-shell.js`, `metrika.js`; styles. Browser tests: `e2e/` (`npm run test:e2e`) |
+| `public/static/*.js`, `styles.css` | Frontend: `script.js` (generation and wiring) plus `i18n.js`, `common.js`, `status.js`, `live-status.js`, `result.js`, `result-explanation.js`, `settings.js`, `settings-link.js`, `history.js`, `share-link.js`, `ui-shell.js`, `analytics.js`, `metrika.js`, `status-page.js`; styles |
+| `public/locales/{ru,en}.json` | Interface strings for both languages |
 | `public/static/presets-fallback.json` | Offline fallback preset catalogue |
-| `api/warp.js` | WARP config generation endpoint |
-| `src/server/awg/` | AWG profiles, strict ranges, WARP safety, and final serialization |
+| `api/warp.js` | WARP config generation endpoint (hostname mode and Lab Auto) |
 | `api/iplist.js` | Preset list and CIDR preview |
-| `api/routePresets.js` | Source of truth for all route and DNS presets |
-| `api/ipListFetch.js` | Domain → CIDR resolution (10-min in-memory cache) |
-| `api/warpCpsPayloads.js` | Pool of verified WARP-compatible CPS payloads |
-| `api/cps-presets/` | Text files referenced via `i1Ref` query param |
-| `api/cpsExtraPackets.js` | Generates I2..I5 for `cps5=1` |
-| `api/vpnLinkBuilder.js` | Builds `vpn://...` AmneziaVPN one-tap import URI |
-| `api/_rateLimit.js` | Per-IP rate limiter (10 generations/min) |
+| `api/status.js`, `api/healthcheck.js` | Data for the "System status" card |
+| `api/lab.js` | Read-only Endpoint Lab data for `/lab` |
+| `src/server/awg/` | AWG profiles, strict ranges, WARP safety, and final serialization |
+| `src/server/routePresets.js` | Source of truth for all route and DNS presets |
+| `src/server/ipListFetch.js` | Domain → CIDR resolution (10-min in-memory cache) |
+| `src/server/warpCpsPayloads.js`, `src/server/cps/` | Pool of verified WARP-compatible CPS payloads and CPS packet generators |
+| `src/server/cps-presets/` | Text files referenced via `i1Ref` query param |
+| `src/server/cpsExtraPackets.js` | Generates I2..I5 for `cps5=1` |
+| `src/server/vpnLinkBuilder.js` | Builds `vpn://...` AmneziaVPN one-tap import URI |
+| `src/server/labPublic.js`, `src/server/endpointProvider.js` | Reading and validating the Lab public files; endpoint selection for Lab Auto |
+| `src/server/_rateLimit.js` | Per-IP rate limiter (10 generations/min) |
+| `server.js` | Self-hosted runtime used in production: routes and headers from `vercel.json` |
+| `deploy/` | Docker image, nginx, blue/green deploy controller, Endpoint Lab host service (`deploy/endpoint-lab/`) |
 | `scripts/dump-presets-fallback.js` | Regenerates `presets-fallback.json` from `routePresets.js` |
-| `__tests__/invariant-*.test.js` | Critical-invariant regression tests |
+| `__tests__/` | `node:test` suite, including the critical-invariant tests `invariant-*.test.js` |
+| `e2e/` | Browser tests in a local Chrome (`npm run test:e2e`) |
 
 ## Critical invariants
 
@@ -114,13 +135,14 @@ These rules are non-obvious, easy to break, and silently fatal. They are enforce
 
 ### `GET` / `POST` `/api/warp`
 
-Returns JSON: `success`, on success `content` (`.conf` body in **base64**), `mode` (`legacy` | `awg2` | `awg3` | `awg31`), optionally `routesSource`, privacy-safe `routesTelemetrySource`, `routesPresets`, `presetSitesCount`, `appliedExtras`, `vpnLink`, `compatibility`, and AWG 3.x-only `awg` capability metadata.
+Returns JSON: `success`, on success `content` (`.conf` body in **base64**; with `count` > 1 the first config), `configs` (every config with its own `content`, `endpointSource`, CPS fields and `vpnLink`), `count`, `mode` (`legacy` | `awg2` | `awg3` | `awg31`), optionally `routesSource`, privacy-safe `routesTelemetrySource`, `routesPresets`, `presetSitesCount`, `appliedExtras`, `vpnLink`, `compatibility`, and AWG 3.x-only `awg` capability metadata.
 
 Parameters via query string (`GET`) or JSON body fields (`POST`). Body field names match query param names (handy for long `i1`).
 
 | Param | Description |
 |---|---|
 | `mode` | `legacy` (default), `awg2`, `awg3`, or `awg31`; accepted AWG 3.x aliases include `3`, `3.0`, `awg30`, `v3`, `3.1`, and `v3.1` |
+| `count` | `1`–`3` configs in one response (default `1`); each config is a separate WARP registration |
 | `presets` | Comma-separated preset keys (or array in JSON body) |
 | `dns` | DNS preset key; UI default is `cloudflare` |
 | `template` | See [Templates](#templates) |
@@ -133,11 +155,11 @@ Parameters via query string (`GET`) or JSON body fields (`POST`). Body field nam
 | `experimentalContentPadding` | Deprecated compatibility flag; `true` remains accepted, while padding now follows `contentPaddingAddition` directly |
 | `disableCookies` | AWG 3.1-only strict `on/off` toggle (also `true/false/1/0`); defaults to `on` |
 | `i1` | Raw CPS / obfuscation string (AWG 2.0) |
-| `i1Ref` | Filename from `api/cps-presets/` |
+| `i1Ref` | Filename from `src/server/cps-presets/` |
 | `cps` | `auto` (stable `static` / `sip` / `stun` only), or explicit `static`, `sip`, `stun`, `quic`, `dns`, `dtls`; the latter three are experimental. `tls` and unknown IDs return HTTP 400. |
 | `plainAddress` | `1` / `true` — omit `/32` and `/128` from `Address` |
 | `ipv6` | `1` — also include IPv6 CIDRs from presets |
-| `cps5` | `1` — append random `I2`..`I5` to `[Interface]` (only for `mode=awg2`, requires non-empty `I1`) |
+| `cps5` | `1` — append random `I2`..`I5` to `[Interface]` (for `mode=awg2`, `awg3`, `awg31`; requires non-empty `I1`) |
 | `mobile` | `1` — mobile profile (see I7) |
 | `router` | `1` — router caps profile |
 | `link` | `1` — include `vpnLink: "vpn://..."` in JSON response for AmneziaVPN one-tap import |
@@ -151,6 +173,20 @@ Lab Auto adds `endpointSource: "lab"` per config and `lab: { requested, selected
 Without `?presets=...`: returns the full preset catalogue (`presets`, categories, `dnsPresets`, `dnsDefault`, etc.).
 
 With `?presets=key1,key2`: resolves domains to CIDRs. Response: `{ count, count4, count6, cidrs, sites, sitesQueried, cidrSource }`. `cidrSource` reports the actual route source (`opencck`, `community`, `mixed`, `antifilter`, or `static`). Unknown keys → 400 with the offending list.
+
+### `GET` `/api/lab`
+
+Read-only Endpoint Lab data for `/lab`; it never controls the Lab. Without parameters: the overview (`status`, `generatedAt`, `freshness`, events and `endpoints` with the public states `ACTIVE`, `VERIFIED`, `SUSPECT`). With `?endpoint=<ip:port>&range=24h|7d|30d|all` (default `all`): the history of one endpoint.
+
+Errors are `{ success: false, code }`: `400 endpoint_invalid`, `400 range_invalid`, `404 endpoint_not_found`, `405 method_not_allowed`; `503 lab_not_available` when the Lab public files are missing (Vercel, forks, no Lab mount) and `503 lab_malformed` when they fail validation, both with `Retry-After`. Responses are `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`.
+
+### `GET` `/api/status`
+
+Endpoint registry summary for the "System status" card: `status`, `updated_at`, `active_endpoints`, per-port `ports` and `candidates` (counts only, never IPs), `health_source`, `message`, and `lab: { available }`, which tells the page whether Endpoint Lab data is there.
+
+### `GET` `/api/healthcheck`
+
+TCP reachability of `api.cloudflareclient.com:443`, `engage.cloudflareclient.com:443` and `iplist.opencck.org:443`: `{ services: { api, engage, cidr }, checkedAt }`. The result is cached for 30 seconds.
 
 ## Templates
 
@@ -182,7 +218,7 @@ With `?presets=key1,key2`: resolves domains to CIDRs. Response: `{ count, count4
 
 | Param | Effect |
 |---|---|
-| `cps5=1` | When `mode=awg2` + non-empty `I1`, server appends `I2..I5` (random hex 16–64 bytes each via `crypto.randomBytes`) to `[Interface]`. Silently ignored for Legacy or empty `I1`. |
+| `cps5=1` | When `mode` is `awg2`, `awg3` or `awg31` and `I1` is non-empty, server appends `I2..I5` (random hex 16–64 bytes each via `crypto.randomBytes`) to `[Interface]`. Silently ignored for Legacy or empty `I1`. |
 | `mobile=1` | Mobile-tuned profile per invariant **I7**. |
 | `router=1` | Router caps profile (`Jc≤2`, `Jmin∈[40,128]`, `Jmax∈[Jmin+1,128]`); composes with `mobile` per invariant **I8**. |
 | `link=1` | Response gains `vpnLink: vpn://<base64url(qCompress(JSON))>` for one-tap import in AmneziaVPN mobile app. |
@@ -239,10 +275,14 @@ it does not guarantee connectivity in every network or client.
 | `npm start` | `vercel dev` |
 | `npm run lint` | ESLint (`--max-warnings 0`) |
 | `npm test` | Run all tests via built-in `node:test` |
+| `npm run test:e2e` | Browser tests in a local Chrome (`e2e/`) |
 | `npm run test:coverage` | Run tests with experimental coverage |
-| `npm run presets:fallback` | Regenerate `public/static/presets-fallback.json` from `api/routePresets.js` |
+| `npm run presets:fallback` | Regenerate `public/static/presets-fallback.json` from `src/server/routePresets.js` |
+| `npm run evidence:check` | Check that the protocol evidence (`docs/protocol-evidence.md`) is current; `evidence:generate` regenerates it |
+| `npm run release:check` | Release consistency: `package.json`, CHANGELOG, asset `?v=` keys, version claims in the READMEs |
 | `npm run indexnow` | Submit the sitemap URLs to IndexNow (Bing, Yandex and others); `--wait-revision <sha>` waits for the deploy, `--since <commit>` skips unchanged releases, `--dry-run` |
-| `npm run seo:en` | Regenerate `public/en/index.html` from `public/index.html` and `public/locales/en.json` (`seo:check` verifies) |
+| `npm run seo:en` | Regenerate the English pages `public/en/index.html` and `public/en/lab/index.html` from the Russian pages and `public/locales/en.json` (`seo:check` verifies) |
+| `npm run assets:build -- <dir>` | Minify and precompress static assets in `<dir>`; the Docker build runs it on a copy of `public/` |
 | `npm run build` | No-op (no build step required) |
 
 To run a single test file: `node --test __tests__/invariant-i1-uppercase.test.js`.

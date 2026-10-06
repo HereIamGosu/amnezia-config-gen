@@ -2,7 +2,7 @@
 
 [English](./README.md) | [Русский](./README.ru.md)
 
-Веб-интерфейс и HTTP API для сборки файлов `.conf` под клиент **AmneziaWG** (WireGuard с расширениями Amnezia). Основной сценарий — профиль **Cloudflare WARP**: регистрация через официальный API, выдача ключа и параметров туннеля, опционально сужение `AllowedIPs` по выбранным пресетам доменов.
+Веб-интерфейс и HTTP API для сборки файлов `.conf` под клиент **AmneziaWG** (WireGuard с расширениями Amnezia). Основной сценарий — профиль **Cloudflare WARP**: регистрация через официальный API, выдача ключа и параметров туннеля, опционально сужение `AllowedIPs` по выбранным пресетам доменов. С версии 3.0 endpoint можно взять и из **Endpoint Lab** — собственной проверки WARP endpoint'ов проекта.
 
 | | |
 | --- | --- |
@@ -11,18 +11,22 @@
 | **Исходный код** | <https://github.com/HereIamGosu/amnezia-config-gen> |
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
-[![Node.js ≥20](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
+[![Node.js 22](https://img.shields.io/badge/node-22.x-brightgreen)](https://nodejs.org/)
 [![CI](https://github.com/HereIamGosu/amnezia-config-gen/actions/workflows/ci.yml/badge.svg)](https://github.com/HereIamGosu/amnezia-config-gen/actions/workflows/ci.yml)
 [![Latest Release](https://img.shields.io/github/v/release/HereIamGosu/amnezia-config-gen)](https://github.com/HereIamGosu/amnezia-config-gen/releases/latest)
 [![Last Commit](https://img.shields.io/github/last-commit/HereIamGosu/amnezia-config-gen)](https://github.com/HereIamGosu/amnezia-config-gen/commits/main)
 [![Open Issues](https://img.shields.io/github/issues/HereIamGosu/amnezia-config-gen)](https://github.com/HereIamGosu/amnezia-config-gen/issues)
 
-![Интерфейс приложения](https://i.imgur.com/xjgNNQX.png)
+![Генератор конфигов AmneziaWG 3.0: выбор профиля, сводка параметров и статус системы](docs/images/awgconfig-3.0-ru.png)
 
 ## Возможности
 
 - Явный выбор режима маршрутизации: полный туннель (весь трафик) или выборочная маршрутизация (только выбранные направления)
 - Четыре формата: **Legacy**, **AWG 2.0**, **AWG 3.0** и **AWG 3.1** (`mode=legacy|awg2|awg3|awg31`). Для AWG 3.x применяется WARP-safe клиентский профиль.
+- До трёх конфигов за один запрос (`count=1..3`), у каждого своя регистрация WARP и свои ключи.
+- **Endpoint Lab** (`/lab`, `/en/lab`, `GET /api/lab`): публичный просмотр WARP endpoint'ов (`IP:UDP-порт`), которые сервер проекта проверяет настоящим WireGuard handshake и HTTPS-трафиком через туннель. Прошедший проверку endpoint считается ACTIVE 7 минут, дальше он должен пройти её снова. Проверки идут с сервера проекта: они показывают, что endpoint работает оттуда, а не из любой сети.
+- **Lab Auto** (`endpointMode=lab`, по выбору пользователя): каждый конфиг получает свой свежий ACTIVE endpoint из Lab, IP не повторяются. Без свежих данных Lab конфиг не создаётся (`503 lab_*`), молчаливой подмены нет. По умолчанию остаётся hostname `engage.cloudflareclient.com` с выбранным портом, как в 2.7.4.
+- Тёмный интерфейс на русском (`/`) и английском (`/en`); язык определяется адресом. Карточка «Статус системы» показывает API генератора, регистрацию WARP, WARP endpoint, источник CIDR и Endpoint Lab.
 - Пресеты маршрутов: тайл-выбор по категориям доменов → агрегированные IPv4 (или IPv4+IPv6) CIDR в `AllowedIPs`. Без выбора по умолчанию используется `0.0.0.0/0`; `::/0` добавляется только при явном включении IPv6.
 - Несколько пресетов DNS для строки `DNS` в конфиге.
 - Скачивание `.conf` для импорта в AmneziaWG и совместимые клиенты.
@@ -38,8 +42,8 @@
 
 ## Требования
 
-- **Node.js ≥ 20** (LTS).
-- **Vercel CLI** для локального запуска серверных функций: `npm i -g vercel` или `npx vercel dev`.
+- **Node.js 22** (`engines` в `package.json`).
+- **Vercel CLI** нужен только для `npm start` (`vercel dev`): `npm i -g vercel` или `npx vercel dev`.
 
 Отдельного `.env` для работы API не требуется — обращение идёт к публичному `api.cloudflareclient.com`.
 
@@ -47,10 +51,14 @@
 
 ```bash
 npm install
-npm start    # vercel dev → http://localhost:3000
+npm start          # vercel dev → http://localhost:3000
+# или тот же runtime, что в production, без Vercel:
+node server.js     # http://localhost:3000 (PORT, HOST)
 ```
 
-Если открыть только статические файлы из `public/` без `vercel dev`, интерфейс подгрузит список пресетов из `public/static/presets-fallback.json`, но вызовы `/api/iplist` и `/api/warp` работать не будут.
+Если открыть только статические файлы из `public/` без сервера, интерфейс подгрузит список пресетов из `public/static/presets-fallback.json`, но вызовы `/api/iplist` и `/api/warp` работать не будут.
+
+Данных Endpoint Lab в репозитории нет. Локально `/lab` сообщает, что данных Lab нет, `/api/lab` отвечает `503 lab_not_available`, Lab Auto — `503 lab_unavailable`; режим hostname работает. Чтобы увидеть Lab локально, укажите в `ENDPOINT_LAB_PUBLIC_DIR` (абсолютный путь, читается при старте) копию публичного каталога Lab.
 
 ## Деплой
 
@@ -59,8 +67,13 @@ npm start    # vercel dev → http://localhost:3000
 проверенный образ и переключает трафик blue/green с автоматическим откатом. Подробности:
 [`deploy/CI_CD.md`](deploy/CI_CD.md), [`deploy/CONTROLLER.md`](deploy/CONTROLLER.md).
 
+Endpoint Lab работает на том же сервере отдельной хостовой службой (`deploy/endpoint-lab/`);
+веб-контейнер получает только публичный каталог Lab без секретов, смонтированный только для чтения.
+Подробности: [`deploy/ENDPOINT_LAB.md`](deploy/ENDPOINT_LAB.md).
+
 Форки по-прежнему работают на **Vercel**: подключите репозиторий в панели Vercel или выполните
-`vercel` / `vercel --prod` из каталога проекта.
+`vercel` / `vercel --prod` из каталога проекта. У форка нет Endpoint Lab: генератор работает в
+режиме hostname, `/lab` сообщает, что данных Lab нет.
 
 ## Privacy-safe telemetry
 
@@ -75,22 +88,30 @@ npm start    # vercel dev → http://localhost:3000
 | Путь | Назначение |
 |---|---|
 | `public/index.html` | Точка входа UI (русская версия, `/`) |
-| `public/en/index.html` | Английская страница (`/en`), генерируется `npm run seo:en` — не править вручную |
+| `public/en/index.html`, `public/en/lab/index.html` | Английские страницы (`/en`, `/en/lab`), генерируются `npm run seo:en` — не править вручную |
+| `public/lab/` | Страница Endpoint Lab (`/lab`): разметка, стили и скрипты |
 | `public/404.html`, `robots.txt`, `sitemap.xml`, `llms.txt`, `.well-known/security.txt` | Страница ошибки и файлы для поисковиков, ИИ-поиска и сообщений об уязвимостях |
-| `public/static/*.js`, `styles.css` | Фронтенд: `script.js` (генерация и связка) плюс `i18n.js`, `common.js`, `status.js`, `result.js`, `settings.js`, `settings-link.js`, `history.js`, `share-link.js`, `ui-shell.js`, `metrika.js`; стили. Браузерные тесты: `e2e/` (`npm run test:e2e`) |
+| `public/static/*.js`, `styles.css` | Фронтенд: `script.js` (генерация и связка) плюс `i18n.js`, `common.js`, `status.js`, `live-status.js`, `result.js`, `result-explanation.js`, `settings.js`, `settings-link.js`, `history.js`, `share-link.js`, `ui-shell.js`, `analytics.js`, `metrika.js`, `status-page.js`; стили |
+| `public/locales/{ru,en}.json` | Строки интерфейса на двух языках |
 | `public/static/presets-fallback.json` | Запасной каталог пресетов без API |
-| `api/warp.js` | Эндпоинт генерации WARP-конфига |
-| `src/server/awg/` | AWG-профили, строгие ranges, WARP safety и финальная сериализация |
+| `api/warp.js` | Эндпоинт генерации WARP-конфига (режим hostname и Lab Auto) |
 | `api/iplist.js` | Список пресетов и предпросмотр CIDR |
-| `api/routePresets.js` | Каталог пресетов и DNS (источник правды) |
-| `api/ipListFetch.js` | Получение CIDR по доменам (in-memory кэш 10 мин) |
-| `api/warpCpsPayloads.js` | Пул верифицированных WARP-совместимых CPS payload'ов |
-| `api/cps-presets/` | Текстовые файлы для query-параметра `i1Ref` |
-| `api/cpsExtraPackets.js` | Генерация I2..I5 для `cps5=1` |
-| `api/vpnLinkBuilder.js` | Сборка `vpn://...` ссылки для AmneziaVPN |
-| `api/_rateLimit.js` | Per-IP rate-limit (10 генераций/мин) |
+| `api/status.js`, `api/healthcheck.js` | Данные для карточки «Статус системы» |
+| `api/lab.js` | Данные Endpoint Lab для `/lab`, только чтение |
+| `src/server/awg/` | AWG-профили, строгие ranges, WARP safety и финальная сериализация |
+| `src/server/routePresets.js` | Каталог пресетов и DNS (источник правды) |
+| `src/server/ipListFetch.js` | Получение CIDR по доменам (in-memory кэш 10 мин) |
+| `src/server/warpCpsPayloads.js`, `src/server/cps/` | Пул верифицированных WARP-совместимых CPS payload'ов и генераторы CPS-пакетов |
+| `src/server/cps-presets/` | Текстовые файлы для query-параметра `i1Ref` |
+| `src/server/cpsExtraPackets.js` | Генерация I2..I5 для `cps5=1` |
+| `src/server/vpnLinkBuilder.js` | Сборка `vpn://...` ссылки для AmneziaVPN |
+| `src/server/labPublic.js`, `src/server/endpointProvider.js` | Чтение и проверка публичных файлов Lab; выбор endpoint'ов для Lab Auto |
+| `src/server/_rateLimit.js` | Per-IP rate-limit (10 генераций/мин) |
+| `server.js` | Self-hosted runtime для production: маршруты и заголовки из `vercel.json` |
+| `deploy/` | Docker-образ, nginx, контроллер blue/green-деплоя, хостовая служба Endpoint Lab (`deploy/endpoint-lab/`) |
 | `scripts/dump-presets-fallback.js` | Пересборка `presets-fallback.json` из `routePresets.js` |
-| `__tests__/invariant-*.test.js` | Регрессионные тесты на критические инварианты |
+| `__tests__/` | Набор тестов `node:test`, включая тесты критических инвариантов `invariant-*.test.js` |
+| `e2e/` | Браузерные тесты в локальном Chrome (`npm run test:e2e`) |
 
 ## Критические инварианты
 
@@ -114,13 +135,14 @@ npm start    # vercel dev → http://localhost:3000
 
 ### `GET` / `POST` `/api/warp`
 
-Возвращает JSON: `success`, при успехе `content` (тело `.conf` в **base64**), `mode` (`legacy` | `awg2` | `awg3` | `awg31`), опционально route metadata, `appliedExtras`, `vpnLink`, `compatibility` и AWG 3.x-only capability metadata `awg`.
+Возвращает JSON: `success`, при успехе `content` (тело `.conf` в **base64**; при `count` > 1 — первый конфиг), `configs` (каждый конфиг со своими `content`, `endpointSource`, CPS-полями и `vpnLink`), `count`, `mode` (`legacy` | `awg2` | `awg3` | `awg31`), опционально route metadata, `appliedExtras`, `vpnLink`, `compatibility` и AWG 3.x-only capability metadata `awg`.
 
 Параметры через query (`GET`) или поля JSON-тела (`POST`). Имена в теле совпадают с query (удобно для длинного `i1`).
 
 | Параметр | Описание |
 |---|---|
 | `mode` | `legacy` (по умолчанию), `awg2`, `awg3` или `awg31`; AWG 3.x aliases: `3`, `3.0`, `awg30`, `v3`, `3.1`, `v3.1` |
+| `count` | `1`–`3` конфига в одном ответе (по умолчанию `1`); каждый — отдельная регистрация WARP |
 | `presets` | Ключи пресетов через запятую (или массив в JSON-теле) |
 | `dns` | Ключ пресета DNS; в UI по умолчанию `cloudflare` |
 | `template` | См. [Шаблоны](#шаблоны) |
@@ -133,11 +155,11 @@ npm start    # vercel dev → http://localhost:3000
 | `experimentalContentPadding` | Deprecated-флаг совместимости; `true` по-прежнему принимается, но padding теперь управляется напрямую через `contentPaddingAddition` |
 | `disableCookies` | Строгий AWG 3.1-only toggle `on/off` (также `true/false/1/0`); default `on` |
 | `i1` | Сырая строка CPS / obfuscation (AWG 2.0) |
-| `i1Ref` | Имя файла из `api/cps-presets/` |
+| `i1Ref` | Имя файла из `src/server/cps-presets/` |
 | `cps` | `auto` (только стабильные `static` / `sip` / `stun`) либо явный `static`, `sip`, `stun`, `quic`, `dns`, `dtls`; последние три экспериментальны. `tls` и неизвестные идентификаторы возвращают HTTP 400. |
 | `plainAddress` | `1` / `true` — в `Address` без `/32` и `/128` |
 | `ipv6` | `1` — также включить IPv6 CIDR из пресетов |
-| `cps5` | `1` — добавить случайные `I2`..`I5` в `[Interface]` (только `mode=awg2`, требует непустой `I1`) |
+| `cps5` | `1` — добавить случайные `I2`..`I5` в `[Interface]` (для `mode=awg2`, `awg3`, `awg31`; требует непустой `I1`) |
 | `mobile` | `1` — мобильный профиль (см. I7) |
 | `router` | `1` — профиль с router-капами |
 | `link` | `1` — добавить в JSON-ответ поле `vpnLink: "vpn://..."` для импорта в AmneziaVPN одним тапом |
@@ -151,6 +173,20 @@ Lab Auto добавляет `endpointSource: "lab"` в каждый конфиг
 Без `?presets=...`: возвращает каталог пресетов целиком (`presets`, категории, `dnsPresets`, `dnsDefault` и т.д.).
 
 С `?presets=key1,key2`: разрешение доменов в CIDR. Ответ: `{ count, count4, count6, cidrs, sites, sitesQueried, cidrSource }`. `cidrSource` сообщает фактический источник маршрутов (`opencck`, `community`, `mixed`, `antifilter` или `static`). Неизвестные ключи → 400 со списком отсутствующих.
+
+### `GET` `/api/lab`
+
+Данные Endpoint Lab для `/lab`, только чтение: эндпоинт ничем в Lab не управляет. Без параметров — обзор (`status`, `generatedAt`, `freshness`, события и `endpoints` с публичными состояниями `ACTIVE`, `VERIFIED`, `SUSPECT`). С `?endpoint=<ip:port>&range=24h|7d|30d|all` (по умолчанию `all`) — история одного endpoint'а.
+
+Ошибки — `{ success: false, code }`: `400 endpoint_invalid`, `400 range_invalid`, `404 endpoint_not_found`, `405 method_not_allowed`; `503 lab_not_available`, если публичных файлов Lab нет (Vercel, форки, Lab не смонтирован), и `503 lab_malformed`, если они не прошли проверку, оба с `Retry-After`. Ответы идут с `Cache-Control: no-store` и `X-Robots-Tag: noindex, nofollow`.
+
+### `GET` `/api/status`
+
+Сводка реестра endpoint'ов для карточки «Статус системы»: `status`, `updated_at`, `active_endpoints`, по портам `ports` и `candidates` (только количества, без IP), `health_source`, `message` и `lab: { available }` — есть ли данные Endpoint Lab.
+
+### `GET` `/api/healthcheck`
+
+TCP-доступность `api.cloudflareclient.com:443`, `engage.cloudflareclient.com:443` и `iplist.opencck.org:443`: `{ services: { api, engage, cidr }, checkedAt }`. Результат кэшируется на 30 секунд.
 
 ## Шаблоны
 
@@ -182,7 +218,7 @@ Lab Auto добавляет `endpointSource: "lab"` в каждый конфиг
 
 | Параметр | Эффект |
 |---|---|
-| `cps5=1` | Когда `mode=awg2` и `I1` непустой, сервер добавляет `I2..I5` (случайный hex 16–64 байт через `crypto.randomBytes`) в `[Interface]`. Для Legacy и пустого `I1` молча игнорируется. |
+| `cps5=1` | Когда `mode` — `awg2`, `awg3` или `awg31` и `I1` непустой, сервер добавляет `I2..I5` (случайный hex 16–64 байт через `crypto.randomBytes`) в `[Interface]`. Для Legacy и пустого `I1` молча игнорируется. |
 | `mobile=1` | Мобильный профиль по инварианту **I7**. |
 | `router=1` | Router-капы (`Jc≤2`, `Jmin∈[40,128]`, `Jmax∈[Jmin+1,128]`); компонуется с `mobile` по инварианту **I8**. |
 | `link=1` | В ответе появляется `vpnLink: vpn://<base64url(qCompress(JSON))>` для импорта в AmneziaVPN одним тапом. |
@@ -238,10 +274,14 @@ Experimental и research форматы **не** являются стабиль
 | `npm start` | `vercel dev` |
 | `npm run lint` | ESLint (`--max-warnings 0`) |
 | `npm test` | Все тесты через встроенный `node:test` |
+| `npm run test:e2e` | Браузерные тесты в локальном Chrome (`e2e/`) |
 | `npm run test:coverage` | Тесты с экспериментальным coverage |
-| `npm run presets:fallback` | Пересобрать `public/static/presets-fallback.json` из `api/routePresets.js` |
+| `npm run presets:fallback` | Пересобрать `public/static/presets-fallback.json` из `src/server/routePresets.js` |
+| `npm run evidence:check` | Проверить, что протокольные доказательства (`docs/protocol-evidence.md`) актуальны; `evidence:generate` пересобирает их |
+| `npm run release:check` | Согласованность релиза: `package.json`, CHANGELOG, ключи `?v=` у ассетов, упоминания версии в README |
 | `npm run indexnow` | Отправить адреса из sitemap в IndexNow (Bing, Яндекс и другие); `--wait-revision <sha>` ждёт выкладки, `--since <commit>` пропускает релизы без изменений, `--dry-run` |
-| `npm run seo:en` | Пересобрать `public/en/index.html` из `public/index.html` и `public/locales/en.json` (`seo:check` проверяет) |
+| `npm run seo:en` | Пересобрать английские страницы `public/en/index.html` и `public/en/lab/index.html` из русских и `public/locales/en.json` (`seo:check` проверяет) |
+| `npm run assets:build -- <dir>` | Минифицировать и предварительно сжать статические файлы в `<dir>`; Docker-сборка запускает его на копии `public/` |
 | `npm run build` | Заглушка (сборка не нужна) |
 
 Запустить один файл тестов: `node --test __tests__/invariant-i1-uppercase.test.js`.
