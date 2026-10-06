@@ -733,14 +733,14 @@
         </article>
 
         <article class="card info-card" id="changes">
-          <a class="info-card__head" href="https://github.com/HereIamGosu/amnezia-config-gen/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">
+          <button type="button" class="info-card__head" data-open-modal="changesModal">
             <svg class="icon icon--lg" aria-hidden="true"><use href="#i-list"/></svg>
             <span class="info-card__titles">
               <span class="info-card__title" data-i18n="changes_card_title">Последние изменения</span>
               <span class="info-card__sub" data-i18n="changes_latest_sub">3.0.1 · 7 окт 2026</span>
             </span>
             <svg class="icon info-card__chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
-          </a>
+          </button>
           <div class="info-card__body">
             <ul class="changes-list" id="changesList">
               <li data-version="3.0.1">
@@ -1122,6 +1122,41 @@
           <p>AmneziaWG Config Generator — неофициальный проект с открытым исходным кодом. Он не связан с Cloudflare и командой Amnezia; названия принадлежат их владельцам.</p>
           <p>Сервис предоставляется «как есть», без гарантий. Работа туннеля зависит от клиента, сети, провайдера и endpoint'а и не гарантируется в каждой сети.</p>
           <p>Использование Cloudflare WARP регулируется условиями Cloudflare. Вы сами отвечаете за соблюдение законов своей страны.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Последние изменения: на телефоне карточка показывает только заголовок, список версий — здесь -->
+    <div id="changesModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="changesModalHeading" aria-hidden="true">
+      <div class="modal__dialog modal__dialog--narrow">
+        <header class="modal__header">
+          <span class="modal__icon"><svg class="icon" aria-hidden="true"><use href="#i-list"/></svg></span>
+          <div class="modal__titles">
+            <h2 id="changesModalHeading" class="modal__title" data-i18n="changes_card_title">Последние изменения</h2>
+            <p class="modal__subtitle" data-i18n="changes_latest_sub">3.0.1 · 7 окт 2026</p>
+          </div>
+          <button type="button" class="modal__close" data-close-modal aria-label="Закрыть" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </header>
+        <div class="modal__body">
+                <ul class="changes-list" id="changesListModal">
+                  <li data-version="3.0.1">
+                    <span class="version-badge">3.0.1</span>
+                    <span class="changes-list__text"><span data-i18n="changes_301_title">Тексты после обновления, страница Lab и окно статуса</span><time class="changes-list__date" datetime="2026-10-07" data-i18n="changes_301_date">7 окт 2026</time></span>
+                  </li>
+                  <li data-version="3.0.0">
+                    <span class="version-badge">3.0.0</span>
+                    <span class="changes-list__text"><span data-i18n="changes_300_title">Endpoint Lab, режим Lab Auto и новый дизайн</span><time class="changes-list__date" datetime="2026-10-07" data-i18n="changes_300_date">7 окт 2026</time></span>
+                  </li>
+                  <li data-version="2.7.4">
+                    <span class="version-badge">2.7.4</span>
+                    <span class="changes-list__text"><span data-i18n="changes_274_title">Честный статус сервисов и обновление кэша</span><time class="changes-list__date" datetime="2026-10-03" data-i18n="changes_274_date">3 окт 2026</time></span>
+                  </li>
+                </ul>
+                <a class="link-arrow info-card__more" href="https://github.com/HereIamGosu/amnezia-config-gen/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">
+                  <span data-i18n="changes_full_link">Полный список изменений</span>
+                  <svg class="icon icon--sm" aria-hidden="true"><use href="#i-arrow-right"/></svg>
+                </a>
+
         </div>
       </div>
     </div>

@@ -734,14 +734,14 @@
         </article>
 
         <article class="card info-card" id="changes">
-          <a class="info-card__head" href="https://github.com/HereIamGosu/amnezia-config-gen/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">
+          <button type="button" class="info-card__head" data-open-modal="changesModal">
             <svg class="icon icon--lg" aria-hidden="true"><use href="#i-list"/></svg>
             <span class="info-card__titles">
               <span class="info-card__title" data-i18n="changes_card_title">Recent changes</span>
               <span class="info-card__sub" data-i18n="changes_latest_sub">3.0.1 · 7 Oct 2026</span>
             </span>
             <svg class="icon info-card__chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
-          </a>
+          </button>
           <div class="info-card__body">
             <ul class="changes-list" id="changesList">
               <li data-version="3.0.1">
@@ -1115,6 +1115,41 @@
           <button type="button" class="modal__close" data-close-modal aria-label="Close" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
         </header>
         <div class="modal__body prose" data-i18n-html="disclaimer_body"><p>AmneziaWG Config Generator is an unofficial open-source project. It is not affiliated with Cloudflare or the Amnezia team; names belong to their owners.</p><p>The service is provided "as is", without warranties. Whether the tunnel works depends on the client, network, ISP and endpoint and is not guaranteed on every network.</p><p>Use of Cloudflare WARP is governed by Cloudflare's terms. You are responsible for complying with the laws of your country.</p></div>
+      </div>
+    </div>
+
+    <!-- Последние изменения: на телефоне карточка показывает только заголовок, список версий — здесь -->
+    <div id="changesModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="changesModalHeading" aria-hidden="true">
+      <div class="modal__dialog modal__dialog--narrow">
+        <header class="modal__header">
+          <span class="modal__icon"><svg class="icon" aria-hidden="true"><use href="#i-list"/></svg></span>
+          <div class="modal__titles">
+            <h2 id="changesModalHeading" class="modal__title" data-i18n="changes_card_title">Recent changes</h2>
+            <p class="modal__subtitle" data-i18n="changes_latest_sub">3.0.1 · 7 Oct 2026</p>
+          </div>
+          <button type="button" class="modal__close" data-close-modal aria-label="Close" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </header>
+        <div class="modal__body">
+                <ul class="changes-list" id="changesListModal">
+                  <li data-version="3.0.1">
+                    <span class="version-badge">3.0.1</span>
+                    <span class="changes-list__text"><span data-i18n="changes_301_title">Texts after the update, the Lab page and the status dialog</span><time class="changes-list__date" datetime="2026-10-07" data-i18n="changes_301_date">7 Oct 2026</time></span>
+                  </li>
+                  <li data-version="3.0.0">
+                    <span class="version-badge">3.0.0</span>
+                    <span class="changes-list__text"><span data-i18n="changes_300_title">Endpoint Lab, Lab Auto mode and the new design</span><time class="changes-list__date" datetime="2026-10-07" data-i18n="changes_300_date">7 Oct 2026</time></span>
+                  </li>
+                  <li data-version="2.7.4">
+                    <span class="version-badge">2.7.4</span>
+                    <span class="changes-list__text"><span data-i18n="changes_274_title">Honest service status and cache refresh</span><time class="changes-list__date" datetime="2026-10-03" data-i18n="changes_274_date">3 Oct 2026</time></span>
+                  </li>
+                </ul>
+                <a class="link-arrow info-card__more" href="https://github.com/HereIamGosu/amnezia-config-gen/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">
+                  <span data-i18n="changes_full_link">Full changelog</span>
+                  <svg class="icon icon--sm" aria-hidden="true"><use href="#i-arrow-right"/></svg>
+                </a>
+
+        </div>
       </div>
     </div>
 

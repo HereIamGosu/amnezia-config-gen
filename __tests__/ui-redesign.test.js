@@ -82,7 +82,7 @@ test('every modal uses the shared shell: dialog role, labelled title, localized 
   const modals = [...html.matchAll(/<div id="([^"]+)" class="modal\b[^"]*" role="dialog" aria-modal="true" aria-labelledby="([^"]+)" aria-hidden="true">/g)];
   const ids = modals.map((m) => m[1]);
   assert.deepEqual(ids.sort(), [
-    'communityModal', 'configPreviewModal', 'disclaimerModal', 'faqModal', 'historyModal', 'instructionModal', 'modal',
+    'changesModal', 'communityModal', 'configPreviewModal', 'disclaimerModal', 'faqModal', 'historyModal', 'instructionModal', 'modal',
     'privacyModal', 'resultInfoModal', 'settingsModal', 'statusModal',
   ].sort());
   assert.equal((html.match(/class="modal\b/g) || []).length, modals.length, 'no modal outside the shared shell');
@@ -154,7 +154,14 @@ test('step 2 is one summary button: a single entry into the settings, changes na
 
 test('recent changes start with the current release', () => {
   const { version } = JSON.parse(read('package.json'));
-  const versions = [...html.matchAll(/<li data-version="([^"]+)">/g)].map((m) => m[1]);
+  const listOf = (id) => {
+    const start = html.indexOf(`<ul class="changes-list" id="${id}">`);
+    assert.ok(start > 0, `#${id} exists`);
+    return html.slice(html.indexOf('>', start) + 1, html.indexOf('</ul>', start)).replace(/\s+/g, ' ').trim();
+  };
+  const versions = [...listOf('changesList').matchAll(/<li data-version="([^"]+)">/g)].map((m) => m[1]);
+  // На телефоне карточка открывает окно с тем же списком: оба обновляются вместе
+  assert.equal(listOf('changesListModal'), listOf('changesList'), 'the dialog lists the same releases');
   assert.equal(versions[0], version, 'update the "Recent changes" card together with the release');
   assert.equal(versions.length, 3, 'three entries: the card keeps its height and the layout does not shift');
   assert.match(ru.changes_latest_sub, new RegExp(`^${version.replace(/\./g, '\\.')} · `));

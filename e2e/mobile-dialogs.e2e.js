@@ -109,9 +109,12 @@ e2eSuite('mobile dialogs (iPhone 14 Pro sizes)', (openPage) => {
           await checkDialog(page, 'historyModal', viaClick(page, '#historyModalBtn'), lang);
           await checkDialog(page, 'configPreviewModal', viaClick(page, '[data-result-action="preview"]'), lang);
           await checkDialog(page, 'labQuickModal', viaClick(page, '#statusLabBtn'), lang);
-          for (const id of ['resultInfoModal', 'instructionModal', 'modal', 'faqModal', 'privacyModal', 'disclaimerModal', 'communityModal']) {
+          for (const id of ['resultInfoModal', 'instructionModal', 'modal', 'faqModal', 'privacyModal', 'disclaimerModal', 'communityModal', 'changesModal']) {
             await checkDialog(page, id, viaShell(page, id), lang);
           }
+          // «Последние изменения» на телефоне открывают окно со списком версий, а не GitHub
+          await checkDialog(page, 'changesModal', () => page.tap('#changes .info-card__head'), `${lang} changes card`);
+          assert.equal(await page.evaluate(() => document.querySelectorAll('#changesListModal li').length), 3, 'three releases in the dialog');
           // «Сообщество» на телефоне открывает окно, а не Telegram
           await checkDialog(page, 'communityModal', () => page.tap('#community .info-card__head'), `${lang} community card`);
           const links = await page.evaluate(() => [...document.querySelectorAll('#communityModal a')].map((a) => new URL(a.href).hostname));

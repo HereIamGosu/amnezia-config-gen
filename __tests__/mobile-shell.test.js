@@ -63,6 +63,8 @@ test('phone: step 2 starts expanded; "Community" opens a dialog with Telegram, G
   assert.doesNotMatch(/<section[^>]*id="stepParams"[\s\S]*?<\/header>/.exec(html)?.[0] || html, /data-collapse-mobile/);
   assert.doesNotMatch(html, /data-step-toggle data-collapse-mobile[^>]*aria-controls="stepParamsBody"/);
   assert.match(html, /<button type="button" class="info-card__head" data-open-modal="communityModal">/);
+  assert.match(html, /<button type="button" class="info-card__head" data-open-modal="changesModal">/, '"Recent changes" opens a dialog');
+  assert.doesNotMatch(html, /<a class="info-card__head"/, 'no card title leaves the page on a phone');
   const modal = /<div id="communityModal"[\s\S]*?\n {4}<\/div>\n/.exec(html)[0];
   for (const host of ['t.me/amnezia_config', 'github.com/HereIamGosu/amnezia-config-gen', 'discord.gg/']) {
     assert.ok(modal.includes(host), `community dialog links ${host}`);
