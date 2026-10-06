@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [3.0.2] - 2026-10-07
+
 ### Changed
 - The "Compatibility" card after generation is redesigned: "Works" and "Uncertain" groups with app tiles (the AmneziaVPN and AmneziaWG app icons, monograms for other clients), import formats and platform icons; "Not directly supported" is a collapsed list of chips grouped by reason; one note with an icon replaces the repeated warnings. The AWG 3.1 client note appears only for AWG 3.x profiles. Image sources and licenses: `docs/research/external-source-license-audit.md`.
 
