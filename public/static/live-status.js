@@ -132,55 +132,98 @@
 
   const fill = (template, values) => String(template).replace(/\{(\w+)\}/g, (_, key) => (values[key] ?? ''));
 
+  // Names and states match the "System status" card in the hero, so the dialog reads as its detailed view.
   const DEFAULT_LABELS = Object.freeze({
     names: {
-      warp_api: 'Cloudflare WARP API',
-      warp_engage: 'Cloudflare WARP (engage)',
-      cidr_source: 'Источник CIDR (iplist.opencck.org)',
-      endpoint_pool: 'Пул WARP endpoint',
+      generator: 'Генератор API',
+      warp_api: 'Регистрация WARP',
+      warp_engage: 'WARP endpoint',
+      cidr_source: 'Источник CIDR',
+      endpoint_pool: 'Встроенный список IP WARP',
+      lab: 'Endpoint Lab',
     },
     hosts: {
       warp_api: 'api.cloudflareclient.com',
       warp_engage: 'engage.cloudflareclient.com',
       cidr_source: 'iplist.opencck.org',
     },
-    statusText: { ok: 'ОК', error: 'ОШИБКА', degraded: 'НЕСТАБИЛЬНО', unknown: 'НЕТ ДАННЫХ' },
+    generatorDetail: 'сервер генератора отвечает',
+    stateText: { ok: 'Работает', degraded: 'Нестабильно', error: 'Недоступен', unknown: 'Нет данных' },
     latency: '{ms} мс',
     unreachable: 'нет соединения',
     poolDetail: 'адресов: {count} · порты: {ports}',
-    poolFallback: 'встроенный список',
-    poolUnmeasured: 'доступность не измеряется',
+    poolUnmeasured: 'не измеряется',
+    labOpen: 'Открыть Lab',
     none: '—',
   });
 
-  const serviceDetail = (svc, labels) => {
-    if (svc.key === 'endpoint_pool') {
-      const parts = [fill(labels.poolDetail, {
-        count: svc.activeEndpoints ?? labels.none,
-        ports: svc.candidatePorts.length ? svc.candidatePorts.join(', ') : labels.none,
-      })];
-      if (svc.fallback) parts.push(labels.poolFallback);
-      if (!svc.measured) parts.push(labels.poolUnmeasured);
-      return parts.join(' · ');
-    }
-    const reach = svc.status === 'ok'
-      ? (svc.latencyMs != null ? fill(labels.latency, { ms: svc.latencyMs }) : labels.statusText.ok)
-      : labels.unreachable;
-    return `${labels.hosts[svc.key] || ''} · ${reach}`;
+  // Inline paths instead of the page sprite: /status.html has none.
+  const STATE_PATHS = {
+    ok: '<path d="M20 6 9 17l-5-5"/>',
+    degraded: '<path d="M12 7v6"/><path d="M12 17h.01"/>',
+    error: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    unknown: '<path d="M8 12h8"/>',
   };
 
-  /** Renders the snapshot as a card list. Every interpolated value is escaped. */
-  const renderCardsHtml = (snapshot, labels = DEFAULT_LABELS) => {
-    const cards = snapshot.services.map((svc) => `
-      <div class="status-card">
-        <div class="status-indicator status-indicator--${escapeHtml(svc.status)}"></div>
-        <div class="status-card__info">
-          <div class="status-card__name">${escapeHtml(labels.names[svc.key] || svc.key)}</div>
-          <div class="status-card__detail">${escapeHtml(serviceDetail(svc, labels))}</div>
-        </div>
-        <span class="status-badge badge--${escapeHtml(svc.status)}">${escapeHtml(labels.statusText[svc.status] || svc.status)}</span>
-      </div>`).join('');
-    return `<div class="status-card-list">${cards}</div>`;
+  const toneOf = (status) => (Object.prototype.hasOwnProperty.call(STATE_PATHS, status) ? status : 'unknown');
+
+  const stateIconHtml = (tone) => `<span class="state-icon state-icon--${tone}" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24">${STATE_PATHS[tone]}</svg></span>`;
+
+  const rowHtml = ({ key, tone, name, meta, stateText }) => `
+      <li class="status-detail" data-service="${escapeHtml(key)}">
+        ${stateIconHtml(tone)}
+        <span class="status-detail__info">
+          <span class="status-detail__name">${escapeHtml(name)}</span>
+          <span class="status-detail__meta">${escapeHtml(meta)}</span>
+        </span>
+        <span class="status-row__state status-row__state--${tone}">${escapeHtml(stateText)}</span>
+      </li>`;
+
+  const serviceRow = (svc, labels) => {
+    const tone = toneOf(svc.status);
+    const name = labels.names[svc.key] || svc.key;
+    if (svc.key === 'endpoint_pool') {
+      const meta = fill(labels.poolDetail, {
+        count: svc.activeEndpoints ?? labels.none,
+        ports: svc.candidatePorts.length ? svc.candidatePorts.join(', ') : labels.none,
+      });
+      // Without runtime health data the list is reference information, not a failure.
+      return svc.measured
+        ? { key: svc.key, tone, name, meta, stateText: labels.stateText[tone] }
+        : { key: svc.key, tone: 'unknown', name, meta, stateText: labels.poolUnmeasured };
+    }
+    const reach = svc.status === 'ok'
+      ? (svc.latencyMs != null ? fill(labels.latency, { ms: svc.latencyMs }) : labels.stateText.ok)
+      : labels.unreachable;
+    return { key: svc.key, tone, name, meta: `${labels.hosts[svc.key] || ''} · ${reach}`, stateText: labels.stateText[tone] };
+  };
+
+  /**
+   * Renders the snapshot as the dialog's service list. Every interpolated value is escaped.
+   * options.labHref adds an Endpoint Lab row with empty #statusModalLab* slots that the page fills
+   * from its own /api/lab poller (status.js); without it (/status.html) there is no Lab row.
+   */
+  const renderCardsHtml = (snapshot, labels = DEFAULT_LABELS, { labHref = null } = {}) => {
+    const services = snapshot.services.filter((svc) => svc.key !== 'endpoint_pool');
+    const pool = snapshot.services.find((svc) => svc.key === 'endpoint_pool');
+    const rows = [
+      // A snapshot exists only if the generator's own API answered.
+      rowHtml({ key: 'generator', tone: 'ok', name: labels.names.generator, meta: labels.generatorDetail, stateText: labels.stateText.ok }),
+      ...services.map((svc) => rowHtml(serviceRow(svc, labels))),
+    ];
+    if (labHref) {
+      rows.push(`
+      <li class="status-detail" data-service="lab">
+        <span class="state-icon state-icon--loading" id="statusModalLabIcon" aria-hidden="true"></span>
+        <span class="status-detail__info">
+          <span class="status-detail__name">${escapeHtml(labels.names.lab)}</span>
+          <span class="status-detail__meta"><span id="statusModalLabMeta"></span><a class="status-detail__link" href="${escapeHtml(labHref)}">${escapeHtml(labels.labOpen)}</a></span>
+        </span>
+        <span class="status-row__state" id="statusModalLabState"></span>
+      </li>`);
+    }
+    if (pool) rows.push(rowHtml(serviceRow(pool, labels)));
+    return `<ul class="status-detail-list">${rows.join('')}</ul>`;
   };
 
   /**

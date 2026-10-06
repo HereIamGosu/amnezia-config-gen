@@ -156,6 +156,7 @@ test('recent changes start with the current release', () => {
   const { version } = JSON.parse(read('package.json'));
   const versions = [...html.matchAll(/<li data-version="([^"]+)">/g)].map((m) => m[1]);
   assert.equal(versions[0], version, 'update the "Recent changes" card together with the release');
+  assert.equal(versions.length, 3, 'three entries: the card keeps its height and the layout does not shift');
   assert.match(ru.changes_latest_sub, new RegExp(`^${version.replace(/\./g, '\\.')} · `));
   assert.match(en.changes_latest_sub, new RegExp(`^${version.replace(/\./g, '\\.')} · `));
 });

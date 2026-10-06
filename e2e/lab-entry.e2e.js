@@ -64,7 +64,7 @@ e2eSuite('Endpoint Lab entry on the generator page', (openPage) => {
       assert.equal(quick.active, String(active));
       assert.equal(quick.link, '/lab');
       assert.equal(quick.css, true);
-      assert.equal(quick.container, '1240px', 'lab.css does not change the generator layout');
+      assert.equal(quick.container, '1320px', 'generator keeps the shared container width from styles.css');
       assert.ok(labApiCalls(page) >= 1);
       await page.assertClean('/ with Lab files');
     } finally {

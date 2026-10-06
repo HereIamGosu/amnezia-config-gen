@@ -63,7 +63,9 @@ test('Lab is not an /api/status row: it never changes the overall state or the w
 
 test('Lab row reads the shared adapter and LabCore.statusSummary; manual refresh also refreshes the Lab', () => {
   assert.match(status, /window\.LabData\.createPoller\(/);
-  assert.match(block(status, 'const renderHeroLab = () => {'), /const Core = window\.LabCore;[\s\S]*Core\.statusSummary\(heroLab, now\)/);
+  assert.match(block(status, 'const heroLabView = () => {'), /const Core = window\.LabCore;[\s\S]*Core\.statusSummary\(heroLab, now\)/);
+  assert.match(block(status, 'const renderHeroLab = () => {'), /const view = heroLabView\(\);/);
+  assert.match(block(status, 'const renderStatusModalLab = () => {'), /const view = heroLabView\(\);/, 'the dialog row shows the same Lab state');
   assert.match(block(status, 'const refreshHeroStatus = () => {'), /labPoller\.refresh\(\)/);
 });
 

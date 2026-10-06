@@ -158,10 +158,24 @@ test('renderCardsHtml escapes every interpolated value', () => {
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
   assert.match(html, /14 мс/);
   assert.match(html, /нет соединения/);
-  assert.match(html, /адресов: 11 · порты: 2408 · встроенный список · доступность не измеряется/);
-  assert.match(html, /status-indicator--unknown/);
-  assert.match(html, /НЕТ ДАННЫХ/);
-  assert.doesNotMatch(html, /НЕСТАБИЛЬНО|status-indicator--degraded/, 'missing telemetry is not shown as a failure');
+  assert.match(html, /адресов: 11 · порты: 2408/);
+  assert.match(html, /data-service="endpoint_pool"[\s\S]*state-icon--unknown[\s\S]*не измеряется/);
+  assert.doesNotMatch(html, /Нестабильно|state-icon--degraded/, 'missing telemetry is not shown as a failure');
+});
+
+test('the status dialog uses the hero card rows; the Lab row only where the page polls the Lab', () => {
+  const snap = LiveStatus.buildSnapshot(STATUS, HEALTH);
+  const html = LiveStatus.renderCardsHtml(snap);
+  const order = [...html.matchAll(/data-service="([a-z_]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(order, ['generator', 'warp_api', 'warp_engage', 'cidr_source', 'endpoint_pool']);
+  for (const name of ['Генератор API', 'Регистрация WARP', 'WARP endpoint', 'Источник CIDR']) assert.match(html, new RegExp(name));
+  assert.doesNotMatch(html, /Cloudflare WARP \(engage\)|ОШИБКА|НЕТ ДАННЫХ/, 'old card names and states are gone');
+
+  const withLab = LiveStatus.renderCardsHtml(snap, LiveStatus.DEFAULT_LABELS, { labHref: '/en/lab' });
+  const labOrder = [...withLab.matchAll(/data-service="([a-z_]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(labOrder, ['generator', 'warp_api', 'warp_engage', 'cidr_source', 'lab', 'endpoint_pool']);
+  assert.match(withLab, /id="statusModalLabState"/);
+  assert.match(withLab, /<a class="status-detail__link" href="\/en\/lab">Открыть Lab<\/a>/);
 });
 
 const makeHarness = ({ hidden = false } = {}) => {

@@ -55,29 +55,35 @@ const formatMoscowTime = (isoStr) => {
   }) + t('status_msk_suffix', ' (МСК)');
 };
 
+// Те же названия и состояния, что в карточке hero: модал — её подробный вид.
 const getLiveStatusLabels = () => {
   const base = window.LiveStatus.DEFAULT_LABELS;
   return {
     ...base,
     names: {
       ...base.names,
-      warp_engage: t('status_engage_name', base.names.warp_engage),
-      cidr_source: t('status_cidr_name', base.names.cidr_source),
+      generator: t('status_row_generator', base.names.generator),
+      warp_api: t('status_row_warp_api', base.names.warp_api),
+      warp_engage: t('status_row_engage', base.names.warp_engage),
+      cidr_source: t('status_row_cidr', base.names.cidr_source),
       endpoint_pool: t('status_pool_name', base.names.endpoint_pool),
     },
-    statusText: {
-      ok:       t('status_ok',       base.statusText.ok),
-      error:    t('status_error',    base.statusText.error),
-      degraded: t('status_degraded', base.statusText.degraded),
-      unknown:  t('status_unknown',  base.statusText.unknown),
+    generatorDetail: t('status_generator_detail', base.generatorDetail),
+    stateText: {
+      ok:       t('status_state_ok',       base.stateText.ok),
+      degraded: t('status_state_degraded', base.stateText.degraded),
+      error:    t('status_state_error',    base.stateText.error),
+      unknown:  t('status_state_unknown',  base.stateText.unknown),
     },
     latency:      t('status_latency',      base.latency),
     unreachable:  t('status_unreachable',  base.unreachable),
     poolDetail:   t('status_pool_detail',  base.poolDetail),
-    poolFallback: t('status_pool_fallback', base.poolFallback),
     poolUnmeasured: t('status_pool_unmeasured', base.poolUnmeasured),
+    labOpen:      t('status_lab_open',     base.labOpen),
   };
 };
+
+const labPageHref = () => (document.documentElement.lang === 'en' ? '/en/lab' : '/lab');
 
 const renderStatusModalLoading = () => {
   const content     = document.getElementById('statusModalContent');
@@ -91,7 +97,8 @@ const renderStatusModal = (snapshot) => {
   const lastChecked = document.getElementById('statusModalLastChecked');
   if (!content) return;
   content.className = '';
-  content.innerHTML = window.LiveStatus.renderCardsHtml(snapshot, getLiveStatusLabels());
+  content.innerHTML = window.LiveStatus.renderCardsHtml(snapshot, getLiveStatusLabels(), { labHref: labPageHref() });
+  renderStatusModalLab();
   if (lastChecked) {
     lastChecked.hidden = false;
     lastChecked.textContent = '';
@@ -273,17 +280,11 @@ let heroLab = null;
 
 const LAB_ROW_ICONS = { ok: 'i-check', degraded: 'i-alert', unknown: 'i-help' };
 
-const renderHeroLab = () => {
-  const icon = document.getElementById('statusLabIcon');
-  const state = document.getElementById('statusLabState');
-  const sub = document.getElementById('statusLabSub');
-  if (!icon || !state || !sub) return;
+/** Состояние Lab для строки карточки и модала: тон иконки, значение справа и подпись. */
+const heroLabView = () => {
   const Core = window.LabCore;
   const now = Date.now();
   const s = Core ? Core.statusSummary(heroLab, now) : { state: 'unavailable', tone: 'unknown', active: null, at: null };
-  icon.className = `state-icon state-icon--${s.tone}`;
-  icon.textContent = '';
-  if (s.tone !== 'loading') icon.appendChild(makeIcon(LAB_ROW_ICONS[s.tone]));
   const active = s.active === null ? '' : t('status_lab_active', '{n} ACTIVE').replace('{n}', String(s.active));
   const ago = s.at === null ? '' : Core.formatAgo(now - s.at, t);
   const [value, detail] = {
@@ -294,10 +295,38 @@ const renderHeroLab = () => {
     empty: [t('status_lab_empty', 'Нет ACTIVE'), ago],
     unavailable: [t('status_lab_unavailable', 'Недоступен'), ''],
   }[s.state];
-  state.className = `status-row__state status-row__state--${s.tone}`;
-  state.textContent = value;
-  sub.textContent = detail;
-  sub.hidden = !detail;
+  return { tone: s.tone, value, detail };
+};
+
+const paintLabState = (icon, state, view) => {
+  icon.className = `state-icon state-icon--${view.tone}`;
+  icon.textContent = '';
+  if (view.tone !== 'loading') icon.appendChild(makeIcon(LAB_ROW_ICONS[view.tone]));
+  state.className = `status-row__state status-row__state--${view.tone}`;
+  state.textContent = view.value;
+};
+
+/** Строка Endpoint Lab в модале: меняются только тексты, ссылка «Открыть Lab» не теряет фокус. */
+const renderStatusModalLab = () => {
+  const icon = document.getElementById('statusModalLabIcon');
+  const state = document.getElementById('statusModalLabState');
+  const meta = document.getElementById('statusModalLabMeta');
+  if (!icon || !state || !meta) return;
+  const view = heroLabView();
+  paintLabState(icon, state, view);
+  meta.textContent = view.detail ? `${view.detail} · ` : '';
+};
+
+const renderHeroLab = () => {
+  const icon = document.getElementById('statusLabIcon');
+  const state = document.getElementById('statusLabState');
+  const sub = document.getElementById('statusLabSub');
+  if (!icon || !state || !sub) return;
+  const view = heroLabView();
+  paintLabState(icon, state, view);
+  sub.textContent = view.detail;
+  sub.hidden = !view.detail;
+  renderStatusModalLab();
   renderLabAutoNote();
 };
 

@@ -152,7 +152,7 @@ test('main page banner appears only for measured problems and is localized', () 
   assert.match(body, /bannerEl\.dataset\.i18n = key/, 'the banner follows locale loads and language switches');
   for (const lang of ['ru', 'en']) {
     const locale = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public', 'locales', `${lang}.json`), 'utf8'));
-    for (const key of ['status_unknown', 'status_pool_unmeasured', 'status_banner_degraded', 'status_banner_down']) {
+    for (const key of ['status_state_unknown', 'status_pool_unmeasured', 'status_banner_degraded', 'status_banner_down']) {
       assert.ok(locale[key], `${lang}.${key}`);
     }
   }

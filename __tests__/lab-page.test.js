@@ -16,7 +16,7 @@ const ru = JSON.parse(read('public/locales/ru.json'));
 const en = JSON.parse(read('public/locales/en.json'));
 const html = read('public/lab/index.html');
 const enHtml = read('public/en/lab/index.html');
-const LAB_SCRIPTS = ['lab-core.js', 'lab-data.js', 'lab.js', 'lab-quick.js', 'lab-fixtures.js'];
+const LAB_SCRIPTS = ['lab-core.js', 'lab-data.js', 'lab.js', 'lab-quick.js', 'lab-fixtures.js', 'lab-history.js'];
 const scripts = Object.fromEntries(LAB_SCRIPTS.map((f) => [f, read(`public/lab/${f}`)]));
 const allLab = [html, read('public/lab/lab.css'), ...Object.values(scripts)].join('\n');
 
@@ -56,12 +56,59 @@ test('read-only: no operator actions, no write requests', () => {
 test('network strings never reach innerHTML or code evaluation', () => {
   for (const [name, src] of Object.entries(scripts)) {
     assert.doesNotMatch(src, /\.innerHTML\b|\.outerHTML\b|insertAdjacentHTML|document\.write|\beval\(|new Function\(/, name);
+    assert.doesNotMatch(src, /data-i18n-html/, `${name} never applies translated HTML`);
   }
-  assert.doesNotMatch(html, /data-i18n-html=/, 'no translated HTML on the Lab page');
+  // Translated HTML only in the shell blocks shared with the generator (footer, FAQ, privacy, disclaimer):
+  // their text is in the markup, the English twin gets it at build time, no Lab script touches it.
+  const SHARED_SHELL_HTML = new Set(['footer_tagline', 'privacy_body', 'disclaimer_body',
+    ...Array.from({ length: 10 }, (_, i) => `faq_a${i + 1}`)]);
+  for (const [, key] of html.matchAll(/data-i18n-html="([^"]+)"/g)) {
+    assert.ok(SHARED_SHELL_HTML.has(key), `no translated HTML on the Lab page outside the shared shell: ${key}`);
+  }
+});
+
+test('the Lab page shares the generator footer and opens FAQ, privacy and disclaimer in place', () => {
+  const main = read('public/index.html');
+  const footerOf = (page) => /<footer class="site-footer">[\s\S]*?<\/footer>/.exec(page)[0]
+    .replace('src="static/', 'src="/static/');
+  assert.equal(footerOf(html), footerOf(main), 'same footer as the generator');
+  assert.match(html, /<a class="site-nav__link" href="#faq" data-open-modal="faqModal" data-i18n="nav_faq">FAQ<\/a>/);
+  assert.doesNotMatch(html, /href="\/#faq"/, 'FAQ does not leave the page');
+  for (const id of ['faqModal', 'privacyModal', 'disclaimerModal']) {
+    const dialog = (page) => new RegExp(`<div id="${id}"[\\s\\S]*?\\n    </div>\\n`).exec(page)[0];
+    assert.equal(dialog(html), dialog(main), `${id} is the generator's dialog`);
+  }
+  for (const icon of ['i-help', 'i-heart', 'i-lock', 'i-alert', 'i-x', 'i-chevron-down', 'i-code', 'i-download', 'i-eye', 'i-history']) {
+    assert.match(html, new RegExp(`<symbol id="${icon}"`), `sprite has ${icon}`);
+  }
+});
+
+test('"История" on the Lab page opens the generator history dialog in place', () => {
+  const main = read('public/index.html');
+  const item = (page) => /<button type="button" class="site-nav__link" id="historyModalBtn"[\s\S]*?<\/button>/.exec(page)[0];
+  assert.equal(item(html), item(main), 'same header item as the generator');
+  assert.doesNotMatch(html, /id="labHistoryLink"/, 'no link to the generator page');
+  for (const id of ['configPreviewModal', 'historyModal']) {
+    const dialog = (page) => new RegExp(`<div id="${id}"[\\s\\S]*?\\n    </div>\\n`).exec(page)[0];
+    assert.equal(dialog(html), dialog(main), `${id} is the generator's dialog`);
+  }
+  // The generator's history stack loads before the Lab adapter; the adapter is the last script.
+  const srcs = [...html.matchAll(/<script defer src="([^"]+)"><\/script>/g)].map((m) => m[1].replace(/\?v=.*$/, ''));
+  const order = ['/static/ui-shell.js', '/static/i18n.js', '/static/common.js', '/static/result.js', '/static/settings.js', '/static/history.js'];
+  assert.deepEqual(srcs.slice(0, order.length), order);
+  assert.equal(srcs.at(-1), '/lab/lab-history.js');
+  const adapter = scripts['lab-history.js'];
+  assert.match(adapter, /renderHistoryPanel\(\);\s*openModal\('historyModal', historyModalBtn\);/);
+  assert.match(adapter, /fetch\(localeRequestUrl\(lang\)\)/, 'dictionary with the asset version, like lab.js');
 });
 
 test('no operator internals in the page, scripts or fixtures', () => {
-  assert.doesNotMatch(allLab, /\/etc\/|\/var\/lib\/|\.sqlite|\.db\b|wg\.key|identity\.json|registration[_ ]?(id|token)|private[_ ]?key|PrivateKey|stack trace/i);
+  // The config preview dialog is the generator's: its note about the visitor's own PrivateKey is not a Lab secret.
+  const previewDialog = /<div id="configPreviewModal"[\s\S]*?\n {4}<\/div>\n/;
+  assert.match(html, previewDialog);
+  assert.equal(previewDialog.exec(html)[0], previewDialog.exec(read('public/index.html'))[0], 'exactly the generator dialog');
+  const labOwn = allLab.replace(previewDialog, '');
+  assert.doesNotMatch(labOwn, /\/etc\/|\/var\/lib\/|\.sqlite|\.db\b|wg\.key|identity\.json|registration[_ ]?(id|token)|private[_ ]?key|PrivateKey|stack trace/i);
 });
 
 test('fixtures load only through the localhost gate, never from the page markup', () => {

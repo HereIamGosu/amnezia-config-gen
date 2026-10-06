@@ -7,20 +7,26 @@
     <meta name="description" content="Публичная проверка endpoint'ов Cloudflare WARP: WireGuard-туннель и HTTPS-трафик с сервера проекта." />
     <meta name="robots" content="noindex,follow" />
     <meta name="theme-color" content="#07090c" />
-    <link rel="icon" href="/static/favicon.ico?v=3.0.0" sizes="16x16 32x32 48x48" />
-    <link rel="icon" href="/static/favicon-32x32.png?v=3.0.0" type="image/png" sizes="32x32" />
-    <link rel="icon" href="/static/favicon-16x16.png?v=3.0.0" type="image/png" sizes="16x16" />
-    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png?v=3.0.0" sizes="180x180" />
+    <link rel="icon" href="/static/favicon.ico?v=3.0.1" sizes="16x16 32x32 48x48" />
+    <link rel="icon" href="/static/favicon-32x32.png?v=3.0.1" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/static/favicon-16x16.png?v=3.0.1" type="image/png" sizes="16x16" />
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png?v=3.0.1" sizes="180x180" />
     <link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/static/fonts/inter-cyrillic.woff2" as="font" type="font/woff2" crossorigin />
     <!-- Общая дизайн-система сайта (только чтение) + стили Lab (вне /static: без годового immutable-кэша) -->
-    <link rel="stylesheet" href="/static/styles.css?v=3.0.0" />
+    <link rel="stylesheet" href="/static/styles.css?v=3.0.1" />
     <link rel="stylesheet" href="/lab/lab.css" />
     <!-- Только внешние скрипты: CSP script-src без 'unsafe-inline' -->
-    <script defer src="/static/ui-shell.js?v=3.0.0"></script>
+    <script defer src="/static/ui-shell.js?v=3.0.1"></script>
+    <script defer src="/static/i18n.js?v=3.0.1"></script>
+    <script defer src="/static/common.js?v=3.0.1"></script>
+    <script defer src="/static/result.js?v=3.0.1"></script>
+    <script defer src="/static/settings.js?v=3.0.1"></script>
+    <script defer src="/static/history.js?v=3.0.1"></script>
     <script defer src="/lab/lab-core.js"></script>
     <script defer src="/lab/lab-data.js"></script>
     <script defer src="/lab/lab.js"></script>
+    <script defer src="/lab/lab-history.js"></script>
   </head>
   <body class="lab-page">
     <noscript>
@@ -57,6 +63,10 @@
       <symbol id="i-clipboard" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h6"/></symbol>
       <symbol id="i-handshake" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m14.31 8 5.74 9.94"/><path d="M9.69 8h11.48"/><path d="m7.38 12 5.74-9.94"/><path d="M9.69 16 3.95 6.06"/><path d="M14.31 16H2.83"/><path d="m16.62 12-5.74 9.94"/></symbol>
       <symbol id="i-tunnel" viewBox="0 0 24 24"><path d="M2 21h20"/><path d="M4 21v-9a8 8 0 0 1 16 0v9"/><path d="M9 21v-6a3 3 0 0 1 6 0v6"/></symbol>
+      <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+      <symbol id="i-heart" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
+      <symbol id="i-code" viewBox="0 0 24 24"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
       <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
       <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-1.96c-3.2.7-3.87-1.54-3.87-1.54-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.68.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z"/></symbol>
     </svg>
@@ -67,7 +77,7 @@
     <header class="site-header" id="siteHeader">
       <div class="container site-header__inner">
         <a class="brand" href="/" data-href-en="/en">
-          <img class="brand__logo" src="/static/logo-80.webp?v=3.0.0" alt="" width="40" height="40" />
+          <img class="brand__logo" src="/static/logo-80.webp?v=3.0.1" alt="" width="40" height="40" />
           <span class="brand__text">
             <span class="brand__name">AmneziaWG</span>
             <span class="brand__sub">Config Generator</span>
@@ -78,11 +88,11 @@
         <nav class="site-nav" id="siteNav" aria-label="Основная навигация" data-i18n-aria-label="nav_aria">
           <a class="site-nav__link" href="/" data-href-en="/en" data-i18n="nav_generator">Генератор</a>
           <a class="site-nav__link site-nav__link--active" href="/lab" data-href-en="/en/lab" aria-current="page" data-i18n="nav_lab">Lab</a>
-          <a class="site-nav__link" href="/#faq" data-href-en="/en#faq" data-i18n="nav_faq">FAQ</a>
-          <a class="site-nav__link" href="/" data-href-en="/en" id="labHistoryLink">
+          <a class="site-nav__link" href="#faq" data-open-modal="faqModal" data-i18n="nav_faq">FAQ</a>
+          <button type="button" class="site-nav__link" id="historyModalBtn" aria-label="История генераций" data-i18n-aria-label="history_btn_aria">
             <span data-i18n="nav_history">История</span>
             <span id="historyCount" class="count-badge"></span>
-          </a>
+          </button>
           <a class="site-nav__link" href="https://github.com/HereIamGosu/amnezia-config-gen" target="_blank" rel="noopener noreferrer">GitHub</a>
         </nav>
 
@@ -364,21 +374,173 @@
     <footer class="site-footer">
       <div class="container site-footer__inner">
         <div class="site-footer__brand">
-          <img src="/static/logo-80.webp?v=3.0.0" alt="" width="32" height="32" loading="lazy" />
+          <img src="/static/logo-80.webp?v=3.0.1" alt="" width="32" height="32" loading="lazy" />
           <div>
             <strong>AmneziaWG Config Generator</strong><br />
-            <span data-i18n="lab_footer_tagline">Endpoint Lab — только чтение, данные обновляются автоматически.</span>
+            <span data-i18n-html="footer_tagline">Открытый проект. Сделано с <span class="heart">♥</span></span>
           </div>
         </div>
         <div class="site-footer__links">
-          <a class="link-btn" href="/" data-href-en="/en" data-i18n="nav_generator">Генератор</a>
-          <a class="link-btn" href="/status.html" data-i18n="nav_status">Статус</a>
-          <a class="link-btn" href="https://github.com/HereIamGosu/amnezia-config-gen" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a class="link-btn" href="#faq" data-open-modal="faqModal" data-i18n="footer_faq">Вопросы и ответы</a>
+          <button type="button" class="link-btn" data-open-modal="privacyModal" data-i18n="footer_privacy">Конфиденциальность</button>
+          <button type="button" class="link-btn" data-open-modal="disclaimerModal" data-i18n="footer_disclaimer">Отказ от ответственности</button>
+          <a
+            href="https://pay.cloudtips.ru/p/24080824"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="donate-link"
+            aria-label="Поддержать проект через CloudTips"
+            data-i18n-aria-label="donate_aria"
+          >
+            <span class="donate-link__icon" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-heart"/></svg></span>
+            <span class="donate-link__text" data-i18n="donate_button">Поддержать проект</span>
+          </a>
         </div>
       </div>
     </footer>
 
     <!-- ═══════════════ Модальные окна (общий каркас ui-shell) ═══════════════ -->
+
+    <!-- Частые вопросы: текст в HTML страницы, поэтому индексируется и в модалке -->
+    <div id="faqModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="faqModalHeading" aria-hidden="true">
+      <div class="modal__dialog">
+        <header class="modal__header">
+          <span class="modal__icon"><svg class="icon" aria-hidden="true"><use href="#i-help"/></svg></span>
+          <div class="modal__titles">
+            <h2 id="faqModalHeading" class="modal__title" data-i18n="faq_title">Частые вопросы</h2>
+            <p class="modal__subtitle" data-i18n="faq_lead">Коротко о том, как работает генератор и что делать, если туннель не поднимается.</p>
+          </div>
+          <button type="button" class="modal__close" data-close-modal aria-label="Закрыть" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </header>
+        <div class="modal__body">
+          <div class="faq__list">
+            <details class="faq__item" name="faq" open>
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">01</span><span class="faq__q-text" data-i18n="faq_q1">Что такое AmneziaWG и чем он отличается от WireGuard?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
+              <div class="faq__a" data-i18n-html="faq_a1">AmneziaWG (его часто пишут как «Amnezia WG» или «Амнезия ВГ») — форк WireGuard от команды Amnezia. Шифрование и ключи те же, что у WireGuard, но к протоколу добавлена маскировка: «мусорные» пакеты перед рукопожатием (Jc, Jmin, Jmax), пакеты-имитации CPS (I1–I5) и, начиная с AWG 2.0, параметры заголовков и паддинга. Поэтому трафик AmneziaWG сложнее распознать по сигнатуре WireGuard.</div>
+            </details>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">02</span><span class="faq__q-text" data-i18n="faq_q2">Что такое Cloudflare WARP и нужен ли свой сервер?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
+              <div class="faq__a" data-i18n-html="faq_a2">WARP — бесплатный сервис Cloudflare на базе WireGuard. Генератор регистрирует новое устройство через официальный API WARP и собирает из полученных данных готовый конфиг, поэтому свой сервер не нужен. Сервер Cloudflare остаётся стандартным WireGuard peer, и часть параметров AmneziaWG для него намеренно фиксирована: S1–S4 = 0, H1–H4 = 1–4, MTU 1280.</div>
+            </details>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">03</span><span class="faq__q-text" data-i18n="faq_q3">Какой профиль выбрать: AWG 1.5, 2.0, 3.0 или 3.1?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
+              <div class="faq__a" data-i18n-html="faq_a3">Начните с AWG 2.0: он выбран по умолчанию и импортируется в актуальные AmneziaWG и AmneziaVPN. AWG 1.5 нужен для старых клиентов. AWG 3.0 и 3.1 добавляют клиентские возможности новых версий, например рандомизацию таймингов; для 3.1 нужен AmneziaVPN 5.0.1.5+ или совместимый клиент. Если импорт не проходит, вернитесь к AWG 2.0.</div>
+            </details>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">04</span><span class="faq__q-text" data-i18n="faq_q4">Как импортировать конфиг в AmneziaWG или AmneziaVPN?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
+              <div class="faq__a" data-i18n-html="faq_a4">На Windows установите клиент AmneziaWG и добавьте туннель из скачанного файла <code>.conf</code>. На Android и iOS используйте AmneziaVPN или AmneziaWG: импортируйте файл <code>.conf</code> или вставьте ссылку <code>vpn://</code>, если она доступна для выбранного профиля. Для роутеров (Keenetic, OpenWrt, MikroTik, GL.iNet) перед генерацией включите в настройках «Режим роутера».</div>
+            </details>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">05</span><span class="faq__q-text" data-i18n="faq_q5">Конфиг импортировался, но не подключается. Что делать?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
+              <div class="faq__a" data-i18n-html="faq_a5">Попробуйте другой UDP-порт (2408, 500, 1701) и IP-адрес endpoint вместо hostname — это меняется в настройках на шаге 2. В мобильной сети включите мобильный профиль. Убедитесь, что версия клиента поддерживает выбранный профиль AWG. Если подключение есть, но сайты не открываются, проверьте DNS и маршруты. Текущее состояние сервисов — на странице <a href="/status.html" data-status-link>«Статус»</a>.</div>
+            </details>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">06</span><span class="faq__q-text" data-i18n="faq_q6">Это бесплатно? Что происходит с ключами?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
+              <div class="faq__a" data-i18n-html="faq_a6">Генератор бесплатный и работает без регистрации. Ключи создаются при генерации и сразу отдаются вам — сервер их не сохраняет. История генераций хранится только в вашем браузере, её можно очистить. Исходный код открыт под лицензией AGPL-3.0.</div>
+            </details>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">07</span><span class="faq__q-text" data-i18n="faq_q7">Можно ли пустить через WARP только отдельные сайты?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
+              <div class="faq__a" data-i18n-html="faq_a7">Да. В настройках выберите выборочную маршрутизацию и отметьте нужные сервисы: в AllowedIPs попадут только их IPv4-подсети, остальной трафик пойдёт напрямую. Чтобы конфиг надёжно работал на телефонах и роутерах, генератор ограничивает список 1000 IPv4-подсетями.</div>
+            </details>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">08</span><span class="faq__q-text" data-i18n="faq_q8">Где скачать AmneziaWG и AmneziaVPN?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
+              <div class="faq__a" data-i18n-html="faq_a8">Генератор создаёт только конфиг, клиент устанавливается отдельно. AmneziaWG для Windows — на странице <a href="https://github.com/amnezia-vpn/amneziawg-windows-client/releases" target="_blank" rel="noopener noreferrer">релизов на GitHub</a>. AmneziaVPN и мобильные приложения — на официальной странице загрузок <a href="https://amnezia.org/downloads" target="_blank" rel="noopener noreferrer">amnezia.org</a>. Скачивайте клиенты только из официальных источников.</div>
+            </details>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">09</span><span class="faq__q-text" data-i18n="faq_q9">Что такое туннель AmneziaWG и где его взять?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
+              <div class="faq__a" data-i18n-html="faq_a9">Туннелем клиент AmneziaWG называет профиль подключения, а файл <code>.conf</code> с этого сайта и есть такой туннель: в нём ключи, адрес, DNS, параметры маскировки и сервер Cloudflare WARP. Нажмите «Сгенерировать конфигурацию», скачайте файл и в клиенте выберите «Добавить туннель» → импорт из файла. Каждая генерация создаёт новый туннель с собственными ключами.</div>
+            </details>
+            <details class="faq__item" name="faq">
+              <summary class="faq__q"><span class="faq__num" aria-hidden="true">10</span><span class="faq__q-text" data-i18n="faq_q10">Чем AmneziaWG отличается от AmneziaVPN?</span><span class="faq__toggle" aria-hidden="true"><svg class="icon icon--sm"><use href="#i-chevron-down"/></svg></span></summary>
+              <div class="faq__a" data-i18n-html="faq_a10">AmneziaWG — протокол и лёгкий клиент только для него: он импортирует файлы <code>.conf</code>. AmneziaVPN — приложение той же команды с несколькими протоколами, включая AmneziaWG; кроме <code>.conf</code> оно принимает ссылки <code>vpn://</code>. Конфиг с этого сайта подходит для обоих клиентов, если они поддерживают выбранный профиль AWG.</div>
+            </details>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Конфиденциальность -->
+    <div id="privacyModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="privacyModalHeading" aria-hidden="true">
+      <div class="modal__dialog modal__dialog--narrow">
+        <header class="modal__header">
+          <span class="modal__icon"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg></span>
+          <div class="modal__titles">
+            <h2 id="privacyModalHeading" class="modal__title" data-i18n="footer_privacy">Конфиденциальность</h2>
+            <p class="modal__subtitle" data-i18n="privacy_subtitle">Что происходит с данными при генерации</p>
+          </div>
+          <button type="button" class="modal__close" data-close-modal aria-label="Закрыть" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </header>
+        <div class="modal__body prose" data-i18n-html="privacy_body">
+          <p>Сервер awgconfig.com регистрирует для вас устройство в Cloudflare WARP и сразу возвращает готовый конфиг. Ключи и конфиги на сервере не сохраняются; в журналы попадают только технические ошибки.</p>
+          <p>История генераций хранится только в этом браузере (localStorage) — её можно очистить в окне «История».</p>
+          <p>Аналитика: Яндекс.Метрика без Вебвизора и обезличенные события продукта (режим, исход генерации). Ключи, адреса endpoint'ов и содержимое конфигов в аналитику не передаются.</p>
+          <p>Сторонние сервисы: Cloudflare (регистрация WARP) и iplist.opencck.org (списки маршрутов для выборочной маршрутизации).</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Отказ от ответственности -->
+    <div id="disclaimerModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="disclaimerModalHeading" aria-hidden="true">
+      <div class="modal__dialog modal__dialog--narrow">
+        <header class="modal__header">
+          <span class="modal__icon"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg></span>
+          <div class="modal__titles">
+            <h2 id="disclaimerModalHeading" class="modal__title" data-i18n="footer_disclaimer">Отказ от ответственности</h2>
+            <p class="modal__subtitle" data-i18n="disclaimer_subtitle">Условия использования генератора</p>
+          </div>
+          <button type="button" class="modal__close" data-close-modal aria-label="Закрыть" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </header>
+        <div class="modal__body prose" data-i18n-html="disclaimer_body">
+          <p>AmneziaWG Config Generator — неофициальный проект с открытым исходным кодом. Он не связан с Cloudflare и командой Amnezia; названия принадлежат их владельцам.</p>
+          <p>Сервис предоставляется «как есть», без гарантий. Работа туннеля зависит от клиента, сети, провайдера и endpoint'а и не гарантируется в каждой сети.</p>
+          <p>Использование Cloudflare WARP регулируется условиями Cloudflare. Вы сами отвечаете за соблюдение законов своей страны.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Предпросмотр конфигурации -->
+    <div id="configPreviewModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="previewModalHeading" aria-hidden="true">
+      <div class="modal__dialog">
+        <header class="modal__header">
+          <span class="modal__icon"><svg class="icon" aria-hidden="true"><use href="#i-code"/></svg></span>
+          <div class="modal__titles">
+            <h2 id="previewModalHeading" class="modal__title" data-i18n="config_preview_title">Предпросмотр конфигурации</h2>
+            <p class="modal__subtitle" data-i18n="config_preview_subtitle">Безопасный просмотр перед импортом</p>
+          </div>
+          <button type="button" class="modal__close" data-close-modal aria-label="Закрыть" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </header>
+        <div class="modal__body">
+          <div class="preview-toolbar">
+            <span class="pill" id="previewFileName">AmneziaWarp.conf</span>
+            <button type="button" id="copyConfigBtnModal" class="btn btn--blue btn--sm" data-i18n="btn_copy">Копировать</button>
+          </div>
+          <pre class="code-block code-block--bordered" id="configPreviewCode" tabindex="0" aria-label="Текст конфигурации" data-i18n-aria-label="config_preview_textarea_aria"></pre>
+          <p class="code-pane__note" data-i18n="result_code_note">PrivateKey скрыт в превью. Скачивание и копирование отдают полный конфиг.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- История генераций -->
+    <div id="historyModal" class="modal history-modal" role="dialog" aria-modal="true" aria-labelledby="historyModalHeading" aria-hidden="true">
+      <div class="modal__dialog">
+        <header class="modal__header">
+          <span class="modal__icon"><svg class="icon" aria-hidden="true"><use href="#i-history"/></svg></span>
+          <div class="modal__titles">
+            <h2 id="historyModalHeading" class="modal__title" data-i18n="history_modal_title">История генераций</h2>
+            <p class="modal__subtitle" data-i18n="history_modal_subtitle">До 20 сохранённых генераций — только в этом браузере</p>
+          </div>
+          <button type="button" class="modal__close" id="historyModalClose" data-close-modal aria-label="Закрыть" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </header>
+        <div class="modal__body">
+          <div id="historyEmptyMsg" class="history-empty-msg" data-i18n="history_empty">Нет сохранённых генераций</div>
+          <div id="historyList" class="history-list"></div>
+        </div>
+        <footer class="modal__footer">
+          <button type="button" id="historyClearBtn" class="btn btn--danger btn--sm" data-i18n="history_clear_all">Очистить историю</button>
+        </footer>
+      </div>
+    </div>
+
 
     <!-- О Endpoint Lab -->
     <div id="labInfoModal" class="modal lab-modal" role="dialog" aria-modal="true" aria-labelledby="labInfoHeading" aria-hidden="true">

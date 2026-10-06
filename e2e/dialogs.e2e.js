@@ -104,8 +104,13 @@ e2eSuite('stacked dialogs', (openPage) => {
 
     await page.click('#statusModalBtn');
     await page.waitFor(isOpen, { args: ['statusModal'] });
-    await page.waitFor(() => document.querySelectorAll('#statusModalContent .status-card').length === 4,
-      { message: 'four status cards in the dialog' });
+    await page.waitFor(() => document.querySelectorAll('#statusModalContent .status-detail').length === 6,
+      { message: 'hero card rows, the Lab row and the IP list in the dialog' });
+    assert.deepEqual(
+      await page.evaluate(() => [...document.querySelectorAll('#statusModalContent .status-detail')].map((li) => li.dataset.service)),
+      ['generator', 'warp_api', 'warp_engage', 'cidr_source', 'lab', 'endpoint_pool'],
+    );
+    assert.equal(await page.evaluate(() => document.querySelector('#statusModalContent .status-detail__link').getAttribute('href')), '/lab');
     assert.equal(await page.evaluate(topmostAt, 'statusModal'), 'statusModal');
     await page.press('Escape');
     await page.waitFor(() => !document.getElementById('statusModal').classList.contains('is-open'));

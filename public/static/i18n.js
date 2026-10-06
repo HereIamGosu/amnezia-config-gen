@@ -60,12 +60,23 @@ const applyTranslations = () => {
 };
 
 /**
+ * Адрес словаря с версией ассетов страницы (?v= у её скриптов из static/, release:check держит его равным
+ * версии пакета). После релиза адрес новый, и браузер не берёт из кэша словарь прошлой версии, где нет
+ * новых ключей: без версии он показывал имена ключей вместо текстов.
+ */
+const localeRequestUrl = (lang) => {
+  const script = document.querySelector('script[src*="static/"][src*="?v="]');
+  const match = script && /[?&]v=([^&#]+)/.exec(script.getAttribute('src'));
+  return `/locales/${lang}.json${match ? `?v=${encodeURIComponent(match[1])}` : ''}`;
+};
+
+/**
  * Загружает словарь для заданного языка и применяет переводы.
  * Fallback: если файл недоступен (offline), оставляем HTML-текст нетронутым.
  */
 const loadLocale = async (lang) => {
   try {
-    const res = await fetch(`/locales/${lang}.json`);
+    const res = await fetch(localeRequestUrl(lang));
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     _i18n.strings = await res.json();
     _i18n.locale = lang;

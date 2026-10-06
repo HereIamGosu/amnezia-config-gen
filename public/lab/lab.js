@@ -64,9 +64,17 @@
     each('data-i18n-alt', (node, v) => node.setAttribute('alt', v));
   };
 
+  // Словарь запрашивается с версией ассетов страницы (?v= у скриптов из /static/, её держит release:check):
+  // после релиза адрес новый, и браузер не подставляет из кэша словарь прошлой версии без ключей lab_*.
+  const localeRequestUrl = () => {
+    const script = doc.querySelector('script[src*="static/"][src*="?v="]');
+    const match = script && /[?&]v=([^&#]+)/.exec(script.getAttribute('src'));
+    return `/locales/${PAGE_LANG}.json${match ? `?v=${encodeURIComponent(match[1])}` : ''}`;
+  };
+
   const loadStrings = async () => {
     try {
-      const res = await fetch(`/locales/${PAGE_LANG}.json`);
+      const res = await fetch(localeRequestUrl());
       if (!res.ok) return;
       const data = await res.json();
       if (data && typeof data === 'object') strings = data;

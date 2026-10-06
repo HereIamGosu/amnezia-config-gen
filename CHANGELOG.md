@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-10-07
+
+### Fixed
+- Interface texts after the 3.0.0 update. `/locales/*.json` had no `Cache-Control` and was requested at a fixed address, so browsers that had loaded the 2.7.4 dictionary kept it from their heuristic cache and showed key names (`lab_state_ok_title`, …) instead of texts on `/lab` and in the new parts of the generator. Dictionaries are now served with `Cache-Control: public, max-age=0, must-revalidate` and requested with the page asset version (`/locales/ru.json?v=3.0.1`), so every release changes their address.
+- "FAQ" and "История" in the header of `/lab` open the FAQ and the generation history dialogs on the Lab page instead of going to the generator page; the history dialog is the generator's (list, preview with the key hidden, download, clear).
+- The status link in the FAQ answer is absolute (`/status.html`) and also works from `/en/lab`.
+
+### Changed
+- `/lab` and `/en/lab` have the generator's footer (FAQ, privacy, disclaimer, donate) and the same dialogs.
+- The generator page uses the Lab container width on desktop: 1320 px instead of 1240 px.
+- The "System status" dialog shows the rows of the hero card — generator API, WARP registration, WARP endpoint, CIDR source and Endpoint Lab with a link to the Lab — with the host and response time; the built-in WARP IP list stays as reference information. `/status.html` uses the same list without the Lab row.
+- "Recent changes" lists the three latest releases, so the card keeps its height.
+- Hero eyebrow «Бесплатный open-source инструмент»; the AWG 3.x note under the profiles has no "ℹ" sign.
+
 ## [3.0.0] - 2026-10-07
 
 ### Added

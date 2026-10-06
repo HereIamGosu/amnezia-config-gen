@@ -128,24 +128,62 @@ e2eSuite('Endpoint Lab page', (openPage) => {
     await page.assertClean('/en/lab');
   });
 
-  test('header FAQ opens the dialog on the generator, closing it returns to the Lab; no Instructions item', async () => {
+  test('header FAQ and the footer dialogs open on the Lab page itself; no Instructions item', async () => {
     const dialogOpen = (id) => document.getElementById(id).classList.contains('is-open');
-    for (const [from, key, modal, home] of [
-      ['/lab?fixture=healthy', 'nav_faq', 'faqModal', '/'],
-      ['/en/lab?fixture=healthy', 'nav_faq', 'faqModal', '/en'],
+    for (const [from, title] of [
+      ['/lab?fixture=healthy', 'Частые вопросы'],
+      ['/en/lab?fixture=healthy', 'Frequently asked questions'],
     ]) {
       const page = await openPage({ width: 1440, height: 900 });
       await page.goto(from, { app: false });
       await page.waitFor(() => document.getElementById('labMain').dataset.labState === 'ok', { message: 'Lab page ready' });
+      const path = await page.evaluate(() => location.pathname);
       assert.equal(await page.evaluate(() => document.querySelectorAll('.site-nav a[href*="#instructions"]').length), 0, 'no Instructions item');
-      await page.click(`.site-nav a[data-i18n="${key}"]`);
-      await page.waitFor((p, id) => location.pathname === p && !!document.getElementById(id)
-        && document.getElementById(id).classList.contains('is-open'), { args: [home, modal], message: `${modal} open on ${home}` });
+      await page.click('.site-nav a[data-i18n="nav_faq"]');
+      await page.waitFor(dialogOpen, { args: ['faqModal'], message: `FAQ open on ${from}` });
+      assert.equal(await page.evaluate(() => location.pathname), path, 'FAQ does not leave the Lab page');
+      assert.equal(await page.evaluate(() => document.getElementById('faqModalHeading').textContent), title);
       await page.press('Escape');
-      await page.waitFor((p) => location.pathname + location.search === p && document.readyState === 'complete',
-        { args: [from], message: `back on ${from}` });
-      await page.waitFor(() => document.getElementById('labMain').dataset.labState === 'ok', { message: 'Lab page shown again' });
-      await page.assertClean(`${from} → ${key} → back`);
+      await page.waitFor((id) => !document.getElementById(id).classList.contains('is-open'), { args: ['faqModal'] });
+      for (const modal of ['privacyModal', 'disclaimerModal']) {
+        await page.click(`.site-footer [data-open-modal="${modal}"]`);
+        await page.waitFor(dialogOpen, { args: [modal], message: `${modal} open from the footer` });
+        await page.press('Escape');
+        await page.waitFor((id) => !document.getElementById(id).classList.contains('is-open'), { args: [modal] });
+      }
+      assert.equal(await page.evaluate(() => location.pathname), path, 'still on the Lab page');
+      assert.equal(await page.evaluate(() => document.getElementById('labMain').dataset.labState), 'ok');
+      await page.assertClean(`${from} → FAQ and footer dialogs`);
+    }
+
+    // «История» opens the generator's history dialog on the Lab page: list, preview with a hidden key.
+    const key = 'kE2eLabHistoryFakeKeyAAAAAAAAAAAAAAAAAAAAAA=';
+    const conf = `[Interface]\nPrivateKey = ${key}\nAddress = 172.16.0.2/32\nDNS = 1.1.1.1\nMTU = 1280\n\n[Peer]\nPublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=\nAllowedIPs = 0.0.0.0/0\nEndpoint = engage.cloudflareclient.com:4500\n`;
+    const entry = { ts: Date.now(), mode: 'awg2', presets: [], dns: 'cloudflare', b64: Buffer.from(conf).toString('base64'),
+      filename: 'AmneziaWarp.conf', routeMode: 'full', port: 4500, endpoint: 'auto', mobile: false, router: false };
+    for (const [from, title] of [['/lab?fixture=healthy', 'История генераций'], ['/en/lab?fixture=healthy', 'Generation History']]) {
+      const page = await openPage({ width: 1440, height: 900 });
+      await page.goto(from, { app: false });
+      await page.evaluate((value) => localStorage.setItem('awg_history', value), JSON.stringify([entry]));
+      await page.goto(from, { app: false });
+      await page.waitFor(() => document.getElementById('labMain').dataset.labState === 'ok', { message: 'Lab page ready' });
+      const path = await page.evaluate(() => location.pathname);
+      await page.waitFor(() => document.getElementById('historyCount').textContent === '1', { message: 'history count in the header' });
+      await page.click('#historyModalBtn');
+      await page.waitFor(dialogOpen, { args: ['historyModal'], message: `history open on ${from}` });
+      assert.equal(await page.evaluate(() => document.getElementById('historyModalHeading').textContent), title);
+      assert.equal(await page.evaluate(() => document.querySelectorAll('#historyList .history-item').length), 1);
+      await page.click('#historyList .history-item button');
+      await page.waitFor(dialogOpen, { args: ['configPreviewModal'], message: 'preview from the history' });
+      const shown = await page.evaluate(() => document.getElementById('configPreviewCode').textContent);
+      assert.match(shown, /Endpoint = engage\.cloudflareclient\.com:4500/);
+      assert.ok(!shown.includes(key), 'the preview hides the private key');
+      await page.press('Escape');
+      await page.waitFor((id) => !document.getElementById(id).classList.contains('is-open'), { args: ['configPreviewModal'] });
+      await page.press('Escape');
+      await page.waitFor((id) => !document.getElementById(id).classList.contains('is-open'), { args: ['historyModal'] });
+      assert.equal(await page.evaluate(() => location.pathname), path, 'history does not leave the Lab page');
+      await page.assertClean(`${from} → История`);
     }
 
     // Opened directly (no Lab page before it): closing the dialog stays on the generator.
