@@ -7,9 +7,9 @@
 
 :root {
   /* Текстовые оттенки статусов — те же, что у статус-панели генератора */
-  --lab-ok: #4ade80;
-  --lab-warn: #fbbf24;
-  --lab-error: #fca5a5;
+  --lab-ok: var(--color-success-text);
+  --lab-warn: var(--color-warning-text);
+  --lab-error: var(--color-error-text);
   --lab-info: var(--color-blue-hover);
   --lab-retry: var(--color-blue);
   --lab-line: rgba(38, 51, 66, 0.6);
@@ -640,9 +640,9 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Подпись переносится по словам: в узкой панели (1280–1440 px) без переноса она залезала в соседний пункт */
 .lab-legend__item > span:last-child {
   grid-column: 2;
-  white-space: nowrap;
 }
 
 .lab-legend__dot {
@@ -810,14 +810,10 @@
   overflow-wrap: anywhere;
 }
 
-.lab-event__action--ok,
-.lab-event__action--error {
-  color: var(--color-orange);
-}
-
-.lab-event__action--warn {
-  color: var(--color-text);
-}
+/* Действие — в цвет точки события: «восстановлен» и «исключён» не должны выглядеть одинаково */
+.lab-event__action--ok { color: var(--lab-ok); }
+.lab-event__action--warn { color: var(--lab-warn); }
+.lab-event__action--error { color: var(--lab-error); }
 
 .lab-event__sub {
   margin: 1px 0 0;

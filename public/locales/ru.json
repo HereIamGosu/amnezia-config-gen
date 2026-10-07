@@ -530,7 +530,7 @@
   "lab_alert_partial": "Часть данных Lab не прошла проверку и не показана.",
   "lab_metric_active": "Свежие проверенные endpoint'ы",
   "lab_metric_verified": "в резерве",
-  "lab_metric_suspect": "на перепроверке",
+  "lab_metric_suspect": "на пере\u00adпроверке",
   "lab_metric_quarantine": "временно исключены",
   "lab_metric_outdated": "неактуальны",
   "lab_fresh_title": "Свежесть пула",
