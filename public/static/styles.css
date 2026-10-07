@@ -59,6 +59,10 @@
   --color-warning-soft: rgba(245, 158, 11, 0.14);
   --color-error: #ef4444;
   --color-error-soft: rgba(239, 68, 68, 0.14);
+  /* Текстовые оттенки статусов: светлее основных, читаются мелким текстом на тёмных поверхностях */
+  --color-success-text: #4ade80;
+  --color-warning-text: #fbbf24;
+  --color-error-text: #fca5a5;
   --color-violet: #a78bfa;
   --color-violet-soft: rgba(167, 139, 250, 0.16);
 
@@ -215,6 +219,11 @@ kbd {
   top: 12px;
 }
 
+/* Общий a:hover (голубой) специфичнее класса: без этого правила текст на оранжевом — 1,5:1 */
+.skip-link:hover {
+  color: #111;
+}
+
 /* ───────────────────────── Кнопки ───────────────────────── */
 
 .btn {
@@ -284,7 +293,7 @@ kbd {
 .btn--danger {
   border-color: rgba(239, 68, 68, 0.45);
   background: var(--color-error-soft);
-  color: #fca5a5;
+  color: var(--color-error-text);
 }
 
 .btn--danger:hover {
@@ -392,7 +401,7 @@ kbd {
 
 .tag--green {
   background: var(--color-success-soft);
-  color: #4ade80;
+  color: var(--color-success-text);
 }
 
 .tag--violet {
@@ -412,12 +421,12 @@ kbd {
 
 .tag--yellow {
   background: var(--color-warning-soft);
-  color: #fbbf24;
+  color: var(--color-warning-text);
 }
 
 .tag--red {
   background: var(--color-error-soft);
-  color: #fca5a5;
+  color: var(--color-error-text);
 }
 
 .pill {
@@ -890,15 +899,15 @@ kbd {
 }
 
 .status-overall--ok {
-  color: #4ade80;
+  color: var(--color-success-text);
 }
 
 .status-overall--degraded {
-  color: #fbbf24;
+  color: var(--color-warning-text);
 }
 
 .status-overall--error {
-  color: #fca5a5;
+  color: var(--color-error-text);
 }
 
 .status-list {
@@ -936,15 +945,15 @@ kbd {
 }
 
 .status-row__state--ok {
-  color: #4ade80;
+  color: var(--color-success-text);
 }
 
 .status-row__state--degraded {
-  color: #fbbf24;
+  color: var(--color-warning-text);
 }
 
 .status-row__state--error {
-  color: #fca5a5;
+  color: var(--color-error-text);
 }
 
 /* Endpoint Lab: вся строка — кнопка быстрого просмотра; второй строкой — возраст данных или число ACTIVE */
@@ -1286,7 +1295,7 @@ kbd {
 
 .profile-card__icon--green {
   background: var(--color-success-soft);
-  color: #4ade80;
+  color: var(--color-success-text);
 }
 
 .profile-card__icon--violet {
@@ -1507,13 +1516,13 @@ kbd {
 
 .result__title {
   margin: 0;
-  color: #4ade80;
+  color: var(--color-success-text);
   font-size: 22px;
   font-weight: 700;
 }
 
 .result__badge--warn + div .result__title {
-  color: #fbbf24;
+  color: var(--color-warning-text);
 }
 
 .result__subtitle {
@@ -1610,7 +1619,7 @@ kbd {
 }
 
 .summary-item dd.is-on {
-  color: #4ade80;
+  color: var(--color-success-text);
 }
 
 /* Окно кода */
@@ -1684,7 +1693,7 @@ kbd {
 }
 
 .code-block .c-mask {
-  color: #fbbf24;
+  color: var(--color-warning-text);
   letter-spacing: 0.06em;
 }
 
@@ -1745,7 +1754,7 @@ kbd {
 }
 
 .result-state--error .result-state__title {
-  color: #fca5a5;
+  color: var(--color-error-text);
 }
 
 .result-state__text {
@@ -2221,7 +2230,7 @@ kbd {
 }
 
 .platform__icon--android {
-  color: #4ade80;
+  color: var(--color-success-text);
 }
 
 .platform__icon--ios {
@@ -2592,7 +2601,7 @@ kbd {
   align-items: center;
   gap: 8px;
   margin: 0 0 4px;
-  color: #fbbf24;
+  color: var(--color-warning-text);
   font-size: 14px;
   font-weight: 700;
 }
@@ -2719,12 +2728,12 @@ kbd {
 
 .cidr-counter-mini--warn {
   border-color: rgba(245, 158, 11, 0.5);
-  color: #fbbf24;
+  color: var(--color-warning-text);
 }
 
 .cidr-counter-mini--over {
   border-color: rgba(239, 68, 68, 0.5);
-  color: #fca5a5;
+  color: var(--color-error-text);
 }
 
 .preset-stats {
@@ -2734,7 +2743,7 @@ kbd {
 }
 
 .preset-stats--warn {
-  color: #fbbf24;
+  color: var(--color-warning-text);
 }
 
 .routes-panel--full-tunnel .cfg-tiles--routes {
@@ -2837,7 +2846,7 @@ kbd {
 
 .cfg-tile__zero-warn {
   margin-left: auto;
-  color: #fbbf24;
+  color: var(--color-warning-text);
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
@@ -2963,11 +2972,11 @@ kbd {
 }
 
 .lab-auto-note__state--ok {
-  color: #4ade80;
+  color: var(--color-success-text);
 }
 
 .lab-auto-note__state--degraded {
-  color: #fbbf24;
+  color: var(--color-warning-text);
 }
 
 .lab-auto-note__link {
@@ -3102,7 +3111,7 @@ kbd {
 }
 
 .cidr-counter--over {
-  color: #fca5a5;
+  color: var(--color-error-text);
 }
 
 /* Предпросмотр */
@@ -3204,7 +3213,7 @@ kbd {
 
 .result-risk-list__empty {
   margin: 0;
-  color: #4ade80;
+  color: var(--color-success-text);
   font-size: 13px;
 }
 
@@ -3342,7 +3351,7 @@ kbd {
 
 .history-item__badge--awg2 {
   background: var(--color-success-soft);
-  color: #4ade80;
+  color: var(--color-success-text);
 }
 
 .history-item__badge--awg3 {
@@ -3641,6 +3650,16 @@ kbd {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* Индикаторы загрузки — не украшение: без движения не видно, что работа идёт. Медленнее, но крутятся */
+  .btn--loading::after,
+  .dot--loading,
+  .state-icon--loading,
+  .icon-btn.is-spinning .icon,
+  .result-state__icon--loading {
+    animation-duration: 1.6s !important;
+    animation-iteration-count: infinite !important;
   }
 }
 
@@ -3963,7 +3982,8 @@ kbd {
 
   .profile-card__head .tag {
     padding: 2px 6px;
-    font-size: 9.5px;
+    font-size: 11px;
+    letter-spacing: 0.02em;
   }
 
   .profile-card__desc {
