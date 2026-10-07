@@ -9,6 +9,8 @@ export default [
       '.cursor/**',
       '.kilo/worktrees/**',
       '.vercel/**',
+      // Локальные сборки промо-видео (/brag): в .gitignore, но лежат в рабочей копии
+      'brag-output*/**',
       'node_modules/**',
     ],
   },
