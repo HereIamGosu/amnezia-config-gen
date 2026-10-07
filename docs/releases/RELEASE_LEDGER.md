@@ -1,6 +1,6 @@
 # Release Ledger
 
-Checked at: 2026-10-07 (tags and GitHub Releases for 3.0.0 and 3.0.1).
+Checked at: 2026-10-08 (3.0.3 prepared; 3.0.2 in production without a tag).
 
 This ledger records release metadata state without fabricating historical tags or GitHub Releases.
 
@@ -13,7 +13,8 @@ This ledger records release metadata state without fabricating historical tags o
 | 2.7.4 | `cacd3e0` (`release: 2.7.4 — Honest Status & Cache Refresh`) | Present (`v2.7.4` → `cacd3e0`) | Not visible in the public API on 2026-10-06 | `docs/releases/2.7.4.md` | `docs/releases/2.7.4-source-audit.md` | Tagged; GitHub Release missing | Bugfix release: status semantics, KV label, cache keys and headers, asset version guard. |
 | 3.0.0 | `ea4f9ddb9b9687ecad703a70b87d115d765ea8bc` (`release: 3.0.0` `1a90ab4` + README `ea4f9dd`) | Present (`v3.0.0` → `ea4f9dd`) | Present (`v3.0.0`, latest=false) | `docs/releases/3.0.0.md` | `docs/releases/3.0.0-source-audit.md` | Published | Pushed to `main` and deployed (blue/green) on 2026-10-07 00:14 MSK; production smoke passed. Endpoint Lab, `/lab` and `/api/lab`, Lab Auto, dark redesign, English site. Returning visitors could see key names instead of texts from a stale cached dictionary — fixed in 3.0.1. |
 | 3.0.1 | `e9c56053bcf8e68308481b19a1c13af8630f0e14` (`release: 3.0.1`) | Present (`v3.0.1` → `e9c5605`) | Present (`v3.0.1`, Latest) | `docs/releases/3.0.1.md` | `docs/releases/3.0.1-source-audit.md` | Published | Deployed (blue/green) on 2026-10-07 01:03 MSK; production smoke passed. Dictionary caching (`/locales` revalidated, requested with the asset version), Lab page footer and in-place FAQ, status dialog with the hero card rows, generator width 1320 px. Known gap: the Lab quick view on the generator page (`public/lab/lab-quick.js`) still loads the dictionary without the version; fix planned for 3.0.2. |
-| 3.0.2 | Release commit `release: 3.0.2` on `release/3.0.2` | Pending — `v3.0.2` after the production smoke | Pending | `docs/releases/3.0.2.md` | `docs/releases/3.0.2-source-audit.md` | Release prepared | Endpoint Lab default while the pool is fresh (hostname button on a Lab refusal), iPhone dialog fixes, compatibility card, phone header and dialogs, Lab quick view dictionary version. |
+| 3.0.2 | `c4c6b676b3dd3d025ea2c86d06ed0a4459382e3d` (`release: 3.0.2`) | Missing | Missing | `docs/releases/3.0.2.md` | `docs/releases/3.0.2-source-audit.md` | Deployed, metadata incomplete | Production answered with `X-App-Revision: c4c6b67…` on 2026-10-08. The tag planned "after the production smoke" was not created; create `v3.0.2` only with owner approval. Endpoint Lab default while the pool is fresh (hostname button on a Lab refusal), iPhone dialog fixes, compatibility card, phone header and dialogs, Lab quick view dictionary version. |
+| 3.0.3 | Release commit `release: 3.0.3` on `fix/design-audit-3.0.3` | Pending — `v3.0.3` on the release commit | Pending | `docs/releases/3.0.3.md` | `docs/releases/3.0.3-source-audit.md` | Release prepared | Design and accessibility fixes from an impeccable audit of 3.0.2: Lab quality legend and summary tile labels, Lab activity colours, 11 px profile badges on phones, loading indicators under reduced motion, skip link hover contrast, status colour tokens. |
 
 ## Remote state observed
 
@@ -21,6 +22,7 @@ This ledger records release metadata state without fabricating historical tags o
 - GitHub Releases API returned `v2.7.0` and `v2.2.0` in the latest 20 releases.
 - When 3.0.0 was prepared (2026-10-06): `git ls-remote --tags origin` returned `v2.2.0`, `v2.7.0`, `v2.7.4` and the two `pre-cicd`/`prod-before-cicd` markers; the public Releases API listed `v2.7.0` and `v2.2.0`.
 - 2026-10-07, after 3.0.0 and 3.0.1 were published: `git ls-remote --tags origin` returned `pre-cicd-main-b32f95a` (→ `b32f95a`), `prod-before-cicd-4ef01c4` (→ `4ef01c4`), `v2.2.0`, `v2.7.0` (→ `481d6bb`), `v2.7.4` (→ `cacd3e0`), `v3.0.0` (→ `ea4f9dd`) and `v3.0.1` (→ `e9c5605`); `gh release list` showed `v3.0.1` (Latest), `v3.0.0`, `v2.7.0` and `v2.2.0`.
+- 2026-10-08, before 3.0.3: the same tags as above and no `v3.0.2`; `gh release list` unchanged (`v3.0.1` Latest); production `X-App-Revision` was `c4c6b67` (3.0.2).
 
 ## Reconciliation rule
 

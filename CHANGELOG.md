@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [3.0.3] - 2026-10-08
+
+### Fixed
+- Endpoint Lab, "Check quality": at 768, 1280 and 1440 px the label "first session" ("с первой сессии") ran into "after retry"; the legend labels now wrap between words.
+- Endpoint Lab summary: the "being rechecked" tile broke the Russian word without a hyphen at 1280–1440 px («перепроверк / е»); it now breaks as «пере- / проверке».
+- Endpoint Lab, "Recent activity": a restored and a temporarily excluded endpoint had the same orange action word; the action now takes the colour of its event dot — green, amber or light red.
+- Profile badges ("Recommended", "Newest" and the others) were 9.5 px on phones; they are 11 px now.
+- With "reduce motion" turned on in the system, the spinner of the generate button stopped, and the button text is hidden while a config is generated, so nothing showed that the request was running. Decorative motion stays off; loading indicators keep turning, slower.
+- "Skip to generator" (the first link for keyboard users) turned its text cyan on the orange background on hover, a 1.5:1 contrast; the text stays dark.
+
 ## [3.0.2] - 2026-10-07
 
 ### Changed
