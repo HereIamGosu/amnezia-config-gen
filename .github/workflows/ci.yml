@@ -151,7 +151,7 @@ jobs:
 
       # The only build. Everything below tests or exports this exact image.
       - name: Build image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         env:
           # The action would otherwise upload a build-record artifact on every run, PRs included.
           DOCKER_BUILD_RECORD_UPLOAD: false
