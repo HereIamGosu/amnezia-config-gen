@@ -78,5 +78,15 @@ Client releases: the latest tags of amneziawg-windows, amneziawg-android and amn
 the same result on that revision as on master, including AWG 3.1. Current client builds would therefore also accept `<rc>`/`<rd>`; the
 b/r/t restriction protects users who have not updated since the v0.2.13/v0.2.14 era (mid-2025).
 
+## Own chains (editor and `i1`…`i5`, 2026-10-14)
+
+The shared parser `public/static/cps-chain.js` enforces the rules above; `all` = `<b>`/`<r>`/`<t>` only,
+`modern` = also `<rd>`/`<rc>`. Found by the harness, not in the first audit: v0.2.13–v0.2.15 also require the
+I-packets to be numbered without gaps (`device/awg/tag_junk_packet_generators.go`, `Validate`: "junk packet index
+should be consecutive"; v0.2.15 lines 22–41). I3 without I2 is rejected there and accepted from v0.2.16. The server
+answers `cps_chain_gap` and the editor shows the same error. Harness run on the final tree: 120 handler configs with
+own chains (60 `all`, 60 `modern`, awg2/awg3/awg31, fields consecutive, one case at 1472 bytes): `all` accepted by
+every revision that supports the profile, `modern` rejected by v0.2.13 and the v0.2.14 beta and accepted from v0.2.15.
+
 Not verified: the installed client apps themselves (AmneziaVPN, AmneziaWG for Windows/Android/iOS, WG Tunnel),
 amnezia-client's own embedding, and networks with DPI.

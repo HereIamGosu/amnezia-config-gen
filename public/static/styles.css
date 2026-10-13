@@ -53,6 +53,7 @@
   --color-blue-soft: rgba(59, 130, 246, 0.14);
   --color-cyan: #19d7ff;
   --color-cyan-soft: rgba(25, 215, 255, 0.12);
+  --color-cyan-line: rgba(25, 215, 255, 0.45);
   --color-success: #22c55e;
   --color-success-soft: rgba(34, 197, 94, 0.14);
   --color-warning: #f59e0b;
@@ -65,6 +66,7 @@
   --color-error-text: #fca5a5;
   --color-violet: #a78bfa;
   --color-violet-soft: rgba(167, 139, 250, 0.16);
+  --color-violet-line: rgba(167, 139, 250, 0.5);
 
   --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, "SFMono-Regular", Menlo, monospace;
@@ -4562,4 +4564,307 @@ html.is-modal-open {
 /* Окно поверх другого окна: затемнение слабее, чтобы не «проваливаться» в черноту */
 .modal.is-stacked {
   background: rgba(3, 5, 8, 0.45);
+}
+
+/* Редактор CPS-цепочек I1–I5 (вкладка «Дополнительно», cps-editor.js) */
+.cps-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.cps-editor__intro {
+  margin: 0;
+  color: var(--color-text-2);
+  font-size: 13px;
+}
+
+.cps-editor__compat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.cps-editor__compat-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.cps-editor__fields {
+  display: grid;
+  gap: 8px;
+}
+
+.cps-field {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.cps-field--invalid {
+  border-color: var(--color-error);
+}
+
+.cps-field__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.cps-field__name {
+  min-width: 26px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.cps-field__status {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text-2);
+  font-size: 12.5px;
+}
+
+.cps-field__switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cps-field__body {
+  display: grid;
+  gap: 10px;
+  padding: 0 14px 14px;
+}
+
+.cps-field__body[hidden] {
+  display: none;
+}
+
+.cps-field__views {
+  justify-self: start;
+}
+
+.cps-field__views .route-mode-btn {
+  padding: 5px 14px;
+  font-size: 13px;
+}
+
+.cps-field__note {
+  margin: 0;
+  color: var(--color-warning-text);
+  font-size: 12.5px;
+}
+
+.cps-blocks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cps-blocks:empty {
+  display: none;
+}
+
+.cps-block {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 4px 4px 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-elev);
+  font-size: 12.5px;
+}
+
+.cps-block--b {
+  border-color: var(--color-border-strong);
+}
+
+.cps-block--r,
+.cps-block--t {
+  border-color: var(--color-cyan-line);
+  background: var(--color-cyan-soft);
+}
+
+.cps-block--rd,
+.cps-block--rc {
+  border-color: var(--color-violet-line);
+  background: var(--color-violet-soft);
+}
+
+.cps-block__type {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cps-block__prefix,
+.cps-block__unit,
+.cps-block__fixed {
+  color: var(--color-text-2);
+  font-family: var(--font-mono);
+}
+
+.cps-block__input {
+  min-height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.cps-block__input--n {
+  width: 70px;
+}
+
+.cps-block__input--hex {
+  width: 18ch;
+  min-width: 8ch;
+  max-width: 100%;
+}
+
+.cps-block__input:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.cps-block__actions {
+  display: inline-flex;
+}
+
+.cps-block__btn {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0 6px;
+}
+
+.cps-block__btn--remove:hover {
+  color: var(--color-error-text);
+}
+
+.cps-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cps-palette__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cps-field__text {
+  width: 100%;
+  min-height: 72px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-elev);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  resize: vertical;
+  overflow-wrap: anywhere;
+}
+
+.cps-field__text:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.cps-field__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  color: var(--color-text-2);
+  font-size: 12.5px;
+}
+
+.cps-field__errors {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+
+.cps-field__errors:empty {
+  display: none;
+}
+
+.cps-field__error {
+  color: var(--color-error-text);
+}
+
+.cps-field__error::before {
+  content: "✕ ";
+}
+
+.cps-field__warning {
+  color: var(--color-warning-text);
+}
+
+.cps-field__warning::before {
+  content: "⚠ ";
+}
+
+.cps-field__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cps-editor__import {
+  padding: 10px 14px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius);
+}
+
+.cps-editor__import summary {
+  color: var(--color-text-2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cps-editor__import[open] {
+  display: grid;
+  gap: 8px;
+}
+
+.cps-editor__import .btn {
+  justify-self: start;
+}
+
+@media (max-width: 560px) {
+  .cps-field__head {
+    flex-wrap: wrap;
+  }
+
+  .cps-field__status {
+    flex-basis: 100%;
+    order: 3;
+  }
+
+  .cps-field__switch {
+    margin-left: auto;
+  }
+}
+
+.cps-field__fix {
+  margin-left: 6px;
+  vertical-align: middle;
 }

@@ -22,6 +22,10 @@
   /** Варианты #warpEndpointSelect: hostname (по умолчанию), Endpoint Lab — авто или один из IP WARP. */
   const ENDPOINTS = Object.freeze(['hostname', 'lab', '162.159.192.1', '162.159.195.1', '188.114.97.1', '188.114.99.1']);
   const COUNTS = Object.freeze([1, 2, 3]);
+  /** Свои CPS-цепочки: поля и уровни совместимости как в cps-chain.js; содержимое проверяет он же при применении. */
+  const CPS_CHAIN_FIELDS = Object.freeze(['I1', 'I2', 'I3', 'I4', 'I5']);
+  const CPS_COMPATS = Object.freeze(['all', 'modern']);
+  const MAX_CHAIN_LENGTH = 4096;
 
   const DEFAULTS = Object.freeze({
     profile: 'awg2',
@@ -36,7 +40,8 @@
   });
 
   /** Порядок параметров в канонической ссылке. */
-  const PARAM_ORDER = Object.freeze(['profile', 'routes', 'dns', 'device', 'ipv6', 'cps', 'cps5', 'endpoint', 'port', 'count']);
+  const PARAM_ORDER = Object.freeze(['profile', 'routes', 'dns', 'device', 'ipv6', 'cps', 'cps5', 'compat', 'i1', 'i2', 'i3', 'i4', 'i5',
+    'endpoint', 'port', 'count']);
 
   const MAX_ROUTES = 64;
 
@@ -77,7 +82,8 @@
    * @param {string | URLSearchParams} search — location.search (с «?» или без)
    * @param {{ routes?: string[], dns?: string[] }} [catalogue] — допустимые id из каталога пресетов
    * @returns {{ profile?: string, routes?: string[], dns?: string, device?: string, ipv6?: boolean,
-   *   cps?: string, cps5?: boolean, endpoint?: string, port?: number, count?: number }}
+   *   cps?: string, cps5?: boolean, cpsCompat?: string, cpsChains?: Record<string, string>, endpoint?: string,
+   *   port?: number, count?: number }}
    */
   const parseShareParams = (search, catalogue = {}) => {
     const params = toParams(search);
@@ -114,6 +120,16 @@
     const cps5 = parseFlag(firstValue(params, 'cps5'));
     if (cps5 !== undefined) out.cps5 = cps5;
 
+    const compat = firstValue(params, 'compat');
+    if (CPS_COMPATS.includes(compat)) out.cpsCompat = compat;
+
+    const chains = {};
+    for (const field of CPS_CHAIN_FIELDS) {
+      const value = firstValue(params, field.toLowerCase());
+      if (value && value.length <= MAX_CHAIN_LENGTH) chains[field] = value;
+    }
+    if (Object.keys(chains).length > 0) out.cpsChains = chains;
+
     const endpoint = firstValue(params, 'endpoint');
     if (ENDPOINTS.includes(endpoint)) out.endpoint = endpoint;
 
@@ -141,6 +157,10 @@
     if (state.ipv6 === true && !isMobileDevice(state.device)) values.ipv6 = '1';
     if (CPS_PROTOCOLS.includes(state.cps) && state.cps !== DEFAULTS.cps) values.cps = state.cps;
     if (state.cps5 === true) values.cps5 = '1';
+    const chains = state.cpsChains && typeof state.cpsChains === 'object' ? state.cpsChains : {};
+    const withChains = CPS_CHAIN_FIELDS.filter((field) => typeof chains[field] === 'string' && chains[field]);
+    for (const field of withChains) values[field.toLowerCase()] = encodeURIComponent(chains[field]);
+    if (withChains.length > 0 && state.cpsCompat === 'modern') values.compat = 'modern';
     if (ENDPOINTS.includes(state.endpoint) && state.endpoint !== DEFAULTS.endpoint) values.endpoint = state.endpoint;
     if (PORTS.includes(state.port) && state.port !== DEFAULTS.port) values.port = String(state.port);
     if (COUNTS.includes(state.count) && state.count !== DEFAULTS.count) values.count = String(state.count);
@@ -161,6 +181,8 @@
     PORTS,
     ENDPOINTS,
     COUNTS,
+    CPS_CHAIN_FIELDS,
+    CPS_COMPATS,
     DEFAULTS,
     PARAM_NAMES: PARAM_ORDER,
     buildShareQuery,

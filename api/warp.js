@@ -14,6 +14,7 @@ const warpLimiter = createRateLimiter({ windowMs: 60_000, maxHits: 10 });
 const { generateCpsPayload } = require('../src/server/cpsGenerator');
 const { getCpsProtocol, validateCpsProtocol } = require('../src/server/cps/protocols');
 const { generateI2I5 } = require('../src/server/cpsExtraPackets');
+const CpsChain = require('../public/static/cps-chain');
 const { buildVpnLink } = require('../src/server/vpnLinkBuilder');
 const { getCompatibilityForGeneration } = require('../src/server/clientCompatibility');
 const { getTopEndpoints } = require('../src/server/endpointCache');
@@ -483,10 +484,7 @@ const buildInterfaceAwg2 = (privKey, clientIPv4, clientIPv6, obf, dnsLine, plain
   if (i1Optional) {
     lines.push(`I1 = ${i1Optional}`);
     if (extraCps) {
-      lines.push(`I2 = ${extraCps.I2}`);
-      lines.push(`I3 = ${extraCps.I3}`);
-      lines.push(`I4 = ${extraCps.I4}`);
-      lines.push(`I5 = ${extraCps.I5}`);
+      for (const field of ['I2', 'I3', 'I4', 'I5']) if (extraCps[field]) lines.push(`${field} = ${extraCps[field]}`);
     }
   }
   return lines.join('\n');
@@ -526,10 +524,7 @@ const buildInterfaceAwg2WarpSafe = (privKey, clientIPv4, clientIPv6, obf, dnsLin
   if (i1Optional) {
     lines.push(`I1 = ${i1Optional}`);
     if (extraCps) {
-      lines.push(`I2 = ${extraCps.I2}`);
-      lines.push(`I3 = ${extraCps.I3}`);
-      lines.push(`I4 = ${extraCps.I4}`);
-      lines.push(`I5 = ${extraCps.I5}`);
+      for (const field of ['I2', 'I3', 'I4', 'I5']) if (extraCps[field]) lines.push(`${field} = ${extraCps[field]}`);
     }
   }
   return lines.join('\n');
@@ -774,6 +769,48 @@ const parsePeerEndpointOverride = (v) => {
 };
 
 /**
+ * Уровень совместимости своих CPS-цепочек: 'all' — только теги, которые понимают все клиенты с I1–I5
+ * (amneziawg-go v0.2.13+), 'modern' — ещё <rd>/<rc> (v0.2.15+). По умолчанию 'modern': до этих полей
+ * API принимал свой i1 без проверки тегов, и 'all' отверг бы допустимые для текущих клиентов цепочки.
+ */
+const parseCpsCompat = (raw) => {
+  if (raw == null || raw === '') return 'modern';
+  const value = String(raw).toLowerCase().trim();
+  if (CpsChain.isCompat(value)) return value;
+  const err = new Error('Некорректный cpsCompat: допустимо all или modern.');
+  err.statusCode = 400;
+  err.code = 'cps_compat_invalid';
+  err.expected = CpsChain.COMPAT_LEVELS;
+  throw err;
+};
+
+/**
+ * Свои цепочки i1..i5 (тело или query). Каждая проверяется тем же парсером, что и редактор в интерфейсе;
+ * в конфиг идёт канонический вид. Ошибка — 400 cps_chain_invalid с полем; содержимое цепочки в текст
+ * ошибки и в лог не попадает.
+ * @returns {{ I1: string, I2: string, I3: string, I4: string, I5: string }}
+ */
+const collectCpsChains = (inputValue, compat) => {
+  const out = {};
+  for (const field of CpsChain.FIELDS) {
+    const raw = inputValue(field.toLowerCase());
+    const text = raw == null ? '' : String(raw).trim();
+    if (!text) { out[field] = ''; continue; }
+    const parsed = CpsChain.parse(text, compat);
+    if (!parsed.ok || parsed.segments.length === 0) {
+      const first = parsed.errors[0] || { code: 'empty_tag' };
+      const err = new Error(`Поле ${field}: ${CpsChain.describeError(first)}.`);
+      err.statusCode = 400;
+      err.code = 'cps_chain_invalid';
+      err.field = field;
+      throw err;
+    }
+    out[field] = parsed.canonical;
+  }
+  return out;
+};
+
+/**
  * Merge query + JSON body options for WARP config extras.
  * @param {import('http').IncomingMessage} req
  * @param {Record<string, unknown>} body
@@ -824,7 +861,12 @@ const collectWarpGenExtras = (req, body, mode = 'legacy') => {
   }
   const i1RefRaw = b.i1Ref ?? pickQuery(req, 'i1Ref');
   const i1Ref = i1RefRaw != null && String(i1RefRaw).trim() !== '' ? String(i1RefRaw).trim() : null;
-  const i1Raw = b.i1 != null ? String(b.i1) : null;
+  const cpsCompat = parseCpsCompat(inputValue('cpsCompat'));
+  const chains = collectCpsChains(inputValue, cpsCompat);
+  const i1Raw = chains.I1 || null;
+  const customExtraCps = ['I2', 'I3', 'I4', 'I5'].some((f) => chains[f])
+    ? { I2: chains.I2, I3: chains.I3, I4: chains.I4, I5: chains.I5 }
+    : null;
   const pa = b.plainAddress ?? pickQuery(req, 'plainAddress');
   const plainAddress =
     pa === true ||
@@ -842,6 +884,7 @@ const collectWarpGenExtras = (req, body, mode = 'legacy') => {
     experimentalContentPadding: isAwg3Mode(mode) && experimentalContentPadding,
     i1Ref,
     i1Raw,
+    customExtraCps,
     plainAddress,
   };
 };
@@ -1288,9 +1331,17 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
   const cps = await resolveI1ForGeneration(warpExtras, routeOpts.cpsProtocol);
   const i1 = cps.value;
 
-  const wantExtraCps = Boolean(routeOpts.extraCps);
-  const canApplyExtraCps = wantExtraCps && (mode === 'awg2' || isAwg3Mode(mode)) && Boolean(i1);
-  const extraCps = canApplyExtraCps ? generateI2I5() : null;
+  // I2–I5 только в AWG 2.0/3.x и только вместе с I1 (I9). Своя цепочка поля заменяет авто-шаблон cps5;
+  // поле без своей цепочки и без cps5 не выводится.
+  const supportsIFields = (mode === 'awg2' || isAwg3Mode(mode)) && Boolean(i1);
+  const canApplyExtraCps = Boolean(routeOpts.extraCps) && supportsIFields;
+  const customExtraCps = supportsIFields ? warpExtras.customExtraCps || null : null;
+  let extraCps = null;
+  if (canApplyExtraCps || customExtraCps) {
+    const auto = canApplyExtraCps ? generateI2I5() : {};
+    extraCps = {};
+    for (const field of ['I2', 'I3', 'I4', 'I5']) extraCps[field] = (customExtraCps && customExtraCps[field]) || auto[field] || '';
+  }
   const persistentKeepalive = warpExtras.persistentKeepalive != null
     ? warpExtras.persistentKeepalive
     : isAwg3Mode(mode)
@@ -1487,6 +1538,23 @@ const handler = async (req, res) => {
     const includeIpv6 = mobileMode ? false : requestedIpv6;
     const routeOpts = { includeIpv6, routerMode, cpsProtocol, extraCps, mobileMode };
 
+    // Свои I2–I5 без cps5 могут оставить пропуск (I3 без I2): amneziawg-go до v0.2.16 отвергает такой конфиг целиком.
+    // Проверяем до регистрации WARP; I2–I5 бывают только в AWG 2.0/3.x и только вместе с I1 (I9).
+    const customExtra = warpExtras.customExtraCps;
+    const hasI1 = Boolean(warpExtras.i1Raw || warpExtras.i1Ref || warpExtras.useEmbeddedAmneziaI1);
+    if (customExtra && hasI1 && (mode === 'awg2' || isAwg3Mode(mode))) {
+      const present = { I1: true };
+      for (const field of ['I2', 'I3', 'I4', 'I5']) present[field] = Boolean(customExtra[field]) || extraCps;
+      const gap = CpsChain.findGap(present);
+      if (gap) {
+        const err = new Error(`Поле ${gap.field}: ${CpsChain.describeGap(gap)}.`);
+        err.statusCode = 400;
+        err.code = 'cps_chain_gap';
+        err.field = gap.field;
+        throw err;
+      }
+    }
+
     // ── routeMode validation ──────────────────────────────────────────────────────
     const routeModeRaw = String(
       body.routeMode ?? pickQuery(req, 'routeMode') ?? ''
@@ -1663,6 +1731,7 @@ const handler = async (req, res) => {
         error: error.code || error.message,
         message: error.message,
         ...(error.expected ? { expected: error.expected } : {}),
+        ...(error.field ? { field: error.field } : {}),
         ...(error.allowedProtocols ? { allowedCpsProtocols: error.allowedProtocols } : {}),
       });
       return;

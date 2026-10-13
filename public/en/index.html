@@ -39,6 +39,7 @@
     <script defer src="/static/result-explanation.js?v=3.0.3"></script>
     <script defer src="/static/live-status.js?v=3.0.3"></script>
     <script defer src="/static/share-link.js?v=3.0.3"></script>
+    <script defer src="/static/cps-chain.js?v=3.0.3"></script>
     <script defer src="/static/ui-shell.js?v=3.0.3"></script>
     <!-- Endpoint Lab: адаптер данных и быстрый просмотр (строка в карточке статуса); /lab/* без ?v= — ревалидируются -->
     <script defer src="/lab/lab-core.js"></script>
@@ -50,6 +51,7 @@
     <script defer src="/static/status.js?v=3.0.3"></script>
     <script defer src="/static/result.js?v=3.0.3"></script>
     <script defer src="/static/settings.js?v=3.0.3"></script>
+    <script defer src="/static/cps-editor.js?v=3.0.3"></script>
     <script defer src="/static/settings-link.js?v=3.0.3"></script>
     <script defer src="/static/history.js?v=3.0.3"></script>
     <script defer src="/static/script.js?v=3.0.3"></script>
@@ -1313,13 +1315,33 @@
                   <span class="option-row__hint" data-i18n="mobile_mode_hint">Low Jc/Jmax, MTU 1280, IPv4-only — for smartphones</span>
                 </span>
               </label>
-              <label class="option-row" title="AmneziaWG 2.0 only. Adds 4 random mimicry packets (I2-I5) before handshake — strengthens traffic obfuscation." data-i18n-title="cps5_title">
+              <label class="option-row" title="AmneziaWG 2.0 and 3.x. Adds 4 packets (I2–I5) before the handshake; the client generates their random part again on every handshake." data-i18n-title="cps5_title">
                 <input type="checkbox" class="switch" id="cps5Toggle" />
                 <span class="option-row__text">
                   <span class="option-row__label" data-i18n="cps5_label">Enhanced mimicry (I2-I5)</span>
-                  <span class="option-row__hint" data-i18n="cps5_hint">AWG 2.0 only. 4 random packets before handshake.</span>
+                  <span class="option-row__hint" data-i18n="cps5_hint">AWG 2.0 and 3.x. 4 packets before the handshake, bytes change every time.</span>
                 </span>
               </label>
+
+              <h3 class="section-label" data-i18n="cps_editor_title">CPS chains I1–I5</h3>
+              <div class="cps-editor" id="cpsEditor">
+                <p class="cps-editor__intro" data-i18n="cps_editor_intro">Packets the client sends before every handshake. A field without your own chain is filled by the generator: I1 with the CPS protocol from the “DNS &amp; CPS” tab, I2–I5 with the “Enhanced mimicry” template. I2–I5 work only in AWG 2.0 and 3.x.</p>
+                <div class="cps-editor__compat">
+                  <span class="option-row__label" id="cpsCompatLabel" data-i18n="cps_compat_label">Compatibility</span>
+                  <div class="route-mode-toggle" role="group" aria-labelledby="cpsCompatLabel">
+                    <button type="button" class="route-mode-btn route-mode-btn--active" data-cps-compat="all" aria-pressed="true" data-i18n="cps_compat_all">All clients</button>
+                    <button type="button" class="route-mode-btn" data-cps-compat="modern" aria-pressed="false" data-i18n="cps_compat_modern">Newer clients</button>
+                  </div>
+                  <p class="option-row__hint cps-editor__compat-hint" id="cpsCompatHint" aria-live="polite"></p>
+                </div>
+                <div class="cps-editor__fields" id="cpsEditorFields"></div>
+                <details class="cps-editor__import">
+                  <summary data-i18n="cps_import_summary">Take I1–I5 from an existing .conf</summary>
+                  <label class="visually-hidden" for="cpsImportText" data-i18n="cps_import_label">Configuration text</label>
+                  <textarea id="cpsImportText" class="cps-field__text cps-editor__import-text" rows="4" spellcheck="false"></textarea>
+                  <button type="button" class="btn btn--sm" id="cpsImportBtn" data-i18n="cps_import_btn">Take chains</button>
+                </details>
+              </div>
 
               <h3 class="section-label" data-i18n="settings_connection">Connection</h3>
               <div class="option-row option-row--stack">

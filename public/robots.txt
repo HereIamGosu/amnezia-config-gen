@@ -17,6 +17,6 @@ Allow: /
 Disallow: /api/
 Clean-param: utm_source&utm_medium&utm_campaign&utm_term&utm_content&utm_id
 Clean-param: yclid&ysclid&gclid&gbraid&wbraid&fbclid&msclkid&_openstat&from&ref
-Clean-param: profile&routes&dns&device&ipv6&cps&cps5&endpoint&port&count
+Clean-param: profile&routes&dns&device&ipv6&cps&cps5&compat&i1&i2&i3&i4&i5&endpoint&port&count
 
 Sitemap: https://awgconfig.com/sitemap.xml

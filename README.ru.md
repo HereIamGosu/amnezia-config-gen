@@ -154,7 +154,8 @@ Endpoint Lab работает на том же сервере отдельной
 | `contentPaddingAddition` | Padding внутри шифрованного AWG 3.x payload; default `10-100`; `off`, `0` или `0-0` отключает; допустим строгий integer/range `0..65535` |
 | `experimentalContentPadding` | Deprecated-флаг совместимости; `true` по-прежнему принимается, но padding теперь управляется напрямую через `contentPaddingAddition` |
 | `disableCookies` | Строгий AWG 3.1-only toggle `on/off` (также `true/false/1/0`); default `on` |
-| `i1` | Сырая строка CPS / obfuscation (AWG 2.0) |
+| `i1` … `i5` | Свои CPS-цепочки для `I1`–`I5` (query или JSON-тело POST). Теги `<b 0x…>`, `<r N>`, `<rd N>`, `<rc N>`, `<t>`; N 1–1000, один `<t>` на поле, до 1472 байт в пакете. Проверяет `public/static/cps-chain.js` (тот же разбор, что у редактора в интерфейсе), в конфиг идёт канонический вид; некорректная цепочка — HTTP 400 `cps_chain_invalid` с `field` до регистрации WARP. Своя `I2`–`I5` заменяет это поле шаблона `cps5`; без `cps5` пишутся только заданные поля. `I2`–`I5` по-прежнему требуют `I1` и режим AWG 2.0/3.x и не должны оставлять пропуск (`I3` без `I2` и без `cps5` — HTTP 400 `cps_chain_gap`: amneziawg-go до v0.2.16 отвергает такой конфиг). |
+| `cpsCompat` | `all` — только `<b>`/`<r>`/`<t>` (все клиенты с I1–I5, amneziawg-go v0.2.13+); `modern` (по умолчанию) — ещё `<rd>`/`<rc>` (v0.2.15+). |
 | `i1Ref` | Имя файла из `src/server/cps-presets/` |
 | `cps` | `auto` (только стабильные `static` / `sip` / `stun`) либо явный `static`, `sip`, `stun`, `quic`, `dns`, `dtls`; последние три экспериментальны. `tls` и неизвестные идентификаторы возвращают HTTP 400. |
 | `plainAddress` | `1` / `true` — в `Address` без `/32` и `/128` |

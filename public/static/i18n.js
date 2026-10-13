@@ -6,7 +6,7 @@
 //
 // Классический скрипт (defer), не модуль: верхнеуровневые const/let/функции всех скриптов генератора
 // живут в одной глобальной лексической области. Порядок загрузки — в public/index.html:
-// i18n.js → common.js → status.js → result.js → settings.js → settings-link.js → history.js →
+// i18n.js → common.js → status.js → result.js → settings.js → cps-editor.js → settings-link.js → history.js →
 // script.js. При загрузке файл вызывает только своё и уже загруженное;
 // остальное — из обработчиков после DOMContentLoaded. /* global */ — что файл берёт у других,
 // /* exported */ — что отдаёт им (проверяют ESLint и __tests__/frontend-scripts.test.js).
@@ -17,6 +17,7 @@
    lastResultSummary:writable, renderResultExplanation, lastCompatibility:writable, renderCompatibilityCard,
    currentResult:writable, renderResultSuccess -- result.js */
 /* global updateCidrCounter, cfgState, ROUTE_MODES, updateParamChips -- settings.js */
+/* global renderCpsEditor -- cps-editor.js */
 /* global renderHistoryPanel -- history.js */
 /* exported _i18n, t, setI18nText, initI18n, restoreLangHandoff, switchLang */
 
@@ -88,6 +89,7 @@ const loadLocale = async (lang) => {
     // Тексты, которые строит JS (статус, чипы, результат, история), — на языке словаря
     renderHeroStatus();
     updateParamChips();
+    renderCpsEditor();
     if (currentResult) renderResultSuccess();
     renderHistoryPanel();
   } catch {

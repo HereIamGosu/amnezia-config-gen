@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+### Added
+- CPS chain editor in Settings → Advanced. Each of I1–I5 is either automatic (I1 from the CPS protocol, I2–I5 from "Enhanced mimicry") or your own chain, built from blocks — bytes, random bytes, random digits, random letters, time — or typed as text. The editor shows the packet size, which bytes change on every handshake and which clients accept the chain. "Compatibility: All clients" allows only `<b>`, `<r>`, `<t>`; "Newer clients" also allows `<rd>`/`<rc>`, which clients on amneziawg-go before 0.2.15 reject. Own chains can be taken from a pasted .conf or from a config in the generation history, and the settings link carries them (a link that would be too long is copied without them, with a notice).
+- `/api/warp` accepts `i1`…`i5` (query or POST body) and `cpsCompat`. Chains are checked by the same parser as the editor (`public/static/cps-chain.js`); an invalid one returns HTTP 400 `cps_chain_invalid` with the field, before any WARP registration. A gap in I1–I5 (for example I3 without I2 and without "Enhanced mimicry") returns HTTP 400 `cps_chain_gap`: clients on amneziawg-go before 0.2.16 reject such a config.
+
 ### Changed
+- `i1` in the request body is now checked like the other chains: unknown tags, `<d>`/`<ds>`/`<dz>`/`<c>`/`<wt>`, text outside tags and packets over 1472 bytes return HTTP 400 instead of reaching the config. With `cpsCompat` unset the check accepts `<rd>`/`<rc>`, as current clients do.
+- "Enhanced mimicry" hint: I2–I5 work in AWG 2.0 and 3.x, not only 2.0.
 - "Enhanced mimicry (I2–I5)": the four extra CPS packets are no longer fixed random bytes chosen when the config is generated. Each is a chain of AmneziaWG tags `<b 0x…>`, `<r N>` and `<t>` with its own shape; the client generates the `<r>` and `<t>` bytes again on every handshake initiation, so these packets differ between handshakes of the same config. `<rc>`/`<rd>` are not used because amneziawg-go before v0.2.15 rejects them together with the whole config. I1 and the CPS protocol choice are unchanged. Sources: `docs/research/cps-runtime-tags-audit.md`.
 
 ### Removed

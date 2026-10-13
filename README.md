@@ -154,7 +154,8 @@ Parameters via query string (`GET`) or JSON body fields (`POST`). Body field nam
 | `contentPaddingAddition` | AWG 3.x encrypted payload padding; defaults to `10-100`; `off`, `0`, or `0-0` disables it; accepts a strict `0..65535` integer/range |
 | `experimentalContentPadding` | Deprecated compatibility flag; `true` remains accepted, while padding now follows `contentPaddingAddition` directly |
 | `disableCookies` | AWG 3.1-only strict `on/off` toggle (also `true/false/1/0`); defaults to `on` |
-| `i1` | Raw CPS / obfuscation string (AWG 2.0) |
+| `i1` … `i5` | Own CPS chains for `I1`–`I5` (query or JSON body of a POST). Tags `<b 0x…>`, `<r N>`, `<rd N>`, `<rc N>`, `<t>`; N 1–1000, one `<t>` per field, up to 1472 bytes per packet. Checked by `public/static/cps-chain.js` (the same parser as the web editor) and written in canonical form; an invalid chain returns HTTP 400 `cps_chain_invalid` with `field`, before any WARP registration. An own `I2`–`I5` replaces that field of the `cps5` template; without `cps5` only the given fields are written. `I2`–`I5` still need `I1` and an AWG 2.0/3.x mode, and must not leave a gap (`I3` without `I2` and without `cps5` returns HTTP 400 `cps_chain_gap`: amneziawg-go before v0.2.16 rejects such a config). |
+| `cpsCompat` | `all` — only `<b>`/`<r>`/`<t>` (every client with I1–I5, amneziawg-go v0.2.13+); `modern` (default) — also `<rd>`/`<rc>` (v0.2.15+). |
 | `i1Ref` | Filename from `src/server/cps-presets/` |
 | `cps` | `auto` (stable `static` / `sip` / `stun` only), or explicit `static`, `sip`, `stun`, `quic`, `dns`, `dtls`; the latter three are experimental. `tls` and unknown IDs return HTTP 400. |
 | `plainAddress` | `1` / `true` — omit `/32` and `/128` from `Address` |

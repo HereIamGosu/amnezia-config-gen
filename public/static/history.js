@@ -5,15 +5,16 @@
 //
 // Классический скрипт (defer), не модуль: верхнеуровневые const/let/функции всех скриптов генератора
 // живут в одной глобальной лексической области. Порядок загрузки — в public/index.html:
-// i18n.js → common.js → status.js → result.js → settings.js → settings-link.js → history.js →
+// i18n.js → common.js → status.js → result.js → settings.js → cps-editor.js → settings-link.js → history.js →
 // script.js. При загрузке файл вызывает только своё и уже загруженное;
 // остальное — из обработчиков после DOMContentLoaded. /* global */ — что файл берёт у других,
 // /* exported */ — что отдаёт им (проверяют ESLint и __tests__/frontend-scripts.test.js).
 
 /* global _i18n, t -- i18n.js */
-/* global makeIcon, openPreviewModal, telemetry, downloadFile -- common.js */
+/* global makeIcon, openPreviewModal, telemetry, downloadFile, toast -- common.js */
 /* global getDnsLabel, getDeviceLabel, getModeBadgeClass, getModeLabel -- result.js */
 /* global getResultStateSnapshot, getSelectedRouteIds, getSelectedDnsKey, ROUTE_MODES -- settings.js */
+/* global setCpsChains -- cps-editor.js */
 /* exported HISTORY_KEY, saveToHistory, renderHistoryPanel */
 
 const HISTORY_KEY = 'awg_history';
@@ -141,6 +142,22 @@ const renderHistoryPanel = () => {
       telemetry.trackEvent('history_item_downloaded', telemetryContext);
     });
     actions.append(previewBtn, dlBtn);
+    // Цепочки I1–I5 берутся из самого сохранённого конфига — работает и для записей до редактора
+    // Повреждённая запись в localStorage не должна ломать список (и инициализацию страницы): тогда кнопки нет
+    let chains = {};
+    try {
+      if (window.CpsChain) chains = window.CpsChain.extractFromConf(atob(entry.b64));
+    } catch { chains = {}; }
+    const chainFields = Object.keys(chains);
+    if (chainFields.length) {
+      const useChainsBtn = makeIconButton('i-layers', t('history_use_chains', 'Взять I1–I5 этого конфига в настройки'), () => {
+        setCpsChains(chains);
+        toast(`${t('history_chains_loaded', 'Свои цепочки загружены в настройки:')} ${chainFields.join(', ')}`, 'success');
+        telemetry.trackEvent('history_chains_used', { ...telemetryContext, fields: chainFields.length });
+      });
+      useChainsBtn.classList.add('history-item__use-chains');
+      actions.append(useChainsBtn);
+    }
 
     item.append(badge, info, actions);
     list.appendChild(item);

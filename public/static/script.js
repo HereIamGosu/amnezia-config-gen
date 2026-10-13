@@ -5,7 +5,7 @@
 //
 // Классический скрипт (defer), не модуль: верхнеуровневые const/let/функции всех скриптов генератора
 // живут в одной глобальной лексической области. Порядок загрузки — в public/index.html:
-// i18n.js → common.js → status.js → result.js → settings.js → settings-link.js → history.js →
+// i18n.js → common.js → status.js → result.js → settings.js → cps-editor.js → settings-link.js → history.js →
 // script.js. При загрузке файл вызывает только своё и уже загруженное;
 // остальное — из обработчиков после DOMContentLoaded. /* global */ — что файл берёт у других,
 // /* exported */ — что отдаёт им (проверяют ESLint и __tests__/frontend-scripts.test.js).
@@ -20,6 +20,7 @@
 /* global
    cfgState, getSelectedRouteIds, ROUTE_MODES, getSelectedDnsKey, getResultStateSnapshot, initSettingsPanel,
    chooseEndpoint, updateParamChips -- settings.js */
+/* global initCpsEditor, getCpsRequest -- cps-editor.js */
 /* global shareLink -- settings-link.js */
 /* global saveToHistory, renderHistoryPanel, HISTORY_KEY -- history.js */
 /* exported getSelectedProfile */
@@ -175,6 +176,14 @@ const generateConfig = async () => {
     return;
   }
 
+  // Свои CPS-цепочки проверяются до запроса тем же разбором, что и на сервере
+  const cpsRequest = getCpsRequest();
+  if (cpsRequest.error) {
+    status.textContent = `${t('cps_generate_error', 'Своя CPS-цепочка с ошибкой (Настройки → Дополнительно):')} ${cpsRequest.error.message}`;
+    status.classList.remove('visually-hidden');
+    return;
+  }
+
   generationInFlight = true;
   button.disabled = true;
   button.classList.add('btn--loading');
@@ -190,9 +199,12 @@ const generateConfig = async () => {
     const timeoutId = setTimeout(() => controller.abort(), API_WARP_TIMEOUT_MS);
     try {
       const warpQs = buildWarpQueryString(mode);
+      // Свои цепочки бывают длиной в килобайты — в теле POST, а не в адресе (лимит строки запроса nginx);
+      // без них запрос прежний
       response = await fetch(`/api/warp?${warpQs}`, {
-        method: 'GET',
+        method: cpsRequest.hasCustom ? 'POST' : 'GET',
         headers: { 'Content-Type': 'application/json' },
+        ...(cpsRequest.hasCustom ? { body: JSON.stringify(cpsRequest.body) } : {}),
         signal: controller.signal,
       });
     } finally {
@@ -347,6 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderHistoryPanel();
 
   initSettingsPanel();
+  initCpsEditor();
 
   // ── F-03: Локализация ──
   initI18n();

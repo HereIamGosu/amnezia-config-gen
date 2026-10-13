@@ -33,7 +33,9 @@ const buildAwg3Interface = (options) => {
   if (options.i1) {
     lines.push(`I1 = ${options.i1}`);
     if (options.extraCps) {
-      for (const field of ['I2', 'I3', 'I4', 'I5']) lines.push(`${field} = ${options.extraCps[field]}`);
+      for (const field of ['I2', 'I3', 'I4', 'I5']) {
+        if (options.extraCps[field]) lines.push(`${field} = ${options.extraCps[field]}`);
+      }
     }
   }
   if (options.contentPaddingAddition) lines.push(`ContentPaddingAddition = ${options.contentPaddingAddition}`);

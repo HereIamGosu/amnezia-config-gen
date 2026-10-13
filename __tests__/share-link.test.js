@@ -227,3 +227,32 @@ test('robots.txt: Yandex Clean-param folds settings links into the page', () => 
   // Ссылки с настройками не меняют канонический адрес страницы.
   assert.match(html, /<link rel="canonical" href="https:\/\/awgconfig\.com\/" \/>/);
 });
+
+test('own CPS chains: round trip through the link, compat only with chains, length cap', () => {
+  const state = {
+    ...DEFAULT_STATE,
+    cpsChains: { I1: '', I2: '<b 0x01><t><r 10>', I3: '', I4: '<rd 5>', I5: '' },
+    cpsCompat: 'modern',
+  };
+  const query = ShareLink.buildShareQuery(state);
+  assert.equal(query, 'compat=modern&i2=%3Cb%200x01%3E%3Ct%3E%3Cr%2010%3E&i4=%3Crd%205%3E');
+  assert.deepEqual(plain(ShareLink.parseShareParams(`?${query}`, CATALOGUE)), {
+    cpsCompat: 'modern',
+    cpsChains: { I2: '<b 0x01><t><r 10>', I4: '<rd 5>' },
+  });
+  // Уровень совместимости без цепочек ничего не значит и в ссылку не пишется; 'all' — умолчание
+  assert.equal(ShareLink.buildShareQuery({ ...DEFAULT_STATE, cpsChains: {}, cpsCompat: 'modern' }), '');
+  assert.equal(ShareLink.buildShareQuery({ ...state, cpsCompat: 'all' }).startsWith('compat='), false);
+  // Неизвестный уровень и слишком длинная цепочка отбрасываются; содержимое проверяет cps-chain.js при применении
+  const long = `<b 0x${'00'.repeat(2100)}>`;
+  assert.deepEqual(plain(ShareLink.parseShareParams(`?compat=newest&i1=${encodeURIComponent(long)}&i2=x`, CATALOGUE)), {
+    cpsChains: { I2: 'x' },
+  });
+});
+
+test('settings link applies chains only after the shared parser accepts them', () => {
+  assert.match(settingsLink, /window\.CpsChain\.parse\(text, 'modern'\)/);
+  assert.match(settingsLink, /setCpsChains\(valid, \{ compat: s\.cpsCompat \}\)/);
+  assert.match(settingsLink, /MAX_SHARE_URL_LENGTH = 6000/);
+  assert.ok(html.indexOf('static/cps-chain.js') < html.indexOf('static/cps-editor.js'), 'parser before the editor');
+});

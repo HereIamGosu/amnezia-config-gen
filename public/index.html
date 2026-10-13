@@ -38,6 +38,7 @@
     <script defer src="static/result-explanation.js?v=3.0.3"></script>
     <script defer src="static/live-status.js?v=3.0.3"></script>
     <script defer src="static/share-link.js?v=3.0.3"></script>
+    <script defer src="static/cps-chain.js?v=3.0.3"></script>
     <script defer src="static/ui-shell.js?v=3.0.3"></script>
     <!-- Endpoint Lab: адаптер данных и быстрый просмотр (строка в карточке статуса); /lab/* без ?v= — ревалидируются -->
     <script defer src="/lab/lab-core.js"></script>
@@ -49,6 +50,7 @@
     <script defer src="static/status.js?v=3.0.3"></script>
     <script defer src="static/result.js?v=3.0.3"></script>
     <script defer src="static/settings.js?v=3.0.3"></script>
+    <script defer src="static/cps-editor.js?v=3.0.3"></script>
     <script defer src="static/settings-link.js?v=3.0.3"></script>
     <script defer src="static/history.js?v=3.0.3"></script>
     <script defer src="static/script.js?v=3.0.3"></script>
@@ -1321,13 +1323,33 @@
                   <span class="option-row__hint" data-i18n="mobile_mode_hint">Низкие Jc/Jmax, MTU 1280, только IPv4 — для смартфонов</span>
                 </span>
               </label>
-              <label class="option-row" title="Только для AmneziaWG 2.0. Добавляет 4 случайных пакета мимикрии (I2-I5) перед handshake — усиливает маскировку трафика." data-i18n-title="cps5_title">
+              <label class="option-row" title="AmneziaWG 2.0 и 3.x. Добавляет 4 пакета (I2–I5) перед handshake; их случайная часть генерируется клиентом заново при каждом handshake." data-i18n-title="cps5_title">
                 <input type="checkbox" class="switch" id="cps5Toggle" />
                 <span class="option-row__text">
                   <span class="option-row__label" data-i18n="cps5_label">Усиленная маскировка (I2-I5)</span>
-                  <span class="option-row__hint" data-i18n="cps5_hint">Только для AWG 2.0. 4 случайных пакета перед handshake.</span>
+                  <span class="option-row__hint" data-i18n="cps5_hint">AWG 2.0 и 3.x. 4 пакета перед handshake, байты меняются каждый раз.</span>
                 </span>
               </label>
+
+              <h3 class="section-label" data-i18n="cps_editor_title">CPS-цепочки I1–I5</h3>
+              <div class="cps-editor" id="cpsEditor">
+                <p class="cps-editor__intro" data-i18n="cps_editor_intro">Пакеты, которые клиент отправляет перед каждым handshake. Поле без своей цепочки заполняет генератор: I1 — протоколом CPS с вкладки «DNS &amp; CPS», I2–I5 — шаблоном «Усиленной маскировки». I2–I5 работают только в AWG 2.0 и 3.x.</p>
+                <div class="cps-editor__compat">
+                  <span class="option-row__label" id="cpsCompatLabel" data-i18n="cps_compat_label">Совместимость</span>
+                  <div class="route-mode-toggle" role="group" aria-labelledby="cpsCompatLabel">
+                    <button type="button" class="route-mode-btn route-mode-btn--active" data-cps-compat="all" aria-pressed="true" data-i18n="cps_compat_all">Все клиенты</button>
+                    <button type="button" class="route-mode-btn" data-cps-compat="modern" aria-pressed="false" data-i18n="cps_compat_modern">Новые клиенты</button>
+                  </div>
+                  <p class="option-row__hint cps-editor__compat-hint" id="cpsCompatHint" aria-live="polite"></p>
+                </div>
+                <div class="cps-editor__fields" id="cpsEditorFields"></div>
+                <details class="cps-editor__import">
+                  <summary data-i18n="cps_import_summary">Взять I1–I5 из готового .conf</summary>
+                  <label class="visually-hidden" for="cpsImportText" data-i18n="cps_import_label">Текст конфигурации</label>
+                  <textarea id="cpsImportText" class="cps-field__text cps-editor__import-text" rows="4" spellcheck="false"></textarea>
+                  <button type="button" class="btn btn--sm" id="cpsImportBtn" data-i18n="cps_import_btn">Взять цепочки</button>
+                </details>
+              </div>
 
               <h3 class="section-label" data-i18n="settings_connection">Соединение</h3>
               <div class="option-row option-row--stack">

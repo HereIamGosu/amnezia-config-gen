@@ -48,7 +48,7 @@ test('both pages load the generator scripts in order, after their dependencies, 
     const first = names.indexOf(APP_SCRIPTS[0]);
     assert.deepEqual(names.slice(first), [...APP_SCRIPTS], `${file}: generator scripts are last and contiguous`);
     // Читаются при исполнении файлов генератора: window.ProductTelemetry, ResultExplanation, LiveStatus, ShareLink, UiShell.
-    for (const dep of ['analytics.js', 'result-explanation.js', 'live-status.js', 'share-link.js', 'ui-shell.js']) {
+    for (const dep of ['analytics.js', 'result-explanation.js', 'live-status.js', 'share-link.js', 'cps-chain.js', 'ui-shell.js']) {
       assert.ok(names.indexOf(dep) >= 0 && names.indexOf(dep) < first, `${file}: ${dep} loads before the generator`);
     }
     for (const name of APP_SCRIPTS) {

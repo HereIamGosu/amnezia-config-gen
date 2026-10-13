@@ -65,6 +65,7 @@ export default [
       'public/static/status.js',
       'public/static/result.js',
       'public/static/settings.js',
+      'public/static/cps-editor.js',
       'public/static/settings-link.js',
       'public/static/history.js',
       'public/static/script.js',

@@ -6,7 +6,7 @@
 //
 // Классический скрипт (defer), не модуль: верхнеуровневые const/let/функции всех скриптов генератора
 // живут в одной глобальной лексической области. Порядок загрузки — в public/index.html:
-// i18n.js → common.js → status.js → result.js → settings.js → settings-link.js → history.js →
+// i18n.js → common.js → status.js → result.js → settings.js → cps-editor.js → settings-link.js → history.js →
 // script.js. При загрузке файл вызывает только своё и уже загруженное;
 // остальное — из обработчиков после DOMContentLoaded. /* global */ — что файл берёт у других,
 // /* exported */ — что отдаёт им (проверяют ESLint и __tests__/frontend-scripts.test.js).
@@ -16,6 +16,7 @@
 /* global renderLabAutoNote -- status.js */
 /* global getDnsLabel, getDeviceLabel -- result.js */
 /* global copySettingsLink, applySharedSettings -- settings-link.js */
+/* global resetCpsEditor -- cps-editor.js */
 /* exported
    ROUTE_MODES, cfgState, forEachRouteTile, getSelectedRouteIds, updateParamChips, applyMobileModeCascade,
    getSelectedDnsKey, getResultStateSnapshot, updateCidrCounter, updateTileActiveClass, initSettingsPanel,
@@ -58,6 +59,10 @@ const cfgState = {
   warpEndpoint: 'hostname',
   /** When true, server appends I2-I5 to AWG 2.0 [Interface]. */
   extraCps: false,
+  /** Свои CPS-цепочки (канонический текст; '' — поле заполняет генератор). Ведёт cps-editor.js. */
+  cpsChains: { I1: '', I2: '', I3: '', I4: '', I5: '' },
+  /** Совместимость своих цепочек: all — все клиенты с I1–I5, modern — ещё <rd>/<rc> (amneziawg-go 0.2.15+). */
+  cpsCompat: 'all',
   /** When true, mobile preset (low Jc/Jmax, IPv4-only). */
   mobileMode: false,
   /** Explicit routing mode. 'full' = all traffic through tunnel; 'split' = only selected presets. */
@@ -219,6 +224,8 @@ const updateParamChips = () => {
 
   if (cfgState.cpsProtocol !== PARAM_DEFAULTS.cps) changed.push('CPS');
   if (cfgState.extraCps !== PARAM_DEFAULTS.cps5) changed.push('I2–I5');
+  const customChains = Object.keys(cfgState.cpsChains).filter((field) => cfgState.cpsChains[field]);
+  if (customChains.length) changed.push(`${t('params_cps_chains', 'Свои цепочки')} ${customChains.join(', ')}`);
   if (cfgState.configCount !== PARAM_DEFAULTS.count) changed.push(t('params_count', 'Число конфигов'));
 
   const state = document.getElementById('paramSummaryState');
@@ -719,6 +726,7 @@ const initSettingsPanel = async () => {
         const mobileToggleReset = document.getElementById('mobileModeToggle');
         if (mobileToggleReset) mobileToggleReset.checked = false;
         applyMobileModeCascade();
+        resetCpsEditor();
         // Clear route presets
         forEachRouteTile((tile) => {
           const cb = tile.querySelector('input[type="checkbox"]');

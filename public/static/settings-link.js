@@ -6,7 +6,7 @@
 //
 // Классический скрипт (defer), не модуль: верхнеуровневые const/let/функции всех скриптов генератора
 // живут в одной глобальной лексической области. Порядок загрузки — в public/index.html:
-// i18n.js → common.js → status.js → result.js → settings.js → settings-link.js → history.js →
+// i18n.js → common.js → status.js → result.js → settings.js → cps-editor.js → settings-link.js → history.js →
 // script.js. При загрузке файл вызывает только своё и уже загруженное;
 // остальное — из обработчиков после DOMContentLoaded. /* global */ — что файл берёт у других,
 // /* exported */ — что отдаёт им (проверяют ESLint и __tests__/frontend-scripts.test.js).
@@ -16,6 +16,7 @@
 /* global
    cfgState, ROUTE_MODES, getSelectedRouteIds, getSelectedDnsKey, forEachRouteTile, updateTileActiveClass,
    applyMobileModeCascade, endpointDefault, chooseEndpoint -- settings.js */
+/* global setCpsChains -- cps-editor.js */
 /* global getSelectedProfile -- script.js */
 /* exported shareLink, applySharedSettings, copySettingsLink */
 
@@ -31,6 +32,8 @@ const getShareState = () => ({
   ipv6: cfgState.includeIpv6,
   cps: cfgState.cpsProtocol,
   cps5: cfgState.extraCps,
+  cpsChains: cfgState.cpsChains,
+  cpsCompat: cfgState.cpsCompat,
   // Endpoint по умолчанию («авто»: Lab, когда он здоров) в ссылку не пишется — только явный выбор
   endpoint: endpointDefault.explicit ? cfgState.warpEndpoint : (shareLink ? shareLink.DEFAULTS.endpoint : 'lab'),
   port: cfgState.port,
@@ -104,6 +107,16 @@ const applySharedSettings = () => {
     if (cps5Toggle) cps5Toggle.checked = s.cps5;
   }
 
+  // Свои CPS-цепочки: каждая проверяется тем же разбором, что и в редакторе; некорректная отбрасывается
+  if (s.cpsChains && window.CpsChain) {
+    const valid = {};
+    for (const [field, text] of Object.entries(s.cpsChains)) {
+      const parsed = window.CpsChain.parse(text, 'modern');
+      if (parsed.ok && parsed.segments.length > 0) valid[field] = parsed.canonical;
+    }
+    if (Object.keys(valid).length > 0) setCpsChains(valid, { compat: s.cpsCompat });
+  }
+
   if (s.endpoint) chooseEndpoint(s.endpoint);
 
   if (s.port) {
@@ -116,12 +129,27 @@ const applySharedSettings = () => {
   if (s.count && setRadioValue('configCount', String(s.count))) cfgState.configCount = s.count;
 };
 
+/**
+ * Длиннее — риск отказа 414: nginx по умолчанию держит строку запроса в буфере 8 КБ, и ссылку ещё
+ * переносят мессенджеры. Такую ссылку копируем без своих CPS-цепочек и говорим об этом.
+ */
+const MAX_SHARE_URL_LENGTH = 6000;
+
 /** «Скопировать ссылку на настройки»: только значения, отличные от умолчаний. */
 const copySettingsLink = async () => {
   if (!shareLink) return;
-  const url = shareLink.buildShareUrl(window.location.href, getShareState());
+  let url = shareLink.buildShareUrl(window.location.href, getShareState());
+  let chainsDropped = false;
+  if (url.length > MAX_SHARE_URL_LENGTH) {
+    url = shareLink.buildShareUrl(window.location.href, { ...getShareState(), cpsChains: {} });
+    chainsDropped = true;
+  }
   const copied = await copyText(url);
-  toast(copied
-    ? t('settings_share_copied', 'Ссылка на настройки скопирована')
-    : t('copy_failed', 'Не удалось скопировать.'), copied ? 'success' : 'info');
+  if (!copied) {
+    toast(t('copy_failed', 'Не удалось скопировать.'), 'info');
+    return;
+  }
+  toast(chainsDropped
+    ? t('settings_share_copied_no_chains', 'Ссылка скопирована без своих CPS-цепочек: с ними она слишком длинная')
+    : t('settings_share_copied', 'Ссылка на настройки скопирована'), chainsDropped ? 'info' : 'success');
 };
