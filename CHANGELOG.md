@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 - "Enhanced mimicry" hint: I2–I5 work in AWG 2.0 and 3.x, not only 2.0.
 - "Enhanced mimicry (I2–I5)": the four extra CPS packets are no longer fixed random bytes chosen when the config is generated. Each is a chain of AmneziaWG tags `<b 0x…>`, `<r N>` and `<t>` with its own shape; the client generates the `<r>` and `<t>` bytes again on every handshake initiation, so these packets differ between handshakes of the same config. `<rc>`/`<rd>` are not used because amneziawg-go before v0.2.15 rejects them together with the whole config. I1 and the CPS protocol choice are unchanged. Sources: `docs/research/cps-runtime-tags-audit.md`.
 
+### Fixed
+- The settings dialog (step 2, "Change parameters") remembered how far it had been scrolled and reopened below the tabs; it now always opens at the top with the tabs visible.
+
 ### Removed
 - `src/server/cpsSignatureGenerator.js`: an unused second I2–I5 generator; nothing imported it.
 

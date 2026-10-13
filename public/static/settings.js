@@ -151,6 +151,9 @@ const getSelectedRouteIds = () =>
 const openSettingsModal = ({ opener = null } = {}) => {
   if (uiShell) uiShell.selectTab('tab-routes');
   openModal('settingsModal', opener);
+  // Тело окна помнит прокрутку с прошлого раза: без сброса окно открылось бы ниже вкладок
+  const body = document.querySelector('#settingsModal .modal__body');
+  if (body) body.scrollTop = 0;
 };
 
 /** Умолчания те же, что у ссылки с настройками (share-link.js загружается раньше). */
