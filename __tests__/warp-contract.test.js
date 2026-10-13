@@ -9,6 +9,7 @@ const { EventEmitter } = require('node:events');
 const { test, mock } = require('node:test');
 const https = require('node:https');
 const net = require('node:net');
+const { parseCompatChain } = require('./helpers/cps-chain');
 
 const realNetCreate = net.createConnection.bind(net);
 
@@ -527,7 +528,13 @@ test('contract: AWG3 composition keeps timing fields across count, CPS5, mobile/
         assert.match(conf, /^RekeyAfterTime = 100-120$/m);
         assert.match(conf, /^S4 = 0$/m);
         assert.match(conf, /^H4 = 4$/m);
-        if (query.cps5) assert.match(conf, /^I5 = /m);
+        if (query.cps5) {
+          for (const n of [2, 3, 4, 5]) {
+            const line = conf.split('\n').find((l) => l.startsWith(`I${n} = `));
+            assert.ok(line, `I${n} missing`);
+            parseCompatChain(line.slice(5));
+          }
+        }
         if (query.mobile) assert.doesNotMatch(conf, /^Address = .*:/m);
         if (query.ipv6 === '1' && !query.mobile) assert.match(conf, /^Address = .*:/m);
       }
@@ -685,5 +692,49 @@ test('contract: TLS and unknown CPS modes return controlled 400 before WARP regi
     assert.equal(res.getBody().success, false);
     assert.equal(res.getBody().error, code);
     assert.ok(Array.isArray(res.getBody().allowedCpsProtocols));
+  }
+});
+
+test('contract: custom I1 + cps5 keeps the custom I1, adds runtime I2..I5 and logs no CPS value', async () => {
+  const customI1 = '<b 0xc0ffee0123456789>';
+  for (const mode of ['awg2', 'awg3']) {
+    clearModules();
+    const httpsMock = installWarpMock();
+    net.createConnection = (opts, cb) => { const s = mockNetOk(); if (cb) setImmediate(cb); return s; };
+    const logged = [];
+    const spies = ['log', 'info', 'warn', 'error', 'debug'].map((m) => mock.method(console, m, (...args) => {
+      logged.push(args.map(String).join(' '));
+    }));
+    try {
+      const handler = require('../api/warp');
+      const req = makeReq({}, 'POST');
+      req.body = { mode, i1: customI1, cps5: true };
+      const res = makeRes();
+      await handler(req, res);
+      const body = res.getBody();
+      assert.equal(res.getStatus(), 200);
+      assert.ok(body.configs.length > 0);
+      assert.equal(body.appliedExtras.cps5, true);
+      for (const item of body.configs) {
+        const conf = Buffer.from(item.content, 'base64').toString('utf8');
+        assert.match(conf, /^I1 = <b 0xc0ffee0123456789>$/m);
+        const values = [customI1];
+        for (const n of [2, 3, 4, 5]) {
+          const line = conf.split('\n').find((l) => l.startsWith(`I${n} = `));
+          assert.ok(line, `${mode}: I${n} missing`);
+          parseCompatChain(line.slice(5));
+          values.push(line.slice(5));
+        }
+        const exposed = JSON.stringify({ ...body, configs: undefined, vpnLink: undefined });
+        for (const v of values) {
+          assert.ok(!logged.some((l) => l.includes(v)), `${mode}: CPS value in console output`);
+          assert.ok(!exposed.includes(v), `${mode}: CPS value in response metadata`);
+        }
+      }
+    } finally {
+      for (const s of spies) s.mock.restore();
+      httpsMock.mock.restore();
+      net.createConnection = realNetCreate;
+    }
   }
 });

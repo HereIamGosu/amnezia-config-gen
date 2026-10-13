@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+### Changed
+- "Enhanced mimicry (I2–I5)": the four extra CPS packets are no longer fixed random bytes chosen when the config is generated. Each is a chain of AmneziaWG tags `<b 0x…>`, `<r N>` and `<t>` with its own shape; the client generates the `<r>` and `<t>` bytes again on every handshake initiation, so these packets differ between handshakes of the same config. `<rc>`/`<rd>` are not used because amneziawg-go before v0.2.15 rejects them together with the whole config. I1 and the CPS protocol choice are unchanged. Sources: `docs/research/cps-runtime-tags-audit.md`.
+
+### Removed
+- `src/server/cpsSignatureGenerator.js`: an unused second I2–I5 generator; nothing imported it.
+
 ## [3.0.3] - 2026-10-08
 
 ### Fixed

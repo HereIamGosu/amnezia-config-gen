@@ -103,7 +103,7 @@ Endpoint Lab работает на том же сервере отдельной
 | `src/server/ipListFetch.js` | Получение CIDR по доменам (in-memory кэш 10 мин) |
 | `src/server/warpCpsPayloads.js`, `src/server/cps/` | Пул верифицированных WARP-совместимых CPS payload'ов и генераторы CPS-пакетов |
 | `src/server/cps-presets/` | Текстовые файлы для query-параметра `i1Ref` |
-| `src/server/cpsExtraPackets.js` | Генерация I2..I5 для `cps5=1` |
+| `src/server/cpsExtraPackets.js` | Генерация I2..I5 для `cps5=1` (runtime-цепочки `<b>`/`<r>`/`<t>`) |
 | `src/server/vpnLinkBuilder.js` | Сборка `vpn://...` ссылки для AmneziaVPN |
 | `src/server/labPublic.js`, `src/server/endpointProvider.js` | Чтение и проверка публичных файлов Lab; выбор endpoint'ов для Lab Auto |
 | `src/server/_rateLimit.js` | Per-IP rate-limit (10 генераций/мин) |
@@ -159,7 +159,7 @@ Endpoint Lab работает на том же сервере отдельной
 | `cps` | `auto` (только стабильные `static` / `sip` / `stun`) либо явный `static`, `sip`, `stun`, `quic`, `dns`, `dtls`; последние три экспериментальны. `tls` и неизвестные идентификаторы возвращают HTTP 400. |
 | `plainAddress` | `1` / `true` — в `Address` без `/32` и `/128` |
 | `ipv6` | `1` — также включить IPv6 CIDR из пресетов |
-| `cps5` | `1` — добавить случайные `I2`..`I5` в `[Interface]` (для `mode=awg2`, `awg3`, `awg31`; требует непустой `I1`) |
+| `cps5` | `1` — добавить CPS-цепочки `I2`..`I5` в `[Interface]` (для `mode=awg2`, `awg3`, `awg31`; требует непустой `I1`) |
 | `mobile` | `1` — мобильный профиль (см. I7) |
 | `router` | `1` — профиль с router-капами |
 | `link` | `1` — добавить в JSON-ответ поле `vpnLink: "vpn://..."` для импорта в AmneziaVPN одним тапом |
@@ -218,7 +218,7 @@ TCP-доступность `api.cloudflareclient.com:443`, `engage.cloudflarecli
 
 | Параметр | Эффект |
 |---|---|
-| `cps5=1` | Когда `mode` — `awg2`, `awg3` или `awg31` и `I1` непустой, сервер добавляет `I2..I5` (случайный hex 16–64 байт через `crypto.randomBytes`) в `[Interface]`. Для Legacy и пустого `I1` молча игнорируется. |
+| `cps5=1` | Когда `mode` — `awg2`, `awg3` или `awg31` и `I1` непустой, сервер добавляет в `[Interface]` `I2..I5`: четыре цепочки разной формы из `<b 0x…>`, `<r N>` и `<t>` (примерно 50–150 байт каждая). Байты `<r>` и `<t>` клиент генерирует при каждой отправке handshake initiation, поэтому пакеты одного конфига меняются от handshake к handshake; фиксированы на конфиг только несколько байт `<b>`. `<rc>`/`<rd>` не используются: amneziawg-go до v0.2.15 отвергает их вместе со всей конфигурацией. Аудит источников: [docs/research/cps-runtime-tags-audit.md](docs/research/cps-runtime-tags-audit.md). Для Legacy и пустого `I1` молча игнорируется. |
 | `mobile=1` | Мобильный профиль по инварианту **I7**. |
 | `router=1` | Router-капы (`Jc≤2`, `Jmin∈[40,128]`, `Jmax∈[Jmin+1,128]`); компонуется с `mobile` по инварианту **I8**. |
 | `link=1` | В ответе появляется `vpnLink: vpn://<base64url(qCompress(JSON))>` для импорта в AmneziaVPN одним тапом. |

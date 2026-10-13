@@ -10,6 +10,7 @@ const assert = require('node:assert/strict');
 const { describe, test } = require('node:test');
 const { inflateSync } = require('node:zlib');
 const { labSnapshot, LAB_POOL, labProvider, generate, endpointOf, parseConf } = require('./helpers/warp-harness');
+const { parseCompatChain } = require('./helpers/cps-chain');
 
 const MODES = ['legacy', 'awg2', 'awg3', 'awg31'];
 const VARIANTS = [
@@ -67,7 +68,11 @@ const assertInvariants = (conf, mode, v, vpnLink) => {
     assert.match(conf, /^Jmax = 128$/m, 'I7/I8');
   }
   if (v.cps5 === '1' && AWG_MODES.has(mode)) {
-    for (const n of [2, 3, 4, 5]) assert.match(conf, new RegExp(`^I${n} = <b 0x[0-9a-f]+>$`, 'm'), 'I9');
+    for (const n of [2, 3, 4, 5]) {
+      const line = conf.split('\n').find((l) => l.startsWith(`I${n} = `));
+      assert.ok(line, `I9: I${n} missing`);
+      assert.doesNotThrow(() => parseCompatChain(line.slice(5)), `I9: I${n} malformed`);
+    }
   } else {
     assert.doesNotMatch(conf, /^I[2-5] = /m, 'I9');
   }
