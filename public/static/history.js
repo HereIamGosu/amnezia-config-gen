@@ -14,7 +14,7 @@
 /* global makeIcon, openPreviewModal, telemetry, downloadFile, toast -- common.js */
 /* global getDnsLabel, getDeviceLabel, getModeBadgeClass, getModeLabel -- result.js */
 /* global getResultStateSnapshot, getSelectedRouteIds, getSelectedDnsKey, ROUTE_MODES -- settings.js */
-/* global setCpsChains -- cps-editor.js */
+/* global setCpsChains, confirmReplaceCpsChains -- cps-editor.js */
 /* exported HISTORY_KEY, saveToHistory, renderHistoryPanel */
 
 const HISTORY_KEY = 'awg_history';
@@ -151,9 +151,11 @@ const renderHistoryPanel = () => {
     const chainFields = Object.keys(chains);
     if (chainFields.length) {
       const useChainsBtn = makeIconButton('i-layers', t('history_use_chains', 'Взять I1–I5 этого конфига в настройки'), () => {
-        setCpsChains(chains);
-        toast(`${t('history_chains_loaded', 'Свои цепочки загружены в настройки:')} ${chainFields.join(', ')}`, 'success');
-        telemetry.trackEvent('history_chains_used', { ...telemetryContext, fields: chainFields.length });
+        confirmReplaceCpsChains(() => {
+          setCpsChains(chains);
+          toast(`${t('history_chains_loaded', 'Свои цепочки загружены в настройки:')} ${chainFields.join(', ')}`, 'success');
+          telemetry.trackEvent('history_chains_used', { ...telemetryContext, fields: chainFields.length });
+        });
       });
       useChainsBtn.classList.add('history-item__use-chains');
       actions.append(useChainsBtn);

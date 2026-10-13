@@ -16,7 +16,7 @@
 /* global
    cfgState, ROUTE_MODES, getSelectedRouteIds, getSelectedDnsKey, forEachRouteTile, updateTileActiveClass,
    applyMobileModeCascade, endpointDefault, chooseEndpoint -- settings.js */
-/* global setCpsChains -- cps-editor.js */
+/* global setCpsChains, syncCpsPresetFromState -- cps-editor.js */
 /* global getSelectedProfile -- script.js */
 /* exported shareLink, applySharedSettings, copySettingsLink */
 
@@ -116,6 +116,8 @@ const applySharedSettings = () => {
     }
     if (Object.keys(valid).length > 0) setCpsChains(valid, { compat: s.cpsCompat });
   }
+  // Готовый вариант в настройках следует за cps5 и цепочками из ссылки
+  syncCpsPresetFromState();
 
   if (s.endpoint) chooseEndpoint(s.endpoint);
 

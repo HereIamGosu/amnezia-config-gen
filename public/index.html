@@ -1323,32 +1323,66 @@
                   <span class="option-row__hint" data-i18n="mobile_mode_hint">Низкие Jc/Jmax, MTU 1280, только IPv4 — для смартфонов</span>
                 </span>
               </label>
-              <label class="option-row" title="AmneziaWG 2.0 и 3.x. Добавляет 4 пакета (I2–I5) перед handshake; их случайная часть генерируется клиентом заново при каждом handshake." data-i18n-title="cps5_title">
-                <input type="checkbox" class="switch" id="cps5Toggle" />
-                <span class="option-row__text">
-                  <span class="option-row__label" data-i18n="cps5_label">Усиленная маскировка (I2-I5)</span>
-                  <span class="option-row__hint" data-i18n="cps5_hint">AWG 2.0 и 3.x. 4 пакета перед handshake, байты меняются каждый раз.</span>
-                </span>
-              </label>
-
-              <h3 class="section-label" data-i18n="cps_editor_title">CPS-цепочки I1–I5</h3>
+              <h3 class="section-label" id="cpsSectionTitle" data-i18n="cps_section_packets_title">Пакеты перед handshake (I1–I5)</h3>
               <div class="cps-editor" id="cpsEditor">
-                <p class="cps-editor__intro" data-i18n="cps_editor_intro">Пакеты, которые клиент отправляет перед каждым handshake. Поле без своей цепочки заполняет генератор: I1 — протоколом CPS с вкладки «DNS &amp; CPS», I2–I5 — шаблоном «Усиленной маскировки». I2–I5 работают только в AWG 2.0 и 3.x.</p>
-                <div class="cps-editor__compat">
-                  <span class="option-row__label" id="cpsCompatLabel" data-i18n="cps_compat_label">Совместимость</span>
-                  <div class="route-mode-toggle" role="group" aria-labelledby="cpsCompatLabel">
-                    <button type="button" class="route-mode-btn route-mode-btn--active" data-cps-compat="all" aria-pressed="true" data-i18n="cps_compat_all">Все клиенты</button>
-                    <button type="button" class="route-mode-btn" data-cps-compat="modern" aria-pressed="false" data-i18n="cps_compat_modern">Новые клиенты</button>
-                  </div>
-                  <p class="option-row__hint cps-editor__compat-hint" id="cpsCompatHint" aria-live="polite"></p>
-                </div>
-                <div class="cps-editor__fields" id="cpsEditorFields"></div>
-                <details class="cps-editor__import">
-                  <summary data-i18n="cps_import_summary">Взять I1–I5 из готового .conf</summary>
-                  <label class="visually-hidden" for="cpsImportText" data-i18n="cps_import_label">Текст конфигурации</label>
-                  <textarea id="cpsImportText" class="cps-field__text cps-editor__import-text" rows="4" spellcheck="false"></textarea>
-                  <button type="button" class="btn btn--sm" id="cpsImportBtn" data-i18n="cps_import_btn">Взять цепочки</button>
+                <details class="cps-editor__about">
+                  <summary data-i18n="cps_about_summary">Что это и зачем?</summary>
+                  <p data-i18n="cps_about_text">Перед каждым подключением клиент отправляет несколько пакетов-«маскировок» (I1–I5), чтобы начало соединения не было похоже на WireGuard. Обычно хватает варианта «Стандарт». Если соединение не устанавливается, попробуйте «Усиленную». Ручная настройка нужна, только если вы знаете, какие пакеты хотите отправлять.</p>
                 </details>
+                <div class="cps-presets" role="radiogroup" aria-labelledby="cpsSectionTitle">
+                  <label class="cps-preset">
+                    <input type="radio" name="cpsPreset" value="standard" checked />
+                    <span class="cps-preset__name" data-i18n="cps_preset_standard">Стандарт</span>
+                    <span class="cps-preset__desc" data-i18n="cps_preset_standard_desc">Один пакет I1 по протоколу CPS. Подходит большинству.</span>
+                    <span class="tag tag--green" data-i18n="cps_compat_badge_all">все клиенты</span>
+                  </label>
+                  <label class="cps-preset">
+                    <input type="radio" name="cpsPreset" value="enhanced" />
+                    <span class="cps-preset__name" data-i18n="cps_preset_enhanced">Усиленная</span>
+                    <span class="cps-preset__desc" data-i18n="cps_preset_enhanced_desc">Плюс 4 пакета I2–I5, их байты меняются при каждом подключении.</span>
+                    <span class="tag tag--green" data-i18n="cps_compat_badge_all">все клиенты</span>
+                  </label>
+                  <label class="cps-preset">
+                    <input type="radio" name="cpsPreset" value="random" />
+                    <span class="cps-preset__name" data-i18n="cps_preset_random">Больше случайности</span>
+                    <span class="cps-preset__desc" data-i18n="cps_preset_random_desc">I2–I5 со случайными цифрами и буквами. Нужен свежий клиент.</span>
+                    <span class="tag tag--violet" data-i18n="cps_compat_badge_modern">клиенты 0.2.15+</span>
+                  </label>
+                  <label class="cps-preset">
+                    <input type="radio" name="cpsPreset" value="manual" />
+                    <span class="cps-preset__name" data-i18n="cps_preset_manual">Ручная настройка</span>
+                    <span class="cps-preset__desc" data-i18n="cps_preset_manual_desc">Свои цепочки для каждого поля. Для опытных.</span>
+                  </label>
+                </div>
+                <button type="button" class="btn btn--sm cps-editor__reroll" id="cpsPresetReroll" hidden data-i18n="cps_preset_reroll">Перемешать заново</button>
+                <p class="cps-editor__note" id="cpsLegacyNote" hidden data-i18n="cps_legacy_note">Профиль Legacy использует только I1: пакеты I2–I5 в конфиг не попадут.</p>
+                <div class="cps-editor__manual" id="cpsManual" hidden>
+                  <div class="cps-editor__compat">
+                    <span class="option-row__label" id="cpsCompatLabel" data-i18n="cps_compat_label">Совместимость</span>
+                    <div class="route-mode-toggle" role="group" aria-labelledby="cpsCompatLabel">
+                      <button type="button" class="route-mode-btn route-mode-btn--active" data-cps-compat="all" aria-pressed="true" data-i18n="cps_compat_all">Все клиенты</button>
+                      <button type="button" class="route-mode-btn" data-cps-compat="modern" aria-pressed="false" data-i18n="cps_compat_modern">Новые клиенты</button>
+                    </div>
+                    <p class="option-row__hint cps-editor__compat-hint" id="cpsCompatHint" aria-live="polite"></p>
+                  </div>
+                  <label class="option-row">
+                    <input type="checkbox" class="switch" id="cpsAutoExtra" />
+                    <span class="option-row__text">
+                      <span class="option-row__label" data-i18n="cps_auto_extra_label">Авто-пакеты I2–I5</span>
+                      <span class="option-row__hint" data-i18n="cps_auto_extra_hint">Поля I2–I5 без своей цепочки генератор заполнит сам</span>
+                    </span>
+                  </label>
+                  <div class="cps-editor__fields" id="cpsEditorFields"></div>
+                  <div class="cps-editor__tools">
+                    <button type="button" class="btn btn--sm btn--ghost" id="cpsResetAll" data-i18n="cps_reset_all">Сбросить все цепочки</button>
+                  </div>
+                  <details class="cps-editor__import">
+                    <summary data-i18n="cps_import_summary">Взять I1–I5 из готового .conf</summary>
+                    <label class="visually-hidden" for="cpsImportText" data-i18n="cps_import_label">Текст конфигурации</label>
+                    <textarea id="cpsImportText" class="cps-field__text cps-editor__import-text" rows="4" spellcheck="false"></textarea>
+                    <button type="button" class="btn btn--sm" id="cpsImportBtn" data-i18n="cps_import_btn">Взять цепочки</button>
+                  </details>
+                </div>
               </div>
 
               <h3 class="section-label" data-i18n="settings_connection">Соединение</h3>
@@ -1408,6 +1442,24 @@
             <span data-i18n="settings_share_btn">Скопировать ссылку на настройки</span>
           </button>
           <button type="button" class="btn btn--blue" data-close-modal data-i18n="settings_apply">Готово</button>
+        </footer>
+      </div>
+    </div>
+    <div id="cpsConfirmModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="cpsConfirmTitle" aria-hidden="true">
+      <div class="modal__dialog modal__dialog--narrow">
+        <header class="modal__header">
+          <span class="modal__icon"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg></span>
+          <div class="modal__titles">
+            <h2 id="cpsConfirmTitle" class="modal__title" data-i18n="cps_confirm_default_title">Подтвердите</h2>
+          </div>
+          <button type="button" class="modal__close" data-close-modal aria-label="Закрыть" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </header>
+        <div class="modal__body">
+          <p id="cpsConfirmText" class="cps-confirm__text"></p>
+        </div>
+        <footer class="modal__footer">
+          <button type="button" class="btn" data-close-modal data-i18n="cps_confirm_cancel">Отмена</button>
+          <button type="button" class="btn btn--blue" id="cpsConfirmOk">OK</button>
         </footer>
       </div>
     </div>

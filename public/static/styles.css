@@ -4868,3 +4868,109 @@ html.is-modal-open {
   margin-left: 6px;
   vertical-align: middle;
 }
+
+/* Готовые варианты CPS-пакетов: карточки-радиокнопки (cps-editor.js) */
+.cps-presets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cps-preset {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.cps-preset:hover {
+  border-color: var(--color-border-strong);
+}
+
+.cps-preset input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cps-preset:has(input:checked) {
+  border-color: var(--color-blue);
+  background: var(--color-blue-soft);
+}
+
+.cps-preset:has(input:focus-visible) {
+  box-shadow: var(--ring);
+}
+
+.cps-preset__name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.cps-preset__desc {
+  flex: 1;
+  color: var(--color-text-2);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.cps-editor__about summary {
+  color: var(--color-text-2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cps-editor__about p {
+  margin: 8px 0 0;
+  color: var(--color-text-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.cps-editor__reroll {
+  justify-self: start;
+}
+
+.cps-editor__note {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+  font-size: 13px;
+}
+
+.cps-editor__manual {
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.cps-editor__manual[hidden] {
+  display: none;
+}
+
+.cps-editor__tools {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.cps-confirm__text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .cps-presets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

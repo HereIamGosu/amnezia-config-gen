@@ -1315,32 +1315,66 @@
                   <span class="option-row__hint" data-i18n="mobile_mode_hint">Low Jc/Jmax, MTU 1280, IPv4-only — for smartphones</span>
                 </span>
               </label>
-              <label class="option-row" title="AmneziaWG 2.0 and 3.x. Adds 4 packets (I2–I5) before the handshake; the client generates their random part again on every handshake." data-i18n-title="cps5_title">
-                <input type="checkbox" class="switch" id="cps5Toggle" />
-                <span class="option-row__text">
-                  <span class="option-row__label" data-i18n="cps5_label">Enhanced mimicry (I2-I5)</span>
-                  <span class="option-row__hint" data-i18n="cps5_hint">AWG 2.0 and 3.x. 4 packets before the handshake, bytes change every time.</span>
-                </span>
-              </label>
-
-              <h3 class="section-label" data-i18n="cps_editor_title">CPS chains I1–I5</h3>
+              <h3 class="section-label" id="cpsSectionTitle" data-i18n="cps_section_packets_title">Packets before the handshake (I1–I5)</h3>
               <div class="cps-editor" id="cpsEditor">
-                <p class="cps-editor__intro" data-i18n="cps_editor_intro">Packets the client sends before every handshake. A field without your own chain is filled by the generator: I1 with the CPS protocol from the “DNS &amp; CPS” tab, I2–I5 with the “Enhanced mimicry” template. I2–I5 work only in AWG 2.0 and 3.x.</p>
-                <div class="cps-editor__compat">
-                  <span class="option-row__label" id="cpsCompatLabel" data-i18n="cps_compat_label">Compatibility</span>
-                  <div class="route-mode-toggle" role="group" aria-labelledby="cpsCompatLabel">
-                    <button type="button" class="route-mode-btn route-mode-btn--active" data-cps-compat="all" aria-pressed="true" data-i18n="cps_compat_all">All clients</button>
-                    <button type="button" class="route-mode-btn" data-cps-compat="modern" aria-pressed="false" data-i18n="cps_compat_modern">Newer clients</button>
-                  </div>
-                  <p class="option-row__hint cps-editor__compat-hint" id="cpsCompatHint" aria-live="polite"></p>
-                </div>
-                <div class="cps-editor__fields" id="cpsEditorFields"></div>
-                <details class="cps-editor__import">
-                  <summary data-i18n="cps_import_summary">Take I1–I5 from an existing .conf</summary>
-                  <label class="visually-hidden" for="cpsImportText" data-i18n="cps_import_label">Configuration text</label>
-                  <textarea id="cpsImportText" class="cps-field__text cps-editor__import-text" rows="4" spellcheck="false"></textarea>
-                  <button type="button" class="btn btn--sm" id="cpsImportBtn" data-i18n="cps_import_btn">Take chains</button>
+                <details class="cps-editor__about">
+                  <summary data-i18n="cps_about_summary">What is this?</summary>
+                  <p data-i18n="cps_about_text">Before every connection the client sends a few disguise packets (I1–I5) so that the start of the connection does not look like WireGuard. “Standard” is usually enough. If the connection does not come up, try “Enhanced”. Manual setup is only for when you know which packets you want to send.</p>
                 </details>
+                <div class="cps-presets" role="radiogroup" aria-labelledby="cpsSectionTitle">
+                  <label class="cps-preset">
+                    <input type="radio" name="cpsPreset" value="standard" checked />
+                    <span class="cps-preset__name" data-i18n="cps_preset_standard">Standard</span>
+                    <span class="cps-preset__desc" data-i18n="cps_preset_standard_desc">One I1 packet shaped by the CPS protocol. Fits most users.</span>
+                    <span class="tag tag--green" data-i18n="cps_compat_badge_all">all clients</span>
+                  </label>
+                  <label class="cps-preset">
+                    <input type="radio" name="cpsPreset" value="enhanced" />
+                    <span class="cps-preset__name" data-i18n="cps_preset_enhanced">Enhanced</span>
+                    <span class="cps-preset__desc" data-i18n="cps_preset_enhanced_desc">Plus 4 packets I2–I5 whose bytes change on every connection.</span>
+                    <span class="tag tag--green" data-i18n="cps_compat_badge_all">all clients</span>
+                  </label>
+                  <label class="cps-preset">
+                    <input type="radio" name="cpsPreset" value="random" />
+                    <span class="cps-preset__name" data-i18n="cps_preset_random">More randomness</span>
+                    <span class="cps-preset__desc" data-i18n="cps_preset_random_desc">I2–I5 with random digits and letters. Needs a recent client.</span>
+                    <span class="tag tag--violet" data-i18n="cps_compat_badge_modern">clients 0.2.15+</span>
+                  </label>
+                  <label class="cps-preset">
+                    <input type="radio" name="cpsPreset" value="manual" />
+                    <span class="cps-preset__name" data-i18n="cps_preset_manual">Manual setup</span>
+                    <span class="cps-preset__desc" data-i18n="cps_preset_manual_desc">Your own chain for each field. For advanced users.</span>
+                  </label>
+                </div>
+                <button type="button" class="btn btn--sm cps-editor__reroll" id="cpsPresetReroll" hidden data-i18n="cps_preset_reroll">Shuffle again</button>
+                <p class="cps-editor__note" id="cpsLegacyNote" hidden data-i18n="cps_legacy_note">The Legacy profile uses only I1: packets I2–I5 are not added to the config.</p>
+                <div class="cps-editor__manual" id="cpsManual" hidden>
+                  <div class="cps-editor__compat">
+                    <span class="option-row__label" id="cpsCompatLabel" data-i18n="cps_compat_label">Compatibility</span>
+                    <div class="route-mode-toggle" role="group" aria-labelledby="cpsCompatLabel">
+                      <button type="button" class="route-mode-btn route-mode-btn--active" data-cps-compat="all" aria-pressed="true" data-i18n="cps_compat_all">All clients</button>
+                      <button type="button" class="route-mode-btn" data-cps-compat="modern" aria-pressed="false" data-i18n="cps_compat_modern">Newer clients</button>
+                    </div>
+                    <p class="option-row__hint cps-editor__compat-hint" id="cpsCompatHint" aria-live="polite"></p>
+                  </div>
+                  <label class="option-row">
+                    <input type="checkbox" class="switch" id="cpsAutoExtra" />
+                    <span class="option-row__text">
+                      <span class="option-row__label" data-i18n="cps_auto_extra_label">Automatic I2–I5</span>
+                      <span class="option-row__hint" data-i18n="cps_auto_extra_hint">The generator fills I2–I5 fields that have no chain of yours</span>
+                    </span>
+                  </label>
+                  <div class="cps-editor__fields" id="cpsEditorFields"></div>
+                  <div class="cps-editor__tools">
+                    <button type="button" class="btn btn--sm btn--ghost" id="cpsResetAll" data-i18n="cps_reset_all">Reset all chains</button>
+                  </div>
+                  <details class="cps-editor__import">
+                    <summary data-i18n="cps_import_summary">Take I1–I5 from an existing .conf</summary>
+                    <label class="visually-hidden" for="cpsImportText" data-i18n="cps_import_label">Configuration text</label>
+                    <textarea id="cpsImportText" class="cps-field__text cps-editor__import-text" rows="4" spellcheck="false"></textarea>
+                    <button type="button" class="btn btn--sm" id="cpsImportBtn" data-i18n="cps_import_btn">Take chains</button>
+                  </details>
+                </div>
               </div>
 
               <h3 class="section-label" data-i18n="settings_connection">Connection</h3>
@@ -1400,6 +1434,24 @@
             <span data-i18n="settings_share_btn">Copy settings link</span>
           </button>
           <button type="button" class="btn btn--blue" data-close-modal data-i18n="settings_apply">Done</button>
+        </footer>
+      </div>
+    </div>
+    <div id="cpsConfirmModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="cpsConfirmTitle" aria-hidden="true">
+      <div class="modal__dialog modal__dialog--narrow">
+        <header class="modal__header">
+          <span class="modal__icon"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg></span>
+          <div class="modal__titles">
+            <h2 id="cpsConfirmTitle" class="modal__title" data-i18n="cps_confirm_default_title">Confirm</h2>
+          </div>
+          <button type="button" class="modal__close" data-close-modal aria-label="Close" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </header>
+        <div class="modal__body">
+          <p id="cpsConfirmText" class="cps-confirm__text"></p>
+        </div>
+        <footer class="modal__footer">
+          <button type="button" class="btn" data-close-modal data-i18n="cps_confirm_cancel">Cancel</button>
+          <button type="button" class="btn btn--blue" id="cpsConfirmOk">OK</button>
         </footer>
       </div>
     </div>

@@ -63,6 +63,8 @@ const cfgState = {
   cpsChains: { I1: '', I2: '', I3: '', I4: '', I5: '' },
   /** Совместимость своих цепочек: all — все клиенты с I1–I5, modern — ещё <rd>/<rc> (amneziawg-go 0.2.15+). */
   cpsCompat: 'all',
+  /** Готовый вариант CPS-пакетов: standard | enhanced (cps5) | random (свои I2–I5 с rd/rc) | manual. */
+  cpsPreset: 'standard',
   /** When true, mobile preset (low Jc/Jmax, IPv4-only). */
   mobileMode: false,
   /** Explicit routing mode. 'full' = all traffic through tunnel; 'split' = only selected presets. */
