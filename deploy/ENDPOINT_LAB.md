@@ -56,7 +56,7 @@ The number of sessions is stored per observation (`observation.sessions`).
 ## Probe topology (one throw-away namespace per session)
 
 ```text
-host netns   ens3 · default route · production · SSH · Docker · awg0      (never modified)
+host netns   ens3 · default route · production · SSH · Docker            (never modified)
    │  `ip link add aelXXXXXX type wireguard` here → its encrypted UDP socket lives here
    │  `ip link set aelXXXXXX netns ael-XXXXXX` moves only the cleartext side
    ▼
@@ -120,8 +120,8 @@ endpoint-lab snapshot | cleanup | bench ID [--repeat N]
 `ID` is the `IP:port` of an endpoint already in the database. There is no CIDR, range or port-range
 argument anywhere. Candidates must be IPv4, use one of the official ports 2408/500/1701/4500, and sit in
 the WARP research prefixes coded in `ALLOWED_PREFIXES`, plus RFC 5737 TEST-NET-1 for negative controls.
-At most 64 endpoints per file. IPv6 is unsupported on this node (`disable_ipv6=1`). Operator reasons are
-1–200 plain characters. Operator actions are stored in `operator_event`, not in journald.
+At most 64 endpoints per file. IPv6 probing is unsupported by design (the host itself has IPv6 since
+the 2026-10-14 move, without AAAA records). Operator reasons are 1–200 plain characters. Operator actions are stored in `operator_event`, not in journald.
 
 `config.json` exists only for tests: `{"simulate_targets_unreachable": true}` replaces every target with an
 unreachable TEST-NET address (global target outage). `{"simulate_failing_targets": ["cf-1111"]}` breaks

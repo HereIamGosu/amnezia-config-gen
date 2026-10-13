@@ -293,7 +293,7 @@ class Endpoint:
 
 
 def parse_endpoint(ip: object, port: object) -> Endpoint:
-    """Strictly validate a candidate. IPv4 only on this node (IPv6 is disabled on the VPS)."""
+    """Strictly validate a candidate. IPv4 only: IPv6 probing is unsupported by design."""
     try:
         addr = ipaddress.ip_address(str(ip).strip())
     except ValueError:

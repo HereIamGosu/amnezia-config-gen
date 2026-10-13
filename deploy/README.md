@@ -73,10 +73,12 @@ awk '{print $1}' $L | sort | uniq -c | sort -rn | head -10                   # c
 ## Disaster recovery on a clean VPS
 
 Nothing application-specific lives only on the server except the TLS key (re-issuable) and the vhost
-(in Git). Steps:
+(in Git). Last host move: 2026-10-14, 185.77.219.233 → 159.200.243.71 (the deploy controller, its state
+and the existing certificate were copied over; the first slot was started from the recorded image digest).
+Steps:
 
 1. Install Docker (with compose plugin), nginx, certbot; open 80/443.
-2. Point DNS to the new IP (for sslip.io the host name itself changes with the IP).
+2. Point the DNS `A` record of awgconfig.com to the new IP (`www` is a CNAME to it).
 3. `mkdir -p /opt/amnezia-web/releases /var/lib/letsencrypt`; copy `deploy/nginx-amnezia-proxy.conf`
    and `deploy/nginx-amnezia-site.conf` to `/etc/nginx/snippets/amnezia-proxy.conf` / `amnezia-site.conf`.
 4. Install a temporary HTTP-only vhost serving `/.well-known/acme-challenge/` from
@@ -93,7 +95,8 @@ Nothing application-specific lives only on the server except the TLS key (re-iss
 4. Update absolute URLs: `public/index.html` (canonical, hreflang, og:url, og:image, JSON-LD) and
    `SITE` in `scripts/build-en-page.js`, then `npm run seo:en`; `public/sitemap.xml`, `public/robots.txt`,
    `public/llms.txt`, `public/.well-known/security.txt`, `package.json` `homepage`, README links.
-5. Optionally keep the sslip.io host as a 301 redirect to the new domain.
+5. The legacy host `valokda-amnezia.185-77-219-233.sslip.io` was redirected to awgconfig.com until the host
+   move of 2026-10-14; the name encodes the old IP, so its vhost was removed.
 
 ## Static assets: minification and compression
 
