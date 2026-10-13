@@ -108,13 +108,26 @@ e2eSuite('CPS packets: presets and the guarded editor', (openPage) => {
     assert.equal(sent.query.get('mode'), 'awg2', 'other parameters stay in the query');
     assert.ok(!['i1', 'i2', 'i3', 'i4', 'i5'].some((k) => sent.query.has(k)), 'chains are not in the address');
 
-    // Своих цепочек нет в «Стандарте»: переход на него спрашивает, «Отмена» оставляет вариант и цепочки
+    // Цепочки, которые выдал вариант, — не свои: «Больше случайности» → «Стандарт» и «Усиленная» без вопроса
     await openExtra(page);
+    await choosePreset(page, 'standard');
+    assert.equal(await page.evaluate(() => document.getElementById('cpsConfirmModal').classList.contains('is-open')), false,
+      'no question when leaving a preset that generated the chains');
+    assert.deepEqual(await chains(page), { I1: '', I2: '', I3: '', I4: '', I5: '' });
+    await choosePreset(page, 'random');
+    await choosePreset(page, 'enhanced');
+    assert.equal(await page.evaluate(() => document.getElementById('cpsConfirmModal').classList.contains('is-open')), false);
+    assert.equal(await page.evaluate(() => cfgState.extraCps), true);
+
+    // После правки в ручном режиме цепочки — свои: уход на готовый вариант спрашивает, «Отмена» всё оставляет
+    await choosePreset(page, 'random');
+    await choosePreset(page, 'manual');
+    await page.click(`${field('I2')} .cps-palette__btn[data-tag="r"]`);
     const kept = await chains(page);
     await choosePreset(page, 'standard');
     await page.waitFor(confirmOpen);
     await page.click('#cpsConfirmModal .modal__footer [data-close-modal]');
-    assert.equal(await page.evaluate(() => document.querySelector('[name="cpsPreset"]:checked').value), 'random');
+    assert.equal(await page.evaluate(() => document.querySelector('[name="cpsPreset"]:checked').value), 'manual');
     assert.deepEqual(await chains(page), kept);
     await choosePreset(page, 'standard');
     await page.waitFor(confirmOpen);
@@ -236,8 +249,9 @@ e2eSuite('CPS packets: presets and the guarded editor', (openPage) => {
     assert.equal(await other.evaluate(() => cfgState.cpsPreset), 'manual');
     await other.assertClean('linked page');
 
-    // Импорт поверх своих цепочек: сначала вопрос
+    // Импорт поверх своих цепочек (правленых в редакторе): сначала вопрос
     await choosePreset(page, 'manual');
+    await page.click(`${field('I2')} .cps-palette__btn[data-tag="r"]`);
     await page.evaluate(() => { document.querySelector('.cps-editor__import').open = true; });
     await page.evaluate(() => {
       document.getElementById('cpsImportText').value = '[Interface]\nI1 = <b 0x0a0b><r 16>\nI2 = <r 64>\n';

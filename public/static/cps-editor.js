@@ -36,6 +36,11 @@ const cpsEditorState = {
   custom: { I1: false, I2: false, I3: false, I4: false, I5: false },
   view: { I1: 'blocks', I2: 'blocks', I3: 'blocks', I4: 'blocks', I5: 'blocks' },
   text: { I1: '', I2: '', I3: '', I4: '', I5: '' },
+  /**
+   * Цепочки — посетителя: он правил их в редакторе или загрузил (импорт, история, ссылка). Цепочки, которые
+   * выдал готовый вариант («Больше случайности»), заменяются без вопроса.
+   */
+  userOwned: false,
 };
 
 const blockLabel = (tag) => ({
@@ -66,6 +71,9 @@ const fieldList = (fields) => fields.join(', ');
 const parseField = (field) => cpsChainLib.parse(cpsEditorState.text[field], cfgState.cpsCompat);
 
 const hasCustomCpsChains = () => CPS_FIELDS.some((f) => Boolean(cfgState.cpsChains[f]));
+
+/** Есть ли свои цепочки, которые посетитель задал сам, — только их замена требует вопроса. */
+const hasOwnCpsChains = () => cpsEditorState.userOwned && hasCustomCpsChains();
 
 const isLegacyProfile = () => typeof getSelectedProfile === 'function' && getSelectedProfile() === 'legacy';
 
@@ -147,7 +155,7 @@ const closeCpsConfirm = () => {
  * @param {() => void} apply
  */
 const confirmReplaceCpsChains = (apply) => {
-  if (!hasCustomCpsChains()) { apply(); return; }
+  if (!hasOwnCpsChains()) { apply(); return; }
   askCpsConfirm({
     title: t('cps_confirm_replace_title', 'Заменить свои цепочки?'),
     text: `${t('cps_confirm_replace_text', 'Сейчас заданы свои цепочки:')} ${fieldList(CPS_FIELDS.filter((f) => cfgState.cpsChains[f]))}. ${t('cps_confirm_replace_text2', 'Они будут заменены.')}`,
@@ -215,6 +223,7 @@ const presetFromState = () => {
 
 const applyPreset = (preset) => {
   cfgState.cpsPreset = preset;
+  if (preset !== 'manual') cpsEditorState.userOwned = false;
   if (preset === 'standard' || preset === 'enhanced') {
     setFieldsAuto();
     cfgState.extraCps = preset === 'enhanced';
@@ -317,6 +326,7 @@ const renderAllMeta = () => {
 
 /** После правки поля: заполнить пропуски, обновить сводки и чипы. */
 const afterFieldChange = (field, { rerender = false } = {}) => {
+  cpsEditorState.userOwned = true;
   syncCfgChain(field);
   const filled = fillGaps();
   if (rerender) renderField(field);
@@ -657,6 +667,7 @@ const renderCpsEditor = () => {
  */
 const setCpsChains = (chains, { compat } = {}) => {
   if (compat && cpsChainLib && cpsChainLib.isCompat(compat)) cfgState.cpsCompat = compat;
+  cpsEditorState.userOwned = CPS_FIELDS.some((field) => String((chains && chains[field]) || '').trim());
   for (const field of CPS_FIELDS) {
     const text = String((chains && chains[field]) || '').trim();
     cpsEditorState.custom[field] = Boolean(text);
@@ -723,7 +734,7 @@ const initCpsEditor = () => {
     radio.addEventListener('change', () => {
       if (!radio.checked) return;
       // Готовый вариант, кроме ручного, заменяет свои цепочки — сначала вопрос; без ответа выбор не меняется
-      if (radio.value === 'manual' || !hasCustomCpsChains()) { applyPreset(radio.value); return; }
+      if (radio.value === 'manual' || !hasOwnCpsChains()) { applyPreset(radio.value); return; }
       renderPresets();
       confirmReplaceCpsChains(() => applyPreset(radio.value));
     });
@@ -746,7 +757,7 @@ const initCpsEditor = () => {
   const resetAll = document.getElementById('cpsResetAll');
   if (resetAll) {
     resetAll.addEventListener('click', () => {
-      if (!hasCustomCpsChains()) { applyPreset('standard'); return; }
+      if (!hasOwnCpsChains()) { applyPreset('standard'); return; }
       askCpsConfirm({
         title: t('cps_confirm_reset_title', 'Сбросить все цепочки?'),
         text: t('cps_confirm_reset_text', 'Свои цепочки будут удалены, генератор снова выберет пакеты сам (вариант «Стандарт»).'),
