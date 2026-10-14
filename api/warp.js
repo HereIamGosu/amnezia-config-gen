@@ -1342,6 +1342,12 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
     extraCps = {};
     for (const field of ['I2', 'I3', 'I4', 'I5']) extraCps[field] = (customExtraCps && customExtraCps[field]) || auto[field] || '';
   }
+  // Какие поля в конфиге — цепочки посетителя: у них нет evidence-статуса протокола, только проверка синтаксиса
+  // и совместимости парсера. Свой I1 и так виден как cpsResolved = custom; I2–I5 без этого списка не видны.
+  const customCps = [
+    ...(cps.requested === 'custom' && i1 ? ['I1'] : []),
+    ...['I2', 'I3', 'I4', 'I5'].filter((field) => customExtraCps && customExtraCps[field]),
+  ];
   const persistentKeepalive = warpExtras.persistentKeepalive != null
     ? warpExtras.persistentKeepalive
     : isAwg3Mode(mode)
@@ -1378,7 +1384,7 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
       routesTelemetrySource,
       sitesResolved: sitesResolved ?? 0,
       presetsUsed: presetKeys.length,
-      appliedExtras: { cps5: canApplyExtraCps, mobile: Boolean(routeOpts.mobileMode) },
+      appliedExtras: { cps5: canApplyExtraCps, mobile: Boolean(routeOpts.mobileMode), customCps },
       endpointSource,
       labEndpoint: labEndpoint ? { ip: labEndpoint.ip, port: labEndpoint.port } : null,
       cps: { requested: cps.requested, resolved: cps.resolved, stability: cps.stability },

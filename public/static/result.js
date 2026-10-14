@@ -539,6 +539,13 @@ const renderResultExplanation = (summary) => {
     ? `Auto → ${summary.cps.resolved}${summary.cps.stability === 'experimental' ? ' (experimental)' : ''}`
     : `${summary.cps.resolved}${summary.cps.stability === 'experimental' ? ' (experimental)' : ''}`;
   appendSummaryField(fields, t('result_summary_cps', 'CPS'), cpsValue);
+  if (summary.cps.custom && summary.cps.custom.length) {
+    appendSummaryField(
+      fields,
+      t('result_summary_cps_custom', 'Свои CPS-цепочки'),
+      `${summary.cps.custom.join(', ')} — ${t('result_summary_cps_custom_note', 'проверены только синтаксис и совместимость с клиентами, не протокол')}`,
+    );
+  }
   appendSummaryField(fields, t('result_summary_import', 'Импорт'), summaryValue('vpnImport', summary.vpnImport));
   if (summary.awg) {
     appendSummaryField(

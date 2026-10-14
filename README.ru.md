@@ -224,7 +224,7 @@ TCP-доступность `api.cloudflareclient.com:443`, `engage.cloudflarecli
 | `router=1` | Router-капы (`Jc≤2`, `Jmin∈[40,128]`, `Jmax∈[Jmin+1,128]`); компонуется с `mobile` по инварианту **I8**. |
 | `link=1` | В ответе появляется `vpnLink: vpn://<base64url(qCompress(JSON))>` для импорта в AmneziaVPN одним тапом. |
 
-`appliedExtras: { cps5, mobile }` в ответе сообщает что фактически применилось (`cps5` может быть `false` даже когда запрошено — Legacy-режим его молча игнорирует).
+`appliedExtras: { cps5, mobile, customCps }` в ответе сообщает что фактически применилось (`cps5` может быть `false` даже когда запрошено — Legacy-режим его молча игнорирует; `customCps` — поля I1–I5 со своими цепочками, у которых нет evidence-статуса протокола).
 
 Успешный ответ также содержит безопасные метаданные `cpsRequested`, `cpsResolved`, `cpsStability` и дополнительное поле `cpsEvidenceStatus`. При `count=1..3` каждый элемент `configs[]` сообщает собственный результат; Auto разрешается независимо для каждого конфига. QUIC формирует защищённый 1200-байтный пакет в форме QUIC v1 Initial и делит его на соседние fixed-byte CPS-теги без усечения, но остаётся экспериментальным до подтверждения совместимости с WARP. Static/SIP/STUN имеют статус stable и проектное evidence verified; QUIC/DNS/DTLS экспериментальны, TLS не поддерживается, Auto выбирает только stable.
 

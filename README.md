@@ -224,7 +224,7 @@ TCP reachability of `api.cloudflareclient.com:443`, `engage.cloudflareclient.com
 | `router=1` | Router caps profile (`Jc≤2`, `Jmin∈[40,128]`, `Jmax∈[Jmin+1,128]`); composes with `mobile` per invariant **I8**. |
 | `link=1` | Response gains `vpnLink: vpn://<base64url(qCompress(JSON))>` for one-tap import in AmneziaVPN mobile app. |
 
-`appliedExtras: { cps5, mobile }` in the response reports what was actually applied (`cps5` may be `false` even when requested — Legacy mode silently ignores it).
+`appliedExtras: { cps5, mobile, customCps }` in the response reports what was actually applied (`cps5` may be `false` even when requested — Legacy mode silently ignores it; `customCps` lists the I1–I5 fields that use own chains, which have no protocol evidence status).
 
 Successful responses also report secret-free `cpsRequested`, `cpsResolved`, `cpsStability`, and additive `cpsEvidenceStatus` fields. For `count=1..3`, every `configs[]` entry carries its own resolution; Auto is resolved independently for each config. QUIC is a protected 1200-byte QUIC v1 Initial-shaped packet split into adjacent fixed-byte CPS tags without truncation, but remains experimental until WARP interoperability is confirmed. Static/SIP/STUN are stable with verified project evidence; QUIC/DNS/DTLS are experimental, TLS is unsupported, and Auto selects stable protocols only.
 

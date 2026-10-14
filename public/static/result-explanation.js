@@ -242,6 +242,10 @@
     const cpsRequested = typeof response.cpsRequested === 'string' ? response.cpsRequested : 'unknown';
     const cpsResolved = typeof response.cpsResolved === 'string' ? response.cpsResolved : 'unknown';
     const cpsStability = typeof response.cpsStability === 'string' ? response.cpsStability : 'unknown';
+    // Поля I1–I5 со своими цепочками посетителя: у них нет evidence-статуса протокола
+    const customCps = Array.isArray(response.appliedExtras?.customCps)
+      ? response.appliedExtras.customCps.filter((field) => /^I[1-5]$/.test(field))
+      : [];
     if (presets.length && routesSource === 'staticFallback') {
       warnings.push({
         level: 'warning',
@@ -280,7 +284,7 @@
       presets,
       profile: getProfile(state),
       ipv6: getIpv6(state),
-      cps: { requested: cpsRequested, resolved: cpsResolved, stability: cpsStability },
+      cps: { requested: cpsRequested, resolved: cpsResolved, stability: cpsStability, custom: customCps },
       awg: getAwg(response),
       vpnImport: response.vpnLink
         || (Array.isArray(response.configs) && response.configs.some((config) => config?.vpnLink))
