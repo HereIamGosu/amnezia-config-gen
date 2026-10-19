@@ -1177,6 +1177,26 @@ const mergeConfigAfterWarp = async (id, token, initialConfig) => {
 };
 
 /**
+ * Expands preset keys and throws a 400 for unknown keys or a set with no domains and no static CIDRs
+ * (a key that normalises to an empty string lands here). Runs before any WARP registration.
+ * @param {string[]} presetKeys
+ */
+const expandValidPresets = (presetKeys) => {
+  const expanded = expandPresetsToSites(presetKeys);
+  if (expanded.unknown.length) {
+    const err = new Error(`Неизвестные пресеты маршрутов: ${expanded.unknown.join(', ')}`);
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!expanded.sites.length && !expanded.staticCidrs.length) {
+    const err = new Error('Не заданы домены для выбранных пресетов.');
+    err.statusCode = 400;
+    throw err;
+  }
+  return expanded;
+};
+
+/**
  * @param {string[]} presetKeys
  * @param {{ includeIpv6?: boolean }} [opts]
  */
@@ -1184,17 +1204,7 @@ const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false } 
   if (!presetKeys.length) {
     return { cidrs: null, routesSource: 'default', routesTelemetrySource: 'static' };
   }
-  const { sites, staticCidrs, communityLists, unknown } = expandPresetsToSites(presetKeys);
-  if (unknown.length) {
-    const err = new Error(`Неизвестные пресеты маршрутов: ${unknown.join(', ')}`);
-    err.statusCode = 400;
-    throw err;
-  }
-  if (!sites.length && !staticCidrs.length) {
-    const err = new Error('Не заданы домены для выбранных пресетов.');
-    err.statusCode = 400;
-    throw err;
-  }
+  const { sites, staticCidrs, communityLists } = expandValidPresets(presetKeys);
 
   const { isIpv4Cidr } = require('../src/server/ipListFetch');
 
@@ -1258,6 +1268,8 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
 
   // Start CIDR resolution concurrently with WARP registration — they are independent.
   const resolvePresetsPromise = resolveAllowedIpsFromPresets(presetKeys, routeOpts);
+  // Marks the rejection as handled while registration is in flight; the error is thrown at the await below.
+  resolvePresetsPromise.catch(() => {});
 
   const regResponse = await handleApiRequest('POST', 'reg', regBody);
   const { id, token } = regResponse.result ?? {};
@@ -1593,6 +1605,8 @@ const handler = async (req, res) => {
     const effectivePresetKeys = (hasExplicitRouteMode && routeModeRaw === 'full')
       ? []
       : presetKeys;
+    // Invalid presets are an input error: answered before Lab Auto selection and WARP registration.
+    if (effectivePresetKeys.length) expandValidPresets(effectivePresetKeys);
     // ─────────────────────────────────────────────────────────────────────────────
 
     // Lab Auto: freshness is decided once, here, before any WARP registration. The request then uses exactly
