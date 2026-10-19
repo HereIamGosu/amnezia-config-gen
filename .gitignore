@@ -21,9 +21,6 @@ id_ed25519*
 *.conf
 !/deploy/**/*.conf
 
-# Local working VPN configs with real keys
-Рабочие_конфиги/
-
 # ============================================================
 # Node.js
 # ============================================================
@@ -86,22 +83,17 @@ logs/
 # ============================================================
 # OS generated files
 # ============================================================
-# macOS
 .DS_Store
 .AppleDouble
 .LSOverride
 ._*
 .Spotlight-V100
 .Trashes
-
-# Windows
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 *.lnk
-
-# Linux
 .trash/
 *~
 
@@ -117,89 +109,11 @@ $RECYCLE.BIN/
 *.sublime-project
 
 # ============================================================
-# AI assistants & agents — local state, context, config
+# Local agent context (never part of the published project)
 # ============================================================
-# Claude / Anthropic
+# Personal tool state of the maintainer lives in .git/info/exclude;
+# these few entries stay here as a safety net against `git add -A`.
 .claude/
 CLAUDE.md
 .mcp.json
-
-# Cursor
-.cursor/
-.cursorignore
-.cursorrules
-*.cursorrules
-
-# GitHub Copilot
-.github/copilot-instructions.md
-
-# Codex / OpenAI
-AGENTS.md
-.codex/
-codex.md
-
-# Gemini / Google
-GEMINI.md
-.gemini/
-
-# Aider
-.aider*
-
-# Continue.dev
-.continue/
-
-# Cline / RooCode / Windsurf / Kilo Code
-.cline/
-.roo/
-.windsurf/
-.windsurfignore
-.windsurfrules
-.kilo/
-.kilocode/
-
-# Supermaven / Tabnine / Codeium
-.supermaven/
-.tabnine*
-.codeium/
-
-# Devin / OpenHands
-.devin/
-.openhands/
-
-# CodeGraph / Understand-Anything (local indexes)
 .codegraph/
-.understand-anything/
-
-# OMX / ruv-swarm / claude-flow / Superpowers
-.omx/
-.ruv-swarm/
-.claude-flow/
-.superpowers/
-/memory/
-/swarm-state/
-
-# Generic AI context files
-.ai-context*
-ai-instructions*
-
-# Agent runtime data (databases, caches, streams)
-/data/
-*.db
-*.db-shm
-*.db-wal
-
-# ============================================================
-# Project-specific (private docs and local artefacts)
-# ============================================================
-/PRD.md
-/DEV_CHECKLIST.md
-# docs/ is tracked (GitHub Pages landing); only private notes are excluded
-/docs/SEO_KEYWORD_MAP.md
-/docs/srs/
-/docs/superpowers/
-
-# Logo/brand design workspace (concepts, renders, full-size sources)
-/branding/
-
-# Legacy local helper script
-/struc.py
