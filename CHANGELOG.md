@@ -11,7 +11,6 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Fixed
 - `/api/warp` with unknown route presets (`presets=…` with `routeMode=split`, or a preset key with no usable characters) now answers HTTP 400 with the same message as before, before any WARP device is registered and before Lab Auto picks endpoints. The preset check is one function used by the request handler and by the route resolver. `routeMode=full` still ignores `presets`.
-- Preset resolution that runs while the WARP registration is in progress can no longer be left without an error handler if the registration fails first; the original error still reaches the response.
 
 ## [3.1.0] - 2026-10-14
 
