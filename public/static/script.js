@@ -258,7 +258,7 @@ const generateConfig = async () => {
     // Автоматически скачивается только первый: браузеры блокируют несколько загрузок подряд.
     const variants = data.configs && data.configs.length > 1
       ? data.configs.map((cfg, idx) => ({
-        filename: filename.replace(/\.conf$/, `_variant${idx + 1}.conf`),
+        filename: filename.replace(/\.conf$/, `_v${idx + 1}.conf`),
         decodedConfig: atob(cfg.content),
         vpnLink: cfg.vpnLink || null,
       }))
