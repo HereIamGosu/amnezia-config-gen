@@ -27,7 +27,7 @@ const swiftSet = (source, name) => {
 const main = () => {
   const [clone, ...tags] = process.argv.slice(2);
   if (!clone || !tags.length) {
-    console.error('usage: node scripts/extract-client-keys.js <amneziawg-apple clone> <tag> [<tag> ...]');
+    process.stderr.write('usage: node scripts/extract-client-keys.js <amneziawg-apple clone> <tag> [<tag> ...]\n');
     process.exit(2);
   }
   const extractedAt = new Date().toISOString().slice(0, 10);
@@ -48,7 +48,7 @@ const main = () => {
   });
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, `${JSON.stringify(entries, null, 2)}\n`);
-  for (const e of entries) console.log(`${e.version} ${e.sha.slice(0, 7)} interface=${e.interfaceKeys.length} peer=${e.peerKeys.length}`);
+  for (const e of entries) process.stdout.write(`${e.version} ${e.sha.slice(0, 7)} interface=${e.interfaceKeys.length} peer=${e.peerKeys.length}\n`);
 };
 
 main();
