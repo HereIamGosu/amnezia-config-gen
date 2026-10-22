@@ -67,7 +67,7 @@ test('default AWG 3.0 and 3.1 output has evidence for every emitted field', () =
     assert.match(text, /S1 = 0/);
     assert.match(text, /H4 = 4/);
     assert.doesNotMatch(text, /HeaderProtectionKey/);
-    if (mode === 'awg31') assert.match(text, /DisableCookies = on/);
+    assert.doesNotMatch(text, /^(DisableCookies|RandomTrailers)\s*=/m);
   }
   assert.match(assertConfigEvidenceKnown('awg3', `${buildDefault('awg3')}\nUnknownAWGField = 1`).join(' '), /no evidence record/);
 });

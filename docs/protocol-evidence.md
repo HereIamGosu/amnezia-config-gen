@@ -1,6 +1,6 @@
 # Current AWG/WARP Protocol Evidence
 
-This document is generated from the JavaScript evidence registries. Historical release notes describe their release snapshot; this page records current policy. Last checked: 2026-10-03.
+This document is generated from the JavaScript evidence registries. Historical release notes describe their release snapshot; this page records current policy. Last checked: 2026-10-22.
 
 ## Evidence status
 
@@ -18,6 +18,7 @@ A community report can trigger research but cannot alone establish a peer-depend
 |---|---|---|---|---|
 | amneziawg-go | primary-upstream | b5928efb6ca19f0153958460c3d141f04abc5c2e | 2026-10-03 | https://github.com/amnezia-vpn/amneziawg-go/tree/b5928efb6ca19f0153958460c3d141f04abc5c2e |
 | amneziawg-tools | primary-upstream | ee0f0a9aa34ff0a0da4b3433b9512781cfe02843 | 2026-10-03 | https://github.com/amnezia-vpn/amneziawg-tools/tree/ee0f0a9aa34ff0a0da4b3433b9512781cfe02843 |
+| amneziawg-apple | primary-upstream | bdaf0b337b85c815e1dc462505455155b6cdfe79 | 2026-10-22 | https://github.com/amnezia-vpn/amneziawg-apple/tree/bdaf0b337b85c815e1dc462505455155b6cdfe79 |
 | amnezia-client | primary-upstream | 94b51df24790bf52427afe82d81c87a95460bdfd | 2026-10-03 | https://github.com/amnezia-vpn/amnezia-client/tree/94b51df24790bf52427afe82d81c87a95460bdfd |
 | project-runtime | project-source | src/server/awg | 2026-10-03 | https://github.com/HereIamGosu/amnezia-config-gen/tree/main/src/server/awg |
 | issue-4 | community-report | issues/4 | 2026-10-03 | https://github.com/HereIamGosu/amnezia-config-gen/issues/4 |
@@ -41,7 +42,7 @@ A community report can trigger research but cannot alone establish a peer-depend
 | KeepaliveTimeout | awg3, awg31 | source-confirmed | client-side | integer-or-range | default 5-15 | amneziawg-go, amneziawg-tools |
 | MaxHandshakeAttempts | awg3, awg31 | source-confirmed | client-side | integer-or-range | default 15-20 | amneziawg-go, amneziawg-tools |
 | PersistentKeepalive | awg3, awg31 | source-confirmed | client-side | integer-or-range | default 25-35 | amneziawg-go, amneziawg-tools |
-| DisableCookies | awg31 | source-confirmed | client-side | on-or-off | default on | amneziawg-go, amneziawg-tools |
+| DisableCookies | awg31 | source-confirmed | client-side | on-or-off | opt-in | amneziawg-go, amneziawg-tools, amneziawg-apple |
 | RandomTrailers | awg31 | peer-dependent-disabled | both-peers | on-or-off | blocked | amneziawg-go, amneziawg-tools, issue-4 |
 | HeaderProtectionKey | awg3, awg31 | peer-dependent-disabled | both-peers | base64-key | blocked | amneziawg-go, amneziawg-tools |
 | S1 | awg3, awg31 | peer-dependent-disabled | both-peers | integer | fixed 0 | amneziawg-go, amneziawg-tools |
@@ -70,7 +71,7 @@ Auto resolves only to stable, verified protocols. Unknown CPS is an API validati
 ## Current WARP invariants
 
 - AWG 3.0 and 3.1 default to `ContentPaddingAddition = 10-100`; `off`, `0`, and `0-0` disable it. It is local encrypted transport padding and may increase packet size.
-- AWG 3.1 defaults to `DisableCookies = on`; `off` remains available. This suppresses the local under-load Cookie Reply branch, leaves incoming Cookie Reply processing available, and reduces local anti-DoS protection. It is an anti-fingerprinting trade-off, not a security improvement.
+- AWG 3.1 omits `DisableCookies` by default; `disableCookies=on` and `off` are opt-in. AmneziaWG iOS/macOS before v3.1.3 reject the key. On a responder it suppresses the under-load Cookie Reply branch and reduces local anti-DoS protection; a WARP client config only initiates handshakes, so it probably changes nothing for the tunnel.
 - `RandomTrailers=on` and `HeaderProtectionKey` are blocked for WARP. `S1..S4` are fixed to zero; `H1..H4` are fixed to 1, 2, 3, 4. The Cloudflare peer is stock WireGuard.
 - Public `.conf` range inputs are constrained to 0..65535 even though the engine's internal numeric representation may be wider. The tools parser uses `u16_range_from_string`; this project's strict range avoids parser truncation.
 

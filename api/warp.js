@@ -843,7 +843,7 @@ const collectWarpGenExtras = (req, body, mode = 'legacy') => {
     throw new WarpSafetyValidationError('DisableCookies is available only for AWG 3.1.');
   }
   const disableCookies = mode === AWG31_MODE
-    ? (disableCookiesRaw == null ? 'on' : parseAwgToggle(disableCookiesRaw, 'DisableCookies'))
+    ? (disableCookiesRaw == null ? null : parseAwgToggle(disableCookiesRaw, 'DisableCookies'))
     : null;
   const timingFields = {
     rekeyAfterTime: 'RekeyAfterTime',

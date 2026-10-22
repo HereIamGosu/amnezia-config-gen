@@ -46,7 +46,8 @@ const buildAwg3Interface = (options) => {
     `KeepaliveTimeout = ${timings.keepaliveTimeout}`,
     `MaxHandshakeAttempts = ${timings.maxHandshakeAttempts}`,
   );
-  if (safe.randomTrailers) lines.push(`RandomTrailers = ${safe.randomTrailers}`);
+  // RandomTrailers stays off (the engine default) and is not written: AmneziaWG Apple before v3.1.3 rejects the key.
+  // DisableCookies is written only when the request asked for it, for the same reason.
   if (safe.disableCookies) lines.push(`DisableCookies = ${safe.disableCookies}`);
   lines.push('MTU = 1280');
   return lines.join('\n');
