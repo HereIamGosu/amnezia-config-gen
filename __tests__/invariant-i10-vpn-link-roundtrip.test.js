@@ -50,7 +50,13 @@ describe('Invariant I10: vpn:// link round-trip', () => {
     const innerJson = JSON.parse(obj.containers[0].awg.last_config);
     assert.equal(innerJson.config, sampleConf, 'inner config must equal original .conf text');
     assert.equal(innerJson.mtu, '1280');
-    assert.equal(innerJson.port, '4500');
+    assert.equal(innerJson.port, 4500);
+    // structured fields AmneziaVPN reads (iOS, Android, desktop), see vpn-link-client-fields.test.js
+    assert.equal(innerJson.hostName, 'engage.cloudflareclient.com');
+    assert.equal(innerJson.client_priv_key, 'AAAA');
+    assert.equal(innerJson.client_ip, '172.16.0.2');
+    assert.equal(innerJson.server_pub_key, 'BBBB');
+    assert.deepEqual(innerJson.allowed_ips, ['0.0.0.0/0', '::/0']);
   });
 
   test('vpn:// uses protocol_version 3.1 for awg31', () => {
@@ -76,7 +82,7 @@ describe('Invariant I10: vpn:// link round-trip', () => {
     assert.equal(obj.containers[0].awg.protocol_version, '3.1');
     assert.equal(innerJson.config, sampleConf);
     assert.equal(innerJson.mtu, '1280');
-    assert.equal(innerJson.port, '4500');
+    assert.equal(innerJson.port, 4500);
   });
 
   test('awg3 vpn:// is disabled until its historical protocol version is confirmed', () => {
@@ -93,6 +99,6 @@ describe('Invariant I10: vpn:// link round-trip', () => {
     const innerJson = JSON.parse(obj.containers[0].awg.last_config);
     assert.equal(obj.containers[0].awg.protocol_version, '1.5');
     assert.equal(innerJson.mtu, '1280', 'MTU defaults to 1280 when no MTU= line');
-    assert.equal(innerJson.port, '4500', 'port defaults to 4500 when no Endpoint=host:port line');
+    assert.equal(innerJson.port, 4500, 'port defaults to 4500 when no Endpoint=host:port line');
   });
 });
