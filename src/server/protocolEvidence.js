@@ -25,7 +25,7 @@ const EVIDENCE_SOURCES = Object.freeze({
   }),
   'amneziawg-apple': Object.freeze({
     repository: 'amnezia-vpn/amneziawg-apple',
-    revision: 'bdaf0b337b85c815e1dc462505455155b6cdfe79',
+    revision: 'tag v3.1.3 (bdaf0b3)',
     checkedAt: '2026-10-22',
     kind: 'primary-upstream',
   }),
