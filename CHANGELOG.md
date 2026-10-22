@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [3.1.2] - 2026-10-22
+
+### Changed
+- **The default AWG 3.1 `.conf` no longer writes `RandomTrailers` and `DisableCookies`.** AmneziaWG for iOS/macOS up to `v3.1.20260814` rejects both keys in `[Interface]` (`interfaceHasUnrecognizedKey`); `v3.1.3` and later accept them. `RandomTrailers` stays off for WARP and is simply not written (off is the engine default). `DisableCookies` is written only for an explicit `disableCookies=on|off`; this supersedes the 2.7.1 default `DisableCookies = on` ([2.7.1](docs/releases/2.7.1.md)). A WARP client config only initiates handshakes, so the setting probably did not change the tunnel (inference from amneziawg-go). `awg.capabilities.disableCookies` is `disabled` and `awg.enabledFeatures` has no `disable-cookies` by default. A test now compares the generated keys of every profile with the key lists of AmneziaWG Apple `v3.1.20260814` and `v3.1.4`.
+- Downloaded config names are `AWGWarp31_k3f9.conf` (variants `_v2`, `_v3`) instead of `AmneziaWarp-AWG3.1.conf`: letters, digits and underscore only, at most 32 characters, unique per generation; Windows clients take the tunnel name from the file name.
+
+### Fixed
+- Compatibility card: wg-tunnel is no longer listed for iOS (Android app); AmneziaWG on Linux is noted as the `awg` / `awg-quick` console tools.
+
 ## [3.1.1] - 2026-10-20
 
 ### Fixed
