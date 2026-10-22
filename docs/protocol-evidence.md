@@ -18,7 +18,7 @@ A community report can trigger research but cannot alone establish a peer-depend
 |---|---|---|---|---|
 | amneziawg-go | primary-upstream | b5928efb6ca19f0153958460c3d141f04abc5c2e | 2026-10-03 | https://github.com/amnezia-vpn/amneziawg-go/tree/b5928efb6ca19f0153958460c3d141f04abc5c2e |
 | amneziawg-tools | primary-upstream | ee0f0a9aa34ff0a0da4b3433b9512781cfe02843 | 2026-10-03 | https://github.com/amnezia-vpn/amneziawg-tools/tree/ee0f0a9aa34ff0a0da4b3433b9512781cfe02843 |
-| amneziawg-apple | primary-upstream | tag v3.1.3 (bdaf0b3) | 2026-10-22 | https://github.com/amnezia-vpn/amneziawg-apple/tree/tag v3.1.3 (bdaf0b3) |
+| amneziawg-apple | primary-upstream | v3.1.3 | 2026-10-22 | https://github.com/amnezia-vpn/amneziawg-apple/tree/v3.1.3 |
 | amnezia-client | primary-upstream | 94b51df24790bf52427afe82d81c87a95460bdfd | 2026-10-03 | https://github.com/amnezia-vpn/amnezia-client/tree/94b51df24790bf52427afe82d81c87a95460bdfd |
 | project-runtime | project-source | src/server/awg | 2026-10-03 | https://github.com/HereIamGosu/amnezia-config-gen/tree/main/src/server/awg |
 | issue-4 | community-report | issues/4 | 2026-10-03 | https://github.com/HereIamGosu/amnezia-config-gen/issues/4 |
