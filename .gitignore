@@ -117,3 +117,4 @@ $RECYCLE.BIN/
 CLAUDE.md
 .mcp.json
 .codegraph/
+.playwright-mcp/
