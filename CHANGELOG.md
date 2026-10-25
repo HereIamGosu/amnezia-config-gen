@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [3.1.4] - 2026-10-25
+
+### Fixed
+- **`warpPort` is checked against the same port list as `port`.** `/api/warp` read `warpPort` (and `port` as its fallback) with a parser that accepted any number from 1 to 65535 and silently dropped non-numeric or `0` values, while the separate allowlist check looked only at `port`. A request such as `port=4500&warpPort=12345` therefore answered 200 with `Endpoint = engage.cloudflareclient.com:12345`. Now an explicit `warpPort` outside 2408, 500, 4500, 1701, 880, 8854 (`0`, `65535`, `abc` included) gets HTTP 400 with the same body as an unlisted `port` (`error`, `allowedPorts`), before any WARP device is registered and before Lab Auto picks endpoints. Allowed ports and the default 4500 behave as before. The web UI only sends values from its own list, so it is not affected.
+
 ## [3.1.3] - 2026-10-22
 
 ### Fixed

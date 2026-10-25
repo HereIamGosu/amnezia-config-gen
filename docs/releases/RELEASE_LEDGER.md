@@ -1,6 +1,6 @@
 # Release Ledger
 
-Checked at: 2026-10-22 (3.1.3 prepared locally; not pushed, not tagged).
+Checked at: 2026-10-25 (3.1.4 prepared locally; not pushed, not tagged).
 
 This ledger records release metadata state without fabricating historical tags or GitHub Releases.
 
@@ -19,6 +19,7 @@ This ledger records release metadata state without fabricating historical tags o
 | 3.1.1 | `6cb62c9159e0e08649bb26209583dae5ad20a577` (`docs(release): …` on top of `release: 3.1.1` `50a4ce3`) | Present (`v3.1.1` → `6cb62c9`) | Present (`v3.1.1`, Latest) | `docs/releases/3.1.1.md` | `docs/releases/3.1.1-source-audit.md` | Published | Pushed to `main` on 2026-10-20 together with `25dc3e9`; CI and IndexNow ran; production served `X-App-Revision: 6cb62c9…` within about four minutes. Smoke: `/`, `/en`, `/status.html`, `/api/status`, `/api/healthcheck` 200, assets `?v=3.1.1`; `GET /api/warp?routeMode=split&presets=bogus` answered 400 and the site kept answering. No generation (WARP registration) was run. Invalid route presets answer 400 before registration and Lab Auto. |
 | 3.1.2 | `424820d3523b27ec090b0fcb6308ddd8f6185a42` (`fix(evidence): …` on top of `release: 3.1.2` `5c666ba`) | Present (`v3.1.2` → `424820d`) | Present (`v3.1.2`, Latest) | `docs/releases/3.1.2.md` | `docs/releases/3.1.2-source-audit.md` | Published | Pushed to `main` on 2026-10-22 (19:28 UTC) together with the 3.1.1 ledger commit `0778aef` and `25dc3e9`; CI succeeded on `main`; the CI run on the tag failed once before any test ("Chrome did not start" on the runner) and passed on rerun; production served `X-App-Revision: 424820d…` about two minutes after CI finished. Smoke: `/`, `/en`, `/status.html`, `/lab`, `/api/status`, `/api/healthcheck`, `/api/lab` 200, assets `?v=3.1.2`, `GET /api/warp?routeMode=split&presets=bogus` 400. No generation (WARP registration) was run, so the new file names and the missing `RandomTrailers`/`DisableCookies` lines were not checked on production; no device test (G1) yet. AWG 3.1 default output without `RandomTrailers` and `DisableCookies` (AmneziaWG Apple before v3.1.3 rejects them), file names `AWGWarp31_xxxx.conf`, client registry fixes. |
 | 3.1.3 | Pending (local commit, not pushed) | Missing | Missing | `docs/releases/3.1.3.md` | `docs/releases/3.1.3-source-audit.md` | Prepared, unpublished | `vpn://` link carries the structured `last_config` fields AmneziaVPN reads (iOS network extension failed on `hostName` null). Tag, push and GitHub Release only with owner approval. |
+| 3.1.4 | Pending (local commit, not pushed) | Missing | Missing | `docs/releases/3.1.4.md` | `docs/releases/3.1.4-source-audit.md` | Prepared locally, not pushed | `warpPort` goes through the same port allowlist as `port`; an unlisted value answers 400 before registration. Push, tag and GitHub Release only with owner approval. |
 
 ## Remote state observed
 

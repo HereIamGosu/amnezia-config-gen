@@ -147,7 +147,7 @@ Parameters via query string (`GET`) or JSON body fields (`POST`). Body field nam
 | `dns` | DNS preset key; UI default is `cloudflare` |
 | `template` | See [Templates](#templates) |
 | `peerEndpoint`, `endpoint` | Full `host:port` for `Endpoint` (used as-is when given) |
-| `warpPort` | UDP port for `engage…` or IP fallback (default for WARP templates: **4500**; classic wgcf often: **2408**) |
+| `warpPort` | UDP port for `engage…` or IP fallback; one of **2408, 500, 4500, 1701, 880, 8854**, otherwise HTTP 400 (default for WARP templates: **4500**; classic wgcf often: **2408**) |
 | `endpointMode` | `hostname` (default, unchanged behaviour) or `lab` — Lab Auto: each config gets a distinct fresh ACTIVE endpoint of the Endpoint Lab. The requested port is a preference: the Lab verifies 2408/500/1701/4500, a shortfall on that port is filled from other verified ports and reported. Fewer distinct endpoints than `count` → fewer configs plus a warning, never duplicates. Only for WARP templates; not with `peerEndpoint`. |
 | `persistentKeepalive`, `keepalive` | Integer for older modes; strict integer or `min-max` range for AWG 3.x (default `25-35`) |
 | `rekeyAfterTime`, `rekeyTimeout`, `rejectAfterTime`, `keepaliveTimeout`, `maxHandshakeAttempts` | AWG 3.x strict integer/range overrides; defaults: `100-120`, `3-7`, `150-180`, `5-15`, `15-20` |

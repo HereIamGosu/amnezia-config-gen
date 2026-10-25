@@ -147,7 +147,7 @@ Endpoint Lab работает на том же сервере отдельной
 | `dns` | Ключ пресета DNS; в UI по умолчанию `cloudflare` |
 | `template` | См. [Шаблоны](#шаблоны) |
 | `peerEndpoint`, `endpoint` | Полная строка `host:port` для `Endpoint` (если задана — используется как есть) |
-| `warpPort` | UDP-порт для `engage…` или IP-fallback (для WARP-шаблонов по умолчанию **4500**; для классического wgcf часто **2408**) |
+| `warpPort` | UDP-порт для `engage…` или IP-fallback; один из **2408, 500, 4500, 1701, 880, 8854**, иначе HTTP 400 (для WARP-шаблонов по умолчанию **4500**; для классического wgcf часто **2408**) |
 | `endpointMode` | `hostname` (по умолчанию, поведение не меняется) или `lab` — Lab Auto: каждый конфиг получает отдельный свежий ACTIVE endpoint Endpoint Lab. Запрошенный порт — предпочтение: Lab проверяет 2408/500/1701/4500, нехватка на этом порту добирается другими проверенными портами с предупреждением. Разных endpoint'ов меньше, чем `count` → меньше конфигов и предупреждение, без повторов. Только для WARP-шаблонов; несовместим с `peerEndpoint`. |
 | `persistentKeepalive`, `keepalive` | Для старых режимов integer; для AWG 3.x строгий integer или `min-max` (default `25-35`) |
 | `rekeyAfterTime`, `rekeyTimeout`, `rejectAfterTime`, `keepaliveTimeout`, `maxHandshakeAttempts` | Строгие AWG 3.x integer/range overrides; defaults: `100-120`, `3-7`, `150-180`, `5-15`, `15-20` |

@@ -1500,13 +1500,14 @@ const handler = async (req, res) => {
     delete warpExtras.forceLegacy;
     delete warpExtras.mode;
 
-    // Validate `port` param against allowlist (if explicitly provided)
-    const portParamRaw = body.port ?? pickQuery(req, 'port');
-    if (portParamRaw != null && portParamRaw !== '') {
-      const portCheck = parseAllowlistedPort(portParamRaw);
-      if (portCheck.error) {
-        res.status(400).json({ success: false, error: portCheck.error, allowedPorts: portCheck.allowedPorts });
-        return;
+    // Validate `port` and `warpPort` against the allowlist (if explicitly provided): both set the Endpoint port.
+    for (const portParamRaw of [body.port ?? pickQuery(req, 'port'), body.warpPort ?? pickQuery(req, 'warpPort')]) {
+      if (portParamRaw != null && portParamRaw !== '') {
+        const portCheck = parseAllowlistedPort(portParamRaw);
+        if (portCheck.error) {
+          res.status(400).json({ success: false, error: portCheck.error, allowedPorts: portCheck.allowedPorts });
+          return;
+        }
       }
     }
 
