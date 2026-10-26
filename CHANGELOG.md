@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [3.1.5] - 2026-10-26
+
+### Changed
+- **The result says that the file is already downloaded.** The `.conf` is saved right after "Generate configuration"; four simulated first-time visitors all stopped at that point because nothing said so. Under the buttons there is now "File … is already downloaded. Can't find it in your downloads? Press "Download .conf"", a "Next" line (import into AmneziaVPN or AmneziaWG, or paste the `vpn://` link into AmneziaVPN) and a link to the instructions. A double click on "Download .conf" gives one file.
+- **A "Create config" button in the header block** scrolls to the generator (on a 375 px screen the generate button was about 1600 px below the top).
+- **Endpoint Lab "Unavailable"** shows "the config will use hostname" next to it.
+- **Refusals before the request** (split tunnelling with no direction selected, an error in a custom CPS chain) are also shown as a toast.
+- **Error texts.** A network failure, HTTP 429, 5xx and an HTML page instead of JSON each get a plain message; the last one no longer tells visitors to run `vercel dev`. A network failure stays a `TypeError`, so the generation telemetry still classifies it as `network`. Errors that carry their own message from the API are shown as before.
+- The findings came from model-driven browser runs against a local server with the Cloudflare registration stubbed, one run per role per round; they are not data from real visitors.
+
 ## [3.1.4] - 2026-10-25
 
 ### Fixed
