@@ -294,7 +294,7 @@ const heroLabView = () => {
     degraded: [t('status_lab_limited', 'Ограничен'), active],
     stale: [t('status_lab_stale', 'Данные устарели'), ago],
     empty: [t('status_lab_empty', 'Нет ACTIVE'), ago],
-    unavailable: [t('status_lab_unavailable', 'Недоступен'), ''],
+    unavailable: [t('status_lab_unavailable', 'Недоступен'), t('status_lab_fallback_hint', 'конфиг пойдёт через hostname')],
   }[s.state];
   // Lab Auto создаёт конфиг, только когда у Lab есть свежие ACTIVE-адреса: ok и degraded
   return { tone: s.tone, value, detail, state: s.state, ready: s.state === 'ok' || s.state === 'degraded' };

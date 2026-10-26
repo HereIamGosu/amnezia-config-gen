@@ -213,6 +213,16 @@ const renderResultSuccess = () => {
     subtitle.textContent = t('result_ready_subtitle', 'Профиль {mode} успешно сгенерирован.')
       .replace('{mode}', getModeLabel(currentResult.mode));
   }
+  // Файл уходит в загрузки сам, сразу после генерации: говорим об этом и называем имя
+  const autoNote = document.getElementById('resultAutoNote');
+  if (autoNote) {
+    autoNote.hidden = !currentResult.autoDownloaded;
+    if (currentResult.autoDownloaded) {
+      autoNote.textContent = t('result_autodownload_note',
+        'Файл {file} уже скачан. Не нашли его в загрузках — нажмите «Скачать .conf».')
+        .replace('{file}', currentResult.autoDownloaded);
+    }
+  }
 
   // Переключатель вариантов (count = 2–3)
   const variantsWrap = document.getElementById('resultVariants');
@@ -271,9 +281,14 @@ const showResult = (result) => {
 };
 
 const initResultPanel = () => {
+  // Двойной щелчок не должен давать два одинаковых файла
+  let lastDownloadAt = 0;
   document.getElementById('resultDownload')?.addEventListener('click', () => {
     const variant = activeVariant();
     if (!variant) return;
+    const now = Date.now();
+    if (now - lastDownloadAt < 1200) return;
+    lastDownloadAt = now;
     downloadFile(variant.decodedConfig, variant.filename);
     telemetry.trackEvent('config_downloaded', currentResult.telemetryContext);
   });

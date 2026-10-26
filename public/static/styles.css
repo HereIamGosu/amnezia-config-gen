@@ -1533,6 +1533,21 @@ kbd {
   font-size: 14px;
 }
 
+.result__note,
+.result__next {
+  margin: 12px 0 0;
+  color: var(--color-text-2);
+  font-size: 13.5px;
+}
+
+.result__next .link-btn {
+  font-size: inherit;
+}
+
+.hero__cta {
+  margin-top: 18px;
+}
+
 .result__actions {
   display: flex;
   flex-wrap: wrap;

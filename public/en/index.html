@@ -317,6 +317,10 @@
               <p class="hero__eyebrow" data-i18n="hero_eyebrow">Free open-source tool</p>
               <h1 class="hero__title" id="heroTitle" data-i18n-html="hero_title"><span class="hero__title-line text-orange">AmneziaWG</span> <span class="hero__title-line">config generator</span> <span class="hero__title-line">for <span class="text-blue">Cloudflare WARP</span></span></h1>
               <p class="hero__lead" data-i18n-html="hero_lead">Ready-to-import <code>.conf</code> tunnels and vpn:// links with route and DNS presets.</p>
+              <a class="btn btn--primary hero__cta" href="#generator" id="heroCta">
+                <span data-i18n="hero_cta">Create config</span>
+                <svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg>
+              </a>
             </div>
             <ul class="hero__features">
               <li class="hero__feature">
@@ -625,6 +629,12 @@
                     </ul>
                   </div>
                 </div>
+
+                <p class="result__note" id="resultAutoNote" role="status" hidden></p>
+                <p class="result__next">
+                  <span data-i18n="result_next_steps">Next: import the .conf into AmneziaVPN or AmneziaWG (or paste the vpn:// link into AmneziaVPN) and turn the tunnel on.</span>
+                  <button type="button" class="link-btn" data-open-modal="instructionModal" data-i18n="result_next_instruction">Full instructions</button>
+                </p>
 
                 <dl class="summary-list" id="resultQuickSummary"></dl>
 

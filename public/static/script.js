@@ -108,6 +108,13 @@ const getApiErrorMessage = (data) => {
   return lab ? t(lab[0], lab[1]) : data && data.message;
 };
 
+/** Текст для ответа без пояснения от API: что произошло и что делать, а не голый код. */
+const httpErrorMessage = (status) => {
+  if (status === 429) return t('err_rate_limited', 'Слишком много запросов. Подождите минуту и попробуйте снова.');
+  if (status >= 500) return t('err_server', 'Сервер временно не отвечает (код {code}). Попробуйте через минуту.').replace('{code}', String(status));
+  return `${t('err_http_prefix', 'Ошибка HTTP:')} ${status}`;
+};
+
 /** Ошибка ответа /api/warp; отказ Lab Auto помечен — панель ошибки предложит hostname явной кнопкой. */
 const apiError = (data, fallback) => {
   const error = new Error(getApiErrorMessage(data) || fallback);
@@ -157,6 +164,13 @@ const initProfileSelector = () => {
 
 let generationInFlight = false;
 
+/** Отказ до запроса: строка статуса под кнопкой мелкая, поэтому дублируем её всплывающим сообщением. */
+const showGuardMessage = (status, text) => {
+  status.textContent = text;
+  status.classList.remove('visually-hidden');
+  toast(text, 'info');
+};
+
 const generateConfig = async () => {
   const button = document.getElementById('generateButton');
   if (!button || generationInFlight) return;
@@ -170,17 +184,15 @@ const generateConfig = async () => {
 
   // Empty split tunnel guard
   if (cfgState.routeMode === ROUTE_MODES.SPLIT && getSelectedRouteIds().length === 0) {
-    status.textContent = t('routing_empty_split_error',
-      'Для выборочной маршрутизации выберите хотя бы одно направление или переключитесь на полный туннель.');
-    status.classList.remove('visually-hidden');
+    showGuardMessage(status, t('routing_empty_split_error',
+      'Для выборочной маршрутизации выберите хотя бы одно направление или переключитесь на полный туннель.'));
     return;
   }
 
   // Свои CPS-цепочки проверяются до запроса тем же разбором, что и на сервере
   const cpsRequest = getCpsRequest();
   if (cpsRequest.error) {
-    status.textContent = `${t('cps_generate_error', 'Своя CPS-цепочка с ошибкой (Настройки → Дополнительно):')} ${cpsRequest.error.message}`;
-    status.classList.remove('visually-hidden');
+    showGuardMessage(status, `${t('cps_generate_error', 'Своя CPS-цепочка с ошибкой (Настройки → Дополнительно):')} ${cpsRequest.error.message}`);
     return;
   }
 
@@ -206,6 +218,11 @@ const generateConfig = async () => {
         headers: { 'Content-Type': 'application/json' },
         ...(cpsRequest.hasCustom ? { body: JSON.stringify(cpsRequest.body) } : {}),
         signal: controller.signal,
+      }).catch((fetchError) => {
+        // Обрыв сети: понятный текст только для самого запроса, чужие TypeError не маскируем
+        if (fetchError && fetchError.name === 'AbortError') throw fetchError;
+        // TypeError сохраняем: по нему analytics.classifyGenerationError отличает сетевой сбой
+        throw new TypeError(t('err_network', 'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.'));
       });
     } finally {
       clearTimeout(timeoutId);
@@ -214,7 +231,7 @@ const generateConfig = async () => {
     const data = await parseJsonResponse(response);
 
     if (!response.ok) {
-      throw apiError(data, `${t('err_http_prefix', 'Ошибка HTTP:')} ${response.status}`);
+      throw apiError(data, httpErrorMessage(response.status));
     }
 
     if (!data.success) {
@@ -268,6 +285,7 @@ const generateConfig = async () => {
       mode,
       variants,
       hasWarnings: warningCount > 0,
+      autoDownloaded: variants[0].filename,
       telemetryContext: completedContext,
       snapshot: resultState,
     });
