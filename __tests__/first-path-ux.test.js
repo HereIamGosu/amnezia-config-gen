@@ -20,7 +20,7 @@ const locales = {
 const html = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');
 
 const NEW_KEYS = [
-  'err_network', 'err_rate_limited', 'err_server', 'hero_cta', 'status_lab_fallback_hint',
+  'err_network', 'err_rate_limited', 'err_server', 'status_lab_fallback_hint',
   'result_autodownload_note', 'result_next_steps', 'result_next_instruction',
 ];
 
@@ -65,8 +65,9 @@ describe('first-path UX wiring', () => {
     assert.match(html, /id="resultAutoNote"[^>]*hidden/);
   });
 
-  test('the hero links to the generator', () => {
-    assert.match(html, /id="heroCta"/);
-    assert.match(html, /href="#generator"/);
+  test('the hero has no extra call-to-action button (it sat flush against the feature chips)', () => {
+    assert.doesNotMatch(html, /id="heroCta"/);
+    assert.equal(locales.ru.hero_cta, undefined);
+    assert.equal(locales.en.hero_cta, undefined);
   });
 });

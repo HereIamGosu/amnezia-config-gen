@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [3.1.6] - 2026-10-26
+
+### Fixed
+- **"Endpoint Lab" is no longer cut off in the status block.** The 3.1.5 hint under "Unavailable" ("the config will use hostname") did not wrap and took the width of the row, so on a 1280 px screen the name showed as "Endp…". The hint now reads "via hostname" (ru: "через hostname"). Measured in a browser at 1280 px (ru and en) and at 375 px with the panel opened: the name is not truncated.
+
+### Removed
+- **The "Create config" button in the header block is gone.** 3.1.5 added it above the feature chips; on the page it sat flush against the chips below with no gap. It also did little: on a desktop screen the generator starts right under the header block, and on a 375 px screen the anchor left the generate button still about 400 px below the visible area (simulated visitors, round 2 of the QA runs). The rest of 3.1.5 stays: the note about the downloaded file, the "Next" line, the plain error texts, the Endpoint Lab hint and the single download on a double click.
+
 ## [3.1.5] - 2026-10-26
 
 ### Changed

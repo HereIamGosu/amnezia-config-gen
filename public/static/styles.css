@@ -1544,10 +1544,6 @@ kbd {
   font-size: inherit;
 }
 
-.hero__cta {
-  margin-top: 18px;
-}
-
 .result__actions {
   display: flex;
   flex-wrap: wrap;
