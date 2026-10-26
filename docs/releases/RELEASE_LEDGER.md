@@ -1,6 +1,6 @@
 # Release Ledger
 
-Checked at: 2026-10-26 (3.1.5 published; 3.1.6 prepared locally, not pushed, not tagged).
+Checked at: 2026-10-26 (tag, GitHub Release and deployment of 3.1.6).
 
 This ledger records release metadata state without fabricating historical tags or GitHub Releases.
 
@@ -21,7 +21,7 @@ This ledger records release metadata state without fabricating historical tags o
 | 3.1.3 | `410c885dbebd418ce7260bd18b4fd3e7b2035d47` (`docs(release): …` on top of `release: 3.1.3` `496ec66`) | Present (`v3.1.3` → `410c885`) | Missing | `docs/releases/3.1.3.md` | `docs/releases/3.1.3-source-audit.md` | Tagged, no GitHub Release | `vpn://` link carries the structured `last_config` fields AmneziaVPN reads (iOS network extension failed on `hostName` null). Observed on 2026-10-25: `git ls-remote --tags origin` had `v3.1.3` → `410c885`, `gh release list` had no `v3.1.3`, and production served `X-App-Revision: 410c885…` before 3.1.4. The new link was not tried on a device. |
 | 3.1.4 | `7d593dea8d0a1bb68817ab641fec3119ef8bcc56` (`release: 3.1.4`) | Present (`v3.1.4` → `7d593de`) | Present (`v3.1.4`, Latest) | `docs/releases/3.1.4.md` | `docs/releases/3.1.4-source-audit.md` | Published | Pushed to `main` on 2026-10-25 (13:28 UTC); CI on `main` succeeded (lint, tests, e2e, image built once and published to GHCR) and IndexNow succeeded; production served `X-App-Revision: 7d593de…` about five minutes after the push. Smoke: `/`, `/en`, `/status.html`, `/api/status`, `/api/healthcheck` 200, assets `?v=3.1.4`; `GET /api/warp?mode=awg2&warpPort=12345` answered 400 with `allowedPorts` and registered nothing. No generation (WARP registration) was run. `warpPort` goes through the same port allowlist as `port`. |
 | 3.1.5 | `c569ac23627e1448897c3a3b406a162bfbdca0eb` (`release: 3.1.5` on top of `fix(ui): …` `2b3bb69`) | Present (`v3.1.5` → `c569ac2`) | Present (`v3.1.5`, Latest) | `docs/releases/3.1.5.md` | `docs/releases/3.1.5-source-audit.md` | Published | Pushed to `main` on 2026-10-26 (15:07 UTC); CI (lint, tests, e2e, image built once and published to GHCR) and IndexNow succeeded; production served `X-App-Revision: c569ac2…` within about five minutes. Smoke: `/`, `/en`, `/api/status`, `/api/healthcheck` 200, assets `?v=3.1.5`, `GET /api/warp?mode=awg2&warpPort=12345` answered 400 and registered nothing. No generation (WARP registration) was run. Frontend hints on the way to the first config; the "Create config" header button it added was removed in 3.1.6. |
-| 3.1.6 | Pending (local commit, not pushed) | Missing | Missing | `docs/releases/3.1.6.md` | `docs/releases/3.1.6-source-audit.md` | Prepared locally, not pushed | Removes the "Create config" button from the header block (flush against the chips below, little use on desktop and phone). No server, protocol or API change. |
+| 3.1.6 | `6ce721a9d1e677a796639055c9748277688670d4` (`release: 3.1.6`) | Present (`v3.1.6` → `6ce721a`) | Present (`v3.1.6`, Latest) | `docs/releases/3.1.6.md` | `docs/releases/3.1.6-source-audit.md` | Published | Pushed to `main` on 2026-10-26 (15:49 UTC); CI (lint, tests, e2e, image built once and published to GHCR) and IndexNow succeeded; production served `X-App-Revision: 6ce721a…` within about five minutes. Smoke: `/`, `/en` 200 without `id="heroCta"` and with assets `?v=3.1.6`, `/api/status`, `/api/healthcheck` 200, `status_lab_fallback_hint` "через hostname" in `ru.json`; `GET /api/warp?mode=awg2&warpPort=12345` answered 400 with `allowedPorts` and registered nothing. No generation (WARP registration) was run. Removes the "Create config" header button added in 3.1.5 and shortens the Endpoint Lab hint that cut the name off in the status block. |
 
 ## Remote state observed
 
@@ -39,6 +39,8 @@ This ledger records release metadata state without fabricating historical tags o
 - 2026-10-25, after 3.1.4 was published: `git ls-remote origin` returned `refs/heads/main` and `v3.1.4^{}` → `7d593de`; `v3.1.3` → `410c885` was already present; `gh release list` showed `v3.1.4` (Latest), then `v3.1.2` and `v3.1.1`, with no `v3.1.3` release.
 
 - 2026-10-26, after 3.1.5 was published: `git ls-remote origin` returned `refs/heads/main` and `v3.1.5^{}` → `c569ac2`; `gh release list` showed `v3.1.5` (Latest), then `v3.1.4` and `v3.1.2`, with no `v3.1.3` release.
+
+- 2026-10-26, after 3.1.6 was published: `git ls-remote origin` returned `refs/heads/main` and `v3.1.6^{}` → `6ce721a`; `gh release list` showed `v3.1.6` (Latest), then `v3.1.5` and `v3.1.4`.
 
 ## Reconciliation rule
 
