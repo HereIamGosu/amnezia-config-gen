@@ -34,7 +34,7 @@ test('WARP safety is the final authority over peer-dependent fields', () => {
   );
   assert.equal(safe.headerProtectionKey, undefined);
   assert.equal(safe.randomTrailers, 'off');
-  assert.equal(safe.disableCookies, 'on');
+  assert.equal(safe.disableCookies, undefined);
   assert.doesNotThrow(() => assertWarpSafeAwgConfig(safe));
 });
 
@@ -58,6 +58,9 @@ test('profiles and response metadata describe only the WARP-safe subset', () => 
   assert.equal(metadata.capabilities.contentPaddingAddition.effectiveValue, '10-100');
   assert.equal(metadata.capabilities.disableCookies.status, 'source-confirmed');
   assert.equal(metadata.capabilities.disableCookies.effectiveState, 'active');
+  const omitted = buildAwgMetadata('awg31', { configText: 'ContentPaddingAddition = 10-100' });
+  assert.equal(omitted.capabilities.disableCookies.effectiveState, 'disabled');
+  assert.ok(!omitted.enabledFeatures.includes('disable-cookies'));
   assert.equal(metadata.capabilities.randomTrailers.status, 'peer-dependent-disabled');
   assert.equal(metadata.capabilities.randomTrailers.effectiveState, 'blocked');
   assert.equal(metadata.capabilities.headerProtectionKey.status, 'peer-dependent-disabled');

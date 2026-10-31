@@ -213,6 +213,16 @@ const renderResultSuccess = () => {
     subtitle.textContent = t('result_ready_subtitle', 'Профиль {mode} успешно сгенерирован.')
       .replace('{mode}', getModeLabel(currentResult.mode));
   }
+  // Файл уходит в загрузки сам, сразу после генерации: говорим об этом и называем имя
+  const autoNote = document.getElementById('resultAutoNote');
+  if (autoNote) {
+    autoNote.hidden = !currentResult.autoDownloaded;
+    if (currentResult.autoDownloaded) {
+      autoNote.textContent = t('result_autodownload_note',
+        'Файл {file} уже скачан. Не нашли его в загрузках — нажмите «Скачать .conf».')
+        .replace('{file}', currentResult.autoDownloaded);
+    }
+  }
 
   // Переключатель вариантов (count = 2–3)
   const variantsWrap = document.getElementById('resultVariants');
@@ -271,9 +281,14 @@ const showResult = (result) => {
 };
 
 const initResultPanel = () => {
+  // Двойной щелчок не должен давать два одинаковых файла
+  let lastDownloadAt = 0;
   document.getElementById('resultDownload')?.addEventListener('click', () => {
     const variant = activeVariant();
     if (!variant) return;
+    const now = Date.now();
+    if (now - lastDownloadAt < 1200) return;
+    lastDownloadAt = now;
     downloadFile(variant.decodedConfig, variant.filename);
     telemetry.trackEvent('config_downloaded', currentResult.telemetryContext);
   });
@@ -431,12 +446,17 @@ const getModeLabel = (mode) => {
   return labels[mode] || t('result_summary_no_data', 'нет данных');
 };
 
-const getModeFilename = (mode) => ({
-  legacy: 'AmneziaWarp.conf',
-  awg2: 'AmneziaWarp-AWG2.conf',
-  awg3: 'AmneziaWarp-AWG3.0.conf',
-  awg31: 'AmneziaWarp-AWG3.1.conf',
-}[mode] || 'AmneziaWarp.conf');
+// Имя файла становится именем туннеля в Windows-клиентах: только латиница, цифры и подчёркивание, без точек,
+// дефисов и пробелов. Четыре символа id делают имя уникальным, чтобы браузер не дописывал « (1)».
+const MODE_FILE_BASE = { legacy: 'AWGWarpL', awg2: 'AWGWarp2', awg3: 'AWGWarp30', awg31: 'AWGWarp31' };
+const FILE_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
+const newConfigFileId = () => {
+  const bytes = new Uint8Array(4);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(bytes);
+  else bytes.forEach((_, i) => { bytes[i] = Math.floor(Math.random() * 256); });
+  return Array.from(bytes, (b) => FILE_ID_ALPHABET[b % FILE_ID_ALPHABET.length]).join('');
+};
+const getModeFilename = (mode) => `${MODE_FILE_BASE[mode] || MODE_FILE_BASE.legacy}_${newConfigFileId()}.conf`;
 const getModeLoadingLabel = (mode) => t(`loading_${mode}`, `Генерация конфигурации (${getModeLabel(mode)})...`);
 const getModeSuccessLabel = (mode) => t(`success_${mode}`, `Конфигурация ${getModeLabel(mode)} успешно сгенерирована.`);
 
@@ -539,6 +559,13 @@ const renderResultExplanation = (summary) => {
     ? `Auto → ${summary.cps.resolved}${summary.cps.stability === 'experimental' ? ' (experimental)' : ''}`
     : `${summary.cps.resolved}${summary.cps.stability === 'experimental' ? ' (experimental)' : ''}`;
   appendSummaryField(fields, t('result_summary_cps', 'CPS'), cpsValue);
+  if (summary.cps.custom && summary.cps.custom.length) {
+    appendSummaryField(
+      fields,
+      t('result_summary_cps_custom', 'Свои CPS-цепочки'),
+      `${summary.cps.custom.join(', ')} — ${t('result_summary_cps_custom_note', 'проверены только синтаксис и совместимость с клиентами, не протокол')}`,
+    );
+  }
   appendSummaryField(fields, t('result_summary_import', 'Импорт'), summaryValue('vpnImport', summary.vpnImport));
   if (summary.awg) {
     appendSummaryField(

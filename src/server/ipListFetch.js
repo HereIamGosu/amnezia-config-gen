@@ -259,7 +259,8 @@ const fetchCidrsForDomains = async (
       throw res4.reason;
     }
     const data4 = res4.value;
-    merged = flattenCidrMap(data4);
+    // An IPv6 entry in the cidr4 answer would bypass the IPv4-only default (I6); every other entry passes as before.
+    merged = new Set([...flattenCidrMap(data4)].filter((c) => !c.includes(':')));
     hasGaps = hasEmptyDomains(data4, sites);
 
     if (includeIpv6 && res6 && res6.status === 'fulfilled') {

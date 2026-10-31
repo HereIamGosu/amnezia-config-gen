@@ -51,7 +51,6 @@ const AWG_PROFILES = Object.freeze({
     timings: AWG3_DEFAULT_TIMINGS,
     contentPaddingDefault: defaultFor('ContentPaddingAddition'),
     vpnProtocolVersion: '3.1',
-    explicitSafeFlags: Object.freeze({ randomTrailers: 'off', disableCookies: defaultFor('DisableCookies') }),
   }),
 });
 

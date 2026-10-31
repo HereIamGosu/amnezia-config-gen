@@ -24,6 +24,7 @@ describe('custom CPS chains in /api/warp', () => {
     assert.equal(fields.I4, undefined, 'without cps5 a field without a chain is not emitted');
     assert.equal(fields.I5, undefined);
     assert.equal(r.body.cpsRequested, 'custom');
+    assert.deepEqual(r.body.appliedExtras.customCps, ['I1', 'I2', 'I3'], 'own fields are reported');
   });
 
   test('POST body works the same and takes precedence over the query', async () => {
@@ -46,6 +47,9 @@ describe('custom CPS chains in /api/warp', () => {
       assert.doesNotThrow(() => parseCompatChain(fields[f]), f);
     }
     assert.equal(r.body.appliedExtras.cps5, true);
+    // I1 by protocol keeps its evidence status; only the own I3 is reported as custom
+    assert.deepEqual(r.body.appliedExtras.customCps, ['I3']);
+    assert.notEqual(r.body.cpsStability, 'custom');
   });
 
   test('compatibility: default modern accepts <rd>/<rc>, all rejects them with 400 and the field', async () => {
@@ -122,10 +126,12 @@ describe('custom CPS chains in /api/warp', () => {
     const fields = iLines(r.configs[0]);
     assert.equal(fields.I1, '<b 0x0102><r 8>');
     assert.deepEqual(Object.keys(fields), ['I1']);
+    assert.deepEqual(r.body.appliedExtras.customCps, ['I1'], 'Legacy drops own I2, reports only I1');
   });
 
   test('without own chains the output is unchanged: same keys and order as before the editor', async () => {
     const plain = await generate({ mode: 'awg2', cps5: '1' });
+    assert.deepEqual(plain.body.appliedExtras.customCps, []);
     const fields = iLines(plain.configs[0]);
     assert.deepEqual(Object.keys(fields), ['I1', 'I2', 'I3', 'I4', 'I5']);
   });

@@ -134,6 +134,31 @@ e2eSuite('profile, step-2 summary and settings dialog', (openPage) => {
     }
   });
 
+  test('the settings dialog always opens at the top with the tabs visible, even after scrolling it last time', async () => {
+    for (const [width, height] of [[1280, 900], [390, 844]]) {
+      const page = await openPage({ width, height, mobile: width < 500 });
+      await page.goto('/');
+      const state = () => page.evaluate(() => {
+        const body = document.querySelector('#settingsModal .modal__body');
+        const tabs = document.querySelector('#settingsModal .tabs').getBoundingClientRect();
+        return { scrollTop: body.scrollTop, tabsVisible: tabs.top >= body.getBoundingClientRect().top - 1 };
+      });
+      await page.click('#paramSummary');
+      await page.waitFor(settingsOpen);
+      assert.deepEqual(await state(), { scrollTop: 0, tabsVisible: true }, `${width}px: first open`);
+      // Прокрутили вниз, закрыли — следующее открытие снова сверху
+      await page.click('#tab-extra');
+      await page.evaluate(() => { document.querySelector('#settingsModal .modal__body').scrollTop = 600; });
+      await page.click('#settingsModal [data-close-modal].btn');
+      await page.waitFor(() => !document.getElementById('settingsModal').classList.contains('is-open'));
+      await page.click('#paramSummary');
+      await page.waitFor(settingsOpen);
+      assert.deepEqual(await state(), { scrollTop: 0, tabsVisible: true }, `${width}px: reopen after scrolling`);
+      assert.equal(await page.evaluate(() => document.getElementById('tab-routes').getAttribute('aria-selected')), 'true');
+      await page.assertClean(`${width}px`);
+    }
+  });
+
   test('settings link ?profile=…&routes=… presets the UI, and the copy button rebuilds it', async () => {
     const page = await openPage();
     await page.goto('/?profile=awg3&routes=youtube,discord,unknown-e2e&dns=adguard&port=2408&endpoint=162.159.192.1&device=mobile&ipv6=1&count=2');

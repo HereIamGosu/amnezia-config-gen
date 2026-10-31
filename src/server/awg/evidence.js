@@ -68,9 +68,14 @@ const AWG_CAPABILITIES = Object.freeze([
   }, enabled('25-35')),
   capability('DisableCookies', 'source-confirmed', local('local-under-load-cookie-reply-suppression'), {
     syntax: 'on-or-off', numericType: 'boolean',
-  }, enabled('on'), {
+  }, optional(), {
     modes: Object.freeze(['awg31']),
-    caveats: ['Reduces local cookie-based denial-of-service protection; it is an anti-fingerprinting trade-off.'],
+    caveats: [
+      'Opt-in: omitted from the default output because AmneziaWG iOS/macOS before v3.1.3 reject the key.',
+      'Reduces local cookie-based denial-of-service protection; it is an anti-fingerprinting trade-off.',
+      'A WARP client config only initiates handshakes, so the setting probably does not change the tunnel (inference from the responder-only branch in amneziawg-go).',
+    ],
+    sources: Object.freeze(['amneziawg-go', 'amneziawg-tools', 'amneziawg-apple']),
   }),
   capability('RandomTrailers', 'peer-dependent-disabled', peerDependent('appended-handshake-trailer'), {
     syntax: 'on-or-off', numericType: 'boolean',

@@ -23,9 +23,17 @@ describe('Invariant I8: mobile->router compose; router caps win on overlap', () 
 
     const afterRouter = __internals.applyRouterModeCaps(afterMobile);
     assert.equal(afterRouter.Jc, 2, 'router cap (max 2) wins over mobile (3)');
-    // Router Jmin range is [40, 128]; mobile 64 is inside, so it stays at 64.
+    // Router Jmin range is [40, 64]; mobile 64 is inside, so it stays at 64.
     assert.equal(afterRouter.Jmin, 64);
     // Router Jmax cap is 128; mobile 128 stays at 128.
     assert.equal(afterRouter.Jmax, 128);
+  });
+
+  test('router caps keep Jmax at least Jmin + 64 and never above 128', () => {
+    for (const [jmin, jmax] of [[23, 911], [64, 128], [200, 900], [800, 1024], [40, 41], [100, 120]]) {
+      const out = __internals.applyRouterModeCaps({ Jc: 10, Jmin: jmin, Jmax: jmax });
+      assert.ok(out.Jmin >= __internals.ROUTER_JMIN_MIN && out.Jmin <= __internals.ROUTER_JMIN_MAX, `Jmin ${out.Jmin}`);
+      assert.ok(out.Jmax <= __internals.ROUTER_JMAX_MAX && out.Jmax - out.Jmin >= 64, `${jmin}/${jmax} -> ${out.Jmin}/${out.Jmax}`);
+    }
   });
 });

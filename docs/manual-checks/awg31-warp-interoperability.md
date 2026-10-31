@@ -6,9 +6,9 @@
 
 | Сценарий | ContentPaddingAddition | DisableCookies | RandomTrailers |
 |---|---|---|---|
-| Baseline A | off | off | off |
+| Baseline A | off | отсутствует (равно `off`, умолчание движка) | отсутствует (равно `off`) |
 | Test B | 10-100 | off | off |
-| Test C | 10-100 | on | off |
+| Test C | 10-100 | on (явный `disableCookies=on`) | отсутствует |
 | Negative D, только контролируемый локальный AWG peer | 10-100 | on | on |
 
 `D` не должен генерироваться production WARP API и не должен тестироваться против Cloudflare как штатный режим.

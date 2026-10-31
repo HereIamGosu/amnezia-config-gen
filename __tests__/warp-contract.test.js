@@ -320,20 +320,19 @@ test('contract: AWG31 POST accepts the same strict range fields and returns prot
     assert.match(conf, /^RekeyTimeout = 5-8$/m);
     assert.match(conf, /^PersistentKeepalive = 30$/m);
     assert.match(conf, /^ContentPaddingAddition = 10-100$/m);
-    assert.match(conf, /^RandomTrailers = off$/m);
-    assert.match(conf, /^DisableCookies = on$/m);
+    assert.doesNotMatch(conf, /^(RandomTrailers|DisableCookies)\s*=/m);
     assert.equal(body.awg.evidenceModelVersion, 1);
     assert.deepEqual(body.awg.capabilities.contentPaddingAddition, {
       status: 'source-confirmed', effectiveState: 'active', effectiveValue: '10-100',
     });
     assert.deepEqual(body.awg.capabilities.disableCookies, {
-      status: 'source-confirmed', effectiveState: 'active', effectiveValue: 'on',
+      status: 'source-confirmed', effectiveState: 'disabled',
     });
     assert.equal(body.awg.capabilities.randomTrailers.effectiveState, 'blocked');
     assert.equal(body.awg.capabilities.headerProtectionKey.effectiveState, 'blocked');
     assert.equal(body.awg.vpnImport.protocolVersion, '3.1');
     assert.equal(body.awg.vpnImport.available, true);
-    assert.ok(body.awg.enabledFeatures.includes('disable-cookies'));
+    assert.ok(!body.awg.enabledFeatures.includes('disable-cookies'));
   } finally {
     httpsMock.mock.restore();
     net.createConnection = realNetCreate;
@@ -404,9 +403,9 @@ test('contract: uint16 timing and keepalive boundaries are preserved, while keep
   }
 });
 
-test('contract: AWG31 DisableCookies is a strict local toggle with default on', async () => {
+test('contract: AWG31 DisableCookies is a strict local toggle, omitted by default', async () => {
   for (const [method, value, expected] of [
-    ['GET', undefined, 'on'],
+    ['GET', undefined, null],
     ['GET', 'off', 'off'],
     ['GET', '1', 'on'],
     ['POST', false, 'off'],
@@ -424,7 +423,8 @@ test('contract: AWG31 DisableCookies is a strict local toggle with default on', 
       const body = res.getBody();
       const conf = Buffer.from(body.content, 'base64').toString('utf8');
       assert.equal(res.getStatus(), 200);
-      assert.match(conf, new RegExp(`^DisableCookies = ${expected}$`, 'm'));
+      if (expected === null) assert.doesNotMatch(conf, /^DisableCookies\s*=/m);
+      else assert.match(conf, new RegExp(`^DisableCookies = ${expected}$`, 'm'));
       assert.equal(body.awg.enabledFeatures.includes('disable-cookies'), expected === 'on');
       assert.equal(body.awg.capabilities.disableCookies.effectiveState, expected === 'on' ? 'active' : 'disabled');
     } finally {
@@ -451,8 +451,7 @@ test('contract: AWG31 never emits RandomTrailers=on through defaults, templates,
       assert.equal(res.getStatus(), 200);
       for (const item of res.getBody().configs) {
         const conf = Buffer.from(item.content, 'base64').toString('utf8');
-        assert.match(conf, /^RandomTrailers = off$/m);
-        assert.doesNotMatch(conf, /^RandomTrailers = on$/m);
+        assert.doesNotMatch(conf, /^RandomTrailers\s*=/m);
       }
     } finally {
       httpsMock.mock.restore();

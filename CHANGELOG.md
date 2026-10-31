@@ -7,14 +7,68 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
-### Added
-- CPS chain editor in Settings → Advanced. Each of I1–I5 is either automatic (I1 from the CPS protocol, I2–I5 from "Enhanced mimicry") or your own chain, built from blocks — bytes, random bytes, random digits, random letters, time — or typed as text. The editor shows the packet size, which bytes change on every handshake and which clients accept the chain. "Compatibility: All clients" allows only `<b>`, `<r>`, `<t>`; "Newer clients" also allows `<rd>`/`<rc>`, which clients on amneziawg-go before 0.2.15 reject. Own chains can be taken from a pasted .conf or from a config in the generation history, and the settings link carries them (a link that would be too long is copied without them, with a notice).
-- `/api/warp` accepts `i1`…`i5` (query or POST body) and `cpsCompat`. Chains are checked by the same parser as the editor (`public/static/cps-chain.js`); an invalid one returns HTTP 400 `cps_chain_invalid` with the field, before any WARP registration. A gap in I1–I5 (for example I3 without I2 and without "Enhanced mimicry") returns HTTP 400 `cps_chain_gap`: clients on amneziawg-go before 0.2.16 reject such a config.
+### Fixed
+- **Router mode now caps Legacy configs too.** With `router=1` a Legacy config kept its template junk (`Jc = 120`, `Jmax = 911`), although the router option promises `Jc ≤ 2` and junk up to 128 bytes (invariant I8). The caps now apply in every mode, after the mobile preset as before.
+- **Split-tunnel routes stay IPv4-only when the IP list service sends an IPv6 entry in its IPv4 answer.** Without `ipv6=1` such an entry used to reach `AllowedIPs` on desktop configs (invariant I6); it is now dropped when the IPv4 answer is read.
 
 ### Changed
-- `i1` in the request body is now checked like the other chains: unknown tags, `<d>`/`<ds>`/`<dz>`/`<c>`/`<wt>`, text outside tags and packets over 1472 bytes return HTTP 400 instead of reaching the config. With `cpsCompat` unset the check accepts `<rd>`/`<rc>`, as current clients do.
-- "Enhanced mimicry" hint: I2–I5 work in AWG 2.0 and 3.x, not only 2.0.
-- "Enhanced mimicry (I2–I5)": the four extra CPS packets are no longer fixed random bytes chosen when the config is generated. Each is a chain of AmneziaWG tags `<b 0x…>`, `<r N>` and `<t>` with its own shape; the client generates the `<r>` and `<t>` bytes again on every handshake initiation, so these packets differ between handshakes of the same config. `<rc>`/`<rd>` are not used because amneziawg-go before v0.2.15 rejects them together with the whole config. I1 and the CPS protocol choice are unchanged. Sources: `docs/research/cps-runtime-tags-audit.md`.
+- **Router mode keeps a 64-byte spread between `Jmin` and `Jmax`.** `Jmin` is now capped at 64 (was 128), and `Jmax` stays between `Jmin + 64` and 128. Before, about nine in ten router configs got `Jmin = Jmax = 128`: every junk packet had the same size. Clients accepted that, but it went against the generator's own spread rule from 2.7.0.
+
+## [3.1.6] - 2026-10-26
+
+### Fixed
+- **"Endpoint Lab" is no longer cut off in the status block.** The 3.1.5 hint under "Unavailable" ("the config will use hostname") did not wrap and took the width of the row, so on a 1280 px screen the name showed as "Endp…". The hint now reads "via hostname" (ru: "через hostname"). Measured in a browser at 1280 px (ru and en) and at 375 px with the panel opened: the name is not truncated.
+
+### Removed
+- **The "Create config" button in the header block is gone.** 3.1.5 added it above the feature chips; on the page it sat flush against the chips below with no gap. It also did little: on a desktop screen the generator starts right under the header block, and on a 375 px screen the anchor left the generate button still about 400 px below the visible area (simulated visitors, round 2 of the QA runs). The rest of 3.1.5 stays: the note about the downloaded file, the "Next" line, the plain error texts, the Endpoint Lab hint and the single download on a double click.
+
+## [3.1.5] - 2026-10-26
+
+### Changed
+- **The result says that the file is already downloaded.** The `.conf` is saved right after "Generate configuration"; four simulated first-time visitors all stopped at that point because nothing said so. Under the buttons there is now "File … is already downloaded. Can't find it in your downloads? Press "Download .conf"", a "Next" line (import into AmneziaVPN or AmneziaWG, or paste the `vpn://` link into AmneziaVPN) and a link to the instructions. A double click on "Download .conf" gives one file.
+- **A "Create config" button in the header block** scrolls to the generator (on a 375 px screen the generate button was about 1600 px below the top).
+- **Endpoint Lab "Unavailable"** shows "the config will use hostname" next to it.
+- **Refusals before the request** (split tunnelling with no direction selected, an error in a custom CPS chain) are also shown as a toast.
+- **Error texts.** A network failure, HTTP 429, 5xx and an HTML page instead of JSON each get a plain message; the last one no longer tells visitors to run `vercel dev`. A network failure stays a `TypeError`, so the generation telemetry still classifies it as `network`. Errors that carry their own message from the API are shown as before.
+- The findings came from model-driven browser runs against a local server with the Cloudflare registration stubbed, one run per role per round; they are not data from real visitors.
+
+## [3.1.4] - 2026-10-25
+
+### Fixed
+- **`warpPort` is checked against the same port list as `port`.** `/api/warp` read `warpPort` (and `port` as its fallback) with a parser that accepted any number from 1 to 65535 and silently dropped non-numeric or `0` values, while the separate allowlist check looked only at `port`. A request such as `port=4500&warpPort=12345` therefore answered 200 with `Endpoint = engage.cloudflareclient.com:12345`. Now an explicit `warpPort` outside 2408, 500, 4500, 1701, 880, 8854 (`0`, `65535`, `abc` included) gets HTTP 400 with the same body as an unlisted `port` (`error`, `allowedPorts`), before any WARP device is registered and before Lab Auto picks endpoints. Allowed ports and the default 4500 behave as before. The web UI only sends values from its own list, so it is not affected.
+
+## [3.1.3] - 2026-10-22
+
+### Fixed
+- **The `vpn://` link now carries the fields AmneziaVPN reads.** The link carried only the `.conf` text plus `mtu` and `port`, but AmneziaVPN starts a tunnel from separate fields of the saved profile. On iOS the network extension failed with `Can't parse WG config … hostName … found null` (AmneziaVPN 5.0.3.0): the import succeeded and Connect did nothing visible. Android and desktop read the same fields. The link now carries what the client stores after importing a `.conf` itself: `hostName` (the host of the Endpoint, also for Lab Auto), `port` as a number, `client_priv_key`, `client_ip`, `server_pub_key`, `allowed_ips`, `mtu`, `persistent_keep_alive` and every AWG key of the config. The `.conf` text inside is unchanged. A link copied before 3.1.3 should be generated again, or the `.conf` file imported. Not yet tried on a device after the fix.
+
+## [3.1.2] - 2026-10-22
+
+### Changed
+- **The default AWG 3.1 `.conf` no longer writes `RandomTrailers` and `DisableCookies`.** AmneziaWG for iOS/macOS up to `v3.1.20260814` rejects both keys in `[Interface]` (`interfaceHasUnrecognizedKey`); `v3.1.3` and later accept them. `RandomTrailers` stays off for WARP and is simply not written (off is the engine default). `DisableCookies` is written only for an explicit `disableCookies=on|off`; this supersedes the 2.7.1 default `DisableCookies = on` ([2.7.1](docs/releases/2.7.1.md)). A WARP client config only initiates handshakes, so the setting probably did not change the tunnel (inference from amneziawg-go). `awg.capabilities.disableCookies` is `disabled` and `awg.enabledFeatures` has no `disable-cookies` by default. A test now compares the generated keys of every profile with the key lists of AmneziaWG Apple `v3.1.20260814` and `v3.1.4`.
+- Downloaded config names are `AWGWarp31_k3f9.conf` (variants `_v2`, `_v3`) instead of `AmneziaWarp-AWG3.1.conf`: letters, digits and underscore only, at most 32 characters, unique per generation; Windows clients take the tunnel name from the file name.
+
+### Fixed
+- Compatibility card: wg-tunnel is no longer listed for iOS (Android app); AmneziaWG on Linux is noted as the `awg` / `awg-quick` console tools.
+
+## [3.1.1] - 2026-10-20
+
+### Fixed
+- `/api/warp` with unknown route presets (`presets=…` with `routeMode=split`, or a preset key with no usable characters) now answers HTTP 400 with the same message as before, before any WARP device is registered and before Lab Auto picks endpoints. The preset check is one function used by the request handler and by the route resolver. `routeMode=full` still ignores `presets`.
+
+## [3.1.0] - 2026-10-14
+
+### Changed
+- **CPS now really changes between handshakes.** The extra packets I2–I5 ("Enhanced") no longer carry random bytes fixed when the file was created: each is a chain of AmneziaWG tags `<b 0x…>`, `<r N>` and `<t>` with its own shape, and the AmneziaWG client generates the `<r>` and `<t>` bytes again on every handshake, so the packets differ between handshakes of the same config. Only tags that every client with I1–I5 understands are used: `<rd>`/`<rc>` would make clients on amneziawg-go before 0.2.15 reject the whole config. I1 and the CPS protocol choice are unchanged. Checked on nine amneziawg-go revisions (0.2.13 to the current one used by AmneziaWG releases) and with live handshakes to Cloudflare WARP; the client apps themselves (AmneziaVPN, AmneziaWG, WG Tunnel) have not been tested by hand. Sources: `docs/research/cps-runtime-tags-audit.md`.
+- `i1` in the `/api/warp` request body is now checked like the other chains: unknown tags, `<d>`/`<ds>`/`<dz>`/`<c>`/`<wt>`, text outside tags and packets over 1472 bytes return HTTP 400 instead of reaching the config. With `cpsCompat` unset the check accepts `<rd>`/`<rc>`, as current clients do.
+
+### Added
+- **CPS chain editor** in Settings → Advanced, "Packets before the handshake (I1–I5)". Each of I1–I5 is either automatic or your own chain, built from blocks — bytes, random bytes, random digits, random letters, time — or typed as text. The editor shows the packet size, which bytes change on every handshake and which clients accept the chain; "Compatibility: All clients" allows only `<b>`, `<r>`, `<t>`, "Newer clients" also `<rd>`/`<rc>`. Own chains can be taken from a pasted .conf or from a config in the generation history, and the settings link carries them (a link that would be too long is copied without them, with a notice). The result summary lists the fields that use your own chains: they are checked for syntax and client compatibility only and do not inherit the evidence status of the CPS protocol.
+- **Presets and error prevention.** The section starts with four presets in one click: Standard (I1 only, the default), Enhanced (plus I2–I5; replaces the separate "Enhanced mimicry" switch), More randomness (I2–I5 with random digits and letters, for clients on amneziawg-go 0.2.15+, with "Shuffle again") and Manual setup, plus a short "What is this?". The manual editor prevents broken configs instead of reporting them: hex fields take only hex digits and an odd length gets a leading zero, lengths stay within 1–1000, blocks cannot push a packet over 1472 bytes, a gap in I1–I5 (which clients before 0.2.16 reject) is filled with a random chain, turning off a field that later fields depend on asks first, switching back to "All clients" offers to replace digits and letters with random bytes of the same length, and importing, taking chains from the history or choosing a preset asks before replacing chains you made yourself. "Back to auto" per field and "Reset all chains" undo changes; the Legacy profile shows that it uses only I1.
+- `/api/warp` accepts `i1`…`i5` (query or POST body) and `cpsCompat` (`all` or `modern`, default `modern`). Chains are checked by the same parser as the editor (`public/static/cps-chain.js`); an invalid chain returns HTTP 400 `cps_chain_invalid` with the field and a gap returns `cps_chain_gap`, both before any WARP registration. `appliedExtras.customCps` lists the fields that use own chains.
+
+### Fixed
+- The settings dialog (step 2, "Change parameters") remembered how far it had been scrolled and reopened below the tabs; it now always opens at the top with the tabs visible.
 
 ### Removed
 - `src/server/cpsSignatureGenerator.js`: an unused second I2–I5 generator; nothing imported it.

@@ -128,7 +128,7 @@ const parseJsonResponse = async (response) => {
     || lower.includes('<!doctype')
     || lower.includes('<html')
   ) {
-    throw new Error(t('err_html_response', 'Сервер вернул HTML вместо JSON (нет API). Запустите vercel dev или откройте задеплоенный сайт.'));
+    throw new Error(t('err_html_response', 'Сервер вернул страницу вместо данных. Обновите страницу и попробуйте ещё раз.'));
   }
   try {
     return JSON.parse(trimmed);

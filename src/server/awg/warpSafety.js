@@ -31,8 +31,8 @@ const assertWarpSafeAwgConfig = (config) => {
 };
 
 const enforceWarpSafeAwgConfig = (config = {}) => {
-  const disableCookies = config.mode === 'awg31'
-    ? String(config.disableCookies || 'on').toLowerCase()
+  const disableCookies = config.mode === 'awg31' && config.disableCookies != null
+    ? String(config.disableCookies).toLowerCase()
     : undefined;
   return assertWarpSafeAwgConfig({
     ...config,
