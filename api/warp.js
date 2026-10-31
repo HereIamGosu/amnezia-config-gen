@@ -262,16 +262,21 @@ const pickAwg2JunkDocCompliant = () => {
  */
 const ROUTER_JC_MAX = 2;
 const ROUTER_JMIN_MIN = 40;
-const ROUTER_JMIN_MAX = 128;
+const ROUTER_JMIN_MAX = 64;
 const ROUTER_JMAX_MAX = 128;
+/** Same Jmax − Jmin spread as the AWG 2.0 generator (pickAwg2JunkDocCompliant): junk sizes stay varied. */
+const ROUTER_JUNK_SPREAD = 64;
 
-/** Apply router mode caps to AWG 2.0 obfuscation params. S/H fields are unchanged. */
-const applyRouterModeCaps = (obf) => ({
-  ...obf,
-  Jc: Math.min(obf.Jc, ROUTER_JC_MAX),
-  Jmin: Math.max(ROUTER_JMIN_MIN, Math.min(obf.Jmin, ROUTER_JMIN_MAX)),
-  Jmax: Math.min(Math.max(obf.Jmax, ROUTER_JMIN_MIN + 1), ROUTER_JMAX_MAX),
-});
+/** Apply router mode caps to junk params (AWG 2.0/3.x obfuscation or the legacy junk lines). S/H are unchanged. */
+const applyRouterModeCaps = (obf) => {
+  const jmin = Math.max(ROUTER_JMIN_MIN, Math.min(obf.Jmin, ROUTER_JMIN_MAX));
+  return {
+    ...obf,
+    Jc: Math.min(obf.Jc, ROUTER_JC_MAX),
+    Jmin: jmin,
+    Jmax: Math.min(Math.max(obf.Jmax, jmin + ROUTER_JUNK_SPREAD), ROUTER_JMAX_MAX),
+  };
+};
 
 /**
  * Mobile preset: low Jc / narrow Jmin/Jmax for cellular networks (4G/5G with carrier DPI).
@@ -420,7 +425,10 @@ const resolveModeFromInput = (raw) => normalizeAwgMode(raw);
  * @param {string} i1Optional full value after `I1 = ` (e.g. `<b 0x...>`), or empty to omit
  * @param {boolean} plainAddress if true, omit /32 and /128 (some exports use bare IPs)
  */
-const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6, dnsLine, i1Optional = '', plainAddress = false, mobileJunk = null) => {
+/** Junk lines of the legacy template when neither mobile nor router mode overrides them. */
+const LEGACY_JUNK = { Jc: 120, Jmin: 23, Jmax: 911 };
+
+const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6, dnsLine, i1Optional = '', plainAddress = false, junk = null) => {
   const addrLine = clientIPv6
     ? (plainAddress
       ? `Address = ${clientIPv4}, ${clientIPv6}`
@@ -428,9 +436,7 @@ const buildInterfaceLegacy = (privKey, clientIPv4, clientIPv6, dnsLine, i1Option
     : (plainAddress
       ? `Address = ${clientIPv4}`
       : `Address = ${clientIPv4}/32`);
-  const jc = mobileJunk ? mobileJunk.Jc : 120;
-  const jmin = mobileJunk ? mobileJunk.Jmin : 23;
-  const jmax = mobileJunk ? mobileJunk.Jmax : 911;
+  const { Jc: jc, Jmin: jmin, Jmax: jmax } = junk || LEGACY_JUNK;
   const lines = [
     '[Interface]',
     `PrivateKey = ${privKey}`,
@@ -584,7 +590,7 @@ const buildFullConfig = (mode, privKey, peerPub, clientIPv4, clientIPv6, peerEnd
         ? buildInterfaceAwg31(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1, extraCps, contentPaddingAddition, ifaceExtras.disableCookies, ifaceExtras.timingRanges)
         : mode === AWG3_MODE
           ? buildInterfaceAwg3(privKey, clientIPv4, clientIPv6, awg2Obf, dnsLine, plainAddress, i1, extraCps, contentPaddingAddition, ifaceExtras.timingRanges)
-      : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine, i1, plainAddress, mobileJunk);
+      : buildInterfaceLegacy(privKey, clientIPv4, clientIPv6, dnsLine, i1, plainAddress, ifaceExtras.legacyJunk || mobileJunk);
   const defaultAllowed = ifaceExtras.mobileJunk
     ? DEFAULT_ALLOWED_IPS
     : ifaceExtras.includeIpv6
@@ -1329,6 +1335,9 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
   // so applying router caps after mobile ensures router-mode values win on overlap.
   if (awg2Obf && routeOpts.mobileMode) awg2Obf = applyMobileModeOverrides(awg2Obf);
   if (awg2Obf && routeOpts.routerMode) awg2Obf = applyRouterModeCaps(awg2Obf);
+  const mobileJunk = routeOpts.mobileMode ? { Jc: MOBILE_JC, Jmin: MOBILE_JMIN, Jmax: MOBILE_JMAX } : null;
+  // Legacy has no obfuscation object: the same mobile-then-router order applies to its junk lines (I8).
+  const legacyJunk = !awg2Obf && routeOpts.routerMode ? applyRouterModeCaps(mobileJunk || LEGACY_JUNK) : null;
   const {
     cidrs: routeCidrs,
     routesSource,
@@ -1387,7 +1396,8 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
         disableCookies: warpExtras.disableCookies,
         timingRanges: warpExtras.timingRanges,
         extraCps,
-        mobileJunk: routeOpts.mobileMode ? { Jc: MOBILE_JC, Jmin: MOBILE_JMIN, Jmax: MOBILE_JMAX } : null,
+        mobileJunk,
+        legacyJunk,
         includeIpv6: routeOpts.includeIpv6,
       },
     ),

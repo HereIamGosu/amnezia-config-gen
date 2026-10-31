@@ -221,7 +221,7 @@ TCP-доступность `api.cloudflareclient.com:443`, `engage.cloudflarecli
 |---|---|
 | `cps5=1` | Когда `mode` — `awg2`, `awg3` или `awg31` и `I1` непустой, сервер добавляет в `[Interface]` `I2..I5`: четыре цепочки разной формы из `<b 0x…>`, `<r N>` и `<t>` (примерно 50–150 байт каждая). Байты `<r>` и `<t>` клиент генерирует при каждой отправке handshake initiation, поэтому пакеты одного конфига меняются от handshake к handshake; фиксированы на конфиг только несколько байт `<b>`. `<rc>`/`<rd>` не используются: amneziawg-go до v0.2.15 отвергает их вместе со всей конфигурацией. Аудит источников: [docs/research/cps-runtime-tags-audit.md](docs/research/cps-runtime-tags-audit.md). Для Legacy и пустого `I1` молча игнорируется. |
 | `mobile=1` | Мобильный профиль по инварианту **I7**. |
-| `router=1` | Router-капы (`Jc≤2`, `Jmin∈[40,128]`, `Jmax∈[Jmin+1,128]`); компонуется с `mobile` по инварианту **I8**. |
+| `router=1` | Router-капы (`Jc≤2`, `Jmin∈[40,64]`, `Jmax∈[Jmin+64,128]`) во всех режимах, включая Legacy; компонуется с `mobile` по инварианту **I8**. |
 | `link=1` | В ответе появляется `vpnLink: vpn://<base64url(qCompress(JSON))>` для импорта в AmneziaVPN одним тапом. |
 
 `appliedExtras: { cps5, mobile, customCps }` в ответе сообщает что фактически применилось (`cps5` может быть `false` даже когда запрошено — Legacy-режим его молча игнорирует; `customCps` — поля I1–I5 со своими цепочками, у которых нет evidence-статуса протокола).

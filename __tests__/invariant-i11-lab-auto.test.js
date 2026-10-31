@@ -62,7 +62,7 @@ const assertInvariants = (conf, mode, v, vpnLink) => {
     const address = conf.split('\n').find((l) => l.startsWith('Address ='));
     assert.doesNotMatch(address, /:/, 'I7: no IPv6 Address');
     assert.doesNotMatch(conf, /^\s*AllowedIPs = .*:/m, 'I7: no IPv6 AllowedIPs');
-    const routerCaps = v.router === '1' && AWG_MODES.has(mode);
+    const routerCaps = v.router === '1';
     assert.match(conf, new RegExp(`^Jc = ${routerCaps ? 2 : 3}$`, 'm'), routerCaps ? 'I8' : 'I7');
     assert.match(conf, /^Jmin = 64$/m, 'I7/I8');
     assert.match(conf, /^Jmax = 128$/m, 'I7/I8');

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+### Fixed
+- **Router mode now caps Legacy configs too.** With `router=1` a Legacy config kept its template junk (`Jc = 120`, `Jmax = 911`), although the router option promises `Jc ≤ 2` and junk up to 128 bytes (invariant I8). The caps now apply in every mode, after the mobile preset as before.
+- **Split-tunnel routes stay IPv4-only when the IP list service sends an IPv6 entry in its IPv4 answer.** Without `ipv6=1` such an entry used to reach `AllowedIPs` on desktop configs (invariant I6); it is now dropped when the IPv4 answer is read.
+
+### Changed
+- **Router mode keeps a 64-byte spread between `Jmin` and `Jmax`.** `Jmin` is now capped at 64 (was 128), and `Jmax` stays between `Jmin + 64` and 128. Before, about nine in ten router configs got `Jmin = Jmax = 128`: every junk packet had the same size. Clients accepted that, but it went against the generator's own spread rule from 2.7.0.
+
 ## [3.1.6] - 2026-10-26
 
 ### Fixed
