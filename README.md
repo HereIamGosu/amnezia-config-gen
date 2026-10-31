@@ -322,5 +322,5 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md). For security reports: [SECURITY.md](./
 
 ## Contacts
 
-- Discord: <https://discord.gg/XGNtYyGbmM>
+- Discord: <https://discord.gg/sZTgtD7SyB>
 - Server site: <https://valokda.vercel.app/>

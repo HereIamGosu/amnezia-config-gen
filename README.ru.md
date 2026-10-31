@@ -311,5 +311,5 @@ Fallback smoke-покрытие релиза 2.4.1 находится в `__test
 
 ## Контакты
 
-- Discord: <https://discord.gg/XGNtYyGbmM>
+- Discord: <https://discord.gg/sZTgtD7SyB>
 - Сайт сервера: <https://valokda.vercel.app/>

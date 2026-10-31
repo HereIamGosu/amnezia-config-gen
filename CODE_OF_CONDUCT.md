@@ -37,7 +37,7 @@ This Code of Conduct applies within all community spaces, and also applies when 
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement at opening a private security advisory at <https://github.com/HereIamGosu/amnezia-config-gen/security/advisories/new> or via the project Discord at <https://discord.gg/XGNtYyGbmM>. All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement at opening a private security advisory at <https://github.com/HereIamGosu/amnezia-config-gen/security/advisories/new> or via the project Discord at <https://discord.gg/sZTgtD7SyB>. All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the reporter of any incident.
 

@@ -11,7 +11,7 @@ This project tracks `main`. There are no LTS branches; security fixes ship to `m
 Use one of:
 
 1. [GitHub Security Advisory](https://github.com/HereIamGosu/amnezia-config-gen/security/advisories/new) (preferred; private, lets us coordinate a fix before disclosure).
-2. Direct message via the project Discord: <https://discord.gg/XGNtYyGbmM>.
+2. Direct message via the project Discord: <https://discord.gg/sZTgtD7SyB>.
 
 We aim to acknowledge within 72 hours.
 
