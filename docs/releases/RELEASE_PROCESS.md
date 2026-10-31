@@ -18,8 +18,9 @@ Use this process for patch and minor releases. It requires only Git, Node/npm, a
    ```
 
 3. Update release notes, source audit, changelog, release ledger, and current frontend asset cache keys
-   (`?v=` in `public/index.html`, `public/status.html`, `public/404.html` and the icons of
-   `public/site.webmanifest`), the JSON-LD `softwareVersion` in `public/index.html`, and `<lastmod>` in
+   (`?v=` in `public/index.html`, `public/status.html`, `public/404.html`, `public/lab/index.html` and the icons
+   of `public/site.webmanifest` and `public/en/site.webmanifest`), the JSON-LD `softwareVersion` in
+   `public/index.html`, and `<lastmod>` in
    `public/sitemap.xml` (not older than the release date). Then regenerate the English page with
    `npm run seo:en`. `release:check` also fails when `public/.well-known/security.txt` expires within 30 days.
 

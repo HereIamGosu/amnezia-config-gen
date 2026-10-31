@@ -65,12 +65,15 @@ function collectVersionedAssetUrls(html) {
 // Every page that loads static/* assets: each needs ?v=<package version> on all of them.
 const HTML_ENTRY_POINTS = ['public/index.html', 'public/en/index.html', 'public/status.html', 'public/404.html', 'public/lab/index.html', 'public/en/lab/index.html'];
 
-function checkManifestIconVersions(manifest, packageVersion) {
+// The Russian app and the English one (/en); both list the same versioned icons.
+const MANIFESTS = ['public/site.webmanifest', 'public/en/site.webmanifest'];
+
+function checkManifestIconVersions(manifest, packageVersion, file = MANIFESTS[0]) {
   const failures = [];
   for (const icon of manifest.icons || []) {
     const version = /\?v=([^&]+)/.exec(icon.src || '')?.[1];
     if (version !== packageVersion) {
-      failures.push(`public/site.webmanifest icon ${icon.src} must use ?v=${packageVersion}`);
+      failures.push(`${file} icon ${icon.src} must use ?v=${packageVersion}`);
     }
   }
   return failures;
@@ -213,7 +216,7 @@ function main() {
     Object.fromEntries(HTML_ENTRY_POINTS.map((file) => [file, readText(file)])),
     packageVersion,
   ));
-  failures.push(...checkManifestIconVersions(readJson('public/site.webmanifest'), packageVersion));
+  for (const file of MANIFESTS) failures.push(...checkManifestIconVersions(readJson(file), packageVersion, file));
   failures.push(...checkSoftwareVersion(readText('public/index.html'), packageVersion));
   failures.push(...checkSitemapFreshness(readText('public/sitemap.xml'), releaseDateOf(changelog, packageVersion)));
   failures.push(...checkSecurityTxtExpiry(readText('public/.well-known/security.txt')));
@@ -262,4 +265,5 @@ module.exports = {
   collectVersionedAssetUrls,
   releaseDateOf,
   HTML_ENTRY_POINTS,
+  MANIFESTS,
 };

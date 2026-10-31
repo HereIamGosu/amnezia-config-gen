@@ -31,6 +31,11 @@ test('versioned static assets are immutable', async () => {
   assert.equal(await cacheControl('/static/icon.svg'), 'public, max-age=31536000, immutable');
 });
 
+test('both web app manifests are revalidated', async () => {
+  assert.equal(await cacheControl('/site.webmanifest'), 'public, max-age=0, must-revalidate');
+  assert.equal(await cacheControl('/en/site.webmanifest'), 'public, max-age=0, must-revalidate');
+});
+
 test('HTML entry points and API are not cached', async () => {
   assert.equal(await cacheControl('/'), 'public, max-age=0, must-revalidate');
   assert.equal(await cacheControl('/status.html'), 'public, max-age=0, must-revalidate');

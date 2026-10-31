@@ -118,6 +118,8 @@ function localizeHead(html, en) {
   out = replaceOnce(out, /<meta property="og:locale:alternate" content="en_US" \/>/g, '<meta property="og:locale:alternate" content="ru_RU" />', 'og:locale:alternate');
   out = replaceOnce(out, metaPattern('property', 'og:url'), (_, open, __, close) => `${open}${EN_URL}${close}`, 'og:url');
   out = replaceOnce(out, /<link rel="canonical" href="[^"]*" \/>/g, `<link rel="canonical" href="${EN_URL}" />`, 'canonical');
+  // public/en/site.webmanifest: the same app with start_url /en, lang en and an English description.
+  out = replaceOnce(out, /<link rel="manifest" href="\/site\.webmanifest" \/>/g, '<link rel="manifest" href="/en/site.webmanifest" />', 'manifest');
   out = replaceOnce(out, JSON_LD_PATTERN, (_, open, json, close) => {
     const data = JSON.parse(json);
     const page = graphNode(data, 'WebPage');
