@@ -108,6 +108,13 @@ test('copy follows real search demand: tunnel wording, official downloads, spell
   assert.match(read('public/llms.txt'), /Valokda Access/);
 });
 
+test('llms.txt lists every public page, Endpoint Lab included', () => {
+  const llms = read('public/llms.txt');
+  for (const url of ['https://awgconfig.com/', 'https://awgconfig.com/en', 'https://awgconfig.com/status.html', 'https://awgconfig.com/lab']) {
+    assert.ok(llms.includes(`](${url})`), url);
+  }
+});
+
 test('favicons: /favicon.ico in the site root and a 120×120 PNG for Yandex on every page', () => {
   const ico = fs.readFileSync(path.join(root, 'public/favicon.ico'));
   assert.equal(ico.readUInt16LE(0), 0, 'ICO reserved field');

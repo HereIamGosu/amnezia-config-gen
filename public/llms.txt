@@ -19,6 +19,7 @@ Key facts:
 - [Generator (Russian)](https://awgconfig.com/): main page, Russian interface
 - [Generator (English)](https://awgconfig.com/en): the same tool with an English interface
 - [Service status](https://awgconfig.com/status.html): live state of the generator API and WARP endpoints
+- [Endpoint Lab](https://awgconfig.com/lab): public pool of Cloudflare WARP endpoint addresses checked from the project server (WireGuard handshake and HTTPS through the tunnel); the generator's Lab Auto mode takes the `Endpoint` from its fresh verified addresses
 
 ## Project
 
