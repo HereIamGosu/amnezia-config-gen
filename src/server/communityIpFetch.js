@@ -37,6 +37,7 @@ const listCache = new Map();
 const fetchListOnce = (name) =>
   new Promise((resolve, reject) => {
     let settled = false;
+    let timer = null;
     const done = (err, val) => {
       if (settled) return;
       settled = true;
@@ -44,10 +45,6 @@ const fetchListOnce = (name) =>
       if (err) reject(err);
       else resolve(val);
     };
-    const timer = setTimeout(() => {
-      req.destroy();
-      done(new Error(`community list ${name} timeout`));
-    }, COMMUNITY_TIMEOUT_MS);
 
     const req = https.request(
       {
@@ -85,6 +82,12 @@ const fetchListOnce = (name) =>
       },
     );
     req.on('error', (e) => done(e));
+    // Armed only once the request exists: if https.request throws synchronously, no timer is left to touch an
+    // uninitialised `req`.
+    timer = setTimeout(() => {
+      req.destroy();
+      done(new Error(`community list ${name} timeout`));
+    }, COMMUNITY_TIMEOUT_MS);
     req.end();
   });
 

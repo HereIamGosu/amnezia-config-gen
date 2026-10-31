@@ -21,6 +21,7 @@ let antifilterCache = null;
 const fetchAntifilterOnce = () =>
   new Promise((resolve, reject) => {
     let settled = false;
+    let timer = null;
     const done = (err, val) => {
       if (settled) return;
       settled = true;
@@ -28,7 +29,6 @@ const fetchAntifilterOnce = () =>
       if (err) reject(err);
       else resolve(val);
     };
-    const timer = setTimeout(() => { req.destroy(); done(new Error('antifilter timeout')); }, ANTIFILTER_TIMEOUT_MS);
     const req = https.request(
       { hostname: ANTIFILTER_HOST, port: 443, path: ANTIFILTER_PATH, method: 'GET', agent: false,
         headers: { 'User-Agent': 'amnezia-config-gen/1.0' } },
@@ -46,6 +46,8 @@ const fetchAntifilterOnce = () =>
       },
     );
     req.on('error', (e) => done(e));
+    // After the request exists, as in httpsJsonOnce below.
+    timer = setTimeout(() => { req.destroy(); done(new Error('antifilter timeout')); }, ANTIFILTER_TIMEOUT_MS);
     req.end();
   });
 
@@ -144,6 +146,7 @@ const hasEmptyDomains = (obj, sites) => {
 const httpsJsonOnce = (path) =>
   new Promise((resolve, reject) => {
     let settled = false;
+    let timer = null;
     const done = (err, val) => {
       if (settled) return;
       settled = true;
@@ -151,11 +154,6 @@ const httpsJsonOnce = (path) =>
       if (err) reject(err);
       else resolve(val);
     };
-
-    const timer = setTimeout(() => {
-      req.destroy();
-      done(new Error('Таймаут запроса к сервису списков IP.'));
-    }, IP_LIST_TIMEOUT_MS);
 
     const req = https.request(
       {
@@ -201,6 +199,12 @@ const httpsJsonOnce = (path) =>
       err.code = e.code;
       done(err);
     });
+    // Armed only once the request exists: if https.request throws synchronously, no timer is left to touch an
+    // uninitialised `req`.
+    timer = setTimeout(() => {
+      req.destroy();
+      done(new Error('Таймаут запроса к сервису списков IP.'));
+    }, IP_LIST_TIMEOUT_MS);
     req.end();
   });
 

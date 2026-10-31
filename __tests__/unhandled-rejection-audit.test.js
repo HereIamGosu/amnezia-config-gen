@@ -281,6 +281,21 @@ describe('route list sources fail', () => {
   });
 });
 
+// Audit finding 2, latent: the opencck, community and antifilter fetchers armed their timer the same way. Their
+// paths come from URLSearchParams, a whitelist and a constant, so Node cannot refuse them today.
+describe('a synchronous refusal from https.request leaves no timer behind (route list fetchers)', () => {
+  test('opencck, community list and antifilter refused → empty result, and no timer fires later', async () => {
+    mock.timers.enable({ apis: ['setTimeout'] });
+    const refusal = Object.assign(new TypeError('Request path contains unescaped characters'), { code: 'ERR_UNESCAPED_CHARACTERS' });
+    const httpsMock = mock.method(https, 'request', () => { throw refusal; });
+    const { fetchCidrsForDomains } = load('../src/server/ipListFetch');
+    const out = await fetchCidrsForDomains(DISCORD_SITES, { communityLists: ['Discord'] });
+    assert.deepEqual([...out.cidrs], []);
+    assert.deepEqual(httpsMock.mock.calls.map((c) => c.arguments[0].hostname), [OPENCCK, COMMUNITY, ANTIFILTER]);
+    assert.doesNotThrow(() => mock.timers.tick(60_000), 'a refused request leaves no timer behind');
+  });
+});
+
 describe('Endpoint Lab pool file fails (Lab Auto)', () => {
   for (const [name, lab] of [
     ['the file is missing', labProvider({}, { missing: true })],
