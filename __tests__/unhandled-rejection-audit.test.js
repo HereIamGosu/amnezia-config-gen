@@ -197,6 +197,20 @@ describe('Cloudflare API fails (/api/warp)', () => {
     assertFailureBody(await call(load('../api/warp')), 500);
   });
 
+  // Audit finding 1: the request timer was armed before https.request, so a registration value Node refuses
+  // synchronously left a live timer whose callback touched an uninitialised `req` and threw outside any handler.
+  for (const [name, answer] of [
+    ['an id Node refuses in a request path', registration({ id: 'audit id' })],
+    ['a token Node refuses in a header', registration({ token: 't\nt' })],
+  ]) {
+    test(`2xx registration with ${name} → 500 with a message, and no timer fires later`, async () => {
+      mock.timers.enable({ apis: ['setTimeout'] });
+      fakeNetwork(byHost({ cloudflare: () => answer }));
+      assertFailureBody(await drive(call(load('../api/warp'))), 500);
+      assert.doesNotThrow(() => mock.timers.tick(60_000), 'a refused request leaves no timer behind');
+    });
+  }
+
   test('split tunnel: registration fails while the route lists fail too → the registration error, nothing unhandled', async () => {
     fakeNetwork(byHost({
       cloudflare: () => json(403, { message: 'Forbidden' }),

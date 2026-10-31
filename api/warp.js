@@ -1090,6 +1090,7 @@ const httpRequestOnce = (method, endpointPath, body = null, token = null) =>
     };
 
     let settled = false;
+    let timer = null;
     const finish = (err, value) => {
       if (settled) return;
       settled = true;
@@ -1097,11 +1098,6 @@ const httpRequestOnce = (method, endpointPath, body = null, token = null) =>
       if (err) reject(err);
       else resolve(value);
     };
-
-    const timer = setTimeout(() => {
-      req.destroy();
-      finish(new Error('Таймаут запроса к Cloudflare API.'));
-    }, REQUEST_TIMEOUT_MS);
 
     const req = https.request(options, (res) => {
       let responseData = '';
@@ -1141,6 +1137,13 @@ const httpRequestOnce = (method, endpointPath, body = null, token = null) =>
       err.code = e.code;
       finish(err);
     });
+
+    // Armed only once the request exists: https.request throws synchronously for a path or header value Node
+    // refuses (an id or token from Cloudflare), and a timer armed earlier would then touch an uninitialised `req`.
+    timer = setTimeout(() => {
+      req.destroy();
+      finish(new Error('Таймаут запроса к Cloudflare API.'));
+    }, REQUEST_TIMEOUT_MS);
 
     if (data) req.write(data);
     req.end();
