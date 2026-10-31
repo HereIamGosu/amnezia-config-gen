@@ -376,7 +376,7 @@ Peak RSS ~34 MB per job.
 | Snapshot write fails | DB committed | `DEGRADED: SNAPSHOT_WRITE_FAILED` | old snapshot ages out | stale snapshot | automatic |
 | Timer stops | unchanged | unchanged | snapshot stale in ≤ 3 min | timer stopped | operator |
 | VPS loses Internet | unchanged | `UNAVAILABLE` | pool drains | Lab unavailable | automatic |
-| `awg0` fine, Lab broken | — | independent: the Lab never reads or changes `awg0` | — | — | — |
+| Host WireGuard interfaces fine, Lab broken | — | independent: the Lab never reads or changes the host's WireGuard interfaces (until 2026-10-14 this was `awg0`, removed in the migration) | — | — | — |
 
 ## Reboot
 
@@ -397,7 +397,8 @@ identity. `status` shows the installed commit and whether the running file match
 also needs `apt-get install --no-install-recommends wireguard-tools`, `endpoint-lab register-probe-identity`
 and `endpoint-lab seed`.
 
-Rollback (never touches amneziawg/`awg0` or the identity):
+Rollback (never touches the host's WireGuard interfaces or the identity; until 2026-10-14 the interface was
+`awg0`, removed in the migration):
 
 1. `systemctl disable --now amnezia-endpoint-lab-refresh.timer amnezia-endpoint-lab-discovery.timer`.
 2. Reinstall a previous commit with `install.sh`, or remove the units and the CLI.
