@@ -7,12 +7,27 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [3.1.7] - 2026-10-31
+
 ### Fixed
 - **Router mode now caps Legacy configs too.** With `router=1` a Legacy config kept its template junk (`Jc = 120`, `Jmax = 911`), although the router option promises `Jc ≤ 2` and junk up to 128 bytes (invariant I8). The caps now apply in every mode, after the mobile preset as before.
 - **Split-tunnel routes stay IPv4-only when the IP list service sends an IPv6 entry in its IPv4 answer.** Without `ipv6=1` such an entry used to reach `AllowedIPs` on desktop configs (invariant I6); it is now dropped when the IPv4 answer is read.
+- **A Cloudflare registration answer that Node cannot put into the next request no longer stops the server 20 seconds later.** When the registration `id` or `token` held a character Node refuses in a request path or header (a space, a line break, a character above U+00FF), the follow-up request failed at once and the visitor got HTTP 500, as before. Its timeout timer, however, stayed armed and then threw outside any handler, which ends the Node process and drops every request in flight. The timer is now armed only after the request exists. The opencck, community list and antifilter fetchers had the same order; Node cannot refuse their requests today, and they now follow the same rule. Found by the audit of promises nobody waits for (`docs/releases/3.1.7-source-audit.md`).
+- **The hint under the number of configs no longer promises different endpoints.** Standard WARP templates give every config the same `Endpoint` hostname; what differs in every mode is the keys. The hint now reads "Generate 1–3 configs with different keys" (ru: "Сгенерировать 1–3 конфигурации с разными ключами").
+- **Russian interface strings left in English are translated.** Fifteen strings of Endpoint Lab (source names, check and step names, the failed session), the result summary and the status block now read in Russian, also in the static markup of the Russian pages. The English Lab step "Tunnel WARP" now reads "WARP tunnel", as in the check list. Interface terms (`Junk packets`, `CPS packets`, `Auto`, `Static`) stay as they are.
+- **The Discord link in the documentation and `security.txt` matches the site.** The READMEs, `SECURITY.md`, `CODE_OF_CONDUCT.md`, the issue template and `/.well-known/security.txt` pointed to an old invite.
+- **`/en` installs as an English app.** The English page links its own `/en/site.webmanifest` (start URL `/en`, language `en`, English description) instead of the Russian manifest; name, icons and colours are the same.
 
 ### Changed
 - **Router mode keeps a 64-byte spread between `Jmin` and `Jmax`.** `Jmin` is now capped at 64 (was 128), and `Jmax` stays between `Jmin + 64` and 128. Before, about nine in ten router configs got `Jmin = Jmax = 128`: every junk packet had the same size. Clients accepted that, but it went against the generator's own spread rule from 2.7.0.
+- The nginx template in `deploy/` no longer carries the temporary sslip.io host name; it was removed on the server on 2026-10-14.
+- `deploy/ENDPOINT_LAB.md` no longer describes `awg0` as a host interface: the Lab never reads or changes the host's WireGuard interfaces, and `awg0` was removed in the 2026-10-14 migration.
+- `llms.txt` lists Endpoint Lab (`/lab`) next to the generator, the English page and the status page.
+
+### Notes
+- Every external source a handler depends on now fails in a test: Cloudflare, opencck, the community lists, antifilter, the Lab pool file, the endpoint registry and the TCP probes refuse, time out or answer with non-JSON, and `server.js` runs once with the network cut off. Each path answers with a status and a JSON body, and no promise rejection goes unhandled (`__tests__/unhandled-rejection-audit.test.js`). No global `unhandledRejection` handler was added: one that logs and carries on would hide defects of this kind.
+- New checks: `ru.json` and `en.json` have the same keys; the static text of the Russian pages equals `ru.json`.
+- `npm audit fix` updated dev dependencies of the linter (`package-lock.json` only); nothing that ships changed.
 
 ## [3.1.6] - 2026-10-26
 
