@@ -5,6 +5,9 @@ const fs = require('fs').promises;
 const path = require('path');
 const { expandPresetsToSites, parsePresetKeysFromRequest, getDnsString, parseDnsKeyFromRequest, DNS_DEFAULT_KEY } = require('../src/server/routePresets');
 const { fetchCidrsForDomains } = require('../src/server/ipListFetch');
+const { aggregateCidrs } = require('../src/server/cidrAggregate');
+const { classifyBudget, routeBudgetWarning } = require('../src/server/routeBudget');
+const { WARP_ENDPOINT_PREFIXES_V4 } = require('../src/server/warpEndpointPrefixes');
 const { createRateLimiter } = require('../src/server/_rateLimit');
 const { registerDevice, refusalFor, isValidIPv4, isValidIPv6 } = require('../src/server/warpRegistration');
 
@@ -1074,7 +1077,11 @@ const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false } 
     }[source] || 'unknown';
   }
 
-  const merged = Array.from(new Set([...resolvedCidrs, ...staticFiltered])).sort();
+  // The IPv4 addresses of the lists minus the WARP endpoint subnets, in the fewest aligned blocks (I14). IPv6 and
+  // malformed entries pass unchanged. Emptiness is checked after the cut: an empty AllowedIPs is a full tunnel.
+  const { cidrs: merged, before4, after4 } = aggregateCidrs([...resolvedCidrs, ...staticFiltered], {
+    exclude: WARP_ENDPOINT_PREFIXES_V4,
+  });
 
   if (!merged.length) {
     const err = new Error(
@@ -1088,6 +1095,8 @@ const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false } 
     routesSource: 'presets',
     routesTelemetrySource,
     sitesResolved: sites.length,
+    before4,
+    after4,
   };
 };
 
@@ -1457,8 +1466,12 @@ const handler = async (req, res) => {
     // Split routes: resolved once, here, before any WARP registration (spec R6 4.5). A list that comes back empty
     // answers 502 without spending a registration, and every config of a count > 1 request gets the same list.
     // The IPv4-only filter stays in generateWarpConfig: it depends on each registration's answer (3.1.8).
+    // Above the route budget the config is still given, with a warning (DECISIONS No. 30).
+    let routeBudgetLine = null;
     if (effectivePresetKeys.length) {
       routeOpts.resolvedRoutes = await resolveAllowedIpsFromPresets(effectivePresetKeys, routeOpts);
+      const { before4, after4 } = routeOpts.resolvedRoutes;
+      if (classifyBudget(after4) === 'over') routeBudgetLine = routeBudgetWarning({ before4, after4 });
     }
 
     const { configs, warning } = await generateMultipleWarpConfigs(count, mode, effectivePresetKeys, dnsKey, warpExtras, routeOpts);
@@ -1493,6 +1506,7 @@ const handler = async (req, res) => {
 
     const responseWarnings = [];
     if (warning) responseWarnings.push(warning);
+    if (routeBudgetLine) responseWarnings.push(routeBudgetLine);
     // mobile=1 drops IPv6 on request (I7), so a registration without it changes nothing the visitor asked for.
     const ipv4OnlyIndexes = mobileMode ? [] : configsOut.filter((_, i) => configs[i].meta.ipv6Missing).map((c) => c.index);
     if (ipv4OnlyIndexes.length) {
