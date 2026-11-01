@@ -19,7 +19,7 @@ Requires **Node.js ≥20**.
 2. Branch from `main`: `git checkout -b feat/short-description` (or `fix/...`, `docs/...`).
 3. Make your changes.
 4. Run `npm run lint` and `npm test` locally; ensure both pass.
-5. If you touched `api/routePresets.js`, run `npm run presets:fallback` and commit the regenerated `public/static/presets-fallback.json`.
+5. If you touched `src/server/routePresets.js`, run `npm run presets:fallback` and commit the regenerated `public/static/presets-fallback.json`; if a recipe changed, rebuild the catalogue first (`npm run ipcatalog:build`, network needed) and check it (`npm run ipcatalog:check`).
 6. Push to your fork and open a Pull Request against `main`.
 
 ## Commit messages

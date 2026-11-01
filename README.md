@@ -26,8 +26,8 @@ Web UI and HTTP API for building `.conf` files for the **AmneziaWG** client (Wir
 - Up to three configs per request (`count=1..3`), each with its own WARP registration and keys.
 - **Endpoint Lab** (`/lab`, `/en/lab`, `GET /api/lab`): a read-only view of Cloudflare WARP endpoints (`IP:UDP port`) that the project server checks with a real WireGuard handshake and HTTPS traffic through the tunnel. An endpoint that passes is ACTIVE for 7 minutes and has to pass again to stay. The checks run from the project server, so they show that an endpoint works from there, not from every network.
 - **Lab Auto** (`endpointMode=lab`): every config gets its own fresh ACTIVE endpoint from the Lab, with distinct IPs. Without fresh Lab data no config is created (`503 lab_*`), never a silent fallback. In the web interface it is the default endpoint while the Lab pool is fresh; otherwise the interface selects the hostname `engage.cloudflareclient.com` and says why, and a Lab refusal offers an explicit "Generate with the hostname" button. The API default stays the hostname.
-- Dark interface in Russian (`/`) and English (`/en`); the language follows the address. The "System status" card shows the generator API, WARP registration, the WARP endpoint, the CIDR source and the Endpoint Lab.
-- Route presets: tile-selectable domain bundles → IPv4 (or IPv4+IPv6) CIDRs in `AllowedIPs`; the IPv4 part leaves out the four WARP subnets `162.159.192.0/24`, `162.159.193.0/24`, `162.159.195.0/24`, `162.159.204.0/24` and is merged into the fewest blocks that cover exactly the same addresses. With no selection, defaults to `0.0.0.0/0`; `::/0` is added only when IPv6 is explicitly enabled.
+- Dark interface in Russian (`/`) and English (`/en`); the language follows the address. The "System status" card shows the generator API, WARP registration, the WARP endpoint, the route lists (the site catalogue and iplist.opencck.org) and the Endpoint Lab.
+- Route presets in ten categories; each tile shows its price in `AllowedIPs` lines and how exact the addresses are. Catalogue presets take their networks from the site's address catalogue `src/server/ipCatalog/snapshot.json`, built in advance from the services' official lists, their AS announcements and the project's own resolution of their domains. Transitional presets (YouTube, Instagram, Facebook, WhatsApp, Discord and the presets whose catalogue recipe did not pass the coverage check) read iplist.opencck.org and the itdoginfo lists per request, with a reserve from the catalogue. The IPv4 part leaves out the four WARP subnets `162.159.192.0/24`, `162.159.193.0/24`, `162.159.195.0/24`, `162.159.204.0/24` and is merged into the fewest blocks that cover exactly the same addresses; a split config never routes its own `Endpoint` into the tunnel. With no selection, defaults to `0.0.0.0/0`; `::/0` is added only when IPv6 is explicitly enabled.
 - DNS presets for the `DNS` line in the config.
 - One-click `.conf` download for import into AmneziaWG and compatible clients.
 - After generation, an explainable result card summarizes the AWG format, variants, endpoint and route sources, profiles, IPv6, `vpn://` availability, risk labels, and practical first diagnostic steps.
@@ -56,7 +56,7 @@ npm start          # vercel dev → http://localhost:3000
 node server.js     # http://localhost:3000 (PORT, HOST)
 ```
 
-If you open the static files in `public/` without a server, the UI loads presets from `public/static/presets-fallback.json` but `/api/iplist` and `/api/warp` won't work.
+If you open the static files in `public/` without a server, the UI loads the preset catalogue with each preset's price from `public/static/presets-fallback.json` and shows the route counter as an estimate (the sum of the tile prices), but `/api/iplist` and `/api/warp` won't work.
 
 Endpoint Lab data is not part of the repository. Locally, `/lab` reports that the Lab data is unavailable, `/api/lab` answers `503 lab_not_available` and Lab Auto answers `503 lab_unavailable`; the hostname mode works. To see the Lab locally, point `ENDPOINT_LAB_PUBLIC_DIR` (absolute path, read at start-up) to a copy of the Lab public directory.
 
@@ -100,7 +100,9 @@ Only bounded product metadata is allowed: mode, requested/produced counts, endpo
 | `api/lab.js` | Read-only Endpoint Lab data for `/lab` |
 | `src/server/awg/` | AWG profiles, strict ranges, WARP safety, and final serialization |
 | `src/server/routePresets.js` | Source of truth for all route and DNS presets |
-| `src/server/ipListFetch.js` | Domain → CIDR resolution (10-min in-memory cache) |
+| `src/server/ipCatalog/` | Preset address catalogue: `snapshot.json` (built by `npm run ipcatalog:build`), its lazy loader, the resolver of `/api/warp` and `/api/iplist`, the checks of `npm run ipcatalog:check` |
+| `src/server/ipListFetch.js` | Live route lists of transitional presets: iplist.opencck.org, then itdoginfo (10-min in-memory cache of non-empty answers) |
+| `src/server/presetStats.js` | `[preset-stats]` log line: successful split generations per preset every 10 minutes, no IP |
 | `src/server/warpCpsPayloads.js`, `src/server/cps/` | Pool of verified WARP-compatible CPS payloads and CPS packet generators |
 | `src/server/cps-presets/` | Text files referenced via `i1Ref` query param |
 | `src/server/cpsExtraPackets.js` | Generates I2..I5 for `cps5=1` (runtime `<b>`/`<r>`/`<t>` chains) |
@@ -109,7 +111,8 @@ Only bounded product metadata is allowed: mode, requested/produced counts, endpo
 | `src/server/_rateLimit.js` | Per-IP rate limiter (10 generations/min) |
 | `server.js` | Self-hosted runtime used in production: routes and headers from `vercel.json` |
 | `deploy/` | Docker image, nginx, blue/green deploy controller, Endpoint Lab host service (`deploy/endpoint-lab/`) |
-| `scripts/dump-presets-fallback.js` | Regenerates `presets-fallback.json` from `routePresets.js` |
+| `scripts/dump-presets-fallback.js` | Regenerates `presets-fallback.json` from `routePresets.js` and the catalogue snapshot |
+| `scripts/ipcatalog/` | Catalogue builder (run by the maintainer, never in the request path or CI) and its check |
 | `__tests__/` | `node:test` suite, including the critical-invariant tests `invariant-*.test.js` |
 | `e2e/` | Browser tests in a local Chrome (`npm run test:e2e`) |
 
@@ -129,8 +132,9 @@ These rules are non-obvious, easy to break, and silently fatal. They are enforce
 | **I8** | When both `mobile=1` and `router=1` are set, `mobile` is applied first, then `router` caps via `Math.min`/`Math.max`. Router caps win on overlap (e.g. final `Jc = 2`). | Composition rule applied in `applyRouterModeCaps` after `applyMobileModeOverrides`. |
 | **I9** | `cps5=1` adds `I2`–`I5` for AWG 2.0/3.x when `I1` is non-empty. | Legacy mode and AWG modes without `I1` must not emit partial CPS chains. |
 | **I10** | `vpn://` must survive the Qt `qCompress` round-trip, identify the payload as a ready third-party AWG profile and carry the structured fields AmneziaVPN reads on connect (`hostName`, numeric `port`, `client_priv_key`, `client_ip`, `server_pub_key`, `allowed_ips`, AWG keys), not only the `.conf` text. | Prevents AmneziaVPN from treating the import as a protocol-installation flow. |
-| **I11** | Lab Auto (`endpointMode=lab`) changes only `Endpoint`: for the same request every other field, its order and the response metadata match hostname mode (keys, junk sizes and CPS packets are random in both). Without usable Lab data it answers `503 lab_*` before any WARP registration and never falls back to hostname. | Lab endpoints are chosen per request from a pool verified minutes ago; a silent hostname fallback would hide that the requested verification did not happen. |
-| **I14** | The IPv4 part of a split `AllowedIPs` covers exactly the addresses of the selected presets' routes minus the WARP endpoint subnets `162.159.192.0/24`, `162.159.193.0/24`, `162.159.195.0/24`, `162.159.204.0/24`, in no more blocks than that set needs. IPv6 and malformed entries pass unchanged. | A route that is wider than the presets sends other traffic through WARP; a route to the config's own WARP endpoint puts the endpoint inside the tunnel's routes (whether a client then loops its own packets is not verified). |
+| **I11** | Lab Auto (`endpointMode=lab`) changes only `Endpoint`: for the same request every other field, its order and the response metadata match hostname mode (keys, junk sizes and CPS packets are random in both). Without usable Lab data it answers `503 lab_*` before any WARP registration and never falls back to hostname, also when every fresh endpoint lies inside the split routes (`503 lab_endpoints_in_routes`). | Lab endpoints are chosen per request from a pool verified minutes ago; a silent hostname fallback would hide that the requested verification did not happen. |
+| **I14** | The IPv4 part of a split `AllowedIPs` covers exactly the routes of the selected presets minus E4 — the WARP endpoint subnets `162.159.192.0/24`, `162.159.193.0/24`, `162.159.195.0/24`, `162.159.204.0/24` — and minus O4, the /32 of a manual endpoint inside those routes, in no more blocks than that set needs. With `ipv6=1` the IPv6 part is the presets' IPv6 routes minus E6 (`2606:4700:d0::/48`, `2606:4700:d1::/48`) and O6, the /128 of a manual endpoint; entries that do not touch them pass unchanged, IPv6 is never merged. The same in hostname and Lab Auto mode; the full tunnel is never cut. | A route that is wider than the presets sends other traffic through WARP; a route to the config's own WARP endpoint puts the endpoint inside the tunnel's routes (whether a client then loops its own packets is not verified). |
+| **I15** | A split `AllowedIPs` never covers the config's `Endpoint`: for the hostname through E4/E6 (`engage.cloudflareclient.com` = `162.159.192.1`, `2606:4700:d0::a29f:c001`), for Lab Auto and the built-in endpoints by skipping the candidates the routes cover, for a manual endpoint by cutting its /32 (/128). | The tunnel's own packets to its endpoint must not be routed into the tunnel; `188.114.96.0/22` holds endpoints and ordinary sites at once, so it is not cut. |
 
 I12 and I13 are reserved for planned releases.
 
@@ -146,10 +150,10 @@ Parameters via query string (`GET`) or JSON body fields (`POST`). Body field nam
 |---|---|
 | `mode` | `legacy` (default), `awg2`, `awg3`, or `awg31`; accepted AWG 3.x aliases include `3`, `3.0`, `awg30`, `v3`, `3.1`, and `v3.1` |
 | `count` | `1`–`3` configs in one response (default `1`); each config is a separate WARP registration |
-| `presets` | Comma-separated preset keys (or array in JSON body) |
+| `presets` | Comma-separated preset keys (or array in JSON body). An old key is accepted as its preset (`rutracker_local` → `rutracker`); a retired key (the Russian services taken out in 3.2.0) is skipped with a `warning`; a set left without a preset to route → `400 empty_split_tunnel`; an unknown key → 400 |
 | `dns` | DNS preset key; UI default is `cloudflare` |
 | `template` | See [Templates](#templates) |
-| `peerEndpoint`, `endpoint` | Full `host:port` for `Endpoint` (used as-is when given) |
+| `peerEndpoint`, `endpoint` | `IPv4:port` or `[IPv6]:port` for `Endpoint`, used as given. A value of that shape with an invalid address or a port outside 1–65535 → `400 peer_endpoint_invalid` before registration; any other value is ignored. Inside the split routes its /32 (/128 with `ipv6=1`) is left out of `AllowedIPs` and `warning` gains `Endpoint override inside routes: <address>` (I15) |
 | `warpPort` | UDP port for `engage…` or IP fallback; one of **2408, 500, 4500, 1701, 880, 8854**, otherwise HTTP 400 (default for WARP templates: **4500**; classic wgcf often: **2408**) |
 | `endpointMode` | `hostname` (default, unchanged behaviour) or `lab` — Lab Auto: each config gets a distinct fresh ACTIVE endpoint of the Endpoint Lab. The requested port is a preference: the Lab verifies 2408/500/1701/4500, a shortfall on that port is filled from other verified ports and reported. Fewer distinct endpoints than `count` → fewer configs plus a warning, never duplicates. Only for WARP templates; not with `peerEndpoint`. |
 | `persistentKeepalive`, `keepalive` | Integer for older modes; strict integer or `min-max` range for AWG 3.x (default `25-35`) |
@@ -162,7 +166,7 @@ Parameters via query string (`GET`) or JSON body fields (`POST`). Body field nam
 | `i1Ref` | Filename from `src/server/cps-presets/` |
 | `cps` | `auto` (stable `static` / `sip` / `stun` only), or explicit `static`, `sip`, `stun`, `quic`, `dns`, `dtls`; the latter three are experimental. `tls` and unknown IDs return HTTP 400. |
 | `plainAddress` | `1` / `true` — omit `/32` and `/128` from `Address` |
-| `ipv6` | `1` — also include IPv6 CIDRs from presets |
+| `ipv6` | `1` — also include IPv6 CIDRs from presets (without the WARP endpoint /48s, see I14) |
 | `cps5` | `1` — append `I2`..`I5` CPS chains to `[Interface]` (for `mode=awg2`, `awg3`, `awg31`; requires non-empty `I1`) |
 | `mobile` | `1` — mobile profile (see I7) |
 | `router` | `1` — router caps profile |
@@ -183,15 +187,15 @@ The network errors `ECONNRESET`, `ETIMEDOUT`, `ENOTFOUND`, `EAI_AGAIN`, `ECONNRE
 
 A registration without a usable IPv6 address no longer fails: the config is IPv4-only (the config of `ipv6=0`, also when `ipv6=1` was asked), and `warning` gains `WARP registration returned no IPv6 address for config(s) N: the config is IPv4-only.` With `mobile=1` the config is IPv4-only anyway and gets no such warning.
 
-Split routes (`presets`, since 3.1.9) are resolved once per request, before any WARP registration: a route list that comes back empty answers `502` («Сервис списков IP вернул пустой ответ…») without spending a registration (up to 3.1.8 this 502 came after it), and every config of a `count` > 1 request gets the same list. The WARP endpoint subnets `162.159.192.0/24`, `162.159.193.0/24`, `162.159.195.0/24` and `162.159.204.0/24` are left out of the IPv4 routes, the same in hostname and Lab Auto mode, and the rest is merged into the fewest aligned blocks that cover exactly the same addresses (I14); a list with nothing outside these subnets is also `502`. `188.114.96.0/22`, which also holds WARP endpoints (the built-in ones of the `awg2_random` and `awg2_dpi` templates, and Lab Auto endpoints the Lab may verify there), is shared with ordinary sites and is not cut. The cut can add lines: `162.158.0.0/15`, which public lists give for several presets, becomes ten blocks. IPv6 routes (`ipv6=1`) pass unchanged, and the full tunnel stays `0.0.0.0/0` (`::/0` with `ipv6=1`). Above 1000 IPv4 routes in `AllowedIPs` the config is still given and `warning` gains `Route budget: N IPv4 routes in AllowedIPs (M in the source lists) is above the limit of 1000; …`; there is no refusal. The `/api/iplist` preview (`count4`, `cidrs`) stays the raw list, and the web UI counts it: warning from 800, unchecked tiles disabled at 1000, over the limit above 1000.
+Split routes (`presets`) are resolved once per request, before any WARP registration, and every config of a `count` > 1 request gets the same list. From 3.2.0 catalogue presets take their networks from `src/server/ipCatalog/snapshot.json` without any network request; a transitional preset asks iplist.opencck.org and its itdoginfo lists on its own call, and when that call gives no IPv4 network it takes the reserve of the snapshot and `warning` gains `Route source fallback: <keys>`. The antifilter substitute of earlier versions is gone. A retired preset is skipped (`Presets retired: <keys>`), a preset without data too (`Presets without data: <keys>`); a set left with no preset to route answers `400 empty_split_tunnel` before Lab Auto and registration, with or without `routeMode`. The WARP endpoint subnets `162.159.192.0/24`, `162.159.193.0/24`, `162.159.195.0/24`, `162.159.204.0/24` are left out of the IPv4 routes, the same in hostname and Lab Auto mode, and the rest is merged into the fewest aligned blocks that cover exactly the same addresses (I14); with `ipv6=1` the IPv6 routes lose `2606:4700:d0::/48` and `2606:4700:d1::/48`. A list with nothing left after the cut answers `502` («Сервис списков IP вернул пустой ответ…»). `188.114.96.0/22`, which also holds WARP endpoints, is shared with ordinary sites and is not cut; instead the Endpoint choice skips the candidates the routes cover — Lab Auto and the built-in endpoints of the `awg2_random` and `awg2_dpi` templates (I15). The full tunnel stays `0.0.0.0/0` (`::/0` with `ipv6=1`). Above 1000 IPv4 routes in `AllowedIPs` the config is still given and `warning` gains `Route budget: N IPv4 routes in AllowedIPs (M in the source lists) is above the limit of 1000; …`; there is no refusal. A catalogue snapshot that cannot be read answers a split request `503` with a fixed text before registration; the full tunnel never reads it. The web UI counts `routes4` of `/api/iplist`, the IPv4 lines of the config: warning from 800, unchecked tiles disabled at 1000, over the limit above 1000. It cannot know two cuts made per request: the IPv4-only filter of a registration without IPv6 and the cut of a manual endpoint.
 
-Lab Auto adds `endpointSource: "lab"` per config and `lab: { requested, selected, requestedPort, portMatched, ports }`. Its refusals are `{ success: false, error, message }`: `400 invalid_endpoint_mode`, `400 endpoint_mode_conflict` (with `peerEndpoint`), `400 lab_template_unsupported` (non-WARP template); `503 lab_unavailable` (no or unusable Lab data, or the Lab reports itself unavailable), `503 lab_stale`, `503 lab_no_endpoints` with `Retry-After: 60`. Freshness is decided once, before registration; the request then keeps those endpoints.
+Lab Auto adds `endpointSource: "lab"` per config and `lab: { requested, selected, requestedPort, portMatched, ports }`. Its refusals are `{ success: false, error, message }`: `400 invalid_endpoint_mode`, `400 endpoint_mode_conflict` (with `peerEndpoint`), `400 lab_template_unsupported` (non-WARP template); `503 lab_unavailable` (no or unusable Lab data, or the Lab reports itself unavailable), `503 lab_stale`, `503 lab_no_endpoints`, `503 lab_endpoints_in_routes` (every fresh endpoint lies inside the split routes) with `Retry-After: 60`. The order is: Lab readiness (a Lab without usable data answers at once, before the route lists), the routes, the selection that skips the endpoints the routes cover, the registration. Freshness is decided by the selection, once, before registration; the request then keeps those endpoints.
 
 ### `GET` `/api/iplist`
 
-Without `?presets=...`: returns the full preset catalogue (`presets`, categories, `dnsPresets`, `dnsDefault`, etc.).
+Without `?presets=...`: the catalogue — `presets` (each with `id`, `label`, `category`, `sitesCount` = its domains, and from the snapshot `routes4`, `precision` = `exact` | `approx` | `wide`, `noData`, `source` = `catalog` | `live`; for a transitional preset `routes4` is the line count of its live lists at the last build), `categories` (display order), `groupRfPopular` (the quick pick), `aliases`, `retired`, `catalogBuiltAt`, `dnsPresets`, `dnsDefault`.
 
-With `?presets=key1,key2`: resolves domains to CIDRs. Response: `{ count, count4, count6, cidrs, sites, sitesQueried, cidrSource }`. `cidrSource` reports the actual route source (`opencck`, `community`, `mixed`, `antifilter`, or `static`). Unknown keys → 400 with the offending list.
+With `?presets=key1,key2` (and `ipv6=1`): `{ presets, sites, sitesQueried, count, count4, count6, cidrs, cidrSource, routes4, routes6, presetStatus, warnings, catalogBuiltAt }`. `cidrs`, `count4`, `count6` and `count` keep their meaning: the raw union of the sources, no cut and no merge between presets (from 3.2.0 the IPv4 part stays in `cidrs` with `ipv6=1`, and `count6` counts only IPv6 entries). `routes4` and `routes6` are what the config would carry after the WARP endpoint cut and the exact merge. `cidrSource` is `catalog` when no transitional preset is in the set or all of them went to the reserve, otherwise the source of the live part (`opencck`, `community`, `mixed`). `presetStatus` gives per key `source` (`catalog`, `live`, `catalog-fallback`, `retired`, `noData`) with `routes4` and `precision`. Only retired or only no-data presets → 200 with zero routes and `warnings`; nothing left after the cut → 200 with `routes4: 0` and `Empty after endpoint cut`; unknown keys → 400 with the offending list; a catalogue snapshot that cannot be read → 503.
 
 ### `GET` `/api/lab`
 
@@ -205,7 +209,7 @@ Endpoint registry summary for the "System status" card: `status`, `updated_at`, 
 
 ### `GET` `/api/healthcheck`
 
-TCP reachability of `api.cloudflareclient.com:443`, `engage.cloudflareclient.com:443` and `iplist.opencck.org:443`: `{ services: { api, engage, cidr }, checkedAt }`. The result is cached for 30 seconds.
+TCP reachability of `api.cloudflareclient.com:443`, `engage.cloudflareclient.com:443` and `iplist.opencck.org:443` (transitional presets read it per request): `{ services: { api, engage, cidr }, checkedAt, catalogBuiltAt }`, where `catalogBuiltAt` is the build time of the catalogue snapshot (null when it cannot be read). The probes are cached for 30 seconds.
 
 ## Templates
 
@@ -296,7 +300,9 @@ it does not guarantee connectivity in every network or client.
 | `npm test` | Run all tests via built-in `node:test` |
 | `npm run test:e2e` | Browser tests in a local Chrome (`e2e/`) |
 | `npm run test:coverage` | Run tests with experimental coverage |
-| `npm run presets:fallback` | Regenerate `public/static/presets-fallback.json` from `src/server/routePresets.js` |
+| `npm run presets:fallback` | Regenerate `public/static/presets-fallback.json` from `src/server/routePresets.js` and the catalogue snapshot |
+| `npm run ipcatalog:build` | Rebuild the catalogue snapshot `src/server/ipCatalog/snapshot.json` (network; `-- --report <file>` writes the build summary); run before every release |
+| `npm run ipcatalog:check` | Check the committed snapshot without network (also part of `npm test`) |
 | `npm run evidence:check` | Check that the protocol evidence (`docs/protocol-evidence.md`) is current; `evidence:generate` regenerates it |
 | `npm run release:check` | Release consistency: `package.json`, CHANGELOG, asset `?v=` keys, version claims in the READMEs |
 | `npm run indexnow` | Submit the sitemap URLs to IndexNow (Bing, Yandex and others); `--wait-revision <sha>` waits for the deploy, `--since <commit>` skips unchanged releases, `--dry-run` |
@@ -306,7 +312,7 @@ it does not guarantee connectivity in every network or client.
 
 To run a single test file: `node --test __tests__/invariant-i1-uppercase.test.js`.
 
-Release 2.4.1 fallback smoke coverage is in `__tests__/fallback-smoke.test.js`: no-KV generation, partial endpoint failure, CIDR source fallback, `/api/status` registry source, and `/api/iplist` route source.
+Release 2.4.1 fallback smoke coverage is in `__tests__/fallback-smoke.test.js`: no-KV generation, partial endpoint failure, a failed primary list without the antifilter substitute and the snapshot reserve of a transitional preset (3.2.0), `/api/status` registry source, and the catalogue route source of `/api/iplist`.
 
 Manual `vpn://` import verification for iOS: [docs/manual-checks/vpn-link-ios.md](docs/manual-checks/vpn-link-ios.md).
 

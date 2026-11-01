@@ -8,7 +8,7 @@ Key facts:
 
 - The generated `.conf` is what AmneziaWG clients import as a "tunnel" (Add Tunnel → import from file); AmneziaVPN also accepts the `vpn://` link. The clients themselves come from the official sources: AmneziaWG for Windows at https://github.com/amnezia-vpn/amneziawg-windows-client/releases, AmneziaVPN and mobile apps at https://amnezia.org/downloads.
 - No account, server or `.env` is needed: the tool registers a WARP device through Cloudflare's public API and returns the keys with the tunnel parameters.
-- Routing: full tunnel (all traffic) or split tunnel, where selected domain presets become IPv4 CIDRs in `AllowedIPs`. IPv6 routes are added only when explicitly enabled.
+- Routing: full tunnel (all traffic) or split tunnel, where selected service presets become IPv4 networks in `AllowedIPs` — from the site's address catalogue, built in advance from official lists, network announcements and domain resolution, or, for transitional presets, from live public lists. IPv6 routes are added only when explicitly enabled.
 - Extras: DNS presets, CPS obfuscation packets (I1, optional I2–I5 for AWG 2.0), router and mobile profiles, WARP endpoint and UDP port selection, `vpn://` links for AmneziaVPN import.
 - For WARP, S1–S4 are always 0, H1–H4 are 1–4 and MTU is 1280: non-zero values break the tunnel with the stock WireGuard peer.
 - Connectivity is not guaranteed in every network: it depends on the client, ISP, endpoint, DNS and routes.

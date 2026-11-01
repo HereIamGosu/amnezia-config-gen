@@ -19,16 +19,17 @@ We aim to acknowledge within 72 hours.
 
 In scope:
 
-- The serverless API at `api/` (warp.js, iplist.js, ipListFetch.js, etc.).
+- The serverless API at `api/` (warp.js, iplist.js, etc.) and the server code in `src/server/` (ipListFetch.js, the preset address catalogue `ipCatalog/`, etc.).
 - The static frontend in `public/`.
 - The CI workflows in `.github/workflows/`.
 - Build and dependency manifests (`package.json`, `package-lock.json`).
+- The preset catalogue builder in `scripts/ipcatalog/` (it runs on the maintainer's machine, not on the server).
 
 Out of scope:
 
 - Cloudflare WARP itself (report to Cloudflare).
 - AmneziaWG client (report to <https://github.com/amnezia-vpn/amneziawg-tools>).
-- Third-party CIDR sources (`iplist.opencck.org`, `antifilter.download`).
+- Third-party address sources: `iplist.opencck.org` and the itdoginfo lists, which transitional presets read per request, and the sources the catalogue is built from (official lists of the services, ipverse/iptoasn, Google DNS-over-HTTPS, rekryt/iplist portal configs).
 
 ## Historical note (2026-05 git history rewrite)
 

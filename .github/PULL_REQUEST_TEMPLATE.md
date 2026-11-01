@@ -19,7 +19,7 @@
 
 - [ ] `npm run lint` passes with zero warnings.
 - [ ] `npm test` passes (existing tests + any new ones).
-- [ ] If `api/routePresets.js` changed: ran `npm run presets:fallback` and committed the regenerated `public/static/presets-fallback.json`.
+- [ ] If `src/server/routePresets.js` changed: ran `npm run presets:fallback` and committed the regenerated `public/static/presets-fallback.json` (after `npm run ipcatalog:build` if a recipe changed).
 - [ ] If a critical invariant is touched (uppercase I1, S-zero for WARP, MTU 1280, field order, IPv4 default, mobile/router compose): updated **both** the test in `__tests__/invariant-*.test.js` **and** the README "Critical Invariants" block.
 - [ ] Updated `CHANGELOG.md` under `[Unreleased]`.
 - [ ] Tested locally with `npm start` (vercel dev) — generated config and confirmed it imports / connects.
