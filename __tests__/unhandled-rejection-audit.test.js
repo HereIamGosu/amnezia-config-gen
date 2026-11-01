@@ -16,6 +16,7 @@ const { spawn } = require('node:child_process');
 const { EventEmitter } = require('node:events');
 const { describe, test, before, after, beforeEach, afterEach, mock } = require('node:test');
 const { generate, labProvider } = require('./helpers/warp-harness');
+const { freePort } = require('./helpers/free-port');
 
 const ROOT = path.resolve(__dirname, '..');
 const CLOUDFLARE = 'api.cloudflareclient.com';
@@ -339,16 +340,6 @@ describe('TCP probes fail (/api/healthcheck)', () => {
     const out = await drive(call(load('../api/healthcheck')));
     assert.equal(out.status, 200);
     assert.deepEqual(Object.values(out.body.services).map((s) => s.ok), [false, false, false]);
-  });
-});
-
-// A port from the OS ephemeral range: the other server tests draw random ports from 41000-45500 in parallel files.
-const freePort = () => new Promise((resolve, reject) => {
-  const probe = net.createServer();
-  probe.once('error', reject);
-  probe.listen(0, '127.0.0.1', () => {
-    const { port } = probe.address();
-    probe.close(() => resolve(port));
   });
 });
 

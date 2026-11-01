@@ -9,6 +9,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { test, before, after } = require('node:test');
 const { buildLabPage, TARGET } = require('../scripts/build-lab-page');
+const { freePort } = require('./helpers/free-port');
 
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -205,10 +206,11 @@ test('mobile layout switches to cards at the same breakpoint in JS and CSS', () 
 
 // ── Реальные заголовки self-hosted сервера ─────────────────────
 
-const PORT = 43000 + Math.floor(Math.random() * 1500);
+let PORT;
 let server;
 
 before(async () => {
+  PORT = await freePort();
   server = spawn(process.execPath, ['server.js'], { cwd: root, env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1' }, stdio: ['ignore', 'pipe', 'pipe'] });
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('server did not start')), 10000);

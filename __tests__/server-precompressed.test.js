@@ -16,9 +16,10 @@ const { spawn } = require('node:child_process');
 const { test, before, after } = require('node:test');
 
 const { build } = require('../scripts/build-assets');
+const { freePort } = require('./helpers/free-port');
 
 const root = path.resolve(__dirname, '..');
-const PORT = 43000 + Math.floor(Math.random() * 2000);
+let PORT;
 const site = fs.mkdtempSync(path.join(os.tmpdir(), 'awg-precompressed-'));
 let server;
 
@@ -62,6 +63,7 @@ before(async () => {
   const later = new Date(Date.now() + 60_000);
   fs.utimesSync(path.join(site, 'static/stale.css'), later, later);
 
+  PORT = await freePort();
   server = spawn(process.execPath, ['server.js'], {
     cwd: root,
     env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', PUBLIC_DIR: site, APP_REVISION: 'b'.repeat(40) },

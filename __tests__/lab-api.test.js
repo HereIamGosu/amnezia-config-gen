@@ -13,6 +13,7 @@ const { createLabHandler } = require('../api/lab');
 const labPublic = require('../src/server/labPublic');
 const Core = require('../public/lab/lab-core.js');
 const { writeLabPublic, tempLabDir, readFixture, flatten } = require('./helpers/lab-public');
+const { freePort } = require('./helpers/free-port');
 
 const root = path.resolve(__dirname, '..');
 const dir = tempLabDir();
@@ -398,12 +399,13 @@ test('size and processing time of real responses', () => {
 
 // ── Real self-hosted server ────────────────────────────────────
 
-const PORT = 44500 + Math.floor(Math.random() * 1000);
+let PORT;
 let server;
 const serverDir = tempLabDir();
 
 before(async () => {
   writeLabPublic(serverDir);
+  PORT = await freePort();
   server = spawn(process.execPath, ['server.js'], {
     cwd: root,
     env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', ENDPOINT_LAB_PUBLIC_DIR: serverDir },

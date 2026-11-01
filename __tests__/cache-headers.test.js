@@ -2,14 +2,16 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { test, before, after } = require('node:test');
+const { freePort } = require('./helpers/free-port');
 
 // Checks the Cache-Control the self-hosted server actually sends. server.js applies every
 // matching vercel.json rule in order and the last one wins, so rule order matters.
 const root = path.resolve(__dirname, '..');
-const PORT = 41000 + Math.floor(Math.random() * 2000);
+let PORT;
 let server;
 
 before(async () => {
+  PORT = await freePort();
   server = spawn(process.execPath, ['server.js'], { cwd: root, env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', APP_REVISION: 'a'.repeat(40) }, stdio: ['ignore', 'pipe', 'pipe'] });
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('server did not start')), 10000);
