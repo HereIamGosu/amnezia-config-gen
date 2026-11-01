@@ -7,7 +7,7 @@ const { expandPresetsToSites, parsePresetKeysFromRequest, getDnsString, parseDns
 const { fetchCidrsForDomains } = require('../src/server/ipListFetch');
 const { aggregateCidrs } = require('../src/server/cidrAggregate');
 const { classifyBudget, routeBudgetWarning } = require('../src/server/routeBudget');
-const { WARP_ENDPOINT_PREFIXES_V4 } = require('../src/server/warpEndpointPrefixes');
+const { WARP_ENDPOINT_PREFIXES_V4, WARP_ENDPOINT_PREFIXES_V6 } = require('../src/server/warpEndpointPrefixes');
 const { createRateLimiter } = require('../src/server/_rateLimit');
 const { registerDevice, refusalFor, isValidIPv4, isValidIPv6 } = require('../src/server/warpRegistration');
 
@@ -1077,10 +1077,12 @@ const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false } 
     }[source] || 'unknown';
   }
 
-  // The IPv4 addresses of the lists minus the WARP endpoint subnets, in the fewest aligned blocks (I14). IPv6 and
-  // malformed entries pass unchanged. Emptiness is checked after the cut: an empty AllowedIPs is a full tunnel.
+  // The IPv4 addresses of the lists minus the WARP endpoint subnets, in the fewest aligned blocks (I14); with ipv6=1
+  // the IPv6 entries lose the WARP endpoint /48 and are otherwise unchanged. Malformed entries pass unchanged.
+  // Emptiness is checked after the cut: an empty AllowedIPs is a full tunnel.
   const { cidrs: merged, before4, after4 } = aggregateCidrs([...resolvedCidrs, ...staticFiltered], {
     exclude: WARP_ENDPOINT_PREFIXES_V4,
+    exclude6: includeIpv6 ? WARP_ENDPOINT_PREFIXES_V6 : [],
   });
 
   if (!merged.length) {

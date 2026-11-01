@@ -14,6 +14,7 @@ const { aggregateCidrs } = require('../src/server/cidrAggregate');
 const { expandPresetsToSites } = require('../src/server/routePresets');
 const {
   coversSame, paint16, minimalCount, mulberry32, randomBlocks16, randomBlocksAnywhere, parse, addressCount,
+  coversSame6, parse6,
 } = require('./helpers/cidr-coverage');
 
 const BASE_10 = parse('10.0.0.0/16')[0];
@@ -248,6 +249,90 @@ describe('subtraction of excluded IPv4 prefixes before the split into blocks', (
   test('an exclude entry that is not a well-formed IPv4 CIDR is a programming error', () => {
     assert.throws(() => aggregateCidrs(['10.0.0.0/8'], { exclude: ['2606:4700:d0::/48'] }), TypeError);
     assert.throws(() => aggregateCidrs(['10.0.0.0/8'], { exclude: ['162.159.192.0'] }), TypeError);
+  });
+});
+
+describe('exclude6: subtraction of IPv6 prefixes, no IPv6 aggregation (3.2.0, spec 3.2.0 §5.4 p. 1)', () => {
+  // The WARP endpoint /48 of the 3.2.0 cut, written out here so this file does not depend on the module.
+  const E6 = ['2606:4700:d0::/48', '2606:4700:d1::/48'];
+  const v6 = (list) => list.filter((c) => c.includes(':'));
+  /** Full eight-group form of a BigInt address: a valid IPv6 spelling the oracle reads independently. */
+  const full6 = (n) => Array.from({ length: 8 }, (_, i) => ((n >> BigInt(16 * (7 - i))) & 0xffffn).toString(16)).join(':');
+
+  test('an entry that does not touch the excluded prefixes passes byte for byte, even in a non-canonical spelling', () => {
+    const input = ['2001:DB8::/32', '2001:0db8:8000::/33', '2606:4700:4700::1111/128', '2606:4700:cf::/48'];
+    const out = aggregateCidrs(input, { exclude6: E6 });
+    assert.deepEqual(v6(out.cidrs), [...input].sort());
+    assert.equal(out.count6, 4);
+  });
+
+  test('IPv6 is not aggregated: adjacent halves stay two entries', () => {
+    assert.deepEqual(cidrsOf(['2001:db8::/33', '2001:db8:8000::/33'], { exclude6: E6 }), ['2001:db8:8000::/33', '2001:db8::/33']);
+  });
+
+  test('2606:4700::/32 (Cloudflare ips-v6) without E6: fifteen aligned blocks, exactly the /32 minus E6', () => {
+    const out = aggregateCidrs(['2606:4700::/32'], { exclude6: E6 });
+    assert.equal(out.count6, 15);
+    assert.equal(coversSame6(out.cidrs, ['2606:4700::/32'], { minus: E6 }).ok, true);
+    assert.ok(out.cidrs.includes('2606:4700:d2::/47'), out.cidrs.join(' '));
+    assert.ok(out.cidrs.includes('2606:4700:8000::/33'), out.cidrs.join(' '));
+    for (const cidr of out.cidrs) assert.match(cidr, /^[0-9a-f:]+\/\d+$/, 'lower case, compressed');
+  });
+
+  test('an entry inside E6 disappears; one equal to it too; nothing left → no IPv6 entry', () => {
+    const out = aggregateCidrs(['2606:4700:d0::/48', '2606:4700:d1:5::/64', '2606:4700:d0::a29f:c001/128'], { exclude6: E6 });
+    assert.deepEqual(out.cidrs, []);
+    assert.equal(out.count6, 0);
+  });
+
+  test('host bits of a touching entry are dropped before the split: 2606:4700:d0::1/40 is 2606:4700::/40', () => {
+    const out = aggregateCidrs(['2606:4700:d0::1/40'], { exclude6: E6 });
+    assert.equal(coversSame6(out.cidrs, ['2606:4700::/40'], { minus: E6 }).ok, true);
+    assert.equal(out.count6, 7, 'the /40 minus a /47: one sibling on each of the seven levels');
+  });
+
+  test('a /128 hole (a manual override) inside a /48: eighty blocks, the address excluded', () => {
+    const out = aggregateCidrs(['2606:4700:4700::/48'], { exclude6: ['2606:4700:4700::1111/128'] });
+    assert.equal(out.count6, 80);
+    assert.equal(coversSame6(out.cidrs, ['2606:4700:4700::/48'], { minus: ['2606:4700:4700::1111/128'] }).ok, true);
+  });
+
+  test('malformed IPv6 entries pass unchanged; IPv4 is not touched by exclude6', () => {
+    const input = ['2606:4700:d0::/129', '2606:zz::/32', '2606:4700:d0::', '2606:4700:d0::/048', 'fe80::1%eth0/64', '162.159.192.0/24'];
+    const out = aggregateCidrs(input, { exclude6: E6 });
+    assert.deepEqual(out.cidrs, [...input].sort());
+  });
+
+  test('exclude and exclude6 together: each family loses its own prefixes', () => {
+    const out = aggregateCidrs(['162.159.192.0/23', '2606:4700:d0::/47', '2001:db8::/32'], {
+      exclude: ['162.159.192.0/24'], exclude6: E6,
+    });
+    assert.deepEqual(out.cidrs, ['162.159.193.0/24', '2001:db8::/32']);
+  });
+
+  test('an exclude6 entry that is not a well-formed IPv6 CIDR is a programming error', () => {
+    assert.throws(() => aggregateCidrs(['2001:db8::/32'], { exclude6: ['162.159.192.0/24'] }), TypeError);
+    assert.throws(() => aggregateCidrs(['2001:db8::/32'], { exclude6: ['2606:4700:d0::'] }), TypeError);
+    assert.throws(() => aggregateCidrs(['2001:db8::/32'], { exclude6: ['2606:4700:d0::/129'] }), TypeError);
+  });
+
+  test('generated cases inside a /112: exactly each entry minus the holes, nothing of the holes, idempotent', () => {
+    const base = parse6('2001:db8:1:2:3:4:5:0/112')[0];
+    for (let seed = 1; seed <= 200; seed += 1) {
+      const random = mulberry32(70_000 + seed);
+      const block = (minLen) => {
+        const len = minLen + Math.floor(random() * (129 - minLen));
+        const size = 2 ** (128 - len);
+        const offset = Math.floor((random() * 65536) / size) * size;
+        return `${full6(base + BigInt(offset))}/${len}`;
+      };
+      const input = Array.from({ length: 1 + Math.floor(random() * 6) }, () => block(112));
+      const holes = Array.from({ length: 1 + Math.floor(random() * 3) }, () => block(114));
+      const out = aggregateCidrs(input, { exclude6: holes });
+      assert.equal(coversSame6(out.cidrs, input, { minus: holes }).ok, true, `seed ${seed}`);
+      assert.equal(coversSame6(out.cidrs, out.cidrs, { minus: holes }).ok, true, `seed ${seed}: holes covered`);
+      assert.deepEqual(cidrsOf(out.cidrs, { exclude6: holes }), out.cidrs, `seed ${seed}: idempotent`);
+    }
   });
 });
 

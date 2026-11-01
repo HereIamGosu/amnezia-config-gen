@@ -127,6 +127,61 @@ const randomBlocksAnywhere = (random, count) => {
   return out;
 };
 
+// IPv6 (3.2.0, I14 with E6 and O6): the same oracle on BigInt intervals, written apart from the module.
+
+/** A well-formed IPv6 address (`::` and an IPv4 tail allowed, no zone) → BigInt. */
+const ip6ToBigInt = (addr) => {
+  let text = String(addr).toLowerCase();
+  const tail = /^(.*:)(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(text);
+  if (tail) {
+    const [a, b, c, d] = tail.slice(2).map(Number);
+    text = `${tail[1]}${(a * 256 + b).toString(16)}:${(c * 256 + d).toString(16)}`;
+  }
+  const [head, rest] = text.split('::');
+  const groupsOf = (s) => (s ? s.split(':') : []);
+  const left = groupsOf(head);
+  const right = rest === undefined ? [] : groupsOf(rest);
+  const groups = rest === undefined ? left : [...left, ...Array(8 - left.length - right.length).fill('0'), ...right];
+  return groups.reduce((acc, g) => acc * 65536n + BigInt(Number.parseInt(g, 16)), 0n);
+};
+
+/** `addr/p` → [start, end] of the IPv6 network as BigInt, host bits ignored. Only for well-formed IPv6 CIDRs. */
+const parse6 = (cidr) => {
+  const [ip, len] = String(cidr).split('/');
+  const size = 2n ** BigInt(128 - Number(len));
+  const start = (ip6ToBigInt(ip) / size) * size;
+  return [start, start + size - 1n];
+};
+
+const intervalsOf6 = (list) => {
+  const sorted = list.map(parse6).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const out = [];
+  for (const [start, end] of sorted) {
+    const last = out[out.length - 1];
+    if (last && start <= last[1] + 1n) last[1] = last[1] > end ? last[1] : end;
+    else out.push([start, end]);
+  }
+  return out;
+};
+
+const contains6 = (intervals, point) => intervals.some(([start, end]) => point >= start && point <= end);
+
+/** coversSame for IPv6 lists: whether `listA` covers exactly the addresses of `listB` minus those of `minus`. */
+const coversSame6 = (listA, listB, { minus = [] } = {}) => {
+  const a = intervalsOf6(listA);
+  const b = intervalsOf6(listB);
+  const m = intervalsOf6(minus);
+  const last = 2n ** 128n - 1n;
+  const points = new Set();
+  for (const [start, end] of [...a, ...b, ...m]) {
+    for (const p of [start - 1n, start, end, end + 1n]) if (p >= 0n && p <= last) points.add(p);
+  }
+  for (const p of points) {
+    if (contains6(a, p) !== (contains6(b, p) && !contains6(m, p))) return { ok: false, witness: p };
+  }
+  return { ok: true, witness: null };
+};
+
 module.exports = {
   parse,
   intervalsOf,
@@ -138,4 +193,6 @@ module.exports = {
   mulberry32,
   randomBlocks16,
   randomBlocksAnywhere,
+  parse6,
+  coversSame6,
 };

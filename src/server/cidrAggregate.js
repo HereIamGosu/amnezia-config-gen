@@ -5,8 +5,13 @@
 // through WARP. IPv6 entries (with ":") and malformed IPv4 entries pass unchanged (exact dedup), as before 3.1.9.
 // The output is sorted by the default string sort, so a canonical list without merges is byte for byte what every
 // version before 3.1.9 wrote.
+// IPv6 (3.2.0, spec 3.2.0 §5.4 p. 1): `exclude6` subtracts IPv6 prefixes on BigInt intervals. An IPv6 entry that
+// does not touch them passes byte for byte; one that does becomes the aligned blocks of its remainder. IPv6 entries
+// are never merged with each other (spec R6 D5).
 
 'use strict';
+
+const net = require('net');
 
 const OCTET = '(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)';
 /** `a.b.c.d/p`: octets 0–255 and prefix 0–32 without leading zeros. Anything else has no defined address set. */
@@ -78,14 +83,103 @@ const toBlocks = ([start, end], out) => {
   }
 };
 
+const PREFIX6 = /^(12[0-8]|1[01]\d|[1-9]?\d)$/;
+
+/** A valid IPv6 address (checked by net.isIPv6, no zone) → BigInt; `::` and an IPv4 tail expanded. */
+const ipv6ToBigInt = (addr) => {
+  let text = addr.toLowerCase();
+  const tail = /^(.*:)(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(text);
+  if (tail) {
+    const [a, b, c, d] = tail.slice(2).map(Number);
+    text = `${tail[1]}${(a * 256 + b).toString(16)}:${(c * 256 + d).toString(16)}`;
+  }
+  const [head, rest] = text.split('::');
+  const groupsOf = (s) => (s ? s.split(':') : []);
+  const left = groupsOf(head);
+  const right = rest === undefined ? [] : groupsOf(rest);
+  const groups = rest === undefined ? left : [...left, ...Array(8 - left.length - right.length).fill('0'), ...right];
+  return groups.reduce((acc, group) => (acc << 16n) + BigInt(Number.parseInt(group, 16)), 0n);
+};
+
+/** [start, end] (BigInt) of `addr/p` with a valid IPv6 address and prefix 0–128 without leading zeros, else null. */
+const toInterval6 = (cidr) => {
+  const slash = cidr.indexOf('/');
+  if (slash < 0) return null;
+  const addr = cidr.slice(0, slash);
+  const len = cidr.slice(slash + 1);
+  if (!PREFIX6.test(len) || addr.includes('%') || !net.isIPv6(addr)) return null;
+  const size = 1n << BigInt(128 - Number(len));
+  const start = (ipv6ToBigInt(addr) / size) * size;
+  return [start, start + size - 1n];
+};
+
+const compareBig = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+/** mergeIntervals on BigInt intervals. */
+const mergeIntervals6 = (intervals) => {
+  const sorted = [...intervals].sort((a, b) => compareBig(a[0], b[0]) || compareBig(b[1], a[1]));
+  const out = [];
+  for (const [start, end] of sorted) {
+    const cur = out[out.length - 1];
+    if (cur && start <= cur[1] + 1n) cur[1] = cur[1] > end ? cur[1] : end;
+    else out.push([start, end]);
+  }
+  return out;
+};
+
+/** subtractIntervals on BigInt intervals. */
+const subtractIntervals6 = (intervals, holes) => {
+  const out = [];
+  for (const [start, end] of intervals) {
+    let cur = start;
+    for (const [holeStart, holeEnd] of holes) {
+      if (holeEnd < cur || holeStart > end) continue;
+      if (holeStart > cur) out.push([cur, holeStart - 1n]);
+      cur = holeEnd + 1n;
+      if (cur > end) break;
+    }
+    if (cur <= end) out.push([cur, end]);
+  }
+  return out;
+};
+
+/** RFC 5952 text of a BigInt address: lower case, no leading zeros, the first longest run of 2+ zero groups → `::`. */
+const formatAddress6 = (n) => {
+  const groups = Array.from({ length: 8 }, (_, i) => Number((n >> BigInt(16 * (7 - i))) & 0xffffn));
+  let best = { at: -1, len: 1 };
+  for (let i = 0; i < 8;) {
+    if (groups[i] !== 0) { i += 1; continue; }
+    let j = i;
+    while (j < 8 && groups[j] === 0) j += 1;
+    if (j - i > best.len) best = { at: i, len: j - i };
+    i = j;
+  }
+  const hex = groups.map((g) => g.toString(16));
+  if (best.at < 0) return hex.join(':');
+  return `${hex.slice(0, best.at).join(':')}::${hex.slice(best.at + best.len).join(':')}`;
+};
+
+/** toBlocks on a BigInt interval: the largest aligned block that fits at each position. */
+const toBlocks6 = ([start, end], out) => {
+  let cur = start;
+  while (cur <= end) {
+    let bits = 0n;
+    while (bits < 128n && ((cur >> bits) & 1n) === 0n && cur + (1n << (bits + 1n)) - 1n <= end) bits += 1n;
+    out.add(`${formatAddress6(cur)}/${128n - bits}`);
+    cur += 1n << bits;
+  }
+};
+
 /**
  * @param {Iterable<unknown>} list route entries; non-strings are read as String(x), surrounding spaces trimmed,
  *   empty entries dropped
- * @param {{ exclude?: string[] }} [opts] well-formed IPv4 CIDRs whose addresses never appear in the output
+ * @param {{ exclude?: string[], exclude6?: string[] }} [opts] well-formed IPv4 (`exclude`) and IPv6 (`exclude6`)
+ *   CIDRs whose addresses never appear in the output
  * @returns {{ cidrs: string[], before4: number, after4: number, count6: number, invalid4: number }} `before4`: distinct
- *   IPv4 strings of the input (malformed ones included); `after4`: IPv4 entries of the output (blocks + `invalid4`)
+ *   IPv4 strings of the input (malformed ones included); `after4`: IPv4 entries of the output (blocks + `invalid4`);
+ *   `count6`: IPv6 entries of the output
  */
-const aggregateCidrs = (list, { exclude = [] } = {}) => {
+const aggregateCidrs = (list, { exclude = [], exclude6 = [] } = {}) => {
   const entries = new Set();
   for (const item of list) {
     const value = String(item).trim();
@@ -96,6 +190,11 @@ const aggregateCidrs = (list, { exclude = [] } = {}) => {
       throw new TypeError(`aggregateCidrs: exclude entry is not a well-formed IPv4 CIDR: ${cidr}`);
     }
     return toInterval(cidr);
+  }));
+  const holes6 = mergeIntervals6(exclude6.map((cidr) => {
+    const interval = typeof cidr === 'string' ? toInterval6(cidr) : null;
+    if (!interval) throw new TypeError(`aggregateCidrs: exclude6 entry is not a well-formed IPv6 CIDR: ${cidr}`);
+    return interval;
   }));
 
   const ipv6 = [];
@@ -111,13 +210,23 @@ const aggregateCidrs = (list, { exclude = [] } = {}) => {
 
   const blocks = [];
   for (const interval of subtractIntervals(mergeIntervals(intervals), holes)) toBlocks(interval, blocks);
+
+  const out6 = new Set();
+  for (const entry of ipv6) {
+    const interval = holes6.length ? toInterval6(entry) : null;
+    if (!interval || !holes6.some(([start, end]) => start <= interval[1] && end >= interval[0])) {
+      out6.add(entry);
+      continue;
+    }
+    for (const rest of subtractIntervals6([interval], holes6)) toBlocks6(rest, out6);
+  }
   return {
-    cidrs: [...blocks, ...invalid4, ...ipv6].sort(),
+    cidrs: [...blocks, ...invalid4, ...out6].sort(),
     before4,
     after4: blocks.length + invalid4.length,
-    count6: ipv6.length,
+    count6: out6.size,
     invalid4: invalid4.length,
   };
 };
 
-module.exports = { aggregateCidrs, STRICT_IPV4_CIDR };
+module.exports = { aggregateCidrs, STRICT_IPV4_CIDR, toInterval6 };

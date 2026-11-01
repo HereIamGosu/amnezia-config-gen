@@ -25,6 +25,8 @@ const LIST = [
   '162.159.128.233/32', '198.51.100.0/24',
 ];
 const LIST6 = ['2606:4700:d0::/48', '2001:db8::/33', '2001:db8:8000::/33'];
+// LIST6 after the 3.2.0 IPv6 cut: 2606:4700:d0::/48 is inside E6 (spec 3.2.0 §5.4 p. 1), the rest passes unchanged.
+const LIST6_OFF_E6 = ['2001:db8:8000::/33', '2001:db8::/33'];
 
 const line = (conf, key) => conf.split('\n').find((l) => l.startsWith(`${key} =`));
 const allowedOf = (conf) => line(conf, 'AllowedIPs').slice('AllowedIPs = '.length).split(', ');
@@ -137,11 +139,13 @@ describe('what the cut does not touch', () => {
     }
   });
 
-  test('ipv6=1: the IPv6 routes pass unchanged, neither cut nor merged (spec R6 D5)', async () => {
+  // Changed in 3.2.0 (spec 3.2.0 §5.4 p. 1): the WARP endpoint /48 of E6 is cut from the IPv6 routes; the IPv6
+  // routes off E6 still pass unchanged and are never merged (spec R6 D5).
+  test('ipv6=1: the IPv6 routes lose E6 and are otherwise unchanged, not merged', async () => {
     const out = await split({ presets: 'discord', ipv6: '1' });
     assert.equal(out.status, 200);
     const allowed = allowedOf(out.configs[0]);
-    assert.deepEqual(allowed.filter((c) => c.includes(':')).sort(), [...LIST6].sort());
+    assert.deepEqual(allowed.filter((c) => c.includes(':')).sort(), LIST6_OFF_E6);
     assert.equal(coversSame(v4(allowed), LIST, { minus: E_FIXED }).ok, true);
   });
 });
@@ -237,7 +241,7 @@ describe('the invariants on the new path', () => {
     const first = allowedOf(out.configs[0]);
     assert.equal(first.some((c) => c.includes(':')), false);
     assert.equal(coversSame(first, LIST, { minus: E_FIXED }).ok, true);
-    assert.deepEqual(allowedOf(out.configs[1]).filter((c) => c.includes(':')).sort(), [...LIST6].sort());
+    assert.deepEqual(allowedOf(out.configs[1]).filter((c) => c.includes(':')).sort(), LIST6_OFF_E6);
     assert.equal(warnings(out.body).filter((w) => w.startsWith('WARP registration returned no IPv6')).length, 1);
   });
 });
