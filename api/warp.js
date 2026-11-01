@@ -1153,8 +1153,12 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
     routesTelemetrySource,
     sitesResolved,
   } = await resolvePresetsPromise;
-  const effectiveClientIPv6 = routeOpts.mobileMode ? null : clientIPv6;
-  const effectiveRouteCidrs = routeOpts.mobileMode && routeCidrs
+  // A registration without a usable IPv6 address gives the config of ipv6=0 (I6): no IPv6 Address, no IPv6 route.
+  // The route lists were resolved with the requested includeIpv6 while registering, so their IPv6 CIDRs go here.
+  const ipv6Missing = !clientIPv6;
+  const ipv4Only = routeOpts.mobileMode || ipv6Missing;
+  const effectiveClientIPv6 = ipv4Only ? null : clientIPv6;
+  const effectiveRouteCidrs = ipv4Only && routeCidrs
     ? routeCidrs.filter((c) => !c.includes(':'))
     : routeCidrs;
   const dnsLine = getDnsString(dnsKey || DNS_DEFAULT_KEY);
@@ -1207,10 +1211,11 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
         extraCps,
         mobileJunk,
         legacyJunk,
-        includeIpv6: routeOpts.includeIpv6,
+        includeIpv6: ipv6Missing ? false : routeOpts.includeIpv6,
       },
     ),
     meta: {
+      ipv6Missing,
       routesSource,
       routesTelemetrySource,
       sitesResolved: sitesResolved ?? 0,
@@ -1478,6 +1483,11 @@ const handler = async (req, res) => {
 
     const responseWarnings = [];
     if (warning) responseWarnings.push(warning);
+    // mobile=1 drops IPv6 on request (I7), so a registration without it changes nothing the visitor asked for.
+    const ipv4OnlyIndexes = mobileMode ? [] : configsOut.filter((_, i) => configs[i].meta.ipv6Missing).map((c) => c.index);
+    if (ipv4OnlyIndexes.length) {
+      responseWarnings.push(`WARP registration returned no IPv6 address for config(s) ${ipv4OnlyIndexes.join(', ')}: the config is IPv4-only.`);
+    }
     let lab;
     if (labSelection) {
       const ports = configs.map(({ meta }) => meta.labEndpoint.port);

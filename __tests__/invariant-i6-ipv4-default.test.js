@@ -2,6 +2,7 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const { isIpv4Cidr, fetchCidrsForDomains } = require('../src/server/ipListFetch');
 const { buildAwg2WarpConf } = require('./helpers/build-config');
+const { generate, registrationAnswer } = require('./helpers/warp-harness');
 
 describe('Invariant I6: IPv4-only by default', () => {
   test('isIpv4Cidr correctly identifies IPv4 vs IPv6 CIDRs', () => {
@@ -34,5 +35,14 @@ describe('Invariant I6: IPv4-only by default', () => {
   test('generated config includes IPv6 default route only with explicit opt-in', () => {
     const conf = buildAwg2WarpConf({ includeIpv6: true });
     assert.match(conf, /^\s*AllowedIPs = 0\.0\.0\.0\/0, ::\/0$/m);
+  });
+
+  test('a registration without an IPv6 address gives the IPv4-only config, even with ipv6=1', async () => {
+    for (const mode of ['legacy', 'awg2', 'awg3', 'awg31']) {
+      const out = await generate({ mode, ipv6: '1' }, { cloudflare: registrationAnswer({ v6: null }) });
+      assert.equal(out.status, 200, mode);
+      assert.match(out.configs[0], /^\s*AllowedIPs = 0\.0\.0\.0\/0$/m, mode);
+      assert.doesNotMatch(out.configs[0], /^Address = .*:/m, mode);
+    }
   });
 });

@@ -173,8 +173,10 @@ const mergeConfigAfterWarp = async (id, token, initialConfig) => {
 
 /**
  * Registers a new device for `publicKey` and returns what the config needs from the registration.
+ * `clientIPv6` is null when the answer has no usable IPv6 address (absent, empty or invalid): the config is then
+ * IPv4-only (3.1.8); an unusable IPv4 address is an error.
  * @param {string} publicKey base64 X25519 public key of the config's PrivateKey
- * @returns {Promise<{ peerPublicKey: string|undefined, clientIPv4: string, clientIPv6: string }>}
+ * @returns {Promise<{ peerPublicKey: string|undefined, clientIPv4: string, clientIPv6: string|null }>}
  */
 const registerDevice = async (publicKey) => {
   const regBody = {
@@ -205,10 +207,7 @@ const registerDevice = async (publicKey) => {
   if (!clientIPv4 || !isValidIPv4(clientIPv4)) {
     throw new Error(`Cloudflare вернул некорректный IPv4 адрес: ${clientIPv4 || '(пусто)'}`);
   }
-  if (!clientIPv6 || !isValidIPv6(clientIPv6)) {
-    throw new Error(`Cloudflare вернул некорректный IPv6 адрес: ${clientIPv6 || '(пусто)'}`);
-  }
-  return { peerPublicKey: config.peers[0]?.public_key, clientIPv4, clientIPv6 };
+  return { peerPublicKey: config.peers[0]?.public_key, clientIPv4, clientIPv6: isValidIPv6(clientIPv6) ? clientIPv6 : null };
 };
 
 module.exports = {
