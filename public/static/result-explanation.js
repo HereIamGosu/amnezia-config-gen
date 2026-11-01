@@ -29,6 +29,7 @@
   const KNOWN_API_WARNINGS = [
     ['Endpoint Lab: not enough fresh verified endpoints on port', 'lab_port_fallback'],
     ['Endpoint Lab: only ', 'lab_partial_diversity'],
+    ['WARP registration returned no IPv6 address', 'warp_ipv4_only'],
   ];
 
   const normalizeWarnings = (input, defaultSource = 'api') => {

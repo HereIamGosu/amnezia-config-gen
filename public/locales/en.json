@@ -337,6 +337,7 @@
   "risk_lab_partial_diversity": "Endpoint Lab has fewer distinct fresh endpoints than configs requested: as many as available were created.",
   "risk_limit_disabled": "The AllowedIPs limit is disabled.",
   "risk_routes_fallback": "A fallback route source was used.",
+  "risk_warp_ipv4_only": "Cloudflare registered the device without an IPv6 address: the config works over IPv4 only.",
   "risk_routes_unknown": "Route source was not reported.",
   "generation_completed_with_warnings": "The configuration was generated with warnings. See the result card for details.",
   "diagnostics_title": "What to check if it does not work",

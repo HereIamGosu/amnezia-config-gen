@@ -243,6 +243,17 @@ describe('Lab Auto (Phase D)', () => {
     assert.deepEqual(summary.warnings.map((w) => w.code), ['lab_port_fallback', 'lab_partial_diversity', 'partial_generation']);
   });
 
+  test('a registration without IPv6 gets the stable code warp_ipv4_only (3.1.8)', () => {
+    const summary = buildResultSummary({
+      success: true,
+      mode: 'awg2',
+      count: 2,
+      configs: [{ content: 'a', endpointSource: 'hostname' }, { content: 'b', endpointSource: 'hostname' }],
+      warning: 'WARP registration returned no IPv6 address for config(s) 2: the config is IPv4-only.',
+    }, { warpEndpoint: 'hostname', port: 4500, configCount: 2 });
+    assert.deepEqual(summary.warnings.map((w) => w.code), ['warp_ipv4_only']);
+  });
+
   test('hostname responses keep their meaning', () => {
     const summary = buildResultSummary({ success: true, mode: 'awg2', configs: [{ content: 'x', endpointSource: 'hostname' }] },
       { warpEndpoint: 'hostname', port: 4500 });

@@ -337,6 +337,7 @@
   "risk_lab_partial_diversity": "В Endpoint Lab меньше разных свежих endpoint'ов, чем запрошено конфигов: создано столько, сколько есть.",
   "risk_limit_disabled": "Лимит AllowedIPs отключён.",
   "risk_routes_fallback": "Использован резервный источник маршрутов.",
+  "risk_warp_ipv4_only": "Cloudflare зарегистрировал устройство без IPv6-адреса: конфиг работает только по IPv4.",
   "risk_routes_unknown": "Источник маршрутов не указан.",
   "generation_completed_with_warnings": "Конфигурация создана с предупреждениями. Подробности указаны в карточке результата.",
   "diagnostics_title": "Что проверить, если не работает",

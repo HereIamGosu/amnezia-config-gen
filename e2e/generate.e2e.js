@@ -192,6 +192,21 @@ e2eSuite('generation (stubbed /api/warp)', (openPage) => {
     await page.assertClean();
   });
 
+  for (const [pathname, expected] of [['/', /работает только по IPv4/], ['/en', /works over IPv4 only/]]) {
+    test(`${pathname}: a registration without IPv6 shows the warning in the page language, not the server text`, async () => {
+      const page = await openPage();
+      await page.goto(pathname);
+      const warning = 'WARP registration returned no IPv6 address for config(s) 1: the config is IPv4-only.';
+      stubWarp(page, () => ({ json: { ...fixtures.warpSuccess(), warning } }), 200);
+      await page.click('#generateButton');
+      await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success');
+      const risks = await page.evaluate(() => document.getElementById('resultRiskLabels').textContent);
+      assert.match(risks, expected);
+      assert.doesNotMatch(risks, /WARP registration returned/);
+      await page.assertClean();
+    });
+  }
+
   test('error state, then recovery on retry', async () => {
     const page = await openPage();
     await page.goto('/');

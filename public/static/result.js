@@ -421,6 +421,8 @@ const warningText = (warning) => {
       'На выбранном порту не хватило свежих endpoint\'ов Lab: часть конфигов использует другой проверенный порт.'),
     lab_partial_diversity: t('risk_lab_partial_diversity',
       'В Endpoint Lab меньше разных свежих endpoint\'ов, чем запрошено конфигов: создано столько, сколько есть.'),
+    warp_ipv4_only: t('risk_warp_ipv4_only',
+      'Cloudflare зарегистрировал устройство без IPv6-адреса: конфиг работает только по IPv4.'),
   };
   return byCode[warning.code] || warning.message || t('result_summary_no_data', 'нет данных');
 };
