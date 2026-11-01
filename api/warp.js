@@ -1103,8 +1103,11 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
   if (routeOpts.endpointMode === 'lab' && !labEndpoint) throw labAutoError('lab_selection_failed', 500);
   const { privKey, pubKey } = generateKeys();
 
-  // Start CIDR resolution concurrently with WARP registration — they are independent.
-  const resolvePresetsPromise = resolveAllowedIpsFromPresets(presetKeys, routeOpts);
+  // The handler resolves the routes before any registration (`routeOpts.resolvedRoutes`, 3.1.9). Without them
+  // (a direct call) the resolution runs concurrently with the WARP registration, as before.
+  const resolvePresetsPromise = routeOpts.resolvedRoutes
+    ? Promise.resolve(routeOpts.resolvedRoutes)
+    : resolveAllowedIpsFromPresets(presetKeys, routeOpts);
   // Marks the rejection as handled while registration is in flight; the error is thrown at the await below.
   resolvePresetsPromise.catch(() => {});
 
@@ -1154,7 +1157,7 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
     sitesResolved,
   } = await resolvePresetsPromise;
   // A registration without a usable IPv6 address gives the config of ipv6=0 (I6): no IPv6 Address, no IPv6 route.
-  // The route lists were resolved with the requested includeIpv6 while registering, so their IPv6 CIDRs go here.
+  // The route lists were resolved with the requested includeIpv6 before registering, so their IPv6 CIDRs go here.
   const ipv6Missing = !clientIPv6;
   const ipv4Only = routeOpts.mobileMode || ipv6Missing;
   const effectiveClientIPv6 = ipv4Only ? null : clientIPv6;
@@ -1449,6 +1452,13 @@ const handler = async (req, res) => {
       }
       routeOpts.endpointMode = 'lab';
       routeOpts.labEndpoints = labSelection.endpoints;
+    }
+
+    // Split routes: resolved once, here, before any WARP registration (spec R6 4.5). A list that comes back empty
+    // answers 502 without spending a registration, and every config of a count > 1 request gets the same list.
+    // The IPv4-only filter stays in generateWarpConfig: it depends on each registration's answer (3.1.8).
+    if (effectivePresetKeys.length) {
+      routeOpts.resolvedRoutes = await resolveAllowedIpsFromPresets(effectivePresetKeys, routeOpts);
     }
 
     const { configs, warning } = await generateMultipleWarpConfigs(count, mode, effectivePresetKeys, dnsKey, warpExtras, routeOpts);

@@ -213,14 +213,18 @@ describe('Cloudflare API fails (/api/warp)', () => {
     });
   }
 
-  test('split tunnel: registration fails while the route lists fail too → the registration error, nothing unhandled', async () => {
-    fakeNetwork(byHost({
+  // 3.1.9: the routes are resolved before registration, so the list failure answers first and Cloudflare is not asked.
+  test('split tunnel: the route lists fail while Cloudflare would refuse too → 502 by routes, no registration, nothing unhandled', async () => {
+    const calls = fakeNetwork(byHost({
       cloudflare: () => json(403, { message: 'Forbidden' }),
       opencck: () => ({ status: 200, body: 'not json' }),
       community: () => ({ error: 'ECONNRESET' }),
       antifilter: () => ({ status: 500, body: '' }),
     }));
-    assertFailureBody(await call(load('../api/warp'), { routeMode: 'split', presets: 'discord' }), 502);
+    const out = await call(load('../api/warp'), { routeMode: 'split', presets: 'discord' });
+    assertFailureBody(out, 502);
+    assert.match(out.body.message, /пустой ответ/);
+    assert.equal(calls.filter((c) => c.includes(CLOUDFLARE)).length, 0, 'no Cloudflare request');
   });
 });
 
@@ -231,11 +235,12 @@ describe('route list sources fail', () => {
     antifilter: () => ({ error: 'ECONNREFUSED' }),
   };
 
-  test('/api/warp split: every list source down → 502 with a message after registration', async () => {
-    fakeNetwork(byHost(allListsDown));
+  test('/api/warp split: every list source down → 502 with a message before registration (3.1.9)', async () => {
+    const calls = fakeNetwork(byHost(allListsDown));
     const out = await call(load('../api/warp'), { routeMode: 'split', presets: 'discord' });
     assertFailureBody(out, 502);
     assert.match(out.body.message, /пустой ответ/);
+    assert.equal(calls.filter((c) => c.includes(CLOUDFLARE)).length, 0, 'no Cloudflare request');
   });
 
   test('/api/iplist: every list source down → 200 with zero routes (the counter shows 0)', async () => {
@@ -370,7 +375,8 @@ describe('server.js with the network cut off', () => {
     const base = `http://127.0.0.1:${PORT}`;
     const cases = [
       ['GET', '/api/warp', 503],
-      ['GET', '/api/warp?routeMode=split&presets=discord', 503],
+      // discord has no static IPv4 routes: offline its list is empty, 502 before registration (3.1.9)
+      ['GET', '/api/warp?routeMode=split&presets=discord', 502],
       ['GET', '/api/warp?endpointMode=lab', 503],
       ['POST', '/api/warp', 400, '{"presets":'],
       ['GET', '/api/iplist?presets=discord', 200],
