@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [3.1.9] - 2026-11-01
+
+### Fixed
+- **Split routes leave out four WARP endpoint subnets.** The public route lists give `162.158.0.0/15` for Discord, X (Twitter), TikTok, OpenAI, Netflix and RuTracker (measured on 2026-11-01). This network holds the WARP endpoint subnets: `162.159.192.1`, the first address of the built-in endpoint list and the address of `engage.cloudflareclient.com` in the measurement of 2026-11-01, and the Endpoint Lab pool, which on 2026-10-31 lay in `162.159.192.0/24` (another session's report). So a split config with one of these presets had a route to its own `Endpoint`, in hostname and in Lab Auto mode. The IPv4 routes of presets now leave out `162.159.192.0/24`, `162.159.193.0/24`, `162.159.195.0/24` and `162.159.204.0/24`, the same in both modes (I11). Cloudflare sites outside these subnets, such as discord.com in `162.159.128.0/19` or `188.114.96.3`, stay routed. Not every WARP endpoint is outside the routes yet: `188.114.96.0/22`, which ten presets get, holds the built-in endpoints of the `awg2_random` and `awg2_dpi` templates and may hold Lab Auto endpoints (the Lab accepts that network), is shared with ordinary sites and is not cut. Whether a client actually looped its packets through such a route was not verified.
+- **An empty route list no longer spends a WARP registration.** The routes of the selected presets are resolved once per request and before the registration: a list that comes back empty answers 502 «Сервис списков IP вернул пустой ответ…» before Cloudflare is asked (in 3.1.8 after the registration), and all configs of `count` > 1 get the same list. A list with no route outside the cut subnets is also 502.
+
+### Changed
+- **The IPv4 part of a split `AllowedIPs` is merged exactly.** The routes are written as the fewest aligned blocks that cover exactly the same addresses minus the cut subnets (new invariant I14): no address outside the presets' networks is added. The order is the string sort of earlier versions, so a list of canonical entries (host bits zero) with nothing to merge or cut is unchanged byte for byte; an entry with host bits is written as its network (`10.0.0.1/8` → `10.0.0.0/8`), and the lists of 2026-11-01 had none. IPv6 routes (`ipv6=1`) and malformed entries pass unchanged; the full tunnel stays `0.0.0.0/0`. On the public lists of 2026-11-01 (25 presets with their own lists; 24 got the antifilter fallback that day, so their own lists were not measured) the merge shortens Instagram from 195 to 133 routes, Facebook 270 → 204, Notion 193 → 152, WhatsApp 585 → 513 and the quick-select group of 26 popular presets 2038 → 1684 (still above 1000); no other preset with its own list ends up more than 6 % shorter (YouTube 624 → 621), and those with `162.158.0.0/15` gain up to nine lines from the cut (Discord 87 → 93, RuTracker 5 → 14). `AllowedIPs` can now hold shorter prefixes and `/31` entries that the raw lists did not have.
+- **Above 1000 routes the config carries a warning, not a refusal.** When `AllowedIPs` holds more than 1000 IPv4 routes, `warning` gains `Route budget: N IPv4 routes in AllowedIPs (M in the source lists) is above the limit of 1000; …`, which the page shows in its language with the numbers.
+- **The route counter is "over" only above 1000.** At exactly 1000 IPv4 CIDR the counter is yellow, not red, and the preview no longer says the limit is exceeded; unchecked tiles are still disabled from 1000. The settings text names the merge and the cut.
+
+### Notes
+- `/api/iplist` does not change: `count4` and `cidrs` are the raw list, and the web counter counts it. The server compares the list after the cut and the merge with 1000, so the two numbers can differ in both directions; a set just under 1000 in the counter can get the warning.
+- The comment "500 is a conservative limit that works reliably on all tested platforms" in `settings.js` had no measurement behind it and is gone; the limit stays 1000.
+- New server modules `src/server/cidrAggregate.js`, `src/server/routeBudget.js`, `src/server/warpEndpointPrefixes.js`.
+
 ## [3.1.8] - 2026-11-01
 
 ### Fixed
