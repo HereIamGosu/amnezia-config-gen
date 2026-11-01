@@ -306,9 +306,26 @@ const fetchCidrsForDomains = async (
   return { cidrs: result, source };
 };
 
+/**
+ * The live routes of one transitional preset (3.2.0, spec 3.2.0 §4.5): opencck for its domains, itdoginfo for its
+ * lists, never the antifilter substitute. Used by the catalogue builder for `liveRoutes4`.
+ * @param {{ domains?: string[], legacy?: { communityLists?: string[] } }} def
+ * @param {{ includeIpv6?: boolean }} [opts]
+ * @returns {Promise<{ cidrs4: string[], cidrs6: string[], source: string }>}
+ */
+const fetchLegacyCidrs = async (def, { includeIpv6 = false } = {}) => {
+  const { cidrs, source } = await fetchCidrsForDomains(def.domains || [], {
+    includeIpv6,
+    communityLists: (def.legacy && def.legacy.communityLists) || [],
+    hasStaticFallback: true,
+  });
+  return { cidrs4: cidrs.filter((c) => !c.includes(':')), cidrs6: cidrs.filter((c) => c.includes(':')), source };
+};
+
 module.exports = {
   IP_LIST_HOST,
   fetchCidrsForDomains,
+  fetchLegacyCidrs,
   buildIpListPath,
   isIpv4Cidr,
 };

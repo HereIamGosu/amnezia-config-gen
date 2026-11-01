@@ -35,6 +35,8 @@
     "evidence:check": "node scripts/generate-protocol-evidence.js --check",
     "release:check": "node scripts/check-release-consistency.js",
     "presets:fallback": "node scripts/dump-presets-fallback.js",
+    "ipcatalog:build": "node scripts/ipcatalog/build.js",
+    "ipcatalog:check": "node scripts/ipcatalog/check.js",
     "seo:en": "node scripts/build-en-page.js && node scripts/build-lab-page.js",
     "seo:check": "node scripts/build-en-page.js --check && node scripts/build-lab-page.js --check",
     "indexnow": "node scripts/indexnow.js",
