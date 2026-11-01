@@ -49,8 +49,9 @@ e2eSuite('profile, step-2 summary and settings dialog', (openPage) => {
     await page.click('#paramSummary');
     await page.waitFor(settingsOpen);
     await page.click('#routeModeSplit');
-    await page.click('#routeTilesSocial .cfg-tile:has(input[value="youtube"])');
-    await page.click('#routeTilesSocial .cfg-tile:has(input[value="discord"])');
+    // 3.2.0: YouTube в категории «Видео», Discord — в «Мессенджеры и звонки»
+    await page.click('[data-category="video"] .cfg-tile:has(input[value="youtube"])');
+    await page.click('[data-category="messengers"] .cfg-tile:has(input[value="discord"])');
     // DNS
     await page.click('#tab-dnscps');
     await page.click('#dnsTiles .cfg-tile:has(input[value="adguard"])');

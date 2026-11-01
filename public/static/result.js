@@ -375,6 +375,7 @@ const summaryValue = (key, value) => {
       unknown: t('result_summary_no_data', 'нет данных'),
     },
     routesSource: {
+      catalog: t('result_summary_routes_catalog', 'каталог адресов'),
       opencck: 'OpenCCK',
       community: t('result_summary_routes_community', 'community lists'),
       antifilter: 'antifilter',
@@ -432,6 +433,19 @@ const warningText = (warning) => {
     return t('risk_routes_over_budget',
       'В AllowedIPs {after} IPv4-маршрутов (в исходных списках {before}), это больше лимита {limit}: телефоны и роутеры могут работать с таким списком нестабильно.')
       .replace('{after}', budget[1]).replace('{before}', budget[2]).replace('{limit}', budget[3]);
+  }
+  // The preset catalogue (api/warp.js, 3.2.0): "Presets retired: vk, ok" and the like, the presets named in the
+  // page language.
+  const presetLines = {
+    presets_retired: ['Presets retired: ', 'risk_presets_retired', 'Сняты с каталога и не добавлены в конфиг: {keys}.'],
+    presets_no_data: ['Presets without data: ', 'risk_presets_no_data', 'Для этих пресетов нет адресов, в конфиг они не добавлены: {keys}.'],
+    routes_source_fallback: ['Route source fallback: ', 'risk_routes_source_fallback',
+      'Списки opencck и itdoginfo не ответили — для {keys} взят запасной список каталога.'],
+  };
+  const presetLine = presetLines[warning.code];
+  if (presetLine && String(warning.message || '').startsWith(presetLine[0])) {
+    const names = warning.message.slice(presetLine[0].length).split(',').map((k) => t(`preset_${k.trim()}`, k.trim())).join(', ');
+    return t(presetLine[1], presetLine[2]).replace('{keys}', names);
   }
   // "Endpoint override inside routes: <address>" (api/warp.js, 3.2.0): the address goes into the localised text.
   const override = warning.code === 'endpoint_override_in_routes'

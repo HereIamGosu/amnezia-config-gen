@@ -80,8 +80,9 @@
   /**
    * Разбирает параметры адреса. Возвращает только распознанные и допустимые поля.
    * @param {string | URLSearchParams} search — location.search (с «?» или без)
-   * @param {{ routes?: string[], dns?: string[] }} [catalogue] — допустимые id из каталога пресетов
-   * @returns {{ profile?: string, routes?: string[], dns?: string, device?: string, ipv6?: boolean,
+   * @param {{ routes?: string[], dns?: string[], aliases?: Record<string, string>, retired?: string[] }} [catalogue] —
+   *   допустимые id из каталога пресетов, старые id с их пресетами и снятые с каталога id
+   * @returns {{ profile?: string, routes?: string[], retiredRoutes?: string[], dns?: string, device?: string, ipv6?: boolean,
    *   cps?: string, cps5?: boolean, cpsCompat?: string, cpsChains?: Record<string, string>, endpoint?: string,
    *   port?: number, count?: number }}
    */
@@ -89,6 +90,10 @@
     const params = toParams(search);
     const allowedRoutes = new Set(Array.isArray(catalogue.routes) ? catalogue.routes : []);
     const allowedDns = new Set(Array.isArray(catalogue.dns) ? catalogue.dns : []);
+    // 3.2.0: an old key is expanded to its preset before the catalogue filter (rutracker_local → rutracker), and a
+    // key taken out of the catalogue is returned in `retiredRoutes`, so the page can say why it was not applied.
+    const aliases = catalogue.aliases && typeof catalogue.aliases === 'object' ? catalogue.aliases : {};
+    const retired = new Set(Array.isArray(catalogue.retired) ? catalogue.retired : []);
     const out = {};
 
     const profile = firstValue(params, 'profile');
@@ -97,11 +102,15 @@
     const routesRaw = firstValue(params, 'routes');
     if (routesRaw) {
       const routes = [];
-      for (const id of routesRaw.split(',').map((part) => part.trim())) {
+      const retiredRoutes = [];
+      for (const raw of routesRaw.split(',').map((part) => part.trim())) {
+        const id = Object.prototype.hasOwnProperty.call(aliases, raw) ? aliases[raw] : raw;
+        if (retired.has(id) && !retiredRoutes.includes(id)) retiredRoutes.push(id);
         if (id && allowedRoutes.has(id) && !routes.includes(id)) routes.push(id);
         if (routes.length >= MAX_ROUTES) break;
       }
       if (routes.length > 0) out.routes = routes;
+      if (retiredRoutes.length > 0) out.retiredRoutes = retiredRoutes;
     }
 
     const dns = firstValue(params, 'dns');

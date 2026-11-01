@@ -367,7 +367,7 @@
               <li class="status-row"><span class="state-icon state-icon--loading"></span><span class="status-row__name" data-i18n="status_row_generator">Генератор API</span><span class="status-row__state"></span></li>
               <li class="status-row"><span class="state-icon state-icon--loading"></span><span class="status-row__name" data-i18n="status_row_warp_api">Регистрация WARP</span><span class="status-row__state"></span></li>
               <li class="status-row"><span class="state-icon state-icon--loading"></span><span class="status-row__name" data-i18n="status_row_engage">Endpoint WARP</span><span class="status-row__state"></span></li>
-              <li class="status-row"><span class="state-icon state-icon--loading"></span><span class="status-row__name" data-i18n="status_row_cidr">Источник CIDR</span><span class="status-row__state"></span></li>
+              <li class="status-row"><span class="state-icon state-icon--loading"></span><span class="status-row__name" data-i18n="status_row_cidr">Маршруты: каталог сайта и opencck</span><span class="status-row__state"></span></li>
               <!-- Endpoint Lab: свой источник (/api/lab), в общий статус не входит; открывает быстрый просмотр -->
               <li class="status-row status-row--lab" id="statusLabRow">
                 <button type="button" class="status-lab" id="statusLabBtn" data-lab-quick="off" aria-haspopup="dialog">
@@ -971,7 +971,7 @@
           <div class="info-section">
             <h3 class="info-section__title" data-i18n="info_s1_title">Маршруты и AllowedIPs</h3>
             <p data-i18n-html="info_s1_p1">По умолчанию весь трафик идёт через туннель (<strong>AllowedIPs = 0.0.0.0/0</strong>). В настройках (шаг 2) можно выбрать DNS-сервер и пресеты — тогда через туннель пойдут только нужные IPv4-подсети. IPv6 можно включить опционально, но это увеличивает число маршрутов в 2–3 раза и может вызывать сбои на роутерах и мобильных клиентах. Безопасный лимит — <strong>1000 IPv4 CIDR</strong>.</p>
-            <p data-i18n-html="info_s1_p2">IP-диапазоны можно заменить вручную. Актуальные списки — на <a href="https://iplist.opencck.org/ru" target="_blank" rel="noopener noreferrer">opencck.org</a> и <a href="https://rockblack.pro/vpn/dopolnitelno/diapazon-ip-adresov" target="_blank" rel="noopener noreferrer">rockblack.pro</a>.</p>
+            <p data-i18n-html="info_s1_p2">Пресеты с проверенным списком адресов берут его из каталога сайта: каталог собирается заранее из официальных списков сервисов, анонсов их сетей и резолва доменов. Переходные пресеты (YouTube, сервисы Meta, Discord и те, чей точный список пока не прошёл проверку) берут маршруты при запросе из <a href="https://iplist.opencck.org/ru" target="_blank" rel="noopener noreferrer">iplist.opencck.org</a> и списков itdoginfo. IP-диапазоны в готовом конфиге можно заменить вручную.</p>
           </div>
 
           <div class="callout callout--warn">
@@ -1107,10 +1107,11 @@
           <button type="button" class="modal__close" data-close-modal aria-label="Закрыть" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
         </header>
         <div class="modal__body prose" data-i18n-html="privacy_body">
-          <p>Сервер awgconfig.com регистрирует для вас устройство в Cloudflare WARP и сразу возвращает готовый конфиг. Ключи и конфиги на сервере не сохраняются; в журналы попадают только технические ошибки.</p>
+          <p>Сервер awgconfig.com регистрирует для вас устройство в Cloudflare WARP и сразу возвращает готовый конфиг. Ключи и конфиги на сервере не сохраняются.</p>
+          <p>Журналы сервера. Журнал доступа веб-сервера записывает IP-адрес, время, строку запроса (в ней видны выбранные параметры и пресеты маршрутов), адрес страницы, с которой пришёл запрос, и строку браузера; файлы журнала хранятся около 15 дней. Журнал приложения содержит технические ошибки и обезличенные счётчики раз в 10 минут: сколько генераций прошло с каждым пресетом и чем закончились регистрации WARP — без IP-адресов и идентификаторов.</p>
           <p>История генераций хранится только в этом браузере (localStorage) — её можно очистить в окне «История».</p>
-          <p>Аналитика: Яндекс.Метрика без Вебвизора и обезличенные события продукта (режим, исход генерации). Ключи, адреса endpoint'ов и содержимое конфигов в аналитику не передаются.</p>
-          <p>Сторонние сервисы: Cloudflare (регистрация WARP) и iplist.opencck.org (списки маршрутов для выборочной маршрутизации).</p>
+          <p>Аналитика: Яндекс.Метрика без Вебвизора и обезличенные события продукта (режим, исход генерации). Ключи, адреса endpoint'ов, выбранные пресеты и содержимое конфигов в аналитику не передаются.</p>
+          <p>Сторонние сервисы: Cloudflare (регистрация WARP), а для пресетов, которые берут маршруты из живых списков, — iplist.opencck.org и raw.githubusercontent.com (списки itdoginfo).</p>
         </div>
       </div>
     </div>
@@ -1241,14 +1242,8 @@
               <button type="button" class="btn btn--sm" id="presetClear" data-i18n="preset_btn_clear">Снять всё</button>
             </div>
             <p id="presetStats" class="preset-stats" aria-live="polite"></p>
-            <h3 class="settings-modal__subsection" data-i18n="section_social">Социальные сети и мессенджеры</h3>
-            <div id="routeTilesSocial" class="cfg-tiles cfg-tiles--routes"></div>
-            <h3 class="settings-modal__subsection" data-i18n="section_gaming">Игровые платформы</h3>
-            <div id="routeTilesGaming" class="cfg-tiles cfg-tiles--routes"></div>
-            <h3 class="settings-modal__subsection" data-i18n="section_torrent">Торрент-трекеры</h3>
-            <div id="routeTilesTorrent" class="cfg-tiles cfg-tiles--routes"></div>
-            <h3 class="settings-modal__subsection" data-i18n="section_more">Дополнительно</h3>
-            <div id="routeTilesMore" class="cfg-tiles cfg-tiles--routes"></div>
+            <p id="routesLinkNote" class="route-mode-notice" hidden></p>
+            <div id="routeCategories" class="route-categories"></div>
           </div>
 
           <!-- Вкладка: DNS и CPS -->

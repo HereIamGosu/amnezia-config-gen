@@ -11,7 +11,7 @@
 // остальное — из обработчиков после DOMContentLoaded. /* global */ — что файл берёт у других,
 // /* exported */ — что отдаёт им (проверяют ESLint и __tests__/frontend-scripts.test.js).
 
-/* global t -- i18n.js */
+/* global t, _i18n, setI18nText -- i18n.js */
 /* global parseJsonResponse, uiShell, openModal, debounce -- common.js */
 /* global renderLabAutoNote -- status.js */
 /* global getDnsLabel, getDeviceLabel -- result.js */
@@ -20,23 +20,32 @@
 /* exported
    ROUTE_MODES, cfgState, forEachRouteTile, getSelectedRouteIds, updateParamChips, applyMobileModeCascade,
    getSelectedDnsKey, getResultStateSnapshot, updateCidrCounter, updateTileActiveClass, initSettingsPanel,
-   endpointDefault, chooseEndpoint, syncDefaultEndpoint */
+   endpointDefault, chooseEndpoint, syncDefaultEndpoint, refreshRouteTileTexts */
 
 /**
- * Limit of IPv4 CIDR routes for the counter (the raw count4 of /api/iplist). Long AllowedIPs lists may fail on
- * routers and phones; no client threshold has been measured yet (gate G4), 1000 is the owner's limit (PRD FR-15).
- * The counter warns from 80 % up to the limit and is "over" only above it; unchecked tiles are disabled from the
- * limit itself. The server checks the aggregated list against the same number (src/server/routeBudget.js).
+ * Limit of IPv4 routes for the counter. From 3.2.0 the counter shows `routes4` of /api/iplist: the IPv4 lines the
+ * config will carry after the WARP endpoint cut and the exact merge (K15), the number the server checks against the
+ * same limit (src/server/routeBudget.js). Long AllowedIPs lists may fail on routers and phones; no client threshold
+ * has been measured yet (gate G4), 1000 is the owner's limit (PRD FR-15). The counter warns from 80 % up to the
+ * limit and is "over" only above it; unchecked tiles are disabled from the limit itself.
  */
 const MAX_CIDR_LIMIT = 1000;
 
 /** Routing mode enum. Always use these constants — never bare string literals. */
 const ROUTE_MODES = Object.freeze({ FULL: 'full', SPLIT: 'split' });
 
-/** @type {{ presets: Array<{id:string,label:string,category?:string,sitesCount?:number}>, groupRfPopular: string[], dnsPresets: Array<{id:string,label:string}>, dnsDefault: string, selectedDns: string, iplistSource: 'none' | 'api' | 'fallback', cidrCount4: number, includeIpv6: boolean }} */
+/** @type {{ presets: Array<{id:string,label:string,category?:string,sitesCount?:number,routes4?:number,precision?:string|null,noData?:string|null,source?:string}>, groupRfPopular: string[], categories: string[], aliases: Record<string,string>, retired: string[], catalogBuiltAt: string|null, dnsPresets: Array<{id:string,label:string}>, dnsDefault: string, selectedDns: string, iplistSource: 'none' | 'api' | 'fallback', cidrCount4: number, includeIpv6: boolean }} */
 const cfgState = {
   presets: [],
   groupRfPopular: [],
+  /** Category blocks in display order (from the catalogue, 3.2.0). */
+  categories: [],
+  /** Old preset keys and their targets, applied to settings links before the catalogue filter. */
+  aliases: {},
+  /** Preset keys taken out of the catalogue: a link that names them gets a note. */
+  retired: [],
+  /** Build time of the catalogue snapshot (ISO), shown with the route estimate. */
+  catalogBuiltAt: null,
   dnsPresets: [],
   dnsDefault: 'cloudflare',
   selectedDns: '',
@@ -51,7 +60,7 @@ const cfgState = {
   routerMode: false,
   /** CPS protocol for I1 field: auto | quic | dns | stun | dtls | sip | static */
   cpsProtocol: 'auto',
-  /** Set of preset IDs confirmed to return 0 IPv4 CIDRs from opencck. */
+  /** Set of preset IDs confirmed to give 0 IPv4 routes when selected alone. */
   zeroCidrPresets: new Set(),
   warpPort: 4500,
   /** Allowlisted UDP port for WARP endpoint (mirrors cfgState.warpPort; kept in sync). */
@@ -114,34 +123,19 @@ const fetchPresetsManifest = async () => {
 
 let presetStatsAbort = null;
 
-const ROUTE_CATEGORY_ORDER = ['social', 'gaming', 'torrent', 'more'];
-
-const ROUTE_CONTAINER_BY_CATEGORY = {
-  social: 'routeTilesSocial',
-  gaming: 'routeTilesGaming',
-  torrent: 'routeTilesTorrent',
-  more: 'routeTilesMore',
-};
-
-const ROUTE_TILE_ROOT_SELECTORS = ROUTE_CATEGORY_ORDER.map(
-  (c) => `#${ROUTE_CONTAINER_BY_CATEGORY[c]} .cfg-tile`,
-);
-
-const ROUTE_CHECKBOX_SELECTOR = ROUTE_TILE_ROOT_SELECTORS.map(
-  (s) => `${s} input[type="checkbox"]:checked`,
-).join(', ');
+// Category blocks come from the catalogue (`categories` of /api/iplist and presets-fallback.json, 3.2.0): one
+// container in index.html, one block per category, titled with `section_<key>`.
+const ROUTE_CATEGORIES_HOST_ID = 'routeCategories';
+const ROUTE_TILE_SELECTOR = `#${ROUTE_CATEGORIES_HOST_ID} .cfg-tile--route`;
+const ROUTE_CHECKBOX_SELECTOR = `${ROUTE_TILE_SELECTOR} input[type="checkbox"]:checked`;
 
 const forEachRouteTile = (fn) => {
-  ROUTE_TILE_ROOT_SELECTORS.forEach((sel) => {
-    document.querySelectorAll(sel).forEach(fn);
-  });
+  document.querySelectorAll(ROUTE_TILE_SELECTOR).forEach(fn);
 };
 
 const clearAllRouteTileHosts = () => {
-  ROUTE_CATEGORY_ORDER.forEach((c) => {
-    const el = document.getElementById(ROUTE_CONTAINER_BY_CATEGORY[c]);
-    if (el) el.textContent = '';
-  });
+  const host = document.getElementById(ROUTE_CATEGORIES_HOST_ID);
+  if (host) host.textContent = '';
 };
 
 const getSelectedRouteIds = () =>
@@ -344,8 +338,12 @@ const updateRouteModeUI = (mode) => {
   updateAllowedIpsExplanation();
 };
 
-/** Update the CIDR counter element (#cidrCounter) and mini counter (#cidrCounterMini). */
-const updateCidrCounter = (count4) => {
+/**
+ * Update the CIDR counter element (#cidrCounter) and mini counter (#cidrCounterMini). `estimate`: the number is the
+ * sum of tile prices (no server), shown as «≈».
+ */
+const updateCidrCounter = (count4, { estimate = false } = {}) => {
+  const shown = estimate ? `≈${count4}` : count4;
   const el = document.getElementById('cidrCounter');
   const mini = document.getElementById('cidrCounterMini');
 
@@ -359,9 +357,9 @@ const updateCidrCounter = (count4) => {
   if (cfgState.ignoreLimit) {
     if (el) {
       el.classList.remove('cidr-counter--warn', 'cidr-counter--over');
-      el.innerHTML = `<span class="cidr-counter__label">${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4} ${t('cidr_limit_disabled', '(лимит отключён)')}</span>`;
+      el.innerHTML = `<span class="cidr-counter__label">${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${shown} ${t('cidr_limit_disabled', '(лимит отключён)')}</span>`;
     }
-    if (mini) { mini.textContent = `IPv4: ${count4}`; mini.className = 'cidr-counter-mini'; }
+    if (mini) { mini.textContent = `IPv4: ${shown}`; mini.className = 'cidr-counter-mini'; }
   } else {
     const pct = Math.min(count4 / MAX_CIDR_LIMIT, 1);
     const warn = count4 >= MAX_CIDR_LIMIT * 0.8 && count4 <= MAX_CIDR_LIMIT;
@@ -370,13 +368,13 @@ const updateCidrCounter = (count4) => {
       el.classList.toggle('cidr-counter--warn', warn);
       el.classList.toggle('cidr-counter--over', over);
       el.innerHTML = `
-        <span class="cidr-counter__label">${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4} / ${MAX_CIDR_LIMIT}</span>
+        <span class="cidr-counter__label">${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${shown} / ${MAX_CIDR_LIMIT}</span>
         <div class="cidr-counter__bar-track">
           <div class="cidr-counter__bar-fill" style="width:${(pct * 100).toFixed(1)}%"></div>
         </div>`;
     }
     if (mini) {
-      mini.textContent = `IPv4: ${count4} / ${MAX_CIDR_LIMIT}`;
+      mini.textContent = `IPv4: ${shown} / ${MAX_CIDR_LIMIT}`;
       mini.className = 'cidr-counter-mini' + (over ? ' cidr-counter-mini--over' : warn ? ' cidr-counter-mini--warn' : '');
     }
   }
@@ -391,7 +389,7 @@ const updateTileDisabledState = () => {
   const overLimit = !cfgState.ignoreLimit && cfgState.cidrCount4 >= MAX_CIDR_LIMIT;
   forEachRouteTile((tile) => {
     const cb = tile.querySelector('input[type="checkbox"]');
-    if (!cb) return;
+    if (!cb || tile.classList.contains('cfg-tile--nodata')) return;
     if (!cb.checked) {
       cb.disabled = overLimit;
       tile.classList.toggle('cfg-tile--disabled', overLimit);
@@ -400,6 +398,62 @@ const updateTileDisabledState = () => {
       tile.classList.remove('cfg-tile--disabled');
     }
   });
+};
+
+/** The name of a preset in the page language (`preset_<key>`), the API label when the locale has none. */
+const presetName = (id) => {
+  const p = cfgState.presets.find((x) => x.id === id);
+  return t(`preset_${id}`, p ? p.label : id);
+};
+
+// Fixed English warnings of /api/iplist and /api/warp about the preset set (3.2.0, spec §5.2–§5.3): shown in the
+// page language with the presets named; another text stays as the server wrote it.
+const PRESET_WARNINGS = [
+  ['Presets retired: ', 'preset_warn_retired', 'Сняты с каталога и не добавлены: {keys}.'],
+  ['Presets without data: ', 'preset_warn_nodata', 'Нет адресов, не добавлены: {keys}.'],
+  ['Route source fallback: ', 'preset_warn_fallback', 'Списки opencck и itdoginfo не ответили — для {keys} взят запасной список каталога.'],
+];
+
+const presetWarningsText = (warnings) => (Array.isArray(warnings) ? warnings : []).map((w) => {
+  const message = String(w);
+  if (message === 'Empty after endpoint cut') {
+    return t('preset_warn_empty_cut', 'После выреза подсетей WARP-endpoint маршрутов не осталось.');
+  }
+  const known = PRESET_WARNINGS.find(([prefix]) => message.startsWith(prefix));
+  if (!known) return message;
+  const names = message.slice(known[0].length).split(',').map((k) => presetName(k.trim())).join(', ');
+  return t(known[1], known[2]).replace('{keys}', names);
+});
+
+/** Plural form of a count: Russian one / few / many (1, 2–4, 5–20 and their tens), English one / many. */
+const pluralForm = (n) => {
+  if (_i18n.locale === 'en') return n === 1 ? 'one' : 'many';
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'one';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'few';
+  return 'many';
+};
+
+/** «≈ 12 маршрутов» / «≈ 12 routes»: the plural form of the page language. */
+const routesPhrase = (n) => {
+  const form = pluralForm(n);
+  const word = form === 'one'
+    ? t('tile_routes_one', 'маршрут')
+    : form === 'few' ? t('tile_routes_few', 'маршрута') : t('tile_routes_many', 'маршрутов');
+  return `≈ ${n} ${word}`;
+};
+
+const PRECISION_FALLBACK = { exact: 'точно', approx: 'приблизительно', wide: 'широко' };
+
+/** Price, precision and source of a tile: «≈ 8 маршрутов · точно», «… · по последнему замеру» for a live preset. */
+const tilePriceText = (p) => {
+  if (p.noData) return t('tile_nodata', 'нет данных');
+  if (!Number.isInteger(p.routes4)) return '';
+  const parts = [routesPhrase(p.routes4)];
+  if (p.precision) parts.push(t(`tile_precision_${p.precision}`, PRECISION_FALLBACK[p.precision] || p.precision));
+  if (p.source === 'live') parts.push(t('tile_price_live', 'по последнему замеру'));
+  return parts.join(' · ');
 };
 
 const refreshPresetStats = debounce(async () => {
@@ -417,7 +471,15 @@ const refreshPresetStats = debounce(async () => {
   }
 
   if (cfgState.iplistSource !== 'api') {
-    el.textContent = t('preset_offline_warning', 'Пресеты выбраны из локального списка. Оценка CIDR и генерация конфига с AllowedIPs по пресетам нуждаются в API — запустите vercel dev или откройте задеплоенный сайт.');
+    // No server (presets-fallback.json): the sum of the tile prices, marked as an estimate — networks shared by the
+    // presets and the merge of neighbouring blocks make the real number smaller (spec 3.2.0 §6).
+    const sum = selected.reduce((acc, id) => acc + ((cfgState.presets.find((p) => p.id === id) || {}).routes4 || 0), 0);
+    cfgState.cidrCount4 = sum;
+    updateCidrCounter(sum, { estimate: true });
+    updateTileDisabledState();
+    el.textContent = t('preset_estimate_offline',
+      'Оценка без сервера: сумма цен выбранных пресетов — {n}; общие сети и объединение соседних подсетей её уменьшают. Конфиг с маршрутами по пресетам создаёт только сервер.')
+      .replace('{n}', String(sum));
     el.classList.add('preset-stats--warn');
     return;
   }
@@ -438,36 +500,35 @@ const refreshPresetStats = debounce(async () => {
     const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
 
-    const count4 = data.count4 ?? data.count;
-    cfgState.cidrCount4 = count4;
-    updateCidrCounter(count4);
+    // routes4: the IPv4 lines of the config after the WARP endpoint cut and the exact merge (K15); count4 of a server
+    // before 3.2.0 as the fallback.
+    const routes4 = data.routes4 ?? data.count4 ?? data.count;
+    cfgState.cidrCount4 = routes4;
+    updateCidrCounter(routes4);
     updateTileDisabledState();
 
-    // Track presets that return 0 CIDRs when selected alone
+    // Track presets that give 0 routes when selected alone
     if (selected.length === 1) {
       const pid = selected[0];
-      if (count4 === 0) cfgState.zeroCidrPresets.add(pid);
+      if (routes4 === 0) cfgState.zeroCidrPresets.add(pid);
       else cfgState.zeroCidrPresets.delete(pid);
       applyZeroCidrMarks();
     }
 
-    const cidrSource = data.cidrSource;
-    const overLimit = !cfgState.ignoreLimit && count4 > MAX_CIDR_LIMIT;
+    const notes = presetWarningsText(data.warnings);
+    const overLimit = !cfgState.ignoreLimit && routes4 > MAX_CIDR_LIMIT;
+    el.classList.toggle('preset-stats--warn', overLimit || notes.length > 0);
+    let main;
     if (overLimit) {
-      el.classList.add('preset-stats--warn');
-      el.textContent = `${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4}/${MAX_CIDR_LIMIT} IPv4 CIDR. ${t('preset_over_limit_msg', 'Некоторые устройства могут работать нестабильно. Рекомендуется отключить часть категорий.')}`;
-    } else if (cidrSource === 'antifilter') {
-      el.classList.add('preset-stats--warn');
-      el.textContent = `⚠ iplist.opencck.org недоступен — использован резервный источник antifilter.download (${count4} общих подсетей РФ). Маршруты могут быть неточными.`;
-    } else if (cidrSource === 'mixed') {
-      el.classList.add('preset-stats--warn');
-      el.textContent = `⚠ Часть пресетов не найдена в opencck — дополнено из antifilter.download (${count4} IPv4). Некоторые маршруты могут быть неточными.`;
+      main = `${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${routes4}/${MAX_CIDR_LIMIT}. ${t('preset_over_limit_msg', 'Некоторые устройства могут работать нестабильно. Рекомендуется отключить часть категорий.')}`;
     } else {
-      el.classList.remove('preset-stats--warn');
-      const ipv6Info = cfgState.includeIpv6 && data.count6 ? `, IPv6: +${data.count6}` : '';
-      const limitNote = cfgState.ignoreLimit && count4 > MAX_CIDR_LIMIT ? t('preset_limit_warn_suffix', ' ⚠ лимит превышен') : '';
-      el.textContent = `${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4}${ipv6Info}${limitNote} (${data.sitesQueried}${t('tile_domains_suffix', ' доменов в запросе')}).`;
+      const ipv6Info = cfgState.includeIpv6 && data.routes6 ? `, IPv6: +${data.routes6}` : '';
+      const limitNote = cfgState.ignoreLimit && routes4 > MAX_CIDR_LIMIT ? t('preset_limit_warn_suffix', ' ⚠ лимит превышен') : '';
+      main = `${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${routes4}${ipv6Info}${limitNote}.`;
     }
+    const builtAt = data.catalogBuiltAt || cfgState.catalogBuiltAt;
+    const dated = builtAt ? t('preset_catalog_date', 'Каталог адресов от {date}.').replace('{date}', String(builtAt).slice(0, 10)) : '';
+    el.textContent = [main, ...notes, dated].filter(Boolean).join(' ');
   } catch (err) {
     if (err && err.name === 'AbortError') return;
     el.textContent = t('preset_preview_fail_prefix', 'Предпросмотр недоступен: ') + (err.message || err);
@@ -493,7 +554,7 @@ const applyZeroCidrMarks = () => {
       warn = document.createElement('span');
       warn.className = 'cfg-tile__zero-warn';
       warn.textContent = '⚠ 0 IP';
-      warn.title = t('tile_zero_cidr_title', 'Нет данных в iplist.opencck.org — маршруты не будут добавлены');
+      warn.title = t('tile_zero_cidr_title', 'Для этого пресета сейчас нет адресов — маршруты не будут добавлены');
       tile.appendChild(warn);
     } else if (!isZero && warn) {
       warn.remove();
@@ -548,17 +609,42 @@ const buildTileText = (fullLabel, sub = '') => {
   return text;
 };
 
+/** The hint of a route tile: its name, the number of its domains and, without data, why it cannot be chosen. */
+const tileTitle = (p) => `${presetName(p.id)} (${p.sitesCount ?? '?'}${t('tile_domains_suffix', ' доменов в пресете')})`
+  + (p.noData ? `. ${t('tile_nodata_title', 'В каталоге нет адресов этого пресета — маршруты не добавляются.')}` : '');
+
+/**
+ * Price lines and hints of the route tiles in the current language. The dictionary may arrive after the catalogue;
+ * i18n.js calls this when it does (the names follow by data-i18n).
+ */
+const refreshRouteTileTexts = () => {
+  forEachRouteTile((tile) => {
+    const input = tile.querySelector('input');
+    const p = input && cfgState.presets.find((x) => x.id === input.value);
+    if (!p) return;
+    tile.title = tileTitle(p);
+    const price = tile.querySelector('.cfg-tile__price');
+    if (price) price.textContent = tilePriceText(p);
+  });
+};
+
 const renderRouteTiles = (host, presetList) => {
   if (!host) return;
   host.textContent = '';
   for (const p of presetList) {
+    const name = presetName(p.id);
     const label = document.createElement('label');
     label.className = 'cfg-tile cfg-tile--route';
-    label.title = `${p.label} (${p.sitesCount ?? '?'}${t('tile_domains_suffix', ' доменов в запросе')})`;
+    label.title = tileTitle(p);
 
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.value = p.id;
+    // A preset without addresses in the catalogue cannot be chosen: it would add nothing (spec 3.2.0 §6).
+    if (p.noData) {
+      input.disabled = true;
+      label.classList.add('cfg-tile--disabled', 'cfg-tile--nodata');
+    }
     input.addEventListener('change', () => {
       updateTileActiveClass(label);
       refreshPresetStats();
@@ -573,12 +659,45 @@ const renderRouteTiles = (host, presetList) => {
     const mark = document.createElement('span');
     mark.className = 'cfg-tile__mark';
     mark.setAttribute('aria-hidden', 'true');
-    mark.textContent = Array.from(p.label.replace(/[^\p{L}\p{N}]/gu, ''))[0] || '•';
+    mark.textContent = Array.from(name.replace(/[^\p{L}\p{N}]/gu, ''))[0] || '•';
 
+    // The name on the first line, the price and precision on the second (spec 3.2.0 §6).
+    const text = document.createElement('span');
+    text.className = 'cfg-tile__text';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'cfg-tile__name';
+    setI18nText(nameEl, `preset_${p.id}`, p.label);
+    text.appendChild(nameEl);
+    const price = tilePriceText(p);
+    if (price) {
+      const priceEl = document.createElement('span');
+      priceEl.className = 'cfg-tile__sub cfg-tile__price';
+      priceEl.textContent = price;
+      text.appendChild(priceEl);
+    }
     label.appendChild(input);
     label.appendChild(mark);
-    label.appendChild(buildTileText(p.label));
+    label.appendChild(text);
     host.appendChild(label);
+  }
+};
+
+/** One block per catalogue category: its title (`section_<key>`) and its tiles. Empty categories are skipped. */
+const renderRouteCategories = () => {
+  const host = document.getElementById(ROUTE_CATEGORIES_HOST_ID);
+  if (!host) return;
+  host.textContent = '';
+  for (const category of cfgState.categories) {
+    const list = cfgState.presets.filter((p) => p.category === category);
+    if (!list.length) continue;
+    const title = document.createElement('h3');
+    title.className = 'settings-modal__subsection';
+    setI18nText(title, `section_${category}`, category);
+    const tiles = document.createElement('div');
+    tiles.className = 'cfg-tiles cfg-tiles--routes';
+    tiles.dataset.category = category;
+    renderRouteTiles(tiles, list);
+    host.append(title, tiles);
   }
 };
 
@@ -605,16 +724,20 @@ const initSettingsPanel = async () => {
 
     cfgState.presets = data.presets || [];
     cfgState.groupRfPopular = data.groupRfPopular || [];
+    // Categories, aliases and retired keys come with the catalogue (3.2.0); an older answer without categories
+    // keeps the order in which its presets name them.
+    cfgState.categories = Array.isArray(data.categories) && data.categories.length
+      ? data.categories
+      : Array.from(new Set(cfgState.presets.map((p) => p.category)));
+    cfgState.aliases = data.aliases && typeof data.aliases === 'object' ? data.aliases : {};
+    cfgState.retired = Array.isArray(data.retired) ? data.retired : [];
+    cfgState.catalogBuiltAt = data.catalogBuiltAt || null;
     cfgState.dnsPresets = data.dnsPresets || [];
     cfgState.dnsDefault = data.dnsDefault || 'cloudflare';
 
     if (dnsHost) renderDnsTiles(dnsHost);
 
-    ROUTE_CATEGORY_ORDER.forEach((cat) => {
-      const host = document.getElementById(ROUTE_CONTAINER_BY_CATEGORY[cat]);
-      const list = cfgState.presets.filter((p) => p.category === cat);
-      renderRouteTiles(host, list);
-    });
+    renderRouteCategories();
     applyZeroCidrMarks();
 
     const btnRf = document.getElementById('presetRfPopular');
@@ -735,7 +858,7 @@ const initSettingsPanel = async () => {
         // Clear route presets
         forEachRouteTile((tile) => {
           const cb = tile.querySelector('input[type="checkbox"]');
-          if (cb) { cb.checked = false; cb.disabled = false; tile.classList.remove('cfg-tile--disabled'); updateTileActiveClass(tile); }
+          if (cb && !tile.classList.contains('cfg-tile--nodata')) { cb.checked = false; cb.disabled = false; tile.classList.remove('cfg-tile--disabled'); updateTileActiveClass(tile); }
         });
         // Reset DNS to default
         const firstDns = document.querySelector('[name="dns-preset"]');
@@ -752,7 +875,7 @@ const initSettingsPanel = async () => {
         const want = new Set(cfgState.groupRfPopular);
         forEachRouteTile((tile) => {
           const cb = tile.querySelector('input[type="checkbox"]');
-          if (cb) {
+          if (cb && !tile.classList.contains('cfg-tile--nodata')) {
             // Only check tiles that are not disabled (limit guard)
             if (!cb.disabled || want.has(cb.value)) {
               cb.checked = want.has(cb.value);
@@ -768,7 +891,7 @@ const initSettingsPanel = async () => {
       btnClear.addEventListener('click', () => {
         forEachRouteTile((tile) => {
           const cb = tile.querySelector('input[type="checkbox"]');
-          if (cb) {
+          if (cb && !tile.classList.contains('cfg-tile--nodata')) {
             cb.checked = false;
             cb.disabled = false;
             tile.classList.remove('cfg-tile--disabled');

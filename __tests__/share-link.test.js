@@ -106,6 +106,18 @@ test('routes: only catalogue ids, de-duplicated, order kept; no catalogue means 
   assert.equal(ShareLink.parseShareParams('routes=unknown', CATALOGUE).routes, undefined, 'no valid route → full tunnel stays');
 });
 
+test('3.2.0: an old key is expanded before the catalogue filter; a retired key is returned for a note', () => {
+  const catalogue = { ...CATALOGUE, aliases: fallback.aliases, retired: fallback.retired };
+  assert.deepEqual(fallback.aliases, { rutracker_local: 'rutracker' }, 'the catalogue of presets-fallback.json');
+  const parsed = ShareLink.parseShareParams('routes=rutracker_local,vk,telegram,rutracker,ok', catalogue);
+  assert.deepEqual(plain(parsed.routes), ['rutracker', 'telegram']);
+  assert.deepEqual(plain(parsed.retiredRoutes), ['vk', 'ok']);
+  const onlyRetired = ShareLink.parseShareParams('routes=vk,yandex', catalogue);
+  assert.equal(onlyRetired.routes, undefined, 'nothing left → split is not switched on');
+  assert.deepEqual(plain(onlyRetired.retiredRoutes), ['vk', 'yandex']);
+  assert.equal(ShareLink.parseShareParams('routes=rutracker_local', CATALOGUE).routes, undefined, 'without aliases an old key is unknown');
+});
+
 test('mobile devices never get IPv6 from a link (invariant I7 / mobile cascade)', () => {
   for (const device of ['mobile', 'mobile-router']) {
     const parsed = ShareLink.parseShareParams(`device=${device}&ipv6=1`, CATALOGUE);
@@ -177,8 +189,13 @@ test('the generator applies the link after the catalogue is loaded and keeps the
   assert.ok(start > 0 && end > start, 'applySharedSettings exists');
   const body = settingsLink.slice(start, end);
   assert.match(body, /shareLink\.parseShareParams\(window\.location\.search, \{/);
-  assert.match(body, /routes: cfgState\.presets\.map/);
+  // 3.2.0: a preset without data cannot be selected from a link; aliases and retired keys come from the catalogue.
+  assert.match(body, /routes: cfgState\.presets\.filter\(\(p\) => !p\.noData\)\.map/);
   assert.match(body, /dns: cfgState\.dnsPresets\.map/);
+  assert.match(body, /aliases: cfgState\.aliases,\s*retired: cfgState\.retired,/);
+  assert.match(body, /linkRetiredRoutes = s\.retiredRoutes \|\| \[\];\s*renderRoutesLinkNote\(\);/,
+    'retired keys of the link are named in the routes panel');
+  assert.match(settingsLink, /const renderRoutesLinkNote = \(\) => \{[\s\S]*?link_routes_retired/);
   assert.match(body, /cfgState\.routeMode = ROUTE_MODES\.SPLIT/, 'routes in the link imply split routing');
   assert.match(body, /applyMobileModeCascade\(\)/);
   // Профиль не зависит от каталога: выставляется сразу, ссылка важнее запомненного, но не сохраняется.

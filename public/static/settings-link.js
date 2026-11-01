@@ -18,9 +18,23 @@
    applyMobileModeCascade, endpointDefault, chooseEndpoint -- settings.js */
 /* global setCpsChains, syncCpsPresetFromState -- cps-editor.js */
 /* global getSelectedProfile -- script.js */
-/* exported shareLink, applySharedSettings, copySettingsLink */
+/* exported shareLink, applySharedSettings, copySettingsLink, renderRoutesLinkNote */
 
 const shareLink = window.ShareLink || null;
+
+/** Ключи из ссылки, снятые с каталога (3.2.0): их называет заметка в панели маршрутов. */
+let linkRetiredRoutes = [];
+
+/** Заметка о снятых ключах на текущем языке; i18n.js вызывает её снова, когда приходит словарь. */
+const renderRoutesLinkNote = () => {
+  const note = document.getElementById('routesLinkNote');
+  if (!note) return;
+  note.hidden = linkRetiredRoutes.length === 0;
+  if (linkRetiredRoutes.length) {
+    note.textContent = t('link_routes_retired', 'Ссылка называет пресеты, снятые с каталога: {keys}. Они не выбраны.')
+      .replace('{keys}', linkRetiredRoutes.join(', '));
+  }
+};
 
 /** Текущие настройки в виде, который понимает ShareLink.buildShareUrl. */
 const getShareState = () => ({
@@ -55,9 +69,15 @@ const setRadioValue = (name, value) => {
 const applySharedSettings = () => {
   if (!shareLink || !window.location.search) return;
   const s = shareLink.parseShareParams(window.location.search, {
-    routes: cfgState.presets.map((p) => p.id),
+    routes: cfgState.presets.filter((p) => !p.noData).map((p) => p.id),
     dns: cfgState.dnsPresets.map((d) => d.id),
+    aliases: cfgState.aliases,
+    retired: cfgState.retired,
   });
+
+  // Пресеты, снятые с каталога в 3.2.0: ссылка их называет, панель маршрутов объясняет, почему они не выбраны.
+  linkRetiredRoutes = s.retiredRoutes || [];
+  renderRoutesLinkNote();
 
   // Профиль из ссылки выставляет initProfileSelector() сразу при загрузке (не ждёт каталога),
   // чтобы карточка профиля не переключалась на глазах и не перебивала клик посетителя.

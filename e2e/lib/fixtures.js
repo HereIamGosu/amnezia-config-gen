@@ -126,7 +126,7 @@ const healthcheckOk = () => ({
   checkedAt: new Date().toISOString(),
 });
 
-/** /api/iplist?presets=… — счётчик CIDR без обращения к iplist.opencck.org. */
+/** /api/iplist?presets=… — оценка маршрутов без сети (поля 3.2.0: routes4 — число строк конфига, по нему счётчик). */
 const iplistCount = (url) => {
   const presets = (new URL(url).searchParams.get('presets') || '').split(',').filter(Boolean);
   const count4 = presets.length * 24;
@@ -139,7 +139,12 @@ const iplistCount = (url) => {
     count4,
     count6: 0,
     cidrs: [],
-    cidrSource: 'static',
+    cidrSource: 'catalog',
+    routes4: count4,
+    routes6: 0,
+    presetStatus: {},
+    warnings: [],
+    catalogBuiltAt: '2026-11-01T14:15:01Z',
   };
 };
 

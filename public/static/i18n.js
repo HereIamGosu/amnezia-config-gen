@@ -16,8 +16,9 @@
 /* global
    lastResultSummary:writable, renderResultExplanation, lastCompatibility:writable, renderCompatibilityCard,
    currentResult:writable, renderResultSuccess -- result.js */
-/* global updateCidrCounter, cfgState, ROUTE_MODES, updateParamChips -- settings.js */
+/* global updateCidrCounter, cfgState, ROUTE_MODES, updateParamChips, refreshRouteTileTexts -- settings.js */
 /* global renderCpsEditor -- cps-editor.js */
+/* global renderRoutesLinkNote -- settings-link.js */
 /* global renderHistoryPanel -- history.js */
 /* exported _i18n, t, setI18nText, initI18n, restoreLangHandoff, switchLang */
 
@@ -89,6 +90,9 @@ const loadLocale = async (lang) => {
     // Тексты, которые строит JS (статус, чипы, результат, история), — на языке словаря
     renderHeroStatus();
     updateParamChips();
+    // Цена и подсказки плиток маршрутов и заметка ссылки: каталог мог прийти раньше словаря
+    refreshRouteTileTexts();
+    renderRoutesLinkNote();
     renderCpsEditor();
     if (currentResult) renderResultSuccess();
     renderHistoryPanel();

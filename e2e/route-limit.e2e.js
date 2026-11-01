@@ -7,10 +7,13 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { e2eSuite, fixtures } = require('./lib/harness');
 
-/** Заглушка предпросмотра /api/iplist?presets=…: число IPv4-маршрутов задаёт тест. */
+/**
+ * Заглушка предпросмотра /api/iplist?presets=…: число маршрутов конфига (routes4, 3.2.0) задаёт тест; сырой count4
+ * намеренно другой — счётчик обязан показывать routes4.
+ */
 const stubIplist = (page, state) => page.route(
   (u) => u.pathname === '/api/iplist' && u.searchParams.has('presets'),
-  (u) => ({ json: { ...fixtures.iplistCount(u.href), count: state.count4, count4: state.count4 } }),
+  (u) => ({ json: { ...fixtures.iplistCount(u.href), routes4: state.count4, count: state.count4 + 9, count4: state.count4 + 9 } }),
 );
 
 const counterState = () => {

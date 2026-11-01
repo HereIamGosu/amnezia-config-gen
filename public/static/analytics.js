@@ -25,7 +25,7 @@
     mode: new Set(['legacy', 'awg2', 'awg3', 'awg31']),
     endpoint_mode: new Set(['hostname', 'ip', 'auto', 'lab']),
     endpoint_source: new Set(['tcp_check', 'fallback', 'hostname', 'manual', 'lab', 'unknown']),
-    routes_source: new Set(['opencck', 'itdoginfo', 'antifilter', 'static', 'fallback', 'unknown']),
+    routes_source: new Set(['catalog', 'opencck', 'itdoginfo', 'antifilter', 'static', 'fallback', 'unknown']),
     route_mode: new Set(['full', 'split', 'unknown']),
     cps_mode: new Set(['auto', 'quic', 'dns', 'stun', 'dtls', 'sip', 'static', 'unknown']),
     cps_requested: new Set(['auto', 'quic', 'dns', 'stun', 'dtls', 'sip', 'static', 'custom', 'none', 'unknown']),

@@ -368,7 +368,7 @@
               <li class="status-row"><span class="state-icon state-icon--loading"></span><span class="status-row__name" data-i18n="status_row_generator">Generator API</span><span class="status-row__state"></span></li>
               <li class="status-row"><span class="state-icon state-icon--loading"></span><span class="status-row__name" data-i18n="status_row_warp_api">WARP registration</span><span class="status-row__state"></span></li>
               <li class="status-row"><span class="state-icon state-icon--loading"></span><span class="status-row__name" data-i18n="status_row_engage">WARP endpoint</span><span class="status-row__state"></span></li>
-              <li class="status-row"><span class="state-icon state-icon--loading"></span><span class="status-row__name" data-i18n="status_row_cidr">CIDR source</span><span class="status-row__state"></span></li>
+              <li class="status-row"><span class="state-icon state-icon--loading"></span><span class="status-row__name" data-i18n="status_row_cidr">Routes: site catalogue and opencck</span><span class="status-row__state"></span></li>
               <!-- Endpoint Lab: свой источник (/api/lab), в общий статус не входит; открывает быстрый просмотр -->
               <li class="status-row status-row--lab" id="statusLabRow">
                 <button type="button" class="status-lab" id="statusLabBtn" data-lab-quick="off" aria-haspopup="dialog">
@@ -972,7 +972,7 @@
           <div class="info-section">
             <h3 class="info-section__title" data-i18n="info_s1_title">Routes and AllowedIPs</h3>
             <p data-i18n-html="info_s1_p1">By default, all traffic goes through the tunnel (<strong>AllowedIPs = 0.0.0.0/0</strong>). In settings (step 2) you can choose a DNS server and presets — only the required IPv4 subnets will be routed through the tunnel. IPv6 can be enabled optionally, but it increases the route count 2–3× and may cause issues on routers and mobile clients. Safe limit — <strong>1000 IPv4 CIDR</strong>.</p>
-            <p data-i18n-html="info_s1_p2">IP ranges can be replaced manually. Up-to-date lists at <a href="https://iplist.opencck.org/ru" target="_blank" rel="noopener noreferrer">opencck.org</a> and <a href="https://rockblack.pro/vpn/dopolnitelno/diapazon-ip-adresov" target="_blank" rel="noopener noreferrer">rockblack.pro</a>.</p>
+            <p data-i18n-html="info_s1_p2">Presets with a verified address list take it from the site catalogue, built in advance from the services' official lists, the announcements of their networks and domain resolution. Transitional presets (YouTube, the Meta services, Discord and those whose exact list has not passed the check yet) take their routes at request time from <a href="https://iplist.opencck.org/ru" target="_blank" rel="noopener noreferrer">iplist.opencck.org</a> and the itdoginfo lists. IP ranges in a finished config can be replaced manually.</p>
           </div>
 
           <div class="callout callout--warn">
@@ -1107,7 +1107,7 @@
           </div>
           <button type="button" class="modal__close" data-close-modal aria-label="Close" data-i18n-aria-label="close_btn_aria"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
         </header>
-        <div class="modal__body prose" data-i18n-html="privacy_body"><p>The awgconfig.com server registers a Cloudflare WARP device for you and immediately returns the finished config. Keys and configs are not stored on the server; only technical errors reach the logs.</p><p>Generation history is kept only in this browser (localStorage) — you can clear it in the History window.</p><p>Analytics: Yandex Metrica without Webvisor plus anonymous product events (mode, generation outcome). Keys, endpoint addresses and config contents are never sent to analytics.</p><p>Third-party services: Cloudflare (WARP registration) and iplist.opencck.org (route lists for split tunnelling).</p></div>
+        <div class="modal__body prose" data-i18n-html="privacy_body"><p>The awgconfig.com server registers a Cloudflare WARP device for you and immediately returns the finished config. Keys and configs are not stored on the server.</p><p>Server logs. The web server access log records the IP address, the time, the request line (it shows the chosen parameters and route presets), the page the request came from and the browser string; its files are kept for about 15 days. The application log holds technical errors and anonymous counters every 10 minutes: how many generations went with each preset and how WARP registrations ended — no IP addresses, no identifiers.</p><p>Generation history is kept only in this browser (localStorage) — you can clear it in the History window.</p><p>Analytics: Yandex Metrica without Webvisor plus anonymous product events (mode, generation outcome). Keys, endpoint addresses, chosen presets and config contents are never sent to analytics.</p><p>Third-party services: Cloudflare (WARP registration), and for presets that take routes from live lists, iplist.opencck.org and raw.githubusercontent.com (itdoginfo lists).</p></div>
       </div>
     </div>
 
@@ -1233,14 +1233,8 @@
               <button type="button" class="btn btn--sm" id="presetClear" data-i18n="preset_btn_clear">Clear All</button>
             </div>
             <p id="presetStats" class="preset-stats" aria-live="polite"></p>
-            <h3 class="settings-modal__subsection" data-i18n="section_social">Social Networks &amp; Messengers</h3>
-            <div id="routeTilesSocial" class="cfg-tiles cfg-tiles--routes"></div>
-            <h3 class="settings-modal__subsection" data-i18n="section_gaming">Gaming Platforms</h3>
-            <div id="routeTilesGaming" class="cfg-tiles cfg-tiles--routes"></div>
-            <h3 class="settings-modal__subsection" data-i18n="section_torrent">Torrent Trackers</h3>
-            <div id="routeTilesTorrent" class="cfg-tiles cfg-tiles--routes"></div>
-            <h3 class="settings-modal__subsection" data-i18n="section_more">More</h3>
-            <div id="routeTilesMore" class="cfg-tiles cfg-tiles--routes"></div>
+            <p id="routesLinkNote" class="route-mode-notice" hidden></p>
+            <div id="routeCategories" class="route-categories"></div>
           </div>
 
           <!-- Вкладка: DNS и CPS -->

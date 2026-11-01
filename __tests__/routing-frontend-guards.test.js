@@ -52,11 +52,15 @@ describe('FR-RSH-007..010 — CIDR counter, 80% warning, hard limit and no-limit
       'MAX_CIDR_LIMIT must stay 1000 (router / mobile routing-table safety)');
   });
 
+  // 3.2.0 (K15): the preview counts routes4 of /api/iplist (the IPv4 lines of the config); without the server the
+  // counter shows the sum of tile prices as an estimate («≈N»).
   test('FR-RSH-007 — split-mode counter renders the live IPv4 count against the limit', () => {
-    // updateCidrCounter shows count4 / MAX_CIDR_LIMIT while in split mode.
-    assert.match(settings, /const updateCidrCounter = \(count4\) =>/);
-    assert.match(settings, /\$\{count4\} \/ \$\{MAX_CIDR_LIMIT\}/,
+    // updateCidrCounter shows the count (marked ≈ when estimated) / MAX_CIDR_LIMIT while in split mode.
+    assert.match(settings, /const updateCidrCounter = \(count4, \{ estimate = false \} = \{\}\) =>/);
+    assert.match(settings, /const shown = estimate \? `≈\$\{count4\}` : count4;/);
+    assert.match(settings, /\$\{shown\} \/ \$\{MAX_CIDR_LIMIT\}/,
       'counter must display the live IPv4 count against the limit');
+    assert.match(settings, /const routes4 = data\.routes4 \?\? data\.count4 \?\? data\.count;/, 'the preview counts routes4');
     // Full tunnel must not show a misleading CIDR count.
     assert.match(settings, /if \(cfgState\.routeMode === ROUTE_MODES\.FULL\)[\s\S]{0,200}routing_counter_not_applicable/,
       'full tunnel must show "not applicable" instead of a misleading CIDR count');
@@ -79,11 +83,11 @@ describe('FR-RSH-007..010 — CIDR counter, 80% warning, hard limit and no-limit
   });
 
   test('FR-RSH-008 — the preview line says "over the limit" only above it', () => {
-    assert.match(settings, /const overLimit = !cfgState\.ignoreLimit && count4 > MAX_CIDR_LIMIT;/);
+    assert.match(settings, /const overLimit = !cfgState\.ignoreLimit && routes4 > MAX_CIDR_LIMIT;/);
   });
 
   test('FR-RSH-010 — with "No limit" the preview marks the limit as exceeded only above it', () => {
-    assert.match(settings, /const limitNote = cfgState\.ignoreLimit && count4 > MAX_CIDR_LIMIT \?/);
+    assert.match(settings, /const limitNote = cfgState\.ignoreLimit && routes4 > MAX_CIDR_LIMIT \?/);
   });
 
   test('the unproven "500 … works reliably on all tested platforms" claim is gone', () => {

@@ -32,6 +32,10 @@
     ['WARP registration returned no IPv6 address', 'warp_ipv4_only'],
     ['Route budget:', 'routes_over_budget'],
     ['Endpoint override inside routes:', 'endpoint_override_in_routes'],
+    // The preset catalogue (3.2.0, spec §5.3): retired presets, presets without data, the snapshot reserve.
+    ['Presets retired:', 'presets_retired'],
+    ['Presets without data:', 'presets_no_data'],
+    ['Route source fallback:', 'routes_source_fallback'],
   ];
 
   const normalizeWarnings = (input, defaultSource = 'api') => {
@@ -87,6 +91,7 @@
   const normalizeRoutesSource = (source, hasPresets) => {
     if (!hasPresets) return 'notApplicable';
     const value = String(source || '').toLowerCase();
+    if (value === 'catalog') return 'catalog';
     if (value === 'opencck') return 'opencck';
     if (value === 'itdoginfo' || value === 'community') return 'community';
     if (value === 'antifilter') return 'antifilter';

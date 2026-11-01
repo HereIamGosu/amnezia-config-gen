@@ -266,7 +266,7 @@ const createPage = async (conn, { width = 1280, height = 900, mobile = false } =
       clearTimeout(timer);
     }
     if (app) {
-      await waitFor(() => document.querySelectorAll('#routeTilesSocial input').length > 0
+      await waitFor(() => document.querySelectorAll('#routeCategories .cfg-tiles--routes input').length > 0
         && document.getElementById('chipDns').hasAttribute('title'), { timeout: 10_000, message: 'app ready (catalogue + chips)' });
     }
     await waitForNetworkIdle();
