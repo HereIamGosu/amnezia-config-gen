@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [3.1.8] - 2026-11-01
+
+### Fixed
+- **A WARP registration without an IPv6 address gives a working IPv4-only config instead of HTTP 500.** When the Cloudflare answer had no usable IPv6 address (absent, empty or not an address), generation stopped with «Cloudflare вернул некорректный IPv6 адрес». The config is now the one of `ipv6=0`: `Address` without IPv6, `AllowedIPs` without `::/0` and without the IPv6 routes of presets, also when `ipv6=1` was asked (invariant I6). `warning` gains `WARP registration returned no IPv6 address for config(s) N: the config is IPv4-only.`, which the page shows in its language; with `count` > 1 one line names every config without IPv6. With `mobile=1` the config is IPv4-only anyway and gets no such warning. An unusable IPv4 address is still an error.
+- **A POST to `/api/warp` with `Content-Type: application/json` and an empty body answers at once.** The self-hosted server read the body and left it unset, so the handler waited until the 60 s deadline (504). An empty JSON body is now `{}`, as an empty body of another type already was. Found by the 3.1.7 audit.
+
+### Changed
+- **A failed Cloudflare WARP registration gets a fixed HTTP code and text.** Before, Cloudflare's code passed through (403 → 403, 503 → 503), a network failure, a timeout, a 3xx and a non-JSON 2xx answered 500, and `message` carried Cloudflare's text (a 400 also in `error`). Now: 429 stays 429 with `Retry-After` (Cloudflare's value when it is an integer 1–3600, otherwise 60); 408, 5xx except 501, network failures and timeouts answer 503 with `Retry-After: 60`; 3xx, other 4xx, 501, a 2xx that is not JSON or lacks `id`/`token`/peers or a usable IPv4 address, and an answer over 2 MB answer 502. The body is `{ success: false, message }` with a fixed Russian text per class and no `error` field; on `/en` this text stays Russian for now. The retries are those of 3.1.7: the network errors `ECONNRESET`, `ETIMEDOUT`, `ENOTFOUND`, `EAI_AGAIN`, `ECONNREFUSED`, `EPIPE`, «socket hang up», timeouts and 429 / 502 / 503 / 504; another network code (such as `EHOSTUNREACH`) is one attempt. Successful answers, the own rate limit and the refusals before registration (`cps_chain_*`, unknown presets, Lab Auto) do not change. Full table: `docs/releases/3.1.8.md`.
+
+### Notes
+- The server counts WARP registration outcomes and writes `[warp-registration-stats] window=600s profile=legacy ok=… ok_ipv4_only=… rate_limited=… unavailable=… rejected=… malformed=…` every 10 minutes when the window had a registration, and at shutdown: numbers only, no address, id, token, key or Cloudflare text. Nothing new is requested from Cloudflare.
+- The registration code moved to `src/server/warpRegistration.js`; the requests to Cloudflare are those of 3.1.7 byte for byte (`__tests__/warp-registration-request.test.js`).
+- Server tests take their port from the OS: random ports from overlapping ranges could collide between test files running in parallel (`server exited 1`).
+
 ## [3.1.7] - 2026-10-31
 
 ### Fixed
