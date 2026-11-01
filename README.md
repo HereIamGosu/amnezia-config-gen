@@ -124,7 +124,7 @@ These rules are non-obvious, easy to break, and silently fatal. They are enforce
 | **I3** | For every WARP-safe AWG 2/3.x profile: `H1..H4 = 1, 2, 3, 4`. | Cloudflare expects the standard WireGuard message types. |
 | **I4** | WARP-safe profiles use `MTU = 1280`; AWG 3.x never emits `HeaderProtectionKey` or enables `RandomTrailers`; `DisableCookies` is an opt-in local setting (`disableCookies=on`) and is omitted by default. | Peer-dependent wire-format changes cannot interoperate with the stock Cloudflare peer; local cookie behaviour does not require Cloudflare support. |
 | **I5** | AmneziaWG 2.0 `[Interface]` field order: `PrivateKey → Address → DNS → MTU → Jc → Jmin → Jmax → S1..S4 → H1..H4 → I1`. | Matches the order `amneziawg-go` UAPI accepts. |
-| **I6** | `AllowedIPs` defaults to **IPv4-only**; IPv6 is opt-in via the Settings IPv6 toggle (`?ipv6=1`). | Routers (GL.iNet, Keenetic, MikroTik) and mobile clients have limited routing-table capacity; doubling the route count via IPv6 causes silent failures. |
+| **I6** | `AllowedIPs` defaults to **IPv4-only**; IPv6 is opt-in via the Settings IPv6 toggle (`?ipv6=1`). A registration without an IPv6 address gives the IPv4-only config, also with `ipv6=1`. | Routers (GL.iNet, Keenetic, MikroTik) and mobile clients have limited routing-table capacity; doubling the route count via IPv6 causes silent failures. |
 | **I7** | `mobile=1` overrides: `Jc=3, Jmin=64, Jmax=128, MTU=1280`, IPv4-only enforced (overrides `ipv6=1`, strips IPv6 from `Address` and `AllowedIPs`). | Mobile-tuned profile within AWG 2.0 spec; reduces battery drain and silent resets on iOS. |
 | **I8** | When both `mobile=1` and `router=1` are set, `mobile` is applied first, then `router` caps via `Math.min`/`Math.max`. Router caps win on overlap (e.g. final `Jc = 2`). | Composition rule applied in `applyRouterModeCaps` after `applyMobileModeOverrides`. |
 | **I9** | `cps5=1` adds `I2`–`I5` for AWG 2.0/3.x when `I1` is non-empty. | Legacy mode and AWG modes without `I1` must not emit partial CPS chains. |
@@ -166,6 +166,19 @@ Parameters via query string (`GET`) or JSON body fields (`POST`). Body field nam
 | `link` | `1` — include `vpnLink: "vpn://..."` in JSON response for AmneziaVPN one-tap import |
 
 Errors: JSON `{ success: false, message }`; HTTP 4xx/5xx as appropriate.
+
+A failed Cloudflare WARP registration answers by class, with a fixed `message` that carries nothing of Cloudflare's answer and no `error` field (since 3.1.8):
+
+| Cloudflare outcome | HTTP | `Retry-After` |
+|---|---|---|
+| 429 (after the retries) | 429 | Cloudflare's value if it is an integer 1–3600, otherwise 60 |
+| 408, 500, 502–504 and other 5xx except 501; network failure; timeout (20 s) | 503 | 60 |
+| 3xx, 4xx except 408 and 429, 501 | 502 | — |
+| 2xx that is not JSON, lacks `id`/`token`/peers or has an unusable IPv4 address; an answer over 2 MB | 502 | — |
+
+The network errors `ECONNRESET`, `ETIMEDOUT`, `ENOTFOUND`, `EAI_AGAIN`, `ECONNREFUSED`, `EPIPE`, «socket hang up», timeouts and 429 / 502 / 503 / 504 are retried (three attempts in all); another network code (such as `EHOSTUNREACH`) and every other outcome is one attempt. Our own rate limit stays `429` with `Retry-After` and the message «Слишком много запросов. Попробуйте позже.»
+
+A registration without a usable IPv6 address no longer fails: the config is IPv4-only (the config of `ipv6=0`, also when `ipv6=1` was asked), and `warning` gains `WARP registration returned no IPv6 address for config(s) N: the config is IPv4-only.` With `mobile=1` the config is IPv4-only anyway and gets no such warning.
 
 Lab Auto adds `endpointSource: "lab"` per config and `lab: { requested, selected, requestedPort, portMatched, ports }`. Its refusals are `{ success: false, error, message }`: `400 invalid_endpoint_mode`, `400 endpoint_mode_conflict` (with `peerEndpoint`), `400 lab_template_unsupported` (non-WARP template); `503 lab_unavailable` (no or unusable Lab data, or the Lab reports itself unavailable), `503 lab_stale`, `503 lab_no_endpoints` with `Retry-After: 60`. Freshness is decided once, before registration; the request then keeps those endpoints.
 

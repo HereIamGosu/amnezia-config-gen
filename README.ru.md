@@ -124,7 +124,7 @@ Endpoint Lab работает на том же сервере отдельной
 | **I3** | Во всех WARP-safe профилях AWG 2/3.x: `H1..H4 = 1, 2, 3, 4`. | Cloudflare ожидает стандартные WireGuard message types. |
 | **I4** | WARP-safe профили используют `MTU = 1280`; AWG 3.x не выводит `HeaderProtectionKey` и не включает `RandomTrailers`; `DisableCookies` — локальная опция по запросу (`disableCookies=on`), по умолчанию не пишется. | Peer-dependent wire-format несовместим со стандартным Cloudflare peer; локальное cookie-поведение не требует поддержки Cloudflare. |
 | **I5** | Порядок полей в `[Interface]` для AmneziaWG 2.0: `PrivateKey → Address → DNS → MTU → Jc → Jmin → Jmax → S1..S4 → H1..H4 → I1`. | Совпадает с порядком, который принимает UAPI `amneziawg-go`. |
-| **I6** | `AllowedIPs` по умолчанию **только IPv4**; IPv6 включается по тумблеру в Настройках (`?ipv6=1`). | Роутеры (GL.iNet, Keenetic, MikroTik) и мобильные клиенты имеют ограниченную ёмкость таблицы маршрутов; удвоение списка через IPv6 приводит к молчаливым отказам. |
+| **I6** | `AllowedIPs` по умолчанию **только IPv4**; IPv6 включается по тумблеру в Настройках (`?ipv6=1`). Регистрация без IPv6-адреса даёт конфиг только по IPv4, даже при `ipv6=1`. | Роутеры (GL.iNet, Keenetic, MikroTik) и мобильные клиенты имеют ограниченную ёмкость таблицы маршрутов; удвоение списка через IPv6 приводит к молчаливым отказам. |
 | **I7** | `mobile=1` форсит: `Jc=3, Jmin=64, Jmax=128, MTU=1280`, только IPv4 (перекрывает `ipv6=1`, убирает IPv6 из `Address` и `AllowedIPs`). | Мобильный профиль в пределах спецификации AWG 2.0; снижает расход батареи и молчаливые reset'ы на iOS. |
 | **I8** | Если одновременно `mobile=1` и `router=1`, сначала применяется `mobile`, потом `router` через `Math.min`/`Math.max`. На пересечении побеждает `router` (например, итог `Jc = 2`). | Правило композиции реализовано в `applyRouterModeCaps` после `applyMobileModeOverrides`. |
 | **I9** | `cps5=1` добавляет `I2`–`I5` для AWG 2.0/3.x при непустом `I1`. | Legacy и режимы AWG без `I1` не должны выдавать неполную CPS-цепочку. |
@@ -166,6 +166,19 @@ Endpoint Lab работает на том же сервере отдельной
 | `link` | `1` — добавить в JSON-ответ поле `vpnLink: "vpn://..."` для импорта в AmneziaVPN одним тапом |
 
 Ошибки: JSON `{ success: false, message }`; коды 4xx/5xx по ситуации.
+
+Отказ регистрации Cloudflare WARP отвечает по классу: фиксированный `message`, в котором нет ничего из ответа Cloudflare, и без поля `error` (с 3.1.8):
+
+| Исход у Cloudflare | HTTP | `Retry-After` |
+|---|---|---|
+| 429 (после повторов) | 429 | значение Cloudflare, если это целое 1–3600, иначе 60 |
+| 408, 500, 502–504 и прочие 5xx, кроме 501; сетевой сбой; таймаут (20 с) | 503 | 60 |
+| 3xx, 4xx, кроме 408 и 429, 501 | 502 | — |
+| 2xx не JSON, без `id`/`token`/пиров или с непригодным IPv4-адресом; ответ больше 2 МБ | 502 | — |
+
+Сетевые ошибки `ECONNRESET`, `ETIMEDOUT`, `ENOTFOUND`, `EAI_AGAIN`, `ECONNREFUSED`, `EPIPE`, «socket hang up», таймауты и ответы 429 / 502 / 503 / 504 повторяются (всего три попытки); другой сетевой код (например, `EHOSTUNREACH`) и любой другой исход — одна попытка. Собственный лимит запросов остаётся `429` с `Retry-After` и сообщением «Слишком много запросов. Попробуйте позже.»
+
+Регистрация без пригодного IPv6-адреса больше не даёт ошибку: конфиг строится только по IPv4 (как при `ipv6=0`, даже если запрошен `ipv6=1`), а в `warning` добавляется `WARP registration returned no IPv6 address for config(s) N: the config is IPv4-only.` При `mobile=1` конфиг и так только IPv4, такого предупреждения нет.
 
 Lab Auto добавляет `endpointSource: "lab"` в каждый конфиг и `lab: { requested, selected, requestedPort, portMatched, ports }`. Отказы — `{ success: false, error, message }`: `400 invalid_endpoint_mode`, `400 endpoint_mode_conflict` (вместе с `peerEndpoint`), `400 lab_template_unsupported` (не WARP-шаблон); `503 lab_unavailable` (данных Lab нет, они непригодны или Lab сам сообщает о недоступности), `503 lab_stale`, `503 lab_no_endpoints` с `Retry-After: 60`. Свежесть решается один раз, до регистрации; дальше запрос использует выбранные endpoint'ы.
 
