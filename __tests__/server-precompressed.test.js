@@ -76,9 +76,15 @@ before(async () => {
   });
 });
 
-after(() => {
-  server?.kill();
-  fs.rmSync(site, { recursive: true, force: true });
+// On Windows the killed server may still hold the served files for a moment: wait for its exit, then remove with
+// retries (ENOTEMPTY seen in 1 of 6 full runs, 2026-11-01).
+after(async () => {
+  if (server && server.exitCode === null && server.signalCode === null) {
+    const exited = new Promise((resolve) => server.once('exit', resolve));
+    server.kill();
+    await exited;
+  }
+  fs.rmSync(site, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
 test('Brotli is preferred; the response keeps the original type and the vercel.json headers', async () => {
