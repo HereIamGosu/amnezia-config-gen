@@ -87,9 +87,12 @@ describe('one resolution per request', () => {
   });
 });
 
+// The live answer of a transitional preset (discord) made only of WARP endpoint subnets is empty after the cut.
+const ONLY_E4 = async () => ({ cidrs: ['162.159.192.0/24', '162.159.204.0/24'], source: 'opencck' });
+
 describe('a route list that fails answers before any registration', () => {
-  test('T-C8 an empty list without static routes → 502 «пустой ответ», no Cloudflare request', async () => {
-    mockLists(async () => ({ cidrs: [], source: 'opencck' }));
+  test('T-C8 a list that is empty after the cut → 502 «пустой ответ», no Cloudflare request', async () => {
+    mockLists(ONLY_E4);
     const out = await generate({ mode: 'awg2', count: '3', routeMode: 'split', presets: 'discord' });
     assert.equal(out.status, 502);
     assert.equal(out.body.success, false);
@@ -97,19 +100,29 @@ describe('a route list that fails answers before any registration', () => {
     assert.equal(cloudflareCalls(out), 0);
   });
 
-  test('T-C7b every list source fails → 502, no registration, nothing unhandled', async () => {
+  // Changed in 3.2.0 (spec 3.2.0 §4.5): an empty live answer, or every list source failing, no longer gives 502 —
+  // the preset takes the reserve of the catalogue snapshot, named in a warning, and the config is generated.
+  test('T-C7b every list source fails → the snapshot reserve, a warning, one registration, nothing unhandled', async () => {
     freshLists();
     const out = await generate({ mode: 'awg2', routeMode: 'split', presets: 'discord' }, {
       cloudflare: answers([registrationAnswer()], () => ({ status: 500, body: 'down' })),
     });
-    assert.equal(out.status, 502);
-    assert.match(out.body.message, /пустой ответ/);
-    assert.equal(cloudflareCalls(out), 0);
+    assert.equal(out.status, 200, JSON.stringify(out.body));
+    assert.deepEqual([].concat(out.body.warning), ['Route source fallback: discord']);
+    assert.match(line(out.configs[0], 'AllowedIPs'), /\b66\.22\.192\.0\/18\b/);
+    assert.equal(cloudflareCalls(out), 3);
     assert.ok(out.requests.some((r) => r.hostname === OPENCCK), 'the lists were asked');
   });
 
-  test('a 502 by routes is not a registration outcome: the counters stay empty', async () => {
+  test('an empty live answer → the snapshot reserve, not a 502', async () => {
     mockLists(async () => ({ cidrs: [], source: 'opencck' }));
+    const out = await generate({ mode: 'awg2', routeMode: 'split', presets: 'discord' });
+    assert.equal(out.status, 200);
+    assert.deepEqual([].concat(out.body.warning), ['Route source fallback: discord']);
+  });
+
+  test('a 502 by routes is not a registration outcome: the counters stay empty', async () => {
+    mockLists(ONLY_E4);
     const out = await generate({ mode: 'awg2', routeMode: 'split', presets: 'discord' });
     assert.equal(out.status, 502);
     const lines = [];
@@ -120,7 +133,7 @@ describe('a route list that fails answers before any registration', () => {
   // Changed in 3.2.0 (spec 3.2.0 §5.4 p. 2): Lab readiness → routes → selection with the route filter → registration.
   // The 502 by routes now comes before any Lab selection (3.1.9: after it).
   test('Lab Auto: readiness first, then the routes: their 502 comes before the selection; no registration', async () => {
-    mockLists(async () => ({ cidrs: [], source: 'opencck' }));
+    mockLists(ONLY_E4);
     const lab = labProvider(labSnapshot(LAB_POOL));
     const out = await generate({ mode: 'awg2', endpointMode: 'lab', count: '2', routeMode: 'split', presets: 'discord' }, { lab });
     assert.equal(out.status, 502);
@@ -149,11 +162,20 @@ describe('a route list that fails answers before any registration', () => {
     for (const conf of out.configs) assert.doesNotMatch(line(conf, 'Endpoint'), /188\.114\./);
   });
 
-  test('a list source that throws → its error, no registration', async () => {
+  // Changed in 3.2.0: a thrown list error is a failed source like any other — the reserve, not the error.
+  test('a list source that throws → the snapshot reserve, nothing unhandled', async () => {
     mockLists(async () => { throw Object.assign(new Error('lists exploded'), { statusCode: 503 }); });
     const out = await generate({ mode: 'awg2', routeMode: 'split', presets: 'discord' });
-    assert.equal(out.status, 503);
-    assert.equal(cloudflareCalls(out), 0);
+    assert.equal(out.status, 200);
+    assert.deepEqual([].concat(out.body.warning), ['Route source fallback: discord']);
+  });
+
+  test('a catalogue preset never asks the lists: no list call, no request', async () => {
+    const fetchMock = mockLists(async () => ({ cidrs: ['203.0.113.0/24'], source: 'opencck' }));
+    const out = await generate({ mode: 'awg2', routeMode: 'split', presets: 'github' });
+    assert.equal(out.status, 200);
+    assert.equal(fetchMock.mock.callCount(), 0);
+    assert.equal(out.requests.filter((r) => r.hostname !== CLOUDFLARE).length, 0);
   });
 
   test('T-C7 an unknown preset → 400 before registration (3.1.1 guard, unchanged)', async () => {

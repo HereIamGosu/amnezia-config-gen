@@ -11,7 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { describe, test } = require('node:test');
 const { aggregateCidrs, routeMatcher } = require('../src/server/cidrAggregate');
-const { expandPresetsToSites } = require('../src/server/routePresets');
+const { ROUTE_PRESETS } = require('../src/server/routePresets');
 const {
   coversSame, paint16, minimalCount, mulberry32, randomBlocks16, randomBlocksAnywhere, parse, addressCount,
   coversSame6, parse6,
@@ -173,22 +173,25 @@ describe('T-A5…T-A9: families, counters, idempotence, order, the pre-3.1.9 for
   });
 });
 
-describe('T-A10: the static presets of routePresets.js', () => {
-  const telegram = expandPresetsToSites(['telegram']).staticCidrs;
-  const control4 = expandPresetsToSites(['control4']).staticCidrs;
+// Changed in 3.2.0 (spec 3.2.0 §8): the static networks of telegram moved into its recipe (cidr.txt and the Telegram
+// AS); telegram stayed transitional (owner, 2026-11-01), so the recipe is its reserve in the snapshot. control4 keeps
+// its static /32 in the recipe. The snapshot holds them aggregated, and their union aggregates exactly.
+describe('T-A10: the static and official presets of the snapshot', () => {
+  const snapshot = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'src', 'server', 'ipCatalog', 'snapshot.json'), 'utf8'));
+  const telegram = snapshot.presets.telegram.fallback.cidrs4;
+  const control4 = snapshot.presets.control4.cidrs4;
+  const recipe = ROUTE_PRESETS.control4.ip.find((step) => step.from === 'static').cidrs4;
 
-  test('telegram 9 → 7 in string order', () => {
-    assert.equal(telegram.length, 9);
-    const out = cidrsOf(telegram);
-    assert.deepEqual(out, ['149.154.160.0/20', '185.76.151.0/24', '91.105.192.0/23', '91.108.16.0/21', '91.108.4.0/22', '91.108.56.0/22', '91.108.8.0/21']);
-    assert.equal(coversSame(out, telegram).ok, true);
+  test('telegram: already aggregated, in string order, holds 149.154.160.0/20 and 91.108.4.0/22', () => {
+    assert.deepEqual(cidrsOf(telegram), telegram);
+    assert.equal(coversSame(telegram, ['149.154.160.0/20', '91.108.4.0/22', ...telegram]).ok, true);
   });
 
-  test('control4 7 → 7, telegram + control4 16 → 14', () => {
+  test('control4: the 7 static /32 of the recipe; telegram + control4 aggregate exactly', () => {
+    assert.equal(coversSame(control4, recipe).ok, true);
     assert.equal(cidrsOf(control4).length, 7);
-    assert.equal(coversSame(cidrsOf(control4), control4).ok, true);
     const both = cidrsOf([...telegram, ...control4]);
-    assert.equal(both.length, 14);
+    assert.equal(both.length, telegram.length + 7);
     assert.equal(coversSame(both, [...telegram, ...control4]).ok, true);
   });
 });

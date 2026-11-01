@@ -10,66 +10,18 @@ const RETRY_MAX = 5;
 const RETRY_BASE_MS = 400;
 const RETRY_MAX_MS = 10000;
 
-// ── Antifilter fallback ───────────────────────────────────────────────────────
-const ANTIFILTER_HOST = 'antifilter.download';
-const ANTIFILTER_PATH = '/list/subnet.lst';
-const ANTIFILTER_TIMEOUT_MS = 10000;
-const ANTIFILTER_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min (matches their update cadence)
-/** @type {{ cidrs: string[], ts: number } | null} */
-let antifilterCache = null;
-
-const fetchAntifilterOnce = () =>
-  new Promise((resolve, reject) => {
-    let settled = false;
-    let timer = null;
-    const done = (err, val) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      if (err) reject(err);
-      else resolve(val);
-    };
-    const req = https.request(
-      { hostname: ANTIFILTER_HOST, port: 443, path: ANTIFILTER_PATH, method: 'GET', agent: false,
-        headers: { 'User-Agent': 'amnezia-config-gen/1.0' } },
-      (res) => {
-        let buf = '';
-        res.on('data', (c) => { buf += c; });
-        res.on('end', () => {
-          if (res.statusCode < 200 || res.statusCode >= 300) {
-            done(new Error(`antifilter HTTP ${res.statusCode}`));
-            return;
-          }
-          const cidrs = buf.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
-          done(null, cidrs);
-        });
-      },
-    );
-    req.on('error', (e) => done(e));
-    // After the request exists, as in httpsJsonOnce below.
-    timer = setTimeout(() => { req.destroy(); done(new Error('antifilter timeout')); }, ANTIFILTER_TIMEOUT_MS);
-    req.end();
-  });
-
-const getAntifilterCidrs = async () => {
-  if (antifilterCache && Date.now() - antifilterCache.ts < ANTIFILTER_CACHE_TTL_MS) {
-    return antifilterCache.cidrs;
-  }
-  const cidrs = await fetchAntifilterOnce();
-  antifilterCache = { cidrs, ts: Date.now() };
-  return cidrs;
-};
-
-/** In-memory CIDR cache: keyed by sorted comma-joined hostnames + ip version flag, TTL 10 min. */
+/**
+ * In-memory CIDR cache: keyed by sorted comma-joined hostnames + ip version flag + community lists, TTL 10 min.
+ * Only answers with routes are cached (3.2.0): an empty answer after a source failure is asked again next time.
+ */
 const CIDR_CACHE_TTL_MS = 10 * 60 * 1000;
 const CIDR_CACHE_MAX_ENTRIES = 200;
 /** @type {Map<string, { cidrs: string[], ts: number }>} */
 const cidrCache = new Map();
 
-const cidrCacheKey = (sites, includeIpv6, communityLists, hasStaticFallback) =>
+const cidrCacheKey = (sites, includeIpv6, communityLists) =>
   `${sites.slice().sort().join(',')}_${includeIpv6 ? '46' : '4'}` +
-  `_c:${(communityLists || []).slice().sort().join('|')}` +
-  `_s:${hasStaticFallback ? '1' : '0'}`;
+  `_c:${(communityLists || []).slice().sort().join('|')}`;
 
 const cidrCacheGet = (key) => {
   const entry = cidrCache.get(key);
@@ -228,22 +180,22 @@ const fetchWithRetry = async (path) => {
  * Resolve CIDRs for hostnames with a targeted cascade (in-memory cache, TTL 10 min):
  *   1. opencck (primary, per-domain)
  *   2. itdoginfo community lists — only when domains have gaps and the preset is mapped
- *   3. antifilter generic blocklist — last resort ONLY when the result is otherwise empty
- *      and the caller has no static CIDR fallback to merge.
+ * There is no third stage (3.2.0, K2): the antifilter list of foreign networks is gone; a preset without an answer
+ * takes its reserve from the catalogue snapshot (src/server/ipCatalog/resolvePresets.js).
  * By default only IPv4 CIDRs are returned. Pass { includeIpv6: true } to also include IPv6.
- * Note: includeIpv6 affects only the opencck stage; the community and antifilter
- * supplements are always IPv4-only (route-table size constraints).
+ * Note: includeIpv6 affects only the opencck stage; the community supplement is always IPv4-only
+ * (route-table size constraints).
  * @param {string[]} sites unique hostnames
- * @param {{ includeIpv6?: boolean, communityLists?: string[], hasStaticFallback?: boolean }} [opts]
- * @returns {Promise<{ cidrs: string[], source: 'opencck' | 'community' | 'mixed' | 'antifilter' }>}
+ * @param {{ includeIpv6?: boolean, communityLists?: string[] }} [opts]
+ * @returns {Promise<{ cidrs: string[], source: 'opencck' | 'community' | 'mixed' }>}
  */
 const fetchCidrsForDomains = async (
   sites,
-  { includeIpv6 = false, communityLists = [], hasStaticFallback = false } = {},
+  { includeIpv6 = false, communityLists = [] } = {},
 ) => {
   if (!sites.length) return { cidrs: [], source: 'opencck' };
 
-  const cacheKey = cidrCacheKey(sites, includeIpv6, communityLists, hasStaticFallback);
+  const cacheKey = cidrCacheKey(sites, includeIpv6, communityLists);
   const cached = cidrCacheGet(cacheKey);
   if (cached) return { cidrs: cached, source: cached._source || 'opencck' };
 
@@ -290,36 +242,30 @@ const fetchCidrsForDomains = async (
     } catch { /* community source failed — ignore */ }
   }
 
-  // Last resort: generic antifilter ONLY when the result is still empty and the
-  // caller has no static CIDRs to merge in afterwards.
-  if (merged.size === 0 && !hasStaticFallback) {
-    try {
-      const afCidrs = await getAntifilterCidrs();
-      for (const c of afCidrs) if (isIpv4Cidr(c)) merged.add(c);
-      if (merged.size > 0) source = 'antifilter';
-    } catch { /* antifilter also failed */ }
-  }
-
   const result = Array.from(merged).sort();
   result._source = source;
-  cidrCacheSet(cacheKey, result);
+  if (result.length) cidrCacheSet(cacheKey, result);
   return { cidrs: result, source };
 };
 
 /**
  * The live routes of one transitional preset (3.2.0, spec 3.2.0 §4.5): opencck for its domains, itdoginfo for its
- * lists, never the antifilter substitute. Used by the catalogue builder for `liveRoutes4`.
- * @param {{ domains?: string[], legacy?: { communityLists?: string[] } }} def
+ * lists, each preset on its own call, so its answer says whether this preset has data. `legacy.cidrs4` (the fixed
+ * networks a preset of 3.1.9 added to its lists) join an answer with IPv4 routes, never an empty one: then the
+ * resolver takes the snapshot reserve. Called through the module object so tests can replace fetchCidrsForDomains.
+ * @param {{ domains?: string[], legacy?: { communityLists?: string[], cidrs4?: string[] } }} def
  * @param {{ includeIpv6?: boolean }} [opts]
  * @returns {Promise<{ cidrs4: string[], cidrs6: string[], source: string }>}
  */
 const fetchLegacyCidrs = async (def, { includeIpv6 = false } = {}) => {
-  const { cidrs, source } = await fetchCidrsForDomains(def.domains || [], {
+  const legacy = def.legacy || {};
+  const { cidrs, source } = await module.exports.fetchCidrsForDomains(def.domains || [], {
     includeIpv6,
-    communityLists: (def.legacy && def.legacy.communityLists) || [],
-    hasStaticFallback: true,
+    communityLists: legacy.communityLists || [],
   });
-  return { cidrs4: cidrs.filter((c) => !c.includes(':')), cidrs6: cidrs.filter((c) => c.includes(':')), source };
+  const cidrs4 = cidrs.filter((c) => !c.includes(':'));
+  const fixed = cidrs4.length ? (legacy.cidrs4 || []).filter((c) => !cidrs4.includes(c)) : [];
+  return { cidrs4: [...cidrs4, ...fixed], cidrs6: cidrs.filter((c) => c.includes(':')), source };
 };
 
 module.exports = {

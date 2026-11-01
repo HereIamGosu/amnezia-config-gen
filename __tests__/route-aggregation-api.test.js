@@ -10,7 +10,8 @@
 const assert = require('node:assert/strict');
 const { describe, test, beforeEach } = require('node:test');
 const { inflateSync } = require('node:zlib');
-const { ROUTE_PRESETS, expandPresetsToSites } = require('../src/server/routePresets');
+const { ROUTE_PRESETS } = require('../src/server/routePresets');
+const { getCatalog } = require('../src/server/ipCatalog');
 const { generate, registrationAnswer, parseConf, endpointOf, labProvider, labSnapshot, labEndpoint } = require('./helpers/warp-harness');
 const { coversSame, parse } = require('./helpers/cidr-coverage');
 
@@ -77,23 +78,32 @@ const semanticDiff = (a, b) => {
   return out;
 };
 
+// Changed in 3.2.0 (spec 3.2.0 §8): S of a catalogue preset is its snapshot record; only the transitional presets
+// still read the route lists, here the faked opencck. A preset without data in the snapshot is refused (K14).
 describe('every preset: AllowedIPs = S \\ E_fixed (decision No. 18, I14)', () => {
+  const snapshot = getCatalog().plan(Object.keys(ROUTE_PRESETS)).snapshot.presets;
   for (const key of Object.keys(ROUTE_PRESETS)) {
     test(key, async () => {
-      const { sites, staticCidrs } = expandPresetsToSites([key]);
-      const s = [...(sites.length ? LIST : []), ...v4(staticCidrs)];
+      const record = snapshot[key];
       const out = await split({ presets: key });
+      if (!record.legacy && record.noData) {
+        assert.equal(out.status, 400, JSON.stringify(out.body));
+        assert.equal(out.body.error, 'empty_split_tunnel');
+        return;
+      }
+      // A transitional preset: the faked lists plus its fixed legacy networks (telegram keeps the nine of 3.1.9).
+      const s = record.legacy ? [...LIST, ...((ROUTE_PRESETS[key].legacy || {}).cidrs4 || [])] : record.cidrs4;
       assert.equal(out.status, 200, JSON.stringify(out.body));
       const allowed = allowedOf(out.configs[0]);
       assert.equal(coversSame(allowed, s, { minus: E_FIXED }).ok, true, 'exactly S minus E_fixed');
       assert.equal(coversSame(allowed, allowed, { minus: E_FIXED }).ok, true, 'nothing of E_fixed');
-      if (sites.length) {
+      if (record.legacy) {
         for (const address of ['162.159.128.233', '162.159.138.232', '188.114.96.3', '188.114.97.3', '10.200.0.1']) {
           assert.ok(covers(allowed, address), `${address} stays routed`);
         }
-        for (const address of ['162.159.192.1', '162.159.193.8', '162.159.195.1', '162.159.204.51']) {
-          assert.equal(covers(allowed, address), false, `${address} is a WARP endpoint`);
-        }
+      }
+      for (const address of ['162.159.192.1', '162.159.193.8', '162.159.195.1', '162.159.204.51']) {
+        assert.equal(covers(allowed, address), false, `${address} is a WARP endpoint`);
       }
     });
   }
@@ -242,6 +252,34 @@ describe('the invariants on the new path', () => {
     assert.equal(first.some((c) => c.includes(':')), false);
     assert.equal(coversSame(first, LIST, { minus: E_FIXED }).ok, true);
     assert.deepEqual(allowedOf(out.configs[1]).filter((c) => c.includes(':')).sort(), LIST6_OFF_E6);
+    assert.equal(warnings(out.body).filter((w) => w.startsWith('WARP registration returned no IPv6')).length, 1);
+  });
+});
+
+// The same invariants on the catalogue path (prompt 3.2.0: I10 and the 3.1.8 degradation on both paths): GitHub
+// takes its networks from the committed snapshot, no list is asked.
+describe('the catalogue path (GitHub from the snapshot): I10 and the 3.1.8 degradation', () => {
+  const github = getCatalog().plan(['github']).snapshot.presets.github;
+
+  test('T-C5 / I10: vpn:// carries the same .conf, and allowed_ips equals AllowedIPs', async () => {
+    const out = await split({ presets: 'github', link: '1' });
+    assert.equal(out.status, 200, JSON.stringify(out.body));
+    const last = JSON.parse(decodeVpnLink(out.body.configs[0].vpnLink).containers[0].awg.last_config);
+    assert.equal(last.config, out.configs[0]);
+    assert.deepEqual(last.allowed_ips, allowedOf(out.configs[0]));
+    assert.equal(coversSame(last.allowed_ips, github.cidrs4, { minus: E_FIXED }).ok, true);
+  });
+
+  test('3.1.8 degradation: ipv6=1 and a registration without IPv6 → IPv4 routes only in that config', async () => {
+    const six = github.cidrs6;
+    assert.ok(six.length && six.every((c) => !c.startsWith('2606:4700:d')), 'GitHub has IPv6 networks off E6');
+    const out = await split({ presets: 'github', ipv6: '1', count: '2' },
+      { registrations: [registrationAnswer({ v6: null }), registrationAnswer()] });
+    assert.equal(out.status, 200, JSON.stringify(out.body));
+    const first = allowedOf(out.configs[0]);
+    assert.equal(first.some((c) => c.includes(':')), false);
+    assert.equal(coversSame(first, github.cidrs4, { minus: E_FIXED }).ok, true);
+    assert.deepEqual(allowedOf(out.configs[1]).filter((c) => c.includes(':')).sort(), [...six].sort());
     assert.equal(warnings(out.body).filter((w) => w.startsWith('WARP registration returned no IPv6')).length, 1);
   });
 });

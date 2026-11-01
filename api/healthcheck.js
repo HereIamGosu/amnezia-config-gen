@@ -1,5 +1,18 @@
 // api/healthcheck.js
+// TCP probes of the services a generation depends on. `cidr` stays: transitional presets read iplist.opencck.org at
+// request time (3.2.0, spec §5.5); `catalogBuiltAt` is the build time of the preset catalogue snapshot (null when it
+// cannot be read).
 const net = require('net');
+const { getCatalog } = require('../src/server/ipCatalog');
+
+const catalogBuiltAt = () => {
+  try {
+    const prices = getCatalog().prices();
+    return prices ? prices.builtAt : null;
+  } catch {
+    return null;
+  }
+};
 
 const PROBE_TIMEOUT_MS = 5000;
 const CACHE_TTL_MS = 30_000;
@@ -54,7 +67,7 @@ module.exports = async (req, res) => {
 
   const now = Date.now();
   if (cache && cache.expiresAt > now) {
-    res.status(200).json({ services: cache.services, checkedAt: cache.checkedAt });
+    res.status(200).json({ services: cache.services, checkedAt: cache.checkedAt, catalogBuiltAt: catalogBuiltAt() });
     return;
   }
 
@@ -74,7 +87,7 @@ module.exports = async (req, res) => {
 
   try {
     const result = await pendingProbe;
-    res.status(200).json({ services: result.services, checkedAt: result.checkedAt });
+    res.status(200).json({ services: result.services, checkedAt: result.checkedAt, catalogBuiltAt: catalogBuiltAt() });
   } catch {
     res.status(500).json({ error: 'Probe failed' });
   }

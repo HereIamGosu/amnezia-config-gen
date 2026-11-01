@@ -1,9 +1,11 @@
 // __tests__/unhandled-rejection-audit.test.js
 // Audit of promises nobody waits for (3.1.7, docs/releases/3.1.7-source-audit.md). Every external source a handler
-// depends on (Cloudflare API, opencck, itdoginfo community lists, antifilter, the Endpoint Lab pool file, the
-// endpoint registry, TCP probes) fails here the ways it can fail: refusal, timeout, non-JSON. The handler still
-// answers with a status and a JSON body, and no rejection goes unhandled. No network: https.request and sockets
-// are fakes, timeouts and retry pauses run on mocked setTimeout. The last block runs server.js itself offline.
+// depends on (Cloudflare API, opencck, itdoginfo community lists, the Endpoint Lab pool file, the endpoint registry,
+// TCP probes) fails here the ways it can fail: refusal, timeout, non-JSON. The handler still answers with a status
+// and a JSON body, and no rejection goes unhandled. From 3.2.0 a transitional preset whose lists fail takes the
+// reserve of the catalogue snapshot, and antifilter is never asked (an unexpected host fails the test). No network:
+// https.request and sockets are fakes, timeouts and retry pauses run on mocked setTimeout. The last block runs
+// server.js itself offline.
 
 'use strict';
 
@@ -213,13 +215,24 @@ describe('Cloudflare API fails (/api/warp)', () => {
     });
   }
 
-  // 3.1.9: the routes are resolved before registration, so the list failure answers first and Cloudflare is not asked.
-  test('split tunnel: the route lists fail while Cloudflare would refuse too → 502 by routes, no registration, nothing unhandled', async () => {
+  // 3.1.9: the routes are resolved before registration. 3.2.0: the failed lists of a transitional preset leave it
+  // on the snapshot reserve, so the request reaches Cloudflare, whose refusal is answered without anything unhandled.
+  test('split tunnel: the route lists fail and Cloudflare refuses → the refusal, the reserve was used, nothing unhandled', async () => {
     const calls = fakeNetwork(byHost({
       cloudflare: () => json(403, { message: 'Forbidden' }),
       opencck: () => ({ status: 200, body: 'not json' }),
       community: () => ({ error: 'ECONNRESET' }),
-      antifilter: () => ({ status: 500, body: '' }),
+    }));
+    const out = await call(load('../api/warp'), { routeMode: 'split', presets: 'discord' });
+    assertFailureBody(out, 502);
+    assert.doesNotMatch(out.body.message, /пустой ответ/);
+    assert.ok(calls.some((c) => c.includes(CLOUDFLARE)), 'the routes came from the reserve');
+  });
+
+  test('split tunnel: a live answer made only of WARP endpoint subnets → 502 "пустой ответ" before registration', async () => {
+    const calls = fakeNetwork(byHost({
+      opencck: () => json(200, Object.fromEntries(DISCORD_SITES.map((site) => [site, ['162.159.192.0/24']]))),
+      community: () => ({ status: 500, body: '' }),
     }));
     const out = await call(load('../api/warp'), { routeMode: 'split', presets: 'discord' });
     assertFailureBody(out, 502);
@@ -232,23 +245,25 @@ describe('route list sources fail', () => {
   const allListsDown = {
     opencck: () => ({ status: 500, body: 'Internal Server Error' }),
     community: () => ({ status: 500, body: '' }),
-    antifilter: () => ({ error: 'ECONNREFUSED' }),
   };
 
-  test('/api/warp split: every list source down → 502 with a message before registration (3.1.9)', async () => {
+  // Changed in 3.2.0 (spec 3.2.0 §8): 3.1.9 answered 502 here; the reserve of the snapshot now gives the config.
+  test('/api/warp split: every list source down → 200 on the snapshot reserve with a warning, one registration', async () => {
     const calls = fakeNetwork(byHost(allListsDown));
     const out = await call(load('../api/warp'), { routeMode: 'split', presets: 'discord' });
-    assertFailureBody(out, 502);
-    assert.match(out.body.message, /пустой ответ/);
-    assert.equal(calls.filter((c) => c.includes(CLOUDFLARE)).length, 0, 'no Cloudflare request');
+    assert.equal(out.status, 200, JSON.stringify(out.body));
+    assert.deepEqual([].concat(out.body.warning), ['Route source fallback: discord']);
+    assert.equal(calls.filter((c) => c.includes(CLOUDFLARE)).length, 3, 'one registration (POST, PATCH, GET)');
   });
 
-  test('/api/iplist: every list source down → 200 with zero routes (the counter shows 0)', async () => {
+  // Changed in 3.2.0: 3.1.9 answered 200 with zero routes; now the reserve, with the same warning as /api/warp.
+  test('/api/iplist: every list source down → 200 with the snapshot reserve and a warning', async () => {
     fakeNetwork(byHost(allListsDown));
     const out = await call(load('../api/iplist'), { presets: 'discord' });
     assert.equal(out.status, 200);
-    assert.equal(out.body.count4, 0);
-    assert.deepEqual(out.body.cidrs, []);
+    assert.ok(out.body.count4 > 0);
+    assert.equal(out.body.cidrSource, 'catalog');
+    assert.deepEqual(out.body.warnings, ['Route source fallback: discord']);
   });
 
   test('/api/iplist: opencck times out on every retry → the community list answers', async () => {
@@ -264,17 +279,18 @@ describe('route list sources fail', () => {
     assert.equal(calls.filter((c) => c.includes(OPENCCK)).length, 5, 'a timeout is retried, five attempts in all');
   });
 
-  test('/api/iplist: opencck sends non-JSON, the community list never answers → antifilter answers', async () => {
+  // Changed in 3.2.0 (K2): this case gave antifilter's networks; now the reserve, and antifilter is not asked.
+  test('/api/iplist: opencck sends non-JSON, the community list never answers → the snapshot reserve', async () => {
     mock.timers.enable({ apis: ['setTimeout'] });
-    fakeNetwork(byHost({
+    const calls = fakeNetwork(byHost({
       opencck: () => ({ status: 200, body: '<html>' }),
       community: () => 'hang',
-      antifilter: () => ({ status: 200, body: '# list\n203.0.113.0/24\n' }),
     }));
     const out = await drive(call(load('../api/iplist'), { presets: 'discord' }));
     assert.equal(out.status, 200);
-    assert.deepEqual(out.body.cidrs, ['203.0.113.0/24']);
-    assert.equal(out.body.cidrSource, 'antifilter');
+    assert.ok(out.body.cidrs.includes('66.22.192.0/18'));
+    assert.equal(out.body.cidrSource, 'catalog');
+    assert.equal(calls.filter((c) => c.includes(ANTIFILTER)).length, 0);
   });
 
   test('/api/iplist: opencck answers, community down → opencck routes only', async () => {
@@ -288,17 +304,17 @@ describe('route list sources fail', () => {
   });
 });
 
-// Audit finding 2, latent: the opencck, community and antifilter fetchers armed their timer the same way. Their
-// paths come from URLSearchParams, a whitelist and a constant, so Node cannot refuse them today.
+// Audit finding 2, latent: the opencck and community fetchers armed their timer the same way. Their paths come
+// from URLSearchParams and a whitelist, so Node cannot refuse them today. (The antifilter fetcher is gone, 3.2.0.)
 describe('a synchronous refusal from https.request leaves no timer behind (route list fetchers)', () => {
-  test('opencck, community list and antifilter refused → empty result, and no timer fires later', async () => {
+  test('opencck and community list refused → empty result, and no timer fires later', async () => {
     mock.timers.enable({ apis: ['setTimeout'] });
     const refusal = Object.assign(new TypeError('Request path contains unescaped characters'), { code: 'ERR_UNESCAPED_CHARACTERS' });
     const httpsMock = mock.method(https, 'request', () => { throw refusal; });
     const { fetchCidrsForDomains } = load('../src/server/ipListFetch');
     const out = await fetchCidrsForDomains(DISCORD_SITES, { communityLists: ['Discord'] });
     assert.deepEqual([...out.cidrs], []);
-    assert.deepEqual(httpsMock.mock.calls.map((c) => c.arguments[0].hostname), [OPENCCK, COMMUNITY, ANTIFILTER]);
+    assert.deepEqual(httpsMock.mock.calls.map((c) => c.arguments[0].hostname), [OPENCCK, COMMUNITY]);
     assert.doesNotThrow(() => mock.timers.tick(60_000), 'a refused request leaves no timer behind');
   });
 });
@@ -375,8 +391,9 @@ describe('server.js with the network cut off', () => {
     const base = `http://127.0.0.1:${PORT}`;
     const cases = [
       ['GET', '/api/warp', 503],
-      // discord has no static IPv4 routes: offline its list is empty, 502 before registration (3.1.9)
-      ['GET', '/api/warp?routeMode=split&presets=discord', 502],
+      // discord offline: its live lists are empty, the snapshot reserve gives the routes (3.2.0; 3.1.9 answered 502
+      // here), and the registration attempt fails offline like the full tunnel's
+      ['GET', '/api/warp?routeMode=split&presets=discord', 503],
       ['GET', '/api/warp?endpointMode=lab', 503],
       ['POST', '/api/warp', 400, '{"presets":'],
       ['GET', '/api/iplist?presets=discord', 200],

@@ -112,6 +112,20 @@ describe('I15 built-in endpoints (templates without engageHost): only a filter o
       });
     }
   }
+
+  // Spec 3.2.0 §5.4 p. 3 as written: the cloudflare preset from the snapshot (its official ips-v4 hold 188.114.96.0/20),
+  // a port other than 2408, random choice.
+  test('the cloudflare preset, port 4500, awg2_random: never a 188.114.x endpoint (25 requests, count=3)', async () => {
+    for (let i = 0; i < 25; i += 1) {
+      const out = await split({ presets: 'cloudflare', template: 'awg2_random', port: '4500', count: '3' });
+      assert.equal(out.status, 200, JSON.stringify(out.body));
+      for (const conf of out.configs) {
+        assert.ok(routes(conf, '188.114.96.3'), 'the preset routes 188.114.96.0/20');
+        assert.doesNotMatch(endpointOf(conf), /^188\.114\./);
+        assert.equal(routes(conf, endpointAddress(conf)), false, endpointOf(conf));
+      }
+    }
+  });
 });
 
 describe('I15 manual override: its /32 (/128) leaves AllowedIPs, with a warning', () => {

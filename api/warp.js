@@ -4,11 +4,11 @@ const { randomInt } = require('crypto');
 const net = require('net');
 const fs = require('fs').promises;
 const path = require('path');
-const { expandPresetsToSites, parsePresetKeysFromRequest, getDnsString, parseDnsKeyFromRequest, DNS_DEFAULT_KEY } = require('../src/server/routePresets');
-const { fetchCidrsForDomains } = require('../src/server/ipListFetch');
-const { aggregateCidrs, routeMatcher } = require('../src/server/cidrAggregate');
+const { ROUTE_PRESETS, parsePresetKeysFromRequest, getDnsString, parseDnsKeyFromRequest, DNS_DEFAULT_KEY } = require('../src/server/routePresets');
+const { getCatalog } = require('../src/server/ipCatalog');
+const { recordPresetUse } = require('../src/server/presetStats');
+const { routeMatcher } = require('../src/server/cidrAggregate');
 const { classifyBudget, routeBudgetWarning } = require('../src/server/routeBudget');
-const { WARP_ENDPOINT_PREFIXES_V4, WARP_ENDPOINT_PREFIXES_V6 } = require('../src/server/warpEndpointPrefixes');
 const { createRateLimiter } = require('../src/server/_rateLimit');
 const { registerDevice, refusalFor, isValidIPv4, isValidIPv6 } = require('../src/server/warpRegistration');
 
@@ -1050,91 +1050,71 @@ const generateKeys = () => {
 };
 
 /**
- * Expands preset keys and throws a 400 for unknown keys or a set with no domains and no static CIDRs
- * (a key that normalises to an empty string lands here). Runs before any WARP registration.
+ * The plan of a preset set (3.2.0, spec 3.2.0 §5.3): aliases folded, retired, unknown and no-data presets named.
+ * Runs before Lab Auto and any WARP registration. Unknown keys → 400; keys that normalise to nothing → 400 as
+ * before; a set left with no preset that has routes (only retired or no-data presets) → 400 empty_split_tunnel
+ * (K14). An unusable catalogue snapshot → 503 with a fixed text (src/server/ipCatalog).
  * @param {string[]} presetKeys
  */
-const expandValidPresets = (presetKeys) => {
-  const expanded = expandPresetsToSites(presetKeys);
-  if (expanded.unknown.length) {
-    const err = new Error(`Неизвестные пресеты маршрутов: ${expanded.unknown.join(', ')}`);
+const planPresets = (presetKeys) => {
+  const plan = getCatalog().plan(presetKeys);
+  if (plan.unknown.length) {
+    const err = new Error(`Неизвестные пресеты маршрутов: ${plan.unknown.join(', ')}`);
     err.statusCode = 400;
     throw err;
   }
-  if (!expanded.sites.length && !expanded.staticCidrs.length) {
+  if (!plan.canonicalKeys.length && !plan.retired.length) {
     const err = new Error('Не заданы домены для выбранных пресетов.');
     err.statusCode = 400;
     throw err;
   }
-  return expanded;
+  if (!plan.active.length) {
+    const reasons = [
+      plan.retired.length ? `retired presets (${plan.retired.join(', ')})` : '',
+      Object.keys(plan.noData).length ? `presets without data (${Object.keys(plan.noData).join(', ')})` : '',
+    ].filter(Boolean).join(' and ');
+    const err = new Error(`Split tunnel requires at least one route preset with routes; ${reasons} give none.`);
+    err.statusCode = 400;
+    err.code = 'empty_split_tunnel';
+    throw err;
+  }
+  return plan;
 };
 
 /**
  * @param {string[]} presetKeys
- * @param {{ includeIpv6?: boolean, endpointOverride?: string|null }} [opts] `endpointOverride`: the address of a
- *   manual endpoint; inside the routes, its /32 (/128 with ipv6=1) is cut and `overrideInside` names it (I14, I15)
+ * @param {{ includeIpv6?: boolean, endpointOverride?: string|null, plan?: object }} [opts] `endpointOverride`: the
+ *   address of a manual endpoint; inside the routes, its /32 (/128 with ipv6=1) is cut and `overrideInside` names it
+ *   (I14, I15)
  */
-const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false, endpointOverride = null } = {}) => {
+const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false, endpointOverride = null, plan = null } = {}) => {
   if (!presetKeys.length) {
     return { cidrs: null, routesSource: 'default', routesTelemetrySource: 'static' };
   }
-  const { sites, staticCidrs, communityLists } = expandValidPresets(presetKeys);
-
-  const { isIpv4Cidr } = require('../src/server/ipListFetch');
-
-  // Merge static CIDRs; for IPv4-only mode filter out IPv6 statics
-  const staticFiltered = includeIpv6 ? staticCidrs : staticCidrs.filter(isIpv4Cidr);
-
-  let resolvedCidrs = [];
-  let routesTelemetrySource = staticFiltered.length && !sites.length ? 'static' : 'unknown';
-  if (sites.length) {
-    // IPv4-only by default: fewer routes, better compatibility with routers and mobile clients.
-    const { cidrs, source } = await fetchCidrsForDomains(sites, {
-      includeIpv6,
-      communityLists,
-      hasStaticFallback: staticFiltered.length > 0,
-    });
-    resolvedCidrs = cidrs;
-    routesTelemetrySource = {
-      opencck: 'opencck',
-      community: 'itdoginfo',
-      antifilter: 'antifilter',
-      mixed: 'fallback',
-    }[source] || 'unknown';
-  }
-
-  // The IPv4 addresses of the lists minus the WARP endpoint subnets, in the fewest aligned blocks (I14); with ipv6=1
-  // the IPv6 entries lose the WARP endpoint /48 and are otherwise unchanged. Malformed entries pass unchanged.
-  // Emptiness is checked after the cut: an empty AllowedIPs is a full tunnel.
-  const all = [...resolvedCidrs, ...staticFiltered];
-  const exclude = WARP_ENDPOINT_PREFIXES_V4;
-  const exclude6 = includeIpv6 ? WARP_ENDPOINT_PREFIXES_V6 : [];
-  let aggregated = aggregateCidrs(all, { exclude, exclude6 });
-  // A manual endpoint inside these routes would send the tunnel's own packets into it (I15): its /32 (/128) is cut.
-  let overrideInside = null;
-  if (endpointOverride && routeMatcher(aggregated.cidrs)(endpointOverride)) {
-    overrideInside = endpointOverride;
-    aggregated = endpointOverride.includes(':')
-      ? aggregateCidrs(all, { exclude, exclude6: [...exclude6, `${endpointOverride}/128`] })
-      : aggregateCidrs(all, { exclude: [...exclude, `${endpointOverride}/32`], exclude6 });
-  }
-  const { cidrs: merged, before4, after4 } = aggregated;
-
-  if (!merged.length) {
+  const p = plan || planPresets(presetKeys);
+  // Catalogue presets from the snapshot, transitional ones live with the snapshot reserve; the WARP endpoint subnets
+  // cut and the rest merged exactly (I14). Emptiness is checked after the cut: an empty AllowedIPs is a full tunnel.
+  const avoid = !endpointOverride ? {} : endpointOverride.includes(':') ? { avoid6: [endpointOverride] } : { avoid4: [endpointOverride] };
+  const r = await getCatalog().resolve(p, { includeIpv6, ...avoid });
+  if (!r.cidrs.length) {
     const err = new Error(
       'Сервис списков IP вернул пустой ответ. Попробуйте другой набор пресетов или повторите позже.',
     );
     err.statusCode = 502;
     throw err;
   }
+  const usedKeys = p.canonicalKeys.filter((key) => ['catalog', 'live', 'catalog-fallback'].includes((r.presetStatus[key] || {}).source));
+  const domains = new Set(p.canonicalKeys.flatMap((key) => ROUTE_PRESETS[key].domains || []));
   return {
-    cidrs: merged,
+    cidrs: r.cidrs,
     routesSource: 'presets',
-    routesTelemetrySource,
-    sitesResolved: sites.length,
-    before4,
-    after4,
-    overrideInside,
+    routesTelemetrySource: r.telemetrySource,
+    sitesResolved: domains.size,
+    before4: r.before4,
+    after4: r.after4,
+    overrideInside: r.avoidInside[0] || null,
+    warnings: r.warnings,
+    usedKeys,
   };
 };
 
@@ -1483,8 +1463,9 @@ const handler = async (req, res) => {
     const effectivePresetKeys = (hasExplicitRouteMode && routeModeRaw === 'full')
       ? []
       : presetKeys;
-    // Invalid presets are an input error: answered before Lab Auto selection and WARP registration.
-    if (effectivePresetKeys.length) expandValidPresets(effectivePresetKeys);
+    // Invalid presets are an input error, and a set without a preset to route is empty_split_tunnel (K14): both are
+    // answered before Lab Auto selection and WARP registration.
+    const presetPlan = effectivePresetKeys.length ? planPresets(effectivePresetKeys) : null;
     // ─────────────────────────────────────────────────────────────────────────────
 
     // Lab Auto (3.2.0 order, spec 3.2.0 §5.4 p. 2): readiness → routes → selection that skips the endpoints the
@@ -1514,7 +1495,7 @@ const handler = async (req, res) => {
     let overrideLine = null;
     if (effectivePresetKeys.length) {
       routeOpts.resolvedRoutes = await resolveAllowedIpsFromPresets(effectivePresetKeys, {
-        ...routeOpts, endpointOverride: endpointOverrideAddress(warpExtras.peerEndpoint),
+        ...routeOpts, plan: presetPlan, endpointOverride: endpointOverrideAddress(warpExtras.peerEndpoint),
       });
       const { before4, after4, overrideInside } = routeOpts.resolvedRoutes;
       if (classifyBudget(after4) === 'over') routeBudgetLine = routeBudgetWarning({ before4, after4 });
@@ -1567,6 +1548,8 @@ const handler = async (req, res) => {
     if (warning) responseWarnings.push(warning);
     if (routeBudgetLine) responseWarnings.push(routeBudgetLine);
     if (overrideLine) responseWarnings.push(overrideLine);
+    // Retired presets, presets without data and transitional presets on the snapshot reserve (spec 3.2.0 §5.3).
+    if (routeOpts.resolvedRoutes) responseWarnings.push(...routeOpts.resolvedRoutes.warnings);
     // mobile=1 drops IPv6 on request (I7), so a registration without it changes nothing the visitor asked for.
     const ipv4OnlyIndexes = mobileMode ? [] : configsOut.filter((_, i) => configs[i].meta.ipv6Missing).map((c) => c.index);
     if (ipv4OnlyIndexes.length) {
@@ -1641,7 +1624,8 @@ const handler = async (req, res) => {
         : (presetKeys.length ? 'split' : 'full'),
       routesSource: firstMeta.routesSource,
       routesTelemetrySource: firstMeta.routesTelemetrySource,
-      routesPresets: effectivePresetKeys.length ? effectivePresetKeys : undefined,
+      // Canonical keys of the presets whose routes are in the config (an alias as its target, 3.2.0).
+      routesPresets: routeOpts.resolvedRoutes ? routeOpts.resolvedRoutes.usedKeys : undefined,
       presetSitesCount: firstMeta.sitesResolved || undefined,
       ...(awg ? { awg } : {}),
       ...(lab ? { lab } : {}),
@@ -1650,6 +1634,8 @@ const handler = async (req, res) => {
     });
     // After the response, aggregate counters only; Lab Auto requests are real selections, not shadow samples.
     if (endpointMode === 'hostname') observeEndpointShadow(count, warpExtras);
+    // Demand per preset (K8): a count per canonical key in a 10-minute window, nothing about the visitor.
+    if (routeOpts.resolvedRoutes) recordPresetUse(routeOpts.resolvedRoutes.usedKeys);
   } catch (error) {
     console.error('Ошибка генерации конфигурации:', error);
     if (error.labCode) {

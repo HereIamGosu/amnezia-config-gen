@@ -1,357 +1,327 @@
 /**
- * Curated hostname lists per preset (resolved to AllowedIPs CIDRs on the server). Each preset has id and category for UI.
+ * Route presets: the single source of truth of the catalogue (3.2.0, spec 3.2.0 §3–§4.1). A preset has a Russian
+ * `label` for the API (the UI shows `preset_<key>` from the locales), a `category` of PRESET_CATEGORY_ORDER, its
+ * `domains` and an `ip` recipe that `npm run ipcatalog:build` turns into src/server/ipCatalog/snapshot.json:
+ *   { from: 'official', list, allowWide? }  an official list (scripts/ipcatalog/sources/official.js)
+ *   { from: 'asn', asns, minus? }           announced prefixes (ipverse, iptoasn); minus 'google-cloud' = cloud.json
+ *   { from: 'resolve', domains? }           own DoH resolution of the preset's domains
+ *   { from: 'portal', portals }             own resolution of the domains of opencck portals (rekryt/iplist, MIT)
+ *   { from: 'static', cidrs4, cidrs6?, source, date }
+ * A transitional preset (`legacy`, spec §4.5) takes its routes from opencck and itdoginfo at request time, each on its
+ * own call; its recipe builds the reserve used when that call gives no IPv4. Transitional in 3.2.0: youtube, the
+ * three Meta presets and discord (K1), and every preset that took opencck addresses in 3.1.9 and whose recipe covered
+ * less than 90 % of the reference addresses in the first build (spec §9 p. 3; the build summary names them).
  */
 const ROUTE_PRESETS = {
   youtube: {
     label: 'YouTube',
-    category: 'social',
-    sites: [
-      'youtube.com',
-      'youtu.be',
-      'googlevideo.com',
-      'ytimg.com',
-      'ggpht.com',
-      'youtubei.googleapis.com',
-    ],
+    category: 'video',
+    domains: ['youtube.com', 'youtu.be', 'googlevideo.com', 'ytimg.com', 'ggpht.com', 'youtubei.googleapis.com'],
+    legacy: {},
+    ip: [{ from: 'asn', asns: [15169, 36040, 43515, 19527, 16550, 36384, 139070, 139190, 41264], minus: 'google-cloud' }],
+  },
+  twitch: {
+    label: 'Twitch',
+    category: 'video',
+    domains: ['twitch.tv', 'ttvnw.net', 'jtvnw.net'],
+    ip: [{ from: 'resolve' }],
+  },
+  telegram: {
+    label: 'Telegram',
+    category: 'messengers',
+    domains: ['telegram.org'],
+    // Transitional (owner, 2026-11-01): the recipe covered 5.1 % of the reference, below the 90 % of spec §9 p. 3 for
+    // official/AS recipes. The live path is that of 3.1.9: the lists plus these nine networks of cidr.txt.
+    legacy: {
+      cidrs4: ['91.108.4.0/22', '91.108.8.0/22', '91.108.12.0/22', '91.108.16.0/22', '91.108.20.0/22', '91.108.56.0/22',
+        '91.105.192.0/23', '149.154.160.0/20', '185.76.151.0/24'],
+    },
+    // cidr.txt has not changed since 2021-10-01 and lacks 95.161.64.0/20: the announcements of the AS fill it.
+    ip: [{ from: 'official', list: 'telegram' }, { from: 'asn', asns: [62041, 62014, 59930, 44907, 211157] }],
   },
   discord: {
     label: 'Discord',
-    category: 'social',
-    communityLists: ['Discord'],
-    sites: [
-      'discord.com',
-      'discord.gg',
-      'discord.media',
-      'discordapp.com',
-      'discordapp.net',
+    category: 'messengers',
+    domains: ['discord.com', 'discord.gg', 'discord.media', 'discordapp.com', 'discordapp.net'],
+    legacy: { communityLists: ['Discord'] },
+    ip: [
+      { from: 'static', cidrs4: ['66.22.192.0/18'], source: 'Discord network announced by i3D.net and Google (03-service-footprints.md)', date: '2026-10-31' },
+      { from: 'portal', portals: ['discord.com'] },
     ],
   },
   whatsapp: {
     label: 'WhatsApp',
-    category: 'social',
-    communityLists: ['Meta'],
-    sites: [
-      'whatsapp.com',
-      'web.whatsapp.com',
-      'cdn.whatsapp.net',
-      'graph.whatsapp.com',
-    ],
+    category: 'messengers',
+    domains: ['whatsapp.com', 'web.whatsapp.com', 'cdn.whatsapp.net', 'graph.whatsapp.com'],
+    legacy: { communityLists: ['Meta'] },
+    ip: [{ from: 'asn', asns: [32934, 63293, 54115] }],
   },
-  telegram: {
-    label: 'Telegram',
-    category: 'social',
-    sites: [
-      'telegram.org',
-    ],
-    // Official Telegram IP ranges from https://core.telegram.org/resources/cidr.txt
-    // t.me, core.telegram.org, telegra.ph, web.telegram.org all resolve to these ranges
-    // but opencck does not return CIDRs for those subdomains
-    cidrs: [
-      '91.108.4.0/22',
-      '91.108.8.0/22',
-      '91.108.12.0/22',
-      '91.108.16.0/22',
-      '91.108.20.0/22',
-      '91.108.56.0/22',
-      '91.105.192.0/23',
-      '149.154.160.0/20',
-      '185.76.151.0/24',
-    ],
+  viber: {
+    label: 'Viber',
+    category: 'messengers',
+    domains: ['viber.com', 'account.viber.com', 'media.cdn.viber.com', 'activate.viber.com'],
+    legacy: {},
+    ip: [{ from: 'portal', portals: ['viber.com'] }],
   },
-  twitter: {
-    label: 'X (Twitter)',
-    category: 'social',
-    communityLists: ['Twitter'],
-    sites: ['twitter.com', 'x.com', 'twimg.com', 't.co', 'pbs.twimg.com'],
+  signal: {
+    label: 'Signal',
+    category: 'messengers',
+    domains: ['signal.org'],
+    ip: [{ from: 'portal', portals: ['signal.org'] }],
   },
   instagram: {
     label: 'Instagram',
     category: 'social',
-    communityLists: ['Meta'],
-    sites: ['instagram.com', 'cdninstagram.com', 'fbcdn.net'],
+    domains: ['instagram.com', 'cdninstagram.com', 'fbcdn.net'],
+    legacy: { communityLists: ['Meta'] },
+    ip: [{ from: 'asn', asns: [32934, 63293, 54115] }],
   },
   facebook: {
     label: 'Facebook',
     category: 'social',
-    communityLists: ['Meta'],
-    sites: ['facebook.com', 'fb.com', 'fbsbx.com'],
+    domains: ['facebook.com', 'fb.com', 'fbsbx.com'],
+    legacy: { communityLists: ['Meta'] },
+    ip: [{ from: 'asn', asns: [32934, 63293, 54115] }],
   },
-  viber: {
-    label: 'Viber',
+  twitter: {
+    label: 'X (Twitter)',
     category: 'social',
-    sites: [
-      'viber.com',
-      'account.viber.com',
-      'media.cdn.viber.com',
-      'activate.viber.com',
-    ],
+    domains: ['twitter.com', 'x.com', 'twimg.com', 't.co', 'pbs.twimg.com'],
+    legacy: { communityLists: ['Twitter'] },
+    ip: [{ from: 'portal', portals: ['x.com'] }, { from: 'asn', asns: [13414, 35995, 63179] }],
+  },
+  linkedin: {
+    label: 'LinkedIn',
+    category: 'social',
+    domains: ['linkedin.com', 'licdn.com'],
+    legacy: {},
+    ip: [{ from: 'portal', portals: ['linkedin.com'] }],
+  },
+  snapchat: {
+    label: 'Snapchat',
+    category: 'social',
+    domains: ['snapchat.com'],
+    ip: [{ from: 'portal', portals: ['snapchat.com'] }],
+  },
+  reddit: {
+    label: 'Reddit',
+    category: 'social',
+    domains: ['reddit.com', 'redditmedia.com', 'redd.it'],
+    ip: [{ from: 'resolve' }],
   },
   tiktok: {
     label: 'TikTok',
     category: 'social',
-    sites: ['tiktok.com', 'tiktokcdn.com', 'ttlivecdn.com'],
-  },
-  itch_io: {
-    label: 'Itch.io',
-    category: 'gaming',
-    sites: ['itch.io', 'html.itch.zone', 'static.itch.io'],
-  },
-  steam: {
-    label: 'Steam',
-    category: 'gaming',
-    sites: [
-      'steampowered.com',
-      'steamcommunity.com',
-      'steamstatic.com',
-      'steamusercontent.com',
-    ],
-  },
-  epic_games: {
-    label: 'Epic Games Store',
-    category: 'gaming',
-    sites: [
-      'epicgames.com',
-      'launcher.store.epicgames.com',
-      'cdn1.unrealengine.com',
-    ],
-  },
-  battle_net: {
-    label: 'Battle.net (Blizzard)',
-    category: 'gaming',
-    sites: ['battle.net', 'blizzard.com', 'bnetcmsus-a.akamaihd.net'],
+    domains: ['tiktok.com', 'tiktokcdn.com', 'ttlivecdn.com'],
+    legacy: {},
+    ip: [{ from: 'portal', portals: ['tiktok.com'] }],
   },
   rutracker: {
     label: 'RuTracker',
     category: 'torrent',
-    sites: ['rutracker.org', 'rutracker.net', 'bt.t-ru.org', 'rutracker.cc'],
+    // .me and .nl were the separate preset rutracker_local before 3.2.0 (now its alias).
+    domains: ['rutracker.org', 'rutracker.net', 'bt.t-ru.org', 'rutracker.cc', 'rutracker.me', 'rutracker.nl'],
+    legacy: {},
+    ip: [{ from: 'portal', portals: ['rutracker.org'] }, { from: 'resolve' }],
   },
   rutor: {
     label: 'Rutor',
     category: 'torrent',
-    sites: ['rutor.org', 'rutor.info', 'rutor.is', 'rutor.lib'],
+    domains: ['rutor.org', 'rutor.info', 'rutor.is', 'rutor.lib'],
+    legacy: {},
+    ip: [{ from: 'portal', portals: ['rutor.info'] }],
   },
   nnmclub: {
     label: 'NNM-Club',
     category: 'torrent',
-    sites: ['nnmclub.to', 'nnm-club.me', 'nnmclub.ro', 'nnm-club.info'],
+    domains: ['nnmclub.to', 'nnm-club.me', 'nnmclub.ro', 'nnm-club.info'],
+    legacy: {},
+    ip: [{ from: 'portal', portals: ['nnmclub.to'] }],
   },
   kinozal: {
     label: 'Kinozal',
     category: 'torrent',
-    sites: ['kinozal.tv', 'kinozal.me', 'kinozal.guru'],
+    domains: ['kinozal.tv', 'kinozal.me', 'kinozal.guru'],
+    legacy: {},
+    ip: [{ from: 'portal', portals: ['kinozal.tv', 'kinozal.me'] }],
   },
   tapochek: {
     label: 'Tapochek',
     category: 'torrent',
-    sites: ['tapochek.net', 'tapochek.club'],
+    domains: ['tapochek.net', 'tapochek.club'],
+    ip: [{ from: 'resolve' }],
   },
-  rutracker_local: {
-    label: 'RuTracker (зеркала .me/.nl)',
+  torrent_more: {
+    label: 'Другие трекеры',
     category: 'torrent',
-    sites: ['rutracker.me', 'rutracker.nl'],
-  },
-  bestchange: {
-    label: 'BestChange',
-    category: 'more',
-    popular: true,
-    sites: ['bestchange.ru', 'bestchange.com', 'www.bestchange.ru'],
-  },
-  animego: {
-    label: 'AnimeGo',
-    category: 'more',
-    popular: true,
-    sites: ['animego.ru', 'animego.org', 'animego.me', 'animego.la'],
-  },
-  roblox: {
-    label: 'Roblox',
-    category: 'more',
-    communityLists: ['roblox'],
-    sites: ['roblox.com'],
+    domains: ['1337x.to', 'thepiratebay.org', 'rustorka.com', 'newstudio.tv', 'booktracker.org', 'nyaa.si'],
+    ip: [{ from: 'portal', portals: ['1337x.to', 'thepiratebay.org', 'rustorka.com', 'newstudio.tv', 'booktracker.org', 'nyaa.si'] }],
   },
   hdrezka: {
     label: 'HDrezka',
-    category: 'more',
-    popular: true,
-    sites: [
-      'hdrezka.ag',
-      'hdrezka.me',
-      'rezka.ag',
-      'voidboost.net',
-      'rezka.cc',
-    ],
+    category: 'media',
+    domains: ['hdrezka.ag', 'hdrezka.me', 'rezka.ag', 'voidboost.net', 'rezka.cc'],
+    legacy: {},
+    ip: [{ from: 'portal', portals: ['hdrezka.ag'] }],
   },
-  spotify: {
-    label: 'Spotify',
-    category: 'more',
-    popular: true,
-    sites: ['spotify.com', 'scdn.co', 'spotifycdn.com'],
-  },
-  openai: {
-    label: 'ChatGPT / OpenAI',
-    category: 'more',
-    popular: true,
-    sites: ['openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com'],
-  },
-  notion: {
-    label: 'Notion',
-    category: 'more',
-    popular: true,
-    sites: ['notion.so', 'notionusercontent.com'],
-  },
-  linkedin: {
-    label: 'LinkedIn',
-    category: 'more',
-    popular: true,
-    sites: ['linkedin.com', 'licdn.com'],
-  },
-  vk: {
-    label: 'ВКонтакте',
-    category: 'more',
-    sites: ['vk.com', 'vk-portal.net', 'userapi.com', 'vkuseraudio.net'],
-  },
-  ok: {
-    label: 'Одноклассники',
-    category: 'more',
-    sites: ['ok.ru', 'odnoklassniki.ru'],
-  },
-  yandex: {
-    label: 'Яндекс',
-    category: 'more',
-    sites: ['yandex.ru', 'yandex.net', 'ya.ru', 'yastatic.net'],
-  },
-  dzen: {
-    label: 'Дзен',
-    category: 'more',
-    sites: ['dzen.ru', 'zen.yandex.ru', 'zen.yandex.net'],
-  },
-  rutube: {
-    label: 'Rutube',
-    category: 'more',
-    sites: ['rutube.ru', 'static.rutube.ru', 'pic.rutubelist.ru'],
-  },
-  mailru: {
-    label: 'Mail.ru',
-    category: 'more',
-    sites: ['mail.ru', 'e.mail.ru', 'imgsmail.ru', 'attachmail.ru'],
-  },
-  wildberries: {
-    label: 'Wildberries',
-    category: 'more',
-    sites: [
-      'wildberries.ru',
-      'wbbasket.ru',
-      'wbcontent.net',
-      'wbx-content-v2.wbstatic.net',
-    ],
-  },
-  ozon: {
-    label: 'Ozon',
-    category: 'more',
-    sites: ['ozon.ru', 'ozonusercontent.com', 'cdn1.ozone.ru'],
-  },
-  avito: {
-    label: 'Avito',
-    category: 'more',
-    sites: ['avito.ru', 'avito.st', 'www.avito.st'],
-  },
-  kinopoisk: {
-    label: 'Кинопоиск',
-    category: 'more',
-    sites: ['kinopoisk.ru', 'hd.kinopoisk.ru'],
-  },
-  twogis: {
-    label: '2ГИС',
-    category: 'more',
-    sites: ['2gis.ru', '2gis.com', 'map.2gis.com', 'api.2gis.com'],
-  },
-  max_messenger: {
-    label: 'MAX (мессенджер)',
-    category: 'more',
-    sites: ['max.ru', 'web.max.ru', 'api.max.ru'],
-  },
-  reddit: {
-    label: 'Reddit',
-    category: 'more',
-    sites: ['reddit.com', 'redditmedia.com', 'redd.it'],
-  },
-  github: {
-    label: 'GitHub',
-    category: 'more',
-    sites: ['github.com', 'githubusercontent.com', 'raw.githubusercontent.com'],
+  animego: {
+    label: 'AnimeGo',
+    category: 'media',
+    domains: ['animego.ru', 'animego.org', 'animego.me', 'animego.la'],
+    legacy: {},
+    ip: [{ from: 'portal', portals: ['animego.org'] }],
   },
   netflix: {
     label: 'Netflix',
-    category: 'more',
-    sites: ['netflix.com', 'nflxvideo.net', 'nflximg.net', 'nflxso.net'],
+    category: 'media',
+    domains: ['netflix.com', 'nflxvideo.net', 'nflximg.net', 'nflxso.net'],
+    legacy: {},
+    ip: [{ from: 'asn', asns: [2906] }, { from: 'portal', portals: ['netflix.com'] }],
   },
-  twitch: {
-    label: 'Twitch',
-    category: 'more',
-    sites: ['twitch.tv', 'ttvnw.net', 'jtvnw.net'],
+  spotify: {
+    label: 'Spotify',
+    category: 'media',
+    domains: ['spotify.com', 'scdn.co', 'spotifycdn.com'],
+    // AS8403 of Spotify announces nothing (03-service-footprints.md): resolution only.
+    legacy: {},
+    ip: [{ from: 'portal', portals: ['spotify.com'] }],
+  },
+  cinema_more: {
+    label: 'Другие кинотеатры и аниме',
+    category: 'media',
+    domains: ['filmix.fm', 'lostfilm.tv', 'seasonvar.ru', 'kinobase.org', 'jut.su', 'anilibria.tv', 'animevost.org', 'shikimori.one', 'crunchyroll.com'],
+    ip: [{ from: 'portal', portals: ['filmix.fm', 'lostfilm.tv', 'seasonvar.ru', 'kinobase.org', 'jut.su', 'anilibria.tv', 'animevost.org', 'shikimori.one', 'crunchyroll.com'] }],
+  },
+  steam: {
+    label: 'Steam',
+    category: 'gaming',
+    domains: ['steampowered.com', 'steamcommunity.com', 'steamstatic.com', 'steamusercontent.com'],
+    ip: [{ from: 'asn', asns: [32590] }],
+  },
+  roblox: {
+    label: 'Roblox',
+    category: 'gaming',
+    domains: ['roblox.com'],
+    ip: [{ from: 'asn', asns: [22697, 11281] }, { from: 'resolve' }],
+  },
+  itch_io: {
+    label: 'Itch.io',
+    category: 'gaming',
+    domains: ['itch.io', 'html.itch.zone', 'static.itch.io'],
+    legacy: {},
+    ip: [{ from: 'portal', portals: ['itch.io'] }],
+  },
+  epic_games: {
+    label: 'Epic Games Store',
+    category: 'gaming',
+    domains: ['epicgames.com', 'launcher.store.epicgames.com', 'cdn1.unrealengine.com'],
+    ip: [{ from: 'resolve' }],
+  },
+  battle_net: {
+    label: 'Battle.net',
+    category: 'gaming',
+    domains: ['battle.net', 'blizzard.com', 'bnetcmsus-a.akamaihd.net'],
+    ip: [{ from: 'asn', asns: [57976] }, { from: 'resolve' }],
+  },
+  openai: {
+    label: 'ChatGPT',
+    category: 'ai',
+    domains: ['openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com'],
+    legacy: {},
+    ip: [{ from: 'portal', portals: ['chatgpt.com'] }],
   },
   google: {
-    label: 'Google (общий)',
-    category: 'more',
-    sites: [
-      'google.com',
-      'gstatic.com',
-      'googleapis.com',
-      'gmail.com',
-      'googleusercontent.com',
-    ],
+    label: 'Google (поиск, почта, Play)',
+    category: 'work',
+    domains: ['google.com', 'gstatic.com', 'googleapis.com', 'gmail.com', 'googleusercontent.com'],
+    // Google's own AS without the addresses of Google Cloud customers (cloud.json), as Google asks.
+    ip: [{ from: 'asn', asns: [15169, 36040, 43515, 19527, 16550, 36384, 139070, 139190, 41264], minus: 'google-cloud' }],
   },
-  cloudflare: {
-    label: 'Cloudflare',
-    category: 'more',
-    sites: ['cloudflare.com', 'one.one.one.one'],
-  },
-  microsoft: {
-    label: 'Microsoft / Outlook',
-    category: 'more',
-    sites: [
-      'microsoft.com',
-      'live.com',
-      'outlook.com',
-      'office.com',
-      'office365.com',
-    ],
-  },
-  zoom: {
-    label: 'Zoom',
-    category: 'more',
-    sites: ['zoom.us', 'zoomgov.com', 'zoom.com'],
+  github: {
+    label: 'GitHub',
+    category: 'work',
+    domains: ['github.com', 'githubusercontent.com', 'raw.githubusercontent.com'],
+    ip: [{ from: 'official', list: 'github' }, { from: 'asn', asns: [36459] }],
   },
   proton: {
     label: 'Proton',
-    category: 'more',
-    sites: ['proton.me', 'protonmail.com', 'pm.me'],
+    category: 'work',
+    domains: ['proton.me', 'protonmail.com', 'pm.me'],
+    legacy: {},
+    ip: [{ from: 'asn', asns: [62371, 209103, 199218] }, { from: 'portal', portals: ['proton.me'] }],
+  },
+  notion: {
+    label: 'Notion',
+    category: 'work',
+    domains: ['notion.so', 'notionusercontent.com'],
+    legacy: {},
+    ip: [{ from: 'portal', portals: ['notion.so'] }],
+  },
+  zoom: {
+    label: 'Zoom',
+    category: 'work',
+    domains: ['zoom.us', 'zoomgov.com', 'zoom.com'],
+    ip: [{ from: 'official', list: 'zoom' }],
+  },
+  microsoft: {
+    label: 'Microsoft / Outlook',
+    category: 'work',
+    domains: ['microsoft.com', 'live.com', 'outlook.com', 'office.com', 'office365.com'],
+    ip: [{ from: 'resolve' }],
+  },
+  cloudflare: {
+    label: 'Cloudflare (сайты за ним)',
+    category: 'infra',
+    domains: ['cloudflare.com', 'one.one.one.one'],
+    // The WARP endpoint subnets inside these networks are cut per request (I14), never in the snapshot.
+    ip: [{ from: 'official', list: 'cloudflare' }],
+  },
+  bestchange: {
+    label: 'BestChange',
+    category: 'other',
+    domains: ['bestchange.ru', 'bestchange.com', 'www.bestchange.ru'],
+    legacy: {},
+    ip: [{ from: 'portal', portals: ['bestchange.ru'] }],
   },
   control4: {
-    label: 'Control4 (умный дом)',
-    category: 'more',
-    // Домены не индексированы opencck → используем статические CIDR по DNS-резолву.
-    // AWS Global Accelerator anycast: 75.2.70.75, 99.83.190.102 (control4.com, snapone.com, ovrc.com)
-    // AWS us-east-2: 13.59.205.187 (api.control4.com)
-    // Cloudflare: 104.18.14.48, 104.18.15.48 (my/customer.control4.com, snapav.com)
-    sites: [],
-    cidrs: [
-      '75.2.70.75/32',
-      '99.83.190.102/32',
-      '13.59.205.187/32',
-      '104.18.14.48/32',
-      '104.18.15.48/32',
-      '104.18.30.8/32',
-      '104.18.31.8/32',
-    ],
+    label: 'Control4',
+    category: 'other',
+    domains: [],
+    ip: [{
+      from: 'static',
+      // AWS Global Accelerator anycast 75.2.70.75, 99.83.190.102 (control4.com, snapone.com, ovrc.com); AWS us-east-2
+      // 13.59.205.187 (api.control4.com); Cloudflare 104.18.14.48, 104.18.15.48, 104.18.30.8, 104.18.31.8
+      // (my/customer.control4.com, snapav.com).
+      cidrs4: ['75.2.70.75/32', '99.83.190.102/32', '13.59.205.187/32', '104.18.14.48/32', '104.18.15.48/32', '104.18.30.8/32', '104.18.31.8/32'],
+      source: 'DNS resolution of the Control4 domains (commit 2f2eb54)',
+      date: '2026-06-05',
+    }],
+  },
+  misc_blocked: {
+    label: 'SoundCloud, Medium, Patreon и др.',
+    category: 'other',
+    domains: ['soundcloud.com', 'medium.com', 'patreon.com', 'grammarly.com', 'myanimelist.net'],
+    ip: [{ from: 'portal', portals: ['soundcloud.com', 'medium.com', 'patreon.com', 'grammarly.com', 'myanimelist.net'] }],
   },
 };
 
-const PRESET_CATEGORY_ORDER = ['social', 'gaming', 'torrent', 'more'];
+/** Category blocks of the catalogue, in display order; the UI titles them with `section_<key>`. */
+const PRESET_CATEGORY_ORDER = Object.freeze(['video', 'messengers', 'social', 'torrent', 'media', 'gaming', 'ai', 'work', 'infra', 'other']);
 
-/** Быстрый выбор: все пресеты вне «more», плюс записи more с popular: true. */
-const PRESET_GROUP_RF_POPULAR = Object.entries(ROUTE_PRESETS)
-  .filter(([, v]) => v.category !== 'more' || v.popular === true)
-  .map(([id]) => id);
+/** The «Основной набор» button (K12); the API field keeps its old name `groupRfPopular`. */
+const PRESET_QUICK_PICK = Object.freeze(['youtube', 'telegram', 'discord', 'cloudflare', 'twitter', 'github', 'rutracker']);
+
+/** Old keys that resolve to another preset: links and API calls of earlier versions keep working. */
+const PRESET_ALIASES = Object.freeze({ rutracker_local: 'rutracker' });
+
+/**
+ * Russian services taken out of the catalogue in 3.2.0 (K3): reachable directly in Russia, and some refuse visitors
+ * through VPN. The server skips them with a warning; a set made only of them is refused before registration.
+ */
+const RETIRED_PRESETS = Object.freeze(['vk', 'ok', 'yandex', 'dzen', 'rutube', 'mailru', 'wildberries', 'ozon', 'avito', 'kinopoisk', 'twogis', 'max_messenger']);
+
+/** Kept for the API field `groupRfPopular` and older callers: the quick pick. */
+const PRESET_GROUP_RF_POPULAR = PRESET_QUICK_PICK;
 
 const normalizePresetKey = (raw) =>
   String(raw || '')
@@ -359,26 +329,31 @@ const normalizePresetKey = (raw) =>
     .toLowerCase()
     .replace(/[^a-z0-9_-]/g, '');
 
+/**
+ * Domains, static networks and itdoginfo lists of a set of presets (aliases applied). Retired and unknown keys are
+ * listed in `unknown`. The request path resolves presets through src/server/ipCatalog; this stays for tools.
+ */
 const expandPresetsToSites = (presetKeys) => {
   const seenSites = new Set();
   const seenCidrs = new Set();
   const seenCommunity = new Set();
   const unknown = [];
   for (const key of presetKeys) {
-    const k = normalizePresetKey(key);
-    if (!k) continue;
+    const raw = normalizePresetKey(key);
+    if (!raw) continue;
+    const k = PRESET_ALIASES[raw] || raw;
     const def = ROUTE_PRESETS[k];
     if (!def) {
-      unknown.push(k);
+      unknown.push(raw);
       continue;
     }
-    for (const s of (def.sites || [])) {
+    for (const s of (def.domains || [])) {
       seenSites.add(s.trim().toLowerCase());
     }
-    for (const c of (def.cidrs || [])) {
-      seenCidrs.add(c.trim());
+    for (const step of (def.ip || [])) {
+      if (step.from === 'static') for (const c of [...step.cidrs4, ...(step.cidrs6 || [])]) seenCidrs.add(c.trim());
     }
-    for (const l of (def.communityLists || [])) {
+    for (const l of ((def.legacy && def.legacy.communityLists) || [])) {
       seenCommunity.add(String(l).trim());
     }
   }
@@ -390,16 +365,23 @@ const expandPresetsToSites = (presetKeys) => {
   };
 };
 
-const listPresetsForApi = () => {
+/**
+ * The catalogue for /api/iplist and presets-fallback.json, by category order. With `prices` (the snapshot prices of
+ * src/server/ipCatalog) every preset also carries `routes4`, `precision`, `noData` and `source` (catalog | live).
+ * @param {{ presets: Record<string, { routes4: number, precision: string|null, noData: string|null, source: string }> } | null} [prices]
+ */
+const listPresetsForApi = (prices = null) => {
   const out = [];
   for (const category of PRESET_CATEGORY_ORDER) {
     for (const [id, v] of Object.entries(ROUTE_PRESETS)) {
       if (v.category !== category) continue;
+      const price = prices && prices.presets[id];
       out.push({
         id,
         label: v.label,
-        sitesCount: (v.sites || []).length,
+        sitesCount: (v.domains || []).length,
         category,
+        ...(price ? { routes4: price.routes4, precision: price.precision, noData: price.noData, source: price.source } : {}),
       });
     }
   }
@@ -517,8 +499,11 @@ const parseDnsKeyFromRequest = (req) => {
 
 module.exports = {
   ROUTE_PRESETS,
-  PRESET_GROUP_RF_POPULAR,
   PRESET_CATEGORY_ORDER,
+  PRESET_QUICK_PICK,
+  PRESET_ALIASES,
+  RETIRED_PRESETS,
+  PRESET_GROUP_RF_POPULAR,
   expandPresetsToSites,
   listPresetsForApi,
   normalizePresetKey,
