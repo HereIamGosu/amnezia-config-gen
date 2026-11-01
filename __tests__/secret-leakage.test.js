@@ -170,6 +170,51 @@ describe('secret leakage — error responses', () => {
   });
 });
 
+// ── Server log lines ──────────────────────────────────────────────────────────
+
+describe('secret leakage — server log lines', () => {
+  test('[warp-registration-stats] carries no token, device id, key or client IP (3.1.8)', async () => {
+    clearModules();
+    const stats = require('../src/server/warpRegistration');
+    stats.__stats.reset();
+    const consoleError = mock.method(console, 'error', () => {});
+    let callCount = 0;
+    const httpsMock = mock.method(https, 'request', (options, cb) => {
+      const fakeRes = new EventEmitter();
+      const req = new EventEmitter();
+      req.write = () => {};
+      req.destroy = () => {};
+      req.end = () => setImmediate(() => {
+        callCount++;
+        // First registration: POST succeeds with the sentinels, PATCH fails (403). Second: succeeds throughout.
+        fakeRes.statusCode = callCount === 2 ? 403 : 200;
+        cb(fakeRes);
+        fakeRes.emit('data', Buffer.from(callCount === 2 ? JSON.stringify({ message: SENTINEL_TOKEN }) : buildWarpResponse(200).body));
+        fakeRes.emit('end');
+      });
+      return req;
+    });
+    net.createConnection = (opts, cb_) => { const s = mockNetOk(); if (cb_) setImmediate(cb_); return s; };
+    try {
+      const handler = require('../api/warp');
+      await handler(makeReq({ mode: 'awg2' }), makeRes());
+      await handler(makeReq({ mode: 'awg2' }), makeRes());
+      const lines = [];
+      stats.flushRegistrationStats((line) => lines.push(line));
+      assert.equal(lines.length, 1);
+      assert.match(lines[0], / ok=1 .* rejected=1 /);
+      assert.doesNotMatch(lines[0], new RegExp(`${SENTINEL_TOKEN}|${SENTINEL_ID}`), 'token and device id must not appear in the log line');
+      assert.doesNotMatch(lines[0], /10\.0\.0\.4|172\.16\.0\.2|fd01::2/, 'no client or tunnel address in the log line');
+      assert.doesNotMatch(lines[0], /=[A-Za-z0-9+/]{20,}/, 'no key material in the log line');
+    } finally {
+      stats.__stats.reset();
+      consoleError.mock.restore();
+      httpsMock.mock.restore();
+      net.createConnection = realNetCreate;
+    }
+  });
+});
+
 // ── Summary / telemetry leakage ───────────────────────────────────────────────
 
 describe('secret leakage — buildResultSummary telemetry', () => {

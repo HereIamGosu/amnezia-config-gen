@@ -8,6 +8,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { flushRegistrationStats } = require('./src/server/warpRegistration');
 
 const ROOT = __dirname;
 // PUBLIC_DIR overrides the static root (tests serve a built copy); production uses ./public.
@@ -389,6 +390,8 @@ server.listen(PORT, HOST, () => {
 });
 
 const shutdown = () => {
+  // WARP registration outcomes since the last window line; nothing when there were none.
+  flushRegistrationStats();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 5000).unref();
 };

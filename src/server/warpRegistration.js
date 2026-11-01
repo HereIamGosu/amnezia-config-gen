@@ -65,6 +65,33 @@ const statusError = (res, message) => {
 /** HTTP status, `Retry-After` seconds or null, and the fixed text of /api/warp for a registration error. */
 const refusalFor = (err) => ({ ...REFUSALS[err.registrationClass], retryAfterS: err.retryAfterS });
 
+// ── Outcome counters (3.1.8, R5 4.D "Лог на сервере") ────────────────────────
+// One outcome per registration, in memory of this process. Every 10 minutes with at least one registration in
+// the window, and at shutdown (server.js), one line of numbers and the profile name: no IP, id, token, key or text.
+const STATS_WINDOW_MS = 10 * 60 * 1000;
+const STATS_KEYS = ['ok', 'ok_ipv4_only', 'rate_limited', 'unavailable', 'rejected', 'malformed'];
+const emptyStats = () => Object.fromEntries(STATS_KEYS.map((key) => [key, 0]));
+let stats = emptyStats();
+let statsTimer = null;
+
+/** Logs the window's line and starts a new window; nothing when the window had no registration. */
+const flushRegistrationStats = (log = console.log) => {
+  if (!STATS_KEYS.some((key) => stats[key] > 0)) return null;
+  const line = `[warp-registration-stats] window=600s profile=legacy ${STATS_KEYS.map((key) => `${key}=${stats[key]}`).join(' ')}`;
+  stats = emptyStats();
+  log(line);
+  return line;
+};
+
+const recordOutcome = (key) => {
+  stats[key] += 1;
+  if (!statsTimer) {
+    // unref: the window timer never keeps a process (a test, a CLI) alive.
+    statsTimer = setInterval(() => flushRegistrationStats(), STATS_WINDOW_MS);
+    statsTimer.unref();
+  }
+};
+
 /** Validate IPv4 address (e.g. 172.16.0.2). */
 const isValidIPv4 = (s) => {
   if (typeof s !== 'string') return false;
@@ -228,6 +255,17 @@ const mergeConfigAfterWarp = async (id, token, initialConfig) => {
  * @returns {Promise<{ peerPublicKey: string|undefined, clientIPv4: string, clientIPv6: string|null }>}
  */
 const registerDevice = async (publicKey) => {
+  try {
+    const registration = await register(publicKey);
+    recordOutcome(registration.clientIPv6 ? 'ok' : 'ok_ipv4_only');
+    return registration;
+  } catch (err) {
+    if (err.registrationClass) recordOutcome(err.registrationClass);
+    throw err;
+  }
+};
+
+const register = async (publicKey) => {
   const regBody = {
     install_id: '',
     tos: new Date().toISOString(),
@@ -264,4 +302,14 @@ module.exports = {
   isValidIPv6,
   registerDevice,
   refusalFor,
+  flushRegistrationStats,
+  /** Tests only: the window timer, and a fresh window without a timer. */
+  __stats: {
+    timer: () => statsTimer,
+    reset: () => {
+      clearInterval(statsTimer);
+      statsTimer = null;
+      stats = emptyStats();
+    },
+  },
 };
