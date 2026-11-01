@@ -193,6 +193,10 @@ const handleApi = async (req, res, name, url) => {
         sendError(res, 400, 'Некорректное JSON-тело запроса.');
         return;
       }
+    } else {
+      // The stream is consumed here, so a handler cannot read the empty body itself: it is `{}`, as an empty
+      // streamed body is for api/warp.js (readRequestJson).
+      req.body = {};
     }
   }
 

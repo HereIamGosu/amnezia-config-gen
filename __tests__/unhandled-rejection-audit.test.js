@@ -387,4 +387,15 @@ describe('server.js with the network cut off', () => {
     assert.equal(server.exitCode, null, `server.js exited: ${stderr}`);
     assert.doesNotMatch(stderr, /unhandled|UnhandledPromiseRejection|uncaught/i);
   });
+
+  // Observation of the 3.1.7 audit, fixed in 3.1.8: server.js read the stream and left req.body unset, and
+  // readRequestJson waited for an `end` that had passed, until the 60 s deadline (504).
+  test('POST with Content-Type: application/json and an empty body answers at once, as `{}` does', async () => {
+    const base = `http://127.0.0.1:${PORT}`;
+    for (const [contentType, body] of [['application/json', ''], ['application/json', '{}'], ['text/plain', '']]) {
+      const res = await fetch(`${base}/api/warp`, { method: 'POST', body, headers: { 'Content-Type': contentType }, signal: AbortSignal.timeout(5000) });
+      assert.equal(res.status, 503, `${contentType} ${JSON.stringify(body)}: a registration attempt, failing offline`);
+      assert.equal((await res.json()).success, false);
+    }
+  });
 });
