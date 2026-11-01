@@ -433,6 +433,14 @@ const warningText = (warning) => {
       'В AllowedIPs {after} IPv4-маршрутов (в исходных списках {before}), это больше лимита {limit}: телефоны и роутеры могут работать с таким списком нестабильно.')
       .replace('{after}', budget[1]).replace('{before}', budget[2]).replace('{limit}', budget[3]);
   }
+  // "Endpoint override inside routes: <address>" (api/warp.js, 3.2.0): the address goes into the localised text.
+  const override = warning.code === 'endpoint_override_in_routes'
+    && /^Endpoint override inside routes: ([0-9A-Fa-f.:]+)$/.exec(warning.message || '');
+  if (override) {
+    return t('risk_endpoint_override_in_routes',
+      'Адрес ручного endpoint {address} входил в выбранные маршруты: он исключён из AllowedIPs, чтобы соединение с WARP не шло через сам туннель.')
+      .replace('{address}', override[1]);
+  }
   return byCode[warning.code] || warning.message || t('result_summary_no_data', 'нет данных');
 };
 

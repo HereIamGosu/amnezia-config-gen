@@ -117,15 +117,36 @@ describe('a route list that fails answers before any registration', () => {
     assert.deepEqual(lines, []);
   });
 
-  test('Lab Auto: the 502 comes after the Lab selection, which has nothing to undo; no registration', async () => {
+  // Changed in 3.2.0 (spec 3.2.0 §5.4 p. 2): Lab readiness → routes → selection with the route filter → registration.
+  // The 502 by routes now comes before any Lab selection (3.1.9: after it).
+  test('Lab Auto: readiness first, then the routes: their 502 comes before the selection; no registration', async () => {
     mockLists(async () => ({ cidrs: [], source: 'opencck' }));
     const lab = labProvider(labSnapshot(LAB_POOL));
     const out = await generate({ mode: 'awg2', endpointMode: 'lab', count: '2', routeMode: 'split', presets: 'discord' }, { lab });
     assert.equal(out.status, 502);
     assert.equal(cloudflareCalls(out), 0);
-    assert.equal(lab.calls.select, 1);
+    assert.equal(lab.calls.select, 0, 'no selection before the routes are known');
     const again = await generate({ mode: 'awg2', endpointMode: 'lab', count: '2' }, { lab });
     assert.equal(again.status, 200, 'the same provider still selects');
+    assert.equal(lab.calls.select, 1);
+  });
+
+  test('Lab Auto without usable data: 503 before the route lists are asked', async () => {
+    const fetchMock = mockLists(async () => ({ cidrs: ['203.0.113.0/24'], source: 'opencck' }));
+    const lab = labProvider(labSnapshot([]));
+    const out = await generate({ mode: 'awg2', endpointMode: 'lab', routeMode: 'split', presets: 'discord' }, { lab });
+    assert.equal(out.status, 503);
+    assert.equal(out.body.error, 'lab_no_endpoints');
+    assert.equal(fetchMock.mock.callCount(), 0, 'no resolution to wait for');
+    assert.equal(cloudflareCalls(out), 0);
+  });
+
+  test('Lab Auto: the selection gets the resolved IPv4 routes and skips what they cover', async () => {
+    mockLists(async () => ({ cidrs: ['162.159.192.0/22', '188.114.96.0/22'], source: 'opencck' }));
+    const lab = labProvider(labSnapshot(LAB_POOL));
+    const out = await generate({ mode: 'awg2', endpointMode: 'lab', count: '3', port: '', routeMode: 'split', presets: 'discord' }, { lab });
+    assert.equal(out.status, 200, JSON.stringify(out.body));
+    for (const conf of out.configs) assert.doesNotMatch(line(conf, 'Endpoint'), /188\.114\./);
   });
 
   test('a list source that throws → its error, no registration', async () => {

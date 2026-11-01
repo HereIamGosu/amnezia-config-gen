@@ -10,7 +10,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { describe, test } = require('node:test');
-const { aggregateCidrs } = require('../src/server/cidrAggregate');
+const { aggregateCidrs, routeMatcher } = require('../src/server/cidrAggregate');
 const { expandPresetsToSites } = require('../src/server/routePresets');
 const {
   coversSame, paint16, minimalCount, mulberry32, randomBlocks16, randomBlocksAnywhere, parse, addressCount,
@@ -333,6 +333,22 @@ describe('exclude6: subtraction of IPv6 prefixes, no IPv6 aggregation (3.2.0, sp
       assert.equal(coversSame6(out.cidrs, out.cidrs, { minus: holes }).ok, true, `seed ${seed}: holes covered`);
       assert.deepEqual(cidrsOf(out.cidrs, { exclude6: holes }), out.cidrs, `seed ${seed}: idempotent`);
     }
+  });
+});
+
+describe('routeMatcher: whether a route list covers an address (3.2.0, I15)', () => {
+  const routed = routeMatcher(['188.114.96.0/20', '10.0.0.1/8', '2606:4700::/32', '1.2.3.4', '256.0.0.0/8', 'x']);
+
+  test('IPv4: inside, the edges, outside; host bits of an entry are dropped', () => {
+    for (const ip of ['188.114.96.1', '188.114.111.255', '188.114.96.0', '10.255.255.255']) assert.equal(routed(ip), true, ip);
+    for (const ip of ['188.114.112.0', '188.114.95.255', '162.159.192.1', '1.2.3.4']) assert.equal(routed(ip), false, ip);
+  });
+
+  test('IPv6: any spelling of a covered address; malformed entries and addresses cover nothing', () => {
+    assert.equal(routed('2606:4700:d0::a29f:c001'), true);
+    assert.equal(routed('2606:4700:0:0:0:0:0:1'), true);
+    assert.equal(routed('2606:4701::1'), false);
+    for (const value of ['', 'engage.cloudflareclient.com', '999.1.1.1', '2606:zz::1', null, undefined]) assert.equal(routed(value), false, String(value));
   });
 });
 

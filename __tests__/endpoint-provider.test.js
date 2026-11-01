@@ -183,6 +183,42 @@ test('Lab Auto selection keeps the provider port and diversity contract', () => 
   assert.equal(providerFor(snapshot(POOL)).provider.selectForGeneration({ count: 1, port: 500 }).endpoints[0].port, 500);
 });
 
+// ── 3.2.0: readiness before the routes, candidates outside AllowedIPs (I15, spec 3.2.0 §5.4 p. 2) ────────────────
+
+test('readiness answers the selection codes without selecting: no random draw, no endpoint', () => {
+  let draws = 0;
+  const ok = providerFor(snapshot(POOL), { random: () => { draws += 1; return 0.42; } }).provider;
+  assert.deepEqual(ok.readiness(), { ok: true });
+  assert.equal(draws, 0, 'readiness never draws');
+  const missing = new LabEndpointProvider({ path: '/nope', stat: () => { throw new Error('ENOENT'); } });
+  for (const [provider, code] of [
+    [missing, 'lab_unavailable'],
+    [providerFor(snapshot(POOL, { lab_status: 'unavailable' })).provider, 'lab_unavailable'],
+    [providerFor(snapshot(POOL, { expires_at: iso(NOW - 1) })).provider, 'lab_stale'],
+    [providerFor(snapshot([])).provider, 'lab_no_endpoints'],
+    [{ snapshot: () => { throw new Error('EIO'); } }, 'lab_unavailable'],
+  ]) {
+    assert.deepEqual(LabEndpointProvider.prototype.readiness.call(provider), { ok: false, code });
+  }
+  assert.deepEqual(providerFor(snapshot(POOL, { lab_status: 'degraded' })).provider.readiness(), { ok: true });
+});
+
+test('selection skips the endpoints the routes cover; none left → lab_endpoints_in_routes', () => {
+  const pool = [endpoint('162.159.192.1', 2408), endpoint('188.114.96.5', 2408), endpoint('188.114.97.6', 500)];
+  const provider = providerFor(snapshot(pool)).provider;
+  for (let i = 0; i < 20; i += 1) {
+    const r = provider.selectForGeneration({ count: 3, port: 2408, avoidCidrs4: ['188.114.96.0/20', '10.0.0.0/8'] });
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.endpoints, [{ ip: '162.159.192.1', port: 2408 }], 'only the endpoint outside the routes');
+  }
+  const shifted = provider.selectForGeneration({ count: 1, port: 500, avoidCidrs4: ['188.114.97.0/24'] });
+  assert.equal(shifted.ok, true);
+  assert.notEqual(shifted.endpoints[0].ip, '188.114.97.6', 'the requested port does not bring a covered endpoint back');
+  assert.deepEqual(provider.selectForGeneration({ count: 1, avoidCidrs4: ['162.159.192.0/24', '188.114.96.0/22'] }),
+    { ok: false, code: 'lab_endpoints_in_routes' });
+  assert.equal(provider.selectForGeneration({ count: 2, avoidCidrs4: [] }).distinct, 2, 'no routes, no filter');
+});
+
 test('builtin provider is the default and the factory needs explicit env', () => {
   assert.equal(new BuiltinEndpointProvider().name, 'builtin');
   assert.equal(createShadowFromEnv({}), null);

@@ -63,6 +63,7 @@
   "err_lab_stale": "Endpoint Lab data is stale. Lab Auto does not create a config without a fresh check — choose hostname in the endpoint settings.",
   "err_lab_no_endpoints": "Endpoint Lab has no freshly verified endpoints right now. Choose hostname in the endpoint settings or try again later.",
   "err_lab_selection_failed": "Could not pick an Endpoint Lab endpoint. No config was created — choose hostname in the endpoint settings.",
+  "err_lab_endpoints_in_routes": "Every fresh Endpoint Lab endpoint lies inside the selected routes, so the connection to WARP would go into the tunnel itself. Choose hostname in the endpoint settings or another set of routes.",
   "instruction_title": "Installation & Setup Guide",
   "additional_info": "Additional Info",
 
@@ -339,6 +340,7 @@
   "risk_routes_fallback": "A fallback route source was used.",
   "risk_warp_ipv4_only": "Cloudflare registered the device without an IPv6 address: the config works over IPv4 only.",
   "risk_routes_over_budget": "AllowedIPs has {after} IPv4 routes ({before} in the source lists), above the limit of {limit}: phones and routers may handle a list this long unstably.",
+  "risk_endpoint_override_in_routes": "The manual endpoint address {address} was inside the selected routes: it is left out of AllowedIPs so the connection to WARP does not go through the tunnel itself.",
   "risk_routes_unknown": "Route source was not reported.",
   "generation_completed_with_warnings": "The configuration was generated with warnings. See the result card for details.",
   "diagnostics_title": "What to check if it does not work",

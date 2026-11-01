@@ -123,6 +123,26 @@ e2eSuite('Lab Auto in the generator', (openPage) => {
     }
   });
 
+  test('every Lab endpoint inside the routes (lab_endpoints_in_routes): a Lab refusal with the hostname button (RU and EN)', async () => {
+    for (const [url, text] of [['/', /попадают в выбранные маршруты/], ['/en', /inside the selected routes/]]) {
+      const page = await openPage({ width: 1440, height: 900 });
+      await page.goto(url);
+      page.allowErrors(/status of 503/, /Ошибка при генерации конфигурации/);
+      const requests = stubWarp(page, () => ({ status: 503, json: fixtures.warpLabError('lab_endpoints_in_routes') }));
+      await chooseEndpoint(page, 'lab');
+      await closeSettings(page);
+      await page.click('#generateButton');
+      await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'error', { message: 'error view' });
+      const error = await page.evaluate(() => document.getElementById('resultErrorText').textContent);
+      assert.match(error, text);
+      assert.doesNotMatch(error, /e2e/, 'the UI shows its own translation, not the server text');
+      assert.equal(await page.evaluate(() => document.getElementById('warpEndpointSelect').value), 'lab', 'the choice stays Lab Auto');
+      assert.equal(await page.evaluate(() => document.getElementById('resultHostnameRetry').hidden), false, 'the hostname button is offered');
+      assert.equal(requests.length, 1, 'no automatic second request');
+      await page.assertClean();
+    }
+  });
+
   test('default endpoint: Endpoint Lab with a fresh pool, hostname with a reason otherwise; a visitor choice sticks', async () => {
     const summary = () => ({
       endpoint: document.getElementById('warpEndpointSelect').value,

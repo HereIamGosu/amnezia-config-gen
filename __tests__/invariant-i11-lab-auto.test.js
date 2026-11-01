@@ -9,8 +9,11 @@
 const assert = require('node:assert/strict');
 const { describe, test } = require('node:test');
 const { inflateSync } = require('node:zlib');
-const { labSnapshot, LAB_POOL, labProvider, generate, endpointOf, parseConf } = require('./helpers/warp-harness');
+const {
+  labSnapshot, labEndpoint, LAB_POOL, labProvider, generate, endpointOf, parseConf, registrationAnswer,
+} = require('./helpers/warp-harness');
 const { parseCompatChain } = require('./helpers/cps-chain');
+const { coversSame } = require('./helpers/cidr-coverage');
 
 const MODES = ['legacy', 'awg2', 'awg3', 'awg31'];
 const VARIANTS = [
@@ -165,3 +168,72 @@ for (const mode of MODES) {
     });
   });
 }
+
+// 3.2.0 (spec 3.2.0 §5.4 p. 2, I15): with a preset that covers 188.114.96.0/20 and 162.158.0.0/15 (cloudflare), Lab
+// Auto still changes only the Endpoint, picks it outside AllowedIPs, and refuses before registration when every
+// fresh Lab endpoint is inside the routes. Cloudflare's ips-v4 is what the route lists answer here.
+describe('I11 with the cloudflare preset: the Lab endpoint outside AllowedIPs, the same AllowedIPs', () => {
+  const CF_IPS_V4 = ['173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22', '141.101.64.0/18',
+    '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20', '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15',
+    '104.16.0.0/13', '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22'];
+  let listRequests = 0;
+  const network = (_n, request) => {
+    if (request.hostname === 'api.cloudflareclient.com') return registrationAnswer();
+    listRequests += 1;
+    if (request.hostname !== 'iplist.opencck.org') return { status: 500, body: '' };
+    const sites = new URLSearchParams(request.path.slice(2)).getAll('site');
+    return { status: 200, body: JSON.stringify(Object.fromEntries(sites.map((s) => [s, CF_IPS_V4]))) };
+  };
+  const fresh = () => {
+    for (const id of ['../src/server/ipListFetch', '../src/server/communityIpFetch']) delete require.cache[require.resolve(id)];
+  };
+  const allowedOf = (conf) => /^AllowedIPs = (.+)$/m.exec(conf)[1].split(', ');
+  const routed = (conf, ip) => coversSame(allowedOf(conf), [...allowedOf(conf), `${ip}/32`]).ok;
+  const registrations = (r) => r.requests.filter((q) => q.hostname === 'api.cloudflareclient.com').length;
+
+  for (const mode of MODES) {
+    test(`${mode}: semanticDiff is Peer.Endpoint only and the Lab endpoint is not routed`, async () => {
+      const query = { mode, port: '4500', routeMode: 'split', presets: 'cloudflare', count: '2', link: '1' };
+      fresh();
+      const host = await generate(query, { cloudflare: network, lab: labProvider(labSnapshot(LAB_POOL)) });
+      fresh();
+      const lab = await generate({ ...query, endpointMode: 'lab' }, { cloudflare: network, lab: labProvider(labSnapshot(LAB_POOL)) });
+      assert.equal(host.status, 200, JSON.stringify(host.body));
+      assert.equal(lab.status, 200, JSON.stringify(lab.body));
+      lab.configs.forEach((conf, i) => {
+        assert.deepEqual(semanticDiff(host.configs[i], conf), ['Peer.Endpoint']);
+        const ip = endpointOf(conf).replace(/:\d+$/, '');
+        assert.ok(POOL_ENDPOINTS.has(endpointOf(conf)), endpointOf(conf));
+        assert.equal(routed(conf, ip), false, `${ip} is outside AllowedIPs`);
+        assert.equal(routed(conf, '188.114.96.31'), true, 'the covered pool endpoint is a routed address');
+      });
+    });
+  }
+
+  test('a pool only inside AllowedIPs → 503 lab_endpoints_in_routes, no registration', async () => {
+    fresh();
+    const pool = [labEndpoint('188.114.96.31', 4500), labEndpoint('188.114.97.41', 500), labEndpoint('188.114.99.5', 2408)];
+    const r = await generate({ mode: 'awg2', port: '4500', endpointMode: 'lab', routeMode: 'split', presets: 'cloudflare' },
+      { cloudflare: network, lab: labProvider(labSnapshot(pool)) });
+    assert.equal(r.status, 503, JSON.stringify(r.body));
+    assert.equal(r.body.error, 'lab_endpoints_in_routes');
+    assert.equal(registrations(r), 0);
+  });
+
+  test('a Lab without data → 503 at once: the route lists are not asked (no wait for a resolution)', async () => {
+    fresh();
+    listRequests = 0;
+    const r = await generate({ mode: 'awg2', endpointMode: 'lab', routeMode: 'split', presets: 'discord' },
+      { cloudflare: network, lab: labProvider(labSnapshot([])) });
+    assert.equal(r.status, 503);
+    assert.equal(r.body.error, 'lab_no_endpoints');
+    assert.equal(listRequests, 0);
+    assert.equal(registrations(r), 0);
+  });
+
+  test('an invalid manual override → 400 before registration', async () => {
+    const r = await generate({ mode: 'awg2', routeMode: 'split', presets: 'cloudflare', peerEndpoint: '999.1.1.1:2408' }, { cloudflare: network });
+    assert.equal(r.status, 400);
+    assert.equal(registrations(r), 0);
+  });
+});

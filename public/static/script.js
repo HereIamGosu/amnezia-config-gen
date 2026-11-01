@@ -101,6 +101,7 @@ const LAB_AUTO_ERRORS = {
   lab_stale: ['err_lab_stale', 'Данные Endpoint Lab устарели. Lab Auto не создаёт конфигурацию без свежей проверки — выберите hostname в настройках endpoint.'],
   lab_no_endpoints: ['err_lab_no_endpoints', 'В Endpoint Lab сейчас нет свежих проверенных endpoint\'ов. Выберите hostname в настройках endpoint или попробуйте позже.'],
   lab_selection_failed: ['err_lab_selection_failed', 'Не удалось выбрать endpoint Endpoint Lab. Конфигурация не создана — выберите hostname в настройках endpoint.'],
+  lab_endpoints_in_routes: ['err_lab_endpoints_in_routes', 'Все свежие endpoint\'ы Endpoint Lab попадают в выбранные маршруты, и соединение с WARP ушло бы в сам туннель. Выберите hostname в настройках endpoint или другой набор маршрутов.'],
 };
 
 const getApiErrorMessage = (data) => {

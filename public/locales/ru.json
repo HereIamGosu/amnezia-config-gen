@@ -63,6 +63,7 @@
   "err_lab_stale": "Данные Endpoint Lab устарели. Lab Auto не создаёт конфигурацию без свежей проверки — выберите hostname в настройках endpoint.",
   "err_lab_no_endpoints": "В Endpoint Lab сейчас нет свежих проверенных endpoint'ов. Выберите hostname в настройках endpoint или попробуйте позже.",
   "err_lab_selection_failed": "Не удалось выбрать endpoint Endpoint Lab. Конфигурация не создана — выберите hostname в настройках endpoint.",
+  "err_lab_endpoints_in_routes": "Все свежие endpoint'ы Endpoint Lab попадают в выбранные маршруты, и соединение с WARP ушло бы в сам туннель. Выберите hostname в настройках endpoint или другой набор маршрутов.",
   "instruction_title": "Инструкция по установке и настройке",
   "additional_info": "Дополнительная информация",
 
@@ -339,6 +340,7 @@
   "risk_routes_fallback": "Использован резервный источник маршрутов.",
   "risk_warp_ipv4_only": "Cloudflare зарегистрировал устройство без IPv6-адреса: конфиг работает только по IPv4.",
   "risk_routes_over_budget": "В AllowedIPs {after} IPv4-маршрутов (в исходных списках {before}), это больше лимита {limit}: телефоны и роутеры могут работать с таким списком нестабильно.",
+  "risk_endpoint_override_in_routes": "Адрес ручного endpoint {address} входил в выбранные маршруты: он исключён из AllowedIPs, чтобы соединение с WARP не шло через сам туннель.",
   "risk_routes_unknown": "Источник маршрутов не указан.",
   "generation_completed_with_warnings": "Конфигурация создана с предупреждениями. Подробности указаны в карточке результата.",
   "diagnostics_title": "Что проверить, если не работает",

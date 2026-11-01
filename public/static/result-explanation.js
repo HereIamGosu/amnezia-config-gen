@@ -31,6 +31,7 @@
     ['Endpoint Lab: only ', 'lab_partial_diversity'],
     ['WARP registration returned no IPv6 address', 'warp_ipv4_only'],
     ['Route budget:', 'routes_over_budget'],
+    ['Endpoint override inside routes:', 'endpoint_override_in_routes'],
   ];
 
   const normalizeWarnings = (input, defaultSource = 'api') => {

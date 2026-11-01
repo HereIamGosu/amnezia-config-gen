@@ -1,11 +1,12 @@
 const nacl = require('tweetnacl');
 const { Buffer } = require('buffer');
 const { randomInt } = require('crypto');
+const net = require('net');
 const fs = require('fs').promises;
 const path = require('path');
 const { expandPresetsToSites, parsePresetKeysFromRequest, getDnsString, parseDnsKeyFromRequest, DNS_DEFAULT_KEY } = require('../src/server/routePresets');
 const { fetchCidrsForDomains } = require('../src/server/ipListFetch');
-const { aggregateCidrs } = require('../src/server/cidrAggregate');
+const { aggregateCidrs, routeMatcher } = require('../src/server/cidrAggregate');
 const { classifyBudget, routeBudgetWarning } = require('../src/server/routeBudget');
 const { WARP_ENDPOINT_PREFIXES_V4, WARP_ENDPOINT_PREFIXES_V6 } = require('../src/server/warpEndpointPrefixes');
 const { createRateLimiter } = require('../src/server/_rateLimit');
@@ -52,6 +53,7 @@ const LAB_AUTO_MESSAGES = Object.freeze({
   lab_stale: 'Данные Endpoint Lab устарели. Lab Auto не выдаёт конфигурацию без свежей проверки; hostname-режим работает без Lab.',
   lab_no_endpoints: 'В Endpoint Lab сейчас нет свежих проверенных endpoint\'ов. Lab Auto не выдаёт конфигурацию; hostname-режим работает без Lab.',
   lab_selection_failed: 'Не удалось выбрать endpoint Endpoint Lab. Конфигурация не выдана; hostname-режим работает без Lab.',
+  lab_endpoints_in_routes: 'Все свежие endpoint\'ы Endpoint Lab попадают в выбранные маршруты split-туннеля, и соединение с WARP ушло бы в сам туннель. Lab Auto не выдаёт конфигурацию; hostname-режим работает без Lab.',
 });
 
 let labProvider = null;
@@ -590,20 +592,24 @@ const TCP_PRECHECK_TIMEOUT_MS = 800;
 /**
  * Pick best endpoint via TCP latency pre-check against endpoint registry candidates.
  * Returns { ip, cidr24 } for the winner, or falls back to random from FALLBACK_ENDPOINTS.
+ * Candidates the split routes cover are skipped (3.2.0, I15): such an Endpoint would be routed into the tunnel. Both
+ * pools always hold addresses inside the WARP endpoint /24s, which the route cut keeps outside AllowedIPs.
  * @param {number} port
  * @param {string[]} [excludeCidrs] avoid these /24 subnets (used for count>1 diversity)
+ * @param {((ip: string) => boolean) | null} [routed] whether the split routes of the request cover an address
  * @returns {Promise<{ ip: string, cidr24: string, endpointSource: 'tcp_check'|'fallback' }>}
  */
-const selectBestEndpointIp = async (port, excludeCidrs = []) => {
+const selectBestEndpointIp = async (port, excludeCidrs = [], routed = null) => {
+  const outsideRoutes = (e) => !routed || !routed(e.ip);
   let candidates;
   try {
-    candidates = await getTopEndpoints({ port, limit: 5, excludeCidrs });
+    candidates = (await getTopEndpoints({ port, limit: 5, excludeCidrs })).filter(outsideRoutes);
   } catch {
     candidates = [];
   }
 
   if (!candidates.length) {
-    const fallback = FALLBACK_ENDPOINTS.filter((e) => !excludeCidrs.includes(e.cidr24));
+    const fallback = FALLBACK_ENDPOINTS.filter((e) => outsideRoutes(e) && !excludeCidrs.includes(e.cidr24));
     const pick = fallback[randomInt(0, Math.max(1, fallback.length))];
     return { ip: pick ? pick.ip : FALLBACK_ENDPOINT_HOSTS[0], cidr24: pick ? pick.cidr24 : 'unknown', endpointSource: 'fallback' };
   }
@@ -620,7 +626,7 @@ const selectBestEndpointIp = async (port, excludeCidrs = []) => {
   if (best) return { ip: best.ip, cidr24: best.cidr24, endpointSource: 'tcp_check' };
 
   // All TCP checks failed — return a random fallback IP
-  const fallback = FALLBACK_ENDPOINTS.filter((e) => !excludeCidrs.includes(e.cidr24));
+  const fallback = FALLBACK_ENDPOINTS.filter((e) => outsideRoutes(e) && !excludeCidrs.includes(e.cidr24));
   const pick = fallback[randomInt(0, Math.max(1, fallback.length))];
   return { ip: pick ? pick.ip : FALLBACK_ENDPOINT_HOSTS[0], cidr24: pick ? pick.cidr24 : 'unknown', endpointSource: 'fallback' };
 };
@@ -742,13 +748,32 @@ const parseAllowlistedPort = (v) => {
   return { port: n };
 };
 
+/**
+ * Manual endpoint `IPv4:port` or `[IPv6]:port`. A value of that shape with an address that is not valid or a port
+ * outside 1–65535 is a 400 before registration (3.2.0, spec 3.2.0 §5.4 p. 4: 999.1.1.1:2408 used to pass and broke
+ * the endpoint cut); any other value is ignored, as before.
+ */
 const parsePeerEndpointOverride = (v) => {
   const s = String(v ?? '').trim();
   if (!s) return null;
-  if (/^(\d{1,3}\.){3}\d{1,3}:\d{1,5}$/.test(s)) return s;
-  if (/^\[[\da-fA-F:]+\]:\d{1,5}$/.test(s)) return s;
-  return null;
+  const shape = /^(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})$/.exec(s) || /^\[([^\]]*)\]:(\d{1,5})$/.exec(s);
+  if (!shape) return null;
+  const port = Number(shape[2]);
+  const valid = (s.startsWith('[') ? net.isIPv6(shape[1]) && !shape[1].includes('%') : net.isIPv4(shape[1]))
+    && port >= 1 && port <= 65535;
+  if (!valid) {
+    const err = new Error('Некорректный peerEndpoint: нужен IPv4:порт или [IPv6]:порт с портом 1–65535.');
+    err.statusCode = 400;
+    err.code = 'peer_endpoint_invalid';
+    throw err;
+  }
+  return s;
 };
+
+/** The address of a manual endpoint (no port, no brackets), or null. */
+const endpointOverrideAddress = (peerEndpoint) => (peerEndpoint
+  ? peerEndpoint.replace(/:\d+$/, '').replace(/^\[(.+)\]$/, '$1')
+  : null);
 
 /**
  * Уровень совместимости своих CPS-цепочек: 'all' — только теги, которые понимают все клиенты с I1–I5
@@ -1046,9 +1071,10 @@ const expandValidPresets = (presetKeys) => {
 
 /**
  * @param {string[]} presetKeys
- * @param {{ includeIpv6?: boolean }} [opts]
+ * @param {{ includeIpv6?: boolean, endpointOverride?: string|null }} [opts] `endpointOverride`: the address of a
+ *   manual endpoint; inside the routes, its /32 (/128 with ipv6=1) is cut and `overrideInside` names it (I14, I15)
  */
-const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false } = {}) => {
+const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false, endpointOverride = null } = {}) => {
   if (!presetKeys.length) {
     return { cidrs: null, routesSource: 'default', routesTelemetrySource: 'static' };
   }
@@ -1080,10 +1106,19 @@ const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false } 
   // The IPv4 addresses of the lists minus the WARP endpoint subnets, in the fewest aligned blocks (I14); with ipv6=1
   // the IPv6 entries lose the WARP endpoint /48 and are otherwise unchanged. Malformed entries pass unchanged.
   // Emptiness is checked after the cut: an empty AllowedIPs is a full tunnel.
-  const { cidrs: merged, before4, after4 } = aggregateCidrs([...resolvedCidrs, ...staticFiltered], {
-    exclude: WARP_ENDPOINT_PREFIXES_V4,
-    exclude6: includeIpv6 ? WARP_ENDPOINT_PREFIXES_V6 : [],
-  });
+  const all = [...resolvedCidrs, ...staticFiltered];
+  const exclude = WARP_ENDPOINT_PREFIXES_V4;
+  const exclude6 = includeIpv6 ? WARP_ENDPOINT_PREFIXES_V6 : [];
+  let aggregated = aggregateCidrs(all, { exclude, exclude6 });
+  // A manual endpoint inside these routes would send the tunnel's own packets into it (I15): its /32 (/128) is cut.
+  let overrideInside = null;
+  if (endpointOverride && routeMatcher(aggregated.cidrs)(endpointOverride)) {
+    overrideInside = endpointOverride;
+    aggregated = endpointOverride.includes(':')
+      ? aggregateCidrs(all, { exclude, exclude6: [...exclude6, `${endpointOverride}/128`] })
+      : aggregateCidrs(all, { exclude: [...exclude, `${endpointOverride}/32`], exclude6 });
+  }
+  const { cidrs: merged, before4, after4 } = aggregated;
 
   if (!merged.length) {
     const err = new Error(
@@ -1099,6 +1134,7 @@ const resolveAllowedIpsFromPresets = async (presetKeys, { includeIpv6 = false } 
     sitesResolved: sites.length,
     before4,
     after4,
+    overrideInside,
   };
 };
 
@@ -1140,7 +1176,10 @@ const generateWarpConfig = async (mode = 'legacy', presetKeys = [], dnsKey = '',
     peerEndpoint = `${warpExtras.engageHost}:${port}`;
   } else {
     const port = warpExtras.warpPort != null ? warpExtras.warpPort : WARP_DEFAULT_ENGAGE_UDP_PORT;
-    const { ip, cidr24, endpointSource: src } = await selectBestEndpointIp(port, routeOpts.excludeCidrs || []);
+    // Built-in endpoints: the candidates the split routes cover are skipped (I15); the full tunnel has no filter.
+    const { cidrs: splitRoutes } = await resolvePresetsPromise;
+    const routed = splitRoutes ? routeMatcher(splitRoutes) : null;
+    const { ip, cidr24, endpointSource: src } = await selectBestEndpointIp(port, routeOpts.excludeCidrs || [], routed);
     endpointSource = src;
     peerEndpoint = `${ip}:${port}`;
     // Pass chosen cidr24 back so count>1 can exclude this subnet for diversity
@@ -1448,21 +1487,23 @@ const handler = async (req, res) => {
     if (effectivePresetKeys.length) expandValidPresets(effectivePresetKeys);
     // ─────────────────────────────────────────────────────────────────────────────
 
-    // Lab Auto: freshness is decided once, here, before any WARP registration. The request then uses exactly
-    // these endpoints even if the snapshot expires while it runs; it never re-selects or switches source.
+    // Lab Auto (3.2.0 order, spec 3.2.0 §5.4 p. 2): readiness → routes → selection that skips the endpoints the
+    // routes cover → registration. A Lab without usable data answers at once, before the route lists; a pool with
+    // every endpoint inside the routes answers lab_endpoints_in_routes. Freshness is decided by the selection, once,
+    // before any WARP registration; the request then uses exactly these endpoints and never switches source (I11).
     const requestedPort = requestExtras.warpPort;
-    let labSelection = null;
+    const refuseLab = (labCode) => {
+      const code = LAB_AUTO_ERROR_CODES.includes(labCode) ? labCode : 'lab_unavailable';
+      res.setHeader('Retry-After', String(LAB_AUTO_RETRY_AFTER_S));
+      res.status(503).json({ success: false, error: code, message: LAB_AUTO_MESSAGES[code] });
+    };
     if (endpointMode === 'lab') {
-      labSelection = getLabProvider().selectForGeneration({ count, port: requestedPort });
-      if (!labSelection.ok || !labSelection.endpoints.length) {
-        let code = labSelection.ok ? 'lab_no_endpoints' : labSelection.code;
-        if (!LAB_AUTO_ERROR_CODES.includes(code)) code = 'lab_unavailable';
-        res.setHeader('Retry-After', String(LAB_AUTO_RETRY_AFTER_S));
-        res.status(503).json({ success: false, error: code, message: LAB_AUTO_MESSAGES[code] });
+      const provider = getLabProvider();
+      const ready = typeof provider.readiness === 'function' ? provider.readiness() : { ok: true };
+      if (!ready.ok) {
+        refuseLab(ready.code);
         return;
       }
-      routeOpts.endpointMode = 'lab';
-      routeOpts.labEndpoints = labSelection.endpoints;
     }
 
     // Split routes: resolved once, here, before any WARP registration (spec R6 4.5). A list that comes back empty
@@ -1470,10 +1511,26 @@ const handler = async (req, res) => {
     // The IPv4-only filter stays in generateWarpConfig: it depends on each registration's answer (3.1.8).
     // Above the route budget the config is still given, with a warning (DECISIONS No. 30).
     let routeBudgetLine = null;
+    let overrideLine = null;
     if (effectivePresetKeys.length) {
-      routeOpts.resolvedRoutes = await resolveAllowedIpsFromPresets(effectivePresetKeys, routeOpts);
-      const { before4, after4 } = routeOpts.resolvedRoutes;
+      routeOpts.resolvedRoutes = await resolveAllowedIpsFromPresets(effectivePresetKeys, {
+        ...routeOpts, endpointOverride: endpointOverrideAddress(warpExtras.peerEndpoint),
+      });
+      const { before4, after4, overrideInside } = routeOpts.resolvedRoutes;
       if (classifyBudget(after4) === 'over') routeBudgetLine = routeBudgetWarning({ before4, after4 });
+      if (overrideInside) overrideLine = `Endpoint override inside routes: ${overrideInside}`;
+    }
+
+    let labSelection = null;
+    if (endpointMode === 'lab') {
+      const avoidCidrs4 = routeOpts.resolvedRoutes ? routeOpts.resolvedRoutes.cidrs.filter((c) => !c.includes(':')) : [];
+      labSelection = getLabProvider().selectForGeneration({ count, port: requestedPort, avoidCidrs4 });
+      if (!labSelection.ok || !labSelection.endpoints.length) {
+        refuseLab(labSelection.ok ? 'lab_no_endpoints' : labSelection.code);
+        return;
+      }
+      routeOpts.endpointMode = 'lab';
+      routeOpts.labEndpoints = labSelection.endpoints;
     }
 
     const { configs, warning } = await generateMultipleWarpConfigs(count, mode, effectivePresetKeys, dnsKey, warpExtras, routeOpts);
@@ -1483,7 +1540,7 @@ const handler = async (req, res) => {
 
     const dnsParts = String(getDnsString(dnsKey || DNS_DEFAULT_KEY)).split(',').map((s) => s.trim()).filter(Boolean);
     const endpointHost = warpExtras.peerEndpoint
-      ? warpExtras.peerEndpoint.replace(/:\d+$/, '').replace(/^\[(.+)\]$/, '$1')
+      ? endpointOverrideAddress(warpExtras.peerEndpoint)
       : (warpExtras.engageHost || 'engage.cloudflareclient.com');
 
     const configsOut = configs.map(({ text, meta }, idx) => {
@@ -1509,6 +1566,7 @@ const handler = async (req, res) => {
     const responseWarnings = [];
     if (warning) responseWarnings.push(warning);
     if (routeBudgetLine) responseWarnings.push(routeBudgetLine);
+    if (overrideLine) responseWarnings.push(overrideLine);
     // mobile=1 drops IPv6 on request (I7), so a registration without it changes nothing the visitor asked for.
     const ipv4OnlyIndexes = mobileMode ? [] : configsOut.filter((_, i) => configs[i].meta.ipv6Missing).map((c) => c.index);
     if (ipv4OnlyIndexes.length) {

@@ -229,4 +229,36 @@ const aggregateCidrs = (list, { exclude = [], exclude6 = [] } = {}) => {
   };
 };
 
-module.exports = { aggregateCidrs, STRICT_IPV4_CIDR, toInterval6 };
+/**
+ * Whether a route list covers an address (I15, 3.2.0): the Endpoint choice skips the candidates the split routes
+ * cover, and a manual override inside them is cut. Well-formed IPv4 and IPv6 CIDRs count; malformed entries cover
+ * nothing; an address that is neither IPv4 nor IPv6 is never covered.
+ * @param {Iterable<unknown>} list
+ * @returns {(address: string) => boolean}
+ */
+const routeMatcher = (list) => {
+  const v4 = [];
+  const v6 = [];
+  for (const item of list) {
+    const value = String(item).trim();
+    if (value.includes(':')) {
+      const interval = toInterval6(value);
+      if (interval) v6.push(interval);
+    } else if (STRICT_IPV4_CIDR.test(value)) {
+      v4.push(toInterval(value));
+    }
+  }
+  const merged4 = mergeIntervals(v4);
+  const merged6 = mergeIntervals6(v6);
+  return (address) => {
+    const text = String(address ?? '').trim();
+    if (net.isIPv4(text)) {
+      const [n] = toInterval(`${text}/32`);
+      return merged4.some(([start, end]) => n >= start && n <= end);
+    }
+    const interval = toInterval6(`${text}/128`);
+    return Boolean(interval) && merged6.some(([start, end]) => interval[0] >= start && interval[0] <= end);
+  };
+};
+
+module.exports = { aggregateCidrs, routeMatcher, STRICT_IPV4_CIDR, toInterval6 };

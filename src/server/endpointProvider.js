@@ -19,6 +19,7 @@
 
 const fs = require('fs');
 const net = require('net');
+const { routeMatcher } = require('./cidrAggregate');
 
 const SNAPSHOT_SCHEMA_VERSION = 2;
 const TOP_KEYS = ['schema_version', 'generated_at', 'expires_at', 'lab_status', 'active_count', 'endpoints'];
@@ -37,7 +38,8 @@ const SHADOW_FLUSH_MS = 10 * 60 * 1000;
 
 // Lab Auto public error codes (what a user may see) and the provider reasons behind them. A file that is
 // missing, oversized, not JSON or fails validation is one public case: the Lab data cannot be used now.
-const LAB_AUTO_ERROR_CODES = Object.freeze(['lab_unavailable', 'lab_stale', 'lab_no_endpoints']);
+// lab_endpoints_in_routes (3.2.0, I15): every fresh endpoint lies inside the split routes of the request.
+const LAB_AUTO_ERROR_CODES = Object.freeze(['lab_unavailable', 'lab_stale', 'lab_no_endpoints', 'lab_endpoints_in_routes']);
 const LAB_AUTO_ERRORS = Object.freeze({
   snapshot_missing: 'lab_unavailable',
   snapshot_too_large: 'lab_unavailable',
@@ -45,6 +47,7 @@ const LAB_AUTO_ERRORS = Object.freeze({
   snapshot_rejected: 'lab_unavailable',
   snapshot_stale: 'lab_stale',
   pool_empty: 'lab_no_endpoints',
+  pool_in_routes: 'lab_endpoints_in_routes',
 });
 
 const sameKeys = (obj, keys) => obj && typeof obj === 'object' && !Array.isArray(obj)
@@ -181,19 +184,44 @@ class LabEndpointProvider {
   }
 
   /**
-   * What the Lab provider would hand out: `count` distinct endpoints, preferring the requested port.
-   * @param {{ count?: number, port?: number|null }} req
+   * Lab Auto readiness without a selection (3.2.0, spec 3.2.0 §5.4 p. 2): the codes selectForGeneration would give
+   * for the snapshot alone. No random draw, no network; /api/warp asks it before resolving the routes, so a Lab
+   * without usable data answers at once instead of after the route lists. Never throws.
+   * @returns {{ ok: true } | { ok: false, code: string }}
    */
-  select({ count = 1, port = null } = {}) {
+  readiness() {
+    let snap;
+    try {
+      snap = this.snapshot();
+    } catch {
+      return { ok: false, code: 'lab_unavailable' };
+    }
+    if (!snap.available) return { ok: false, code: LAB_AUTO_ERRORS[snap.reason] || 'lab_unavailable' };
+    if (snap.labStatus === 'unavailable') return { ok: false, code: 'lab_unavailable' };
+    return { ok: true };
+  }
+
+  /**
+   * What the Lab provider would hand out: `count` distinct endpoints, preferring the requested port. With
+   * `avoidCidrs4` (the IPv4 AllowedIPs of a split request, 3.2.0) the endpoints those routes cover are not candidates:
+   * a config would route its own Endpoint into the tunnel (I15).
+   * @param {{ count?: number, port?: number|null, avoidCidrs4?: string[] }} req
+   */
+  select({ count = 1, port = null, avoidCidrs4 = [] } = {}) {
     const snap = this.snapshot();
     if (!snap.available) return { available: false, reason: snap.reason, ageSec: snap.ageSec ?? null, endpoints: [] };
+    const routed = avoidCidrs4.length ? routeMatcher(avoidCidrs4) : null;
+    const pool = routed ? snap.endpoints.filter((e) => !routed(e.ip)) : snap.endpoints;
+    if (!pool.length) {
+      return { available: false, reason: 'pool_in_routes', ageSec: snap.ageSec, labStatus: snap.labStatus, endpoints: [] };
+    }
     const n = Math.min(3, Math.max(1, Number.parseInt(String(count), 10) || 1));
-    const samePort = port == null ? snap.endpoints : snap.endpoints.filter((e) => e.port === port);
+    const samePort = port == null ? pool : pool.filter((e) => e.port === port);
     // The requested port first; any shortfall is filled from other ports (distinct IPs still), and recorded.
     const chosen = pickDiverse(samePort, n, this.now(), this.random);
     if (chosen.length < n) {
       const used = new Set(chosen.map((e) => e.ip));
-      const others = snap.endpoints.filter((e) => !samePort.includes(e) && !used.has(e.ip));
+      const others = pool.filter((e) => !samePort.includes(e) && !used.has(e.ip));
       chosen.push(...pickDiverse(others, n - chosen.length, this.now(), this.random));
     }
     const endpoints = chosen.map((e) => ({ ip: e.ip, port: e.port, verifiedAtMs: e.verifiedAtMs, sourceClass: e.sourceClass }));
@@ -207,8 +235,9 @@ class LabEndpointProvider {
    * moment of selection (snapshot and every endpoint must be unexpired). A Lab that reports itself `unavailable`
    * cannot vouch for its pool, so it is refused even while endpoints are inside their TTL. Port and diversity
    * semantics are select()'s: requested port first, shortfall from other Lab ports, distinct IPs, fewer
-   * endpoints rather than duplicates. Never throws.
-   * @param {{ count?: number, port?: number|null }} req
+   * endpoints rather than duplicates. `avoidCidrs4`: see select(); nothing left outside them → lab_endpoints_in_routes.
+   * Never throws.
+   * @param {{ count?: number, port?: number|null, avoidCidrs4?: string[] }} req
    * @returns {{ ok: false, code: string } | { ok: true, requested: number, distinct: number, portMatched: boolean,
    *   ageSec: number, labStatus: string, endpoints: Array<{ ip: string, port: number }> }}
    */
@@ -219,8 +248,8 @@ class LabEndpointProvider {
     } catch {
       return { ok: false, code: 'lab_unavailable' };
     }
-    if (!r.available) return { ok: false, code: LAB_AUTO_ERRORS[r.reason] || 'lab_unavailable' };
     if (r.labStatus === 'unavailable') return { ok: false, code: 'lab_unavailable' };
+    if (!r.available) return { ok: false, code: LAB_AUTO_ERRORS[r.reason] || 'lab_unavailable' };
     if (!r.endpoints.length) return { ok: false, code: 'lab_no_endpoints' };
     return { ok: true, requested: r.requested, distinct: r.distinct, portMatched: r.portMatched, ageSec: r.ageSec,
       labStatus: r.labStatus, endpoints: r.endpoints.map(({ ip, port }) => ({ ip, port })) };
