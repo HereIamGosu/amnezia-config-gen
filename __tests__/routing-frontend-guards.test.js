@@ -62,16 +62,32 @@ describe('FR-RSH-007..010 — CIDR counter, 80% warning, hard limit and no-limit
       'full tunnel must show "not applicable" instead of a misleading CIDR count');
   });
 
-  test('FR-RSH-008 — warning fires at 80% of the limit and "over" at 100%', () => {
-    assert.match(settings, /const warn = count4 >= MAX_CIDR_LIMIT \* 0\.8 && count4 < MAX_CIDR_LIMIT;/,
-      '80% warning threshold must be preserved');
-    assert.match(settings, /const over = count4 >= MAX_CIDR_LIMIT;/,
-      'hard-limit (over) threshold must be preserved');
+  // 3.1.9 (DECISIONS No. 31, decision No. 5 of the release plan): "over" only above the limit, so exactly 1000 is
+  // still --warn; unchecked tiles are disabled from the limit itself. One check per line of settings.js.
+  test('FR-RSH-008 — the counter warns from 80% of the limit up to the limit itself', () => {
+    assert.match(settings, /const warn = count4 >= MAX_CIDR_LIMIT \* 0\.8 && count4 <= MAX_CIDR_LIMIT;/,
+      '80% warning threshold must be preserved, up to and including the limit');
+  });
+
+  test('FR-RSH-008 — the counter is "over" only above the limit', () => {
+    assert.match(settings, /const over = count4 > MAX_CIDR_LIMIT;/, 'hard-limit (over) threshold: above the limit');
   });
 
   test('FR-RSH-009 — unchecked tiles are disabled once the limit is reached', () => {
     assert.match(settings, /const overLimit = !cfgState\.ignoreLimit && cfgState\.cidrCount4 >= MAX_CIDR_LIMIT;/,
       'tile disabling must respect the hard limit and the no-limit opt-out');
+  });
+
+  test('FR-RSH-008 — the preview line says "over the limit" only above it', () => {
+    assert.match(settings, /const overLimit = !cfgState\.ignoreLimit && count4 > MAX_CIDR_LIMIT;/);
+  });
+
+  test('FR-RSH-010 — with "No limit" the preview marks the limit as exceeded only above it', () => {
+    assert.match(settings, /const limitNote = cfgState\.ignoreLimit && count4 > MAX_CIDR_LIMIT \?/);
+  });
+
+  test('the unproven "500 … works reliably on all tested platforms" claim is gone', () => {
+    assert.doesNotMatch(settings, /conservative limit|tested platforms/);
   });
 
   test('FR-RSH-010 — "no limit" opt-out still counts but stops disabling tiles / warning as over', () => {

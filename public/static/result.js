@@ -424,6 +424,15 @@ const warningText = (warning) => {
     warp_ipv4_only: t('risk_warp_ipv4_only',
       'Cloudflare зарегистрировал устройство без IPv6-адреса: конфиг работает только по IPv4.'),
   };
+  // "Route budget: N IPv4 routes in AllowedIPs (M in the source lists) is above the limit of L; …"
+  // (src/server/routeBudget.js): the numbers go into the localised text; another shape stays as the server wrote it.
+  const budget = warning.code === 'routes_over_budget'
+    && /^Route budget: (\d+) IPv4 routes in AllowedIPs \((\d+) in the source lists\) is above the limit of (\d+);/.exec(warning.message || '');
+  if (budget) {
+    return t('risk_routes_over_budget',
+      'В AllowedIPs {after} IPv4-маршрутов (в исходных списках {before}), это больше лимита {limit}: телефоны и роутеры могут работать с таким списком нестабильно.')
+      .replace('{after}', budget[1]).replace('{before}', budget[2]).replace('{limit}', budget[3]);
+  }
   return byCode[warning.code] || warning.message || t('result_summary_no_data', 'нет данных');
 };
 

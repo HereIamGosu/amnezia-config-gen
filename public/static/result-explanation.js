@@ -30,6 +30,7 @@
     ['Endpoint Lab: not enough fresh verified endpoints on port', 'lab_port_fallback'],
     ['Endpoint Lab: only ', 'lab_partial_diversity'],
     ['WARP registration returned no IPv6 address', 'warp_ipv4_only'],
+    ['Route budget:', 'routes_over_budget'],
   ];
 
   const normalizeWarnings = (input, defaultSource = 'api') => {

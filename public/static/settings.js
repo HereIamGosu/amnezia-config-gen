@@ -23,10 +23,10 @@
    endpointDefault, chooseEndpoint, syncDefaultEndpoint */
 
 /**
- * Maximum safe number of IPv4 CIDR routes in AllowedIPs.
- * Above this threshold routers and low-memory devices (GL.iNet, Keenetic, MikroTik)
- * may fail to apply the routing table. 500 is a conservative limit that works reliably
- * on all tested platforms. Users are warned at 80 % and blocked at 100 %.
+ * Limit of IPv4 CIDR routes for the counter (the raw count4 of /api/iplist). Long AllowedIPs lists may fail on
+ * routers and phones; no client threshold has been measured yet (gate G4), 1000 is the owner's limit (PRD FR-15).
+ * The counter warns from 80 % up to the limit and is "over" only above it; unchecked tiles are disabled from the
+ * limit itself. The server checks the aggregated list against the same number (src/server/routeBudget.js).
  */
 const MAX_CIDR_LIMIT = 1000;
 
@@ -292,7 +292,7 @@ const updateAllowedIpsExplanation = () => {
     lines.push(t('routing_allowedips_split',
       'В AllowedIPs попадут только сети выбранных направлений. Если нужный сайт не входит в выбранные presets, он может идти мимо туннеля.'));
     lines.push(t('routing_allowedips_limit',
-      'Большие списки AllowedIPs могут нестабильно импортироваться или работать на телефонах и роутерах. Поэтому генератор предупреждает на 80% лимита и блокирует выбор при 1000 IPv4 CIDR, если не включён режим «Без лимита».'));
+      'Большие списки AllowedIPs могут нестабильно импортироваться или работать на телефонах и роутерах. Поэтому генератор предупреждает на 80% лимита, на 1000 IPv4 CIDR перестаёт добавлять направления и выше 1000 показывает превышение, если не включён режим «Без лимита». В конфиге смежные подсети объединяются, а подсети WARP 162.159.192.0/24, 162.159.193.0/24, 162.159.195.0/24 и 162.159.204.0/24 в маршруты не попадают.'));
   }
 
   if (cfgState.ignoreLimit) {
@@ -364,8 +364,8 @@ const updateCidrCounter = (count4) => {
     if (mini) { mini.textContent = `IPv4: ${count4}`; mini.className = 'cidr-counter-mini'; }
   } else {
     const pct = Math.min(count4 / MAX_CIDR_LIMIT, 1);
-    const warn = count4 >= MAX_CIDR_LIMIT * 0.8 && count4 < MAX_CIDR_LIMIT;
-    const over = count4 >= MAX_CIDR_LIMIT;
+    const warn = count4 >= MAX_CIDR_LIMIT * 0.8 && count4 <= MAX_CIDR_LIMIT;
+    const over = count4 > MAX_CIDR_LIMIT;
     if (el) {
       el.classList.toggle('cidr-counter--warn', warn);
       el.classList.toggle('cidr-counter--over', over);
@@ -452,7 +452,7 @@ const refreshPresetStats = debounce(async () => {
     }
 
     const cidrSource = data.cidrSource;
-    const overLimit = !cfgState.ignoreLimit && count4 >= MAX_CIDR_LIMIT;
+    const overLimit = !cfgState.ignoreLimit && count4 > MAX_CIDR_LIMIT;
     if (overLimit) {
       el.classList.add('preset-stats--warn');
       el.textContent = `${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4}/${MAX_CIDR_LIMIT} IPv4 CIDR. ${t('preset_over_limit_msg', 'Некоторые устройства могут работать нестабильно. Рекомендуется отключить часть категорий.')}`;
@@ -465,7 +465,7 @@ const refreshPresetStats = debounce(async () => {
     } else {
       el.classList.remove('preset-stats--warn');
       const ipv6Info = cfgState.includeIpv6 && data.count6 ? `, IPv6: +${data.count6}` : '';
-      const limitNote = cfgState.ignoreLimit && count4 >= MAX_CIDR_LIMIT ? t('preset_limit_warn_suffix', ' ⚠ лимит превышен') : '';
+      const limitNote = cfgState.ignoreLimit && count4 > MAX_CIDR_LIMIT ? t('preset_limit_warn_suffix', ' ⚠ лимит превышен') : '';
       el.textContent = `${t('cidr_routes_prefix', 'IPv4 маршруты:')} ${count4}${ipv6Info}${limitNote} (${data.sitesQueried}${t('tile_domains_suffix', ' доменов в запросе')}).`;
     }
   } catch (err) {

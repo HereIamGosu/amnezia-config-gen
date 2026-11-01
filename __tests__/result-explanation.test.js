@@ -254,6 +254,17 @@ describe('Lab Auto (Phase D)', () => {
     assert.deepEqual(summary.warnings.map((w) => w.code), ['warp_ipv4_only']);
   });
 
+  test('a split list over the route budget gets the stable code routes_over_budget (3.1.9)', () => {
+    const summary = buildResultSummary({
+      success: true,
+      mode: 'awg2',
+      count: 1,
+      configs: [{ content: 'a', endpointSource: 'hostname' }],
+      warning: 'Route budget: 1009 IPv4 routes in AllowedIPs (1000 in the source lists) is above the limit of 1000; phones and routers may handle a list this long unstably.',
+    }, { warpEndpoint: 'hostname', port: 4500, configCount: 1 });
+    assert.deepEqual(summary.warnings.map((w) => w.code), ['routes_over_budget']);
+  });
+
   test('hostname responses keep their meaning', () => {
     const summary = buildResultSummary({ success: true, mode: 'awg2', configs: [{ content: 'x', endpointSource: 'hostname' }] },
       { warpEndpoint: 'hostname', port: 4500 });
