@@ -222,7 +222,9 @@ test('error/rate-limit: 10 requests exhaust limit → 429 with Retry-After', asy
 
 // ── Unknown / unexpected error ────────────────────────────────────────────────
 
-test('error/unknown: unexpected throw → 500, success=false, human-readable message', async () => {
+// A network failure of the WARP API is "unavailable" since 3.1.8 (503, was 500); an exception without a class or
+// a status still answers 500 (__tests__/warp-registration-errors.test.js).
+test('error/network: a failed WARP API request → 503, success=false, human-readable message', async () => {
   clearModules();
   // Emit 'error' event from the request object — simulates ECONNREFUSED without TDZ in warp.js
   const httpsMock = mock.method(https, 'request', () => {
@@ -237,7 +239,7 @@ test('error/unknown: unexpected throw → 500, success=false, human-readable mes
     const handler = require('../api/warp');
     const res = makeRes();
     await handler(makeReq({ mode: 'awg2' }), res);
-    assert.equal(res.getStatus(), 500);
+    assert.equal(res.getStatus(), 503);
     const body = res.getBody();
     assert.equal(body.success, false);
     assert.ok(typeof body.message === 'string' && body.message.length > 0);

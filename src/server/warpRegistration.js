@@ -17,6 +17,54 @@ const RETRY_MAX_DELAY_MS = 4000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// ── Failure classes (3.1.8, R5 4.D without the `error` field) ────────────────
+// rate_limited: 429. unavailable: 408, 5xx but 501, network, timeout. rejected: 3xx, other 4xx, 501.
+// malformed: a 2xx that is not JSON, lacks id/token/peers or has an unusable IPv4, an answer over 2 MB.
+const RETRY_AFTER_DEFAULT_S = 60;
+const RETRY_AFTER_MAX_S = 3600;
+const REFUSALS = {
+  rate_limited: { status: 429, message: 'Cloudflare временно ограничил создание устройств WARP. Повторите через минуту; если ошибка держится, это сбой на стороне Cloudflare, а не вашего подключения.' },
+  unavailable: { status: 503, message: 'Сервис регистрации Cloudflare WARP сейчас не отвечает. Повторите позже.' },
+  rejected: { status: 502, message: 'Cloudflare не принял запрос регистрации WARP. Это сбой на стороне сервиса, а не ваших настроек.' },
+};
+REFUSALS.malformed = REFUSALS.rejected;
+
+/**
+ * Every error of this module. `message` is internal (server log); /api/warp answers by `registrationClass`.
+ * @param {'rate_limited'|'unavailable'|'rejected'|'malformed'} klass
+ */
+const registrationError = (klass, message, { upstreamStatus = null, retryAfterS = null, code } = {}) => {
+  const err = new Error(message);
+  err.source = 'cloudflare';
+  err.registrationClass = klass;
+  err.upstreamStatus = upstreamStatus;
+  err.retryAfterS = retryAfterS;
+  if (code) err.code = code;
+  return err;
+};
+
+/** Decimal seconds 1..3600 from a Cloudflare `Retry-After`, anything else 60. */
+const parseRetryAfter = (value) => {
+  const s = String(value ?? '').trim();
+  const n = /^\d+$/.test(s) ? Number(s) : 0;
+  return n >= 1 && n <= RETRY_AFTER_MAX_S ? n : RETRY_AFTER_DEFAULT_S;
+};
+
+/** A non-2xx answer. `res.headers` only through `?.`: the test fakes answer without headers. */
+const statusError = (res, message) => {
+  const status = res.statusCode;
+  if (status === 429) {
+    return registrationError('rate_limited', message, { upstreamStatus: status, retryAfterS: parseRetryAfter(res.headers?.['retry-after']) });
+  }
+  if (status === 408 || (status >= 500 && status < 600 && status !== 501)) {
+    return registrationError('unavailable', message, { upstreamStatus: status, retryAfterS: RETRY_AFTER_DEFAULT_S });
+  }
+  return registrationError('rejected', message, { upstreamStatus: status });
+};
+
+/** HTTP status, `Retry-After` seconds or null, and the fixed text of /api/warp for a registration error. */
+const refusalFor = (err) => ({ ...REFUSALS[err.registrationClass], retryAfterS: err.retryAfterS });
+
 /** Validate IPv4 address (e.g. 172.16.0.2). */
 const isValidIPv4 = (s) => {
   if (typeof s !== 'string') return false;
@@ -47,7 +95,7 @@ const generateHeaders = (token = null) => {
 
 const isTransientApiFailure = (err) => {
   if (!err) return false;
-  const code = err.statusCode;
+  const code = err.upstreamStatus;
   if (code === 429 || code === 502 || code === 503 || code === 504) return true;
   const sys = err.code;
   if (sys && ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'EPIPE'].includes(sys)) {
@@ -93,42 +141,38 @@ const httpRequestOnce = (method, endpointPath, body = null, token = null) =>
         totalBytes += chunk.length;
         if (totalBytes > MAX_RESPONSE_BYTES) {
           req.destroy();
-          finish(new Error('Ответ Cloudflare API слишком большой.'));
+          // No upstreamStatus: an oversized answer is not repeated whatever its code, as in 3.1.7.
+          finish(registrationError('malformed', 'Ответ Cloudflare API слишком большой.'));
           return;
         }
         responseData += chunk;
       });
 
       res.on('end', () => {
+        const ok = res.statusCode >= 200 && res.statusCode < 300;
         try {
           const parsedData = responseData ? JSON.parse(responseData) : {};
-          if (res.statusCode >= 200 && res.statusCode < 300) {
+          if (ok) {
             finish(null, parsedData);
             return;
           }
-          const errorMessage = parsedData.message || `Ошибка с кодом ${res.statusCode}`;
-          const err = new Error(errorMessage);
-          err.statusCode = res.statusCode;
-          finish(err);
+          finish(statusError(res, parsedData.message || `Ошибка с кодом ${res.statusCode}`));
         } catch {
-          const err = new Error('Не удалось обработать ответ сервера.');
-          err.statusCode = res.statusCode;
-          finish(err);
+          const message = 'Не удалось обработать ответ сервера.';
+          finish(ok ? registrationError('malformed', message, { upstreamStatus: res.statusCode }) : statusError(res, message));
         }
       });
     });
 
     req.on('error', (e) => {
-      const err = new Error(`Ошибка запроса: ${e.message}`);
-      err.code = e.code;
-      finish(err);
+      finish(registrationError('unavailable', `Ошибка запроса: ${e.message}`, { code: e.code, retryAfterS: RETRY_AFTER_DEFAULT_S }));
     });
 
     // Armed only once the request exists: https.request throws synchronously for a path or header value Node
     // refuses (an id or token from Cloudflare), and a timer armed earlier would then touch an uninitialised `req`.
     timer = setTimeout(() => {
       req.destroy();
-      finish(new Error('Таймаут запроса к Cloudflare API.'));
+      finish(registrationError('unavailable', 'Таймаут запроса к Cloudflare API.', { retryAfterS: RETRY_AFTER_DEFAULT_S }));
     }, REQUEST_TIMEOUT_MS);
 
     if (data) req.write(data);
@@ -140,7 +184,12 @@ const handleApiRequest = async (method, endpointPath, body = null, token = null)
   for (let attempt = 0; attempt < RETRY_MAX_ATTEMPTS; attempt += 1) {
     try {
       return await httpRequestOnce(method, endpointPath, body, token);
-    } catch (err) {
+    } catch (caught) {
+      // Without a class only a synchronous refusal of https.request: a path or header value Node cannot send
+      // (an id or token from Cloudflare). The request never left, so it is not repeated.
+      const err = caught.registrationClass
+        ? caught
+        : registrationError('malformed', `Запрос к Cloudflare API не построен: ${caught.message}`, { code: caught.code });
       lastErr = err;
       if (!isTransientApiFailure(err) || attempt === RETRY_MAX_ATTEMPTS - 1) {
         throw err;
@@ -189,23 +238,23 @@ const registerDevice = async (publicKey) => {
   };
 
   const regResponse = await handleApiRequest('POST', 'reg', regBody);
-  const { id, token } = regResponse.result ?? {};
+  const { id, token } = regResponse?.result ?? {};
 
-  if (!id || !token) {
-    throw new Error('Ошибка: отсутствуют id или token в ответе регистрации');
+  if (typeof id !== 'string' || !id || typeof token !== 'string' || !token) {
+    throw registrationError('malformed', 'Ошибка: отсутствуют id или token в ответе регистрации');
   }
 
   await handleApiRequest('PATCH', `reg/${id}`, { warp_enabled: true }, token);
 
   const initialConfig = regResponse.result?.config;
   if (!initialConfig?.peers?.length) {
-    throw new Error('Ошибка: недостающие данные для формирования конфигурации WARP');
+    throw registrationError('malformed', 'Ошибка: недостающие данные для формирования конфигурации WARP');
   }
 
   const config = await mergeConfigAfterWarp(id, token, initialConfig);
   const { v4: clientIPv4, v6: clientIPv6 } = config.interface?.addresses ?? {};
   if (!clientIPv4 || !isValidIPv4(clientIPv4)) {
-    throw new Error(`Cloudflare вернул некорректный IPv4 адрес: ${clientIPv4 || '(пусто)'}`);
+    throw registrationError('malformed', `Cloudflare вернул некорректный IPv4 адрес: ${clientIPv4 || '(пусто)'}`);
   }
   return { peerPublicKey: config.peers[0]?.public_key, clientIPv4, clientIPv6: isValidIPv6(clientIPv6) ? clientIPv6 : null };
 };
@@ -214,4 +263,5 @@ module.exports = {
   isValidIPv4,
   isValidIPv6,
   registerDevice,
+  refusalFor,
 };

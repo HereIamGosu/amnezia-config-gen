@@ -6,7 +6,7 @@ const path = require('path');
 const { expandPresetsToSites, parsePresetKeysFromRequest, getDnsString, parseDnsKeyFromRequest, DNS_DEFAULT_KEY } = require('../src/server/routePresets');
 const { fetchCidrsForDomains } = require('../src/server/ipListFetch');
 const { createRateLimiter } = require('../src/server/_rateLimit');
-const { registerDevice, isValidIPv4, isValidIPv6 } = require('../src/server/warpRegistration');
+const { registerDevice, refusalFor, isValidIPv4, isValidIPv6 } = require('../src/server/warpRegistration');
 
 /** 10 generations per minute per IP — prevents Cloudflare WARP registration abuse. */
 const warpLimiter = createRateLimiter({ windowMs: 60_000, maxHits: 10 });
@@ -1570,6 +1570,13 @@ const handler = async (req, res) => {
     console.error('Ошибка генерации конфигурации:', error);
     if (error.labCode) {
       res.status(error.statusCode).json({ success: false, error: error.labCode, message: error.message });
+      return;
+    }
+    // A Cloudflare failure (src/server/warpRegistration.js): a code and a fixed text by class, nothing of its answer.
+    if (error.registrationClass) {
+      const refusal = refusalFor(error);
+      if (refusal.retryAfterS != null) res.setHeader('Retry-After', String(refusal.retryAfterS));
+      res.status(refusal.status).json({ success: false, message: refusal.message });
       return;
     }
     const sc = error.statusCode;

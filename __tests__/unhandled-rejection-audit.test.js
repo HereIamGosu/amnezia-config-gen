@@ -167,12 +167,13 @@ describe('what the fakes reproduce', () => {
   });
 });
 
+// Codes and texts of a Cloudflare failure follow table 4.2 of 3.1.8 (503 unavailable, 502 rejected/malformed).
 describe('Cloudflare API fails (/api/warp)', () => {
-  test('an unreachable host after every retry → 500 with a message', async () => {
+  test('an unreachable host after every retry → 503 with a message', async () => {
     mock.timers.enable({ apis: ['setTimeout'] });
     const calls = fakeNetwork(byHost({ cloudflare: () => ({ error: 'ECONNREFUSED' }) }));
     const out = await drive(call(load('../api/warp')));
-    assertFailureBody(out, 500);
+    assertFailureBody(out, 503);
     assert.equal(calls.length, 3, 'a refused connection is retried, three attempts in all');
   });
 
@@ -184,18 +185,18 @@ describe('Cloudflare API fails (/api/warp)', () => {
     assert.equal(calls.length, 3);
   });
 
-  test('no answer at all → the request timer fires on every attempt → 500 with a message', async () => {
+  test('no answer at all → the request timer fires on every attempt → 503 with a message', async () => {
     mock.timers.enable({ apis: ['setTimeout'] });
     const calls = fakeNetwork(byHost({ cloudflare: () => 'hang' }));
     const out = await drive(call(load('../api/warp')));
-    assertFailureBody(out, 500);
-    assert.match(out.body.message, /Таймаут запроса к Cloudflare API/);
+    assertFailureBody(out, 503);
+    assert.match(out.body.message, /Сервис регистрации Cloudflare WARP сейчас не отвечает/);
     assert.equal(calls.length, 3);
   });
 
-  test('2xx with a body that is not JSON → 500 with a message', async () => {
+  test('2xx with a body that is not JSON → 502 with a message', async () => {
     fakeNetwork(byHost({ cloudflare: () => ({ status: 200, body: '<html>captcha</html>' }) }));
-    assertFailureBody(await call(load('../api/warp')), 500);
+    assertFailureBody(await call(load('../api/warp')), 502);
   });
 
   // Audit finding 1: the request timer was armed before https.request, so a registration value Node refuses
@@ -204,10 +205,10 @@ describe('Cloudflare API fails (/api/warp)', () => {
     ['an id Node refuses in a request path', registration({ id: 'audit id' })],
     ['a token Node refuses in a header', registration({ token: 't\nt' })],
   ]) {
-    test(`2xx registration with ${name} → 500 with a message, and no timer fires later`, async () => {
+    test(`2xx registration with ${name} → 502 with a message, and no timer fires later`, async () => {
       mock.timers.enable({ apis: ['setTimeout'] });
       fakeNetwork(byHost({ cloudflare: () => answer }));
-      assertFailureBody(await drive(call(load('../api/warp'))), 500);
+      assertFailureBody(await drive(call(load('../api/warp'))), 502);
       assert.doesNotThrow(() => mock.timers.tick(60_000), 'a refused request leaves no timer behind');
     });
   }
@@ -219,7 +220,7 @@ describe('Cloudflare API fails (/api/warp)', () => {
       community: () => ({ error: 'ECONNRESET' }),
       antifilter: () => ({ status: 500, body: '' }),
     }));
-    assertFailureBody(await call(load('../api/warp'), { routeMode: 'split', presets: 'discord' }), 403);
+    assertFailureBody(await call(load('../api/warp'), { routeMode: 'split', presets: 'discord' }), 502);
   });
 });
 
@@ -368,8 +369,8 @@ describe('server.js with the network cut off', () => {
   test('every API path answers with a status and a JSON body, and the process stays up', async () => {
     const base = `http://127.0.0.1:${PORT}`;
     const cases = [
-      ['GET', '/api/warp', 500],
-      ['GET', '/api/warp?routeMode=split&presets=discord', 500],
+      ['GET', '/api/warp', 503],
+      ['GET', '/api/warp?routeMode=split&presets=discord', 503],
       ['GET', '/api/warp?endpointMode=lab', 503],
       ['POST', '/api/warp', 400, '{"presets":'],
       ['GET', '/api/iplist?presets=discord', 200],
