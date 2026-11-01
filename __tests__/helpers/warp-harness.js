@@ -21,6 +21,33 @@ const FAKE_WARP_RESPONSE = JSON.stringify({
   },
 });
 
+/**
+ * A registration answer with placeholder secrets (a one-letter token, a peer key of 32 bytes of 0x01).
+ * `v6: null` leaves the IPv6 address out; `result` overrides the whole `result` object.
+ */
+const registrationAnswer = ({ v4 = '172.16.0.2', v6 = 'fd01::2', id = 'harness-id', token = 't', result } = {}) => ({
+  status: 200,
+  body: JSON.stringify({
+    result: result ?? {
+      id,
+      token,
+      config: {
+        peers: [{ public_key: Buffer.alloc(32, 1).toString('base64'), endpoint: { v4: '162.159.192.1:2408' } }],
+        interface: { addresses: v6 === null ? { v4 } : { v4, v6 } },
+      },
+    },
+  }),
+});
+
+/** `cloudflare` of `generate`: one answer for every request, a list used in order (the last repeats) or a function. */
+const answerFor = (cloudflare, n, request) => {
+  if (typeof cloudflare === 'function') return cloudflare(n, request);
+  if (Array.isArray(cloudflare)) return cloudflare[Math.min(n, cloudflare.length) - 1];
+  return cloudflare;
+};
+
+const chunksOf = (body) => (Array.isArray(body) ? body : [typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body)]);
+
 const NOW = Date.parse('2026-10-05T21:00:00Z');
 const iso = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
 
@@ -84,26 +111,49 @@ function makeRes() {
 }
 
 /**
- * One handler call on a fresh module. Returns status, body, headers, decoded configs and the number of
- * Cloudflare API requests made (0 proves nothing was registered).
+ * One handler call on a fresh module. Returns status, body, headers, decoded configs, the number of
+ * Cloudflare API requests made (0 proves nothing was registered) and those requests (method, host, port, path,
+ * agent, headers in order, written body).
+ *
+ * `cloudflare` answers the API requests (default: 200 with `FAKE_WARP_RESPONSE` to every one). An answer is
+ * `{ status, body, headers }` (`body` a string, an object sent as JSON or a list of chunks; without `headers`
+ * the fake response has none, like the other fakes), `{ error: 'ECODE' }` (the request fails as an unreachable
+ * host does) or `'hang'` (never answers). `cloudflare` is one answer, a list used in order (the last repeats)
+ * or `(n, request) => answer` for the n-th request, counted from 1.
  * @param {Record<string,string>} query
  * @param {{ lab?: { provider: object } | null, shadow?: object|null, method?: string, body?: object|null,
- *   onRegistration?: () => void }} [opts]
+ *   onRegistration?: () => void, cloudflare?: object|string|Array|Function }} [opts]
  */
-async function generate(query, { lab = null, shadow = null, method = 'GET', body = null, onRegistration = null } = {}) {
+async function generate(query, {
+  lab = null, shadow = null, method = 'GET', body = null, onRegistration = null,
+  cloudflare = { status: 200, body: FAKE_WARP_RESPONSE },
+} = {}) {
   delete require.cache[require.resolve('../../api/warp')];
   let apiCalls = 0;
+  const requests = [];
   const httpsMock = mock.method(https, 'request', (options, cb) => {
-    const res = new EventEmitter();
-    res.statusCode = 200;
+    const request = {
+      method: options.method, hostname: options.hostname, port: options.port, path: options.path, agent: options.agent,
+      headers: { ...options.headers }, body: '',
+    };
+    requests.push(request);
     const req = new EventEmitter();
-    req.write = () => {};
+    req.write = (chunk) => { request.body += chunk; };
     req.destroy = () => {};
     req.end = () => setImmediate(() => {
       apiCalls += 1;
       if (onRegistration) onRegistration(apiCalls);
+      const answer = answerFor(cloudflare, apiCalls, request);
+      if (answer === 'hang') return;
+      if (answer.error) {
+        req.emit('error', Object.assign(new Error(`connect ${answer.error}`), { code: answer.error }));
+        return;
+      }
+      const res = new EventEmitter();
+      res.statusCode = answer.status ?? 200;
+      if (answer.headers) res.headers = answer.headers;
       cb(res);
-      res.emit('data', Buffer.from(FAKE_WARP_RESPONSE));
+      for (const chunk of chunksOf(answer.body ?? '')) res.emit('data', Buffer.from(chunk));
       res.emit('end');
     });
     return req;
@@ -126,7 +176,7 @@ async function generate(query, { lab = null, shadow = null, method = 'GET', body
     const configs = out && Array.isArray(out.configs)
       ? out.configs.map((c) => Buffer.from(c.content, 'base64').toString('utf8'))
       : [];
-    return { status: res.getStatus(), body: out, headers: res, configs, apiCalls };
+    return { status: res.getStatus(), body: out, headers: res, configs, apiCalls, requests };
   } finally {
     httpsMock.mock.restore();
     net.createConnection = realNet;
@@ -149,6 +199,8 @@ const parseConf = (conf) => {
 };
 
 module.exports = {
+  FAKE_WARP_RESPONSE,
+  registrationAnswer,
   NOW,
   iso,
   labEndpoint,
