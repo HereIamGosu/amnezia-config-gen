@@ -3,7 +3,7 @@
 
 # --- builder: minifies static JS/CSS and precompresses text assets (.br/.gz). ---
 # Sources in git stay readable; only this stage's copy of public/ is rewritten.
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS builder
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS builder
 WORKDIR /build
 COPY package.json package-lock.json ./
 # Dev dependencies included (esbuild); its platform binary comes from optionalDependencies.
@@ -13,7 +13,7 @@ COPY public ./public
 RUN node scripts/build-assets.js public
 
 # --- runtime ---
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914
 ARG APP_REVISION=unknown
 LABEL org.opencontainers.image.source="https://github.com/HereIamGosu/amnezia-config-gen" \
       org.opencontainers.image.revision="${APP_REVISION}"
