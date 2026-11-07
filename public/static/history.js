@@ -154,7 +154,7 @@ const renderHistoryPanel = () => {
         confirmReplaceCpsChains(() => {
           setCpsChains(chains);
           toast(`${t('history_chains_loaded', 'Свои цепочки загружены в настройки:')} ${chainFields.join(', ')}`, 'success');
-          telemetry.trackEvent('history_chains_used', { ...telemetryContext, fields: chainFields.length });
+          telemetry.trackEvent('history_chains_used', { ...telemetryContext, chain_fields: chainFields.length });
         });
       });
       useChainsBtn.classList.add('history-item__use-chains');

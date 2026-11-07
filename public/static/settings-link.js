@@ -12,7 +12,7 @@
 // /* exported */ — что отдаёт им (проверяют ESLint и __tests__/frontend-scripts.test.js).
 
 /* global t -- i18n.js */
-/* global copyText, toast -- common.js */
+/* global copyText, toast, telemetry -- common.js */
 /* global
    cfgState, ROUTE_MODES, getSelectedRouteIds, getSelectedDnsKey, forEachRouteTile, updateTileActiveClass,
    applyMobileModeCascade, endpointDefault, chooseEndpoint -- settings.js */
@@ -171,6 +171,8 @@ const copySettingsLink = async () => {
     toast(t('copy_failed', 'Не удалось скопировать.'), 'info');
     return;
   }
+  // Ссылка на настройки — канал распространения от пользователя к пользователю: без события его не видно
+  telemetry.trackEvent('settings_link_copied', { chains_dropped: chainsDropped });
   toast(chainsDropped
     ? t('settings_share_copied_no_chains', 'Ссылка скопирована без своих CPS-цепочек: с ними она слишком длинная')
     : t('settings_share_copied', 'Ссылка на настройки скопирована'), chainsDropped ? 'info' : 'success');

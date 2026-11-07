@@ -512,6 +512,8 @@
   "status_lab_unavailable": "Unavailable",
   "status_lab_fallback_hint": "via hostname",
   "result_autodownload_note": "The file {file} has already been downloaded. Can't find it in your downloads? Press “Download .conf”.",
+  "result_manual_download_note": "Your config is ready. Press “Download .conf”, or “Copy vpn://” to import it into AmneziaVPN.",
+  "result_manual_download_note_conf": "Your config is ready. Press “Download .conf” to save the file.",
   "result_next_steps": "Next: import the .conf into AmneziaVPN or AmneziaWG (or paste the vpn:// link into AmneziaVPN) and turn the tunnel on.",
   "result_next_instruction": "Full instructions",
   "status_row_cidr": "Routes: site catalogue and opencck",

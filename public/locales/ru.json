@@ -512,6 +512,8 @@
   "status_lab_unavailable": "Недоступен",
   "status_lab_fallback_hint": "через hostname",
   "result_autodownload_note": "Файл {file} уже скачан. Не нашли его в загрузках — нажмите «Скачать .conf».",
+  "result_manual_download_note": "Конфиг готов. Нажмите «Скачать .conf» или «Скопировать vpn://» для импорта в AmneziaVPN.",
+  "result_manual_download_note_conf": "Конфиг готов. Нажмите «Скачать .conf», чтобы сохранить файл.",
   "result_next_steps": "Дальше: импортируйте .conf в AmneziaVPN или AmneziaWG (или вставьте vpn://-ссылку в AmneziaVPN) и включите туннель.",
   "result_next_instruction": "Подробная инструкция",
   "status_row_cidr": "Маршруты: каталог сайта и opencck",

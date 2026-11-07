@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ## [Unreleased]
 
+### Changed
+- **iPhone and iPad keep the result on screen.** On iOS (Safari, Chrome, Yandex and iPadOS in desktop mode) the config is no longer downloaded automatically after generation; the result panel says to press «Скачать .conf» or «Скопировать vpn://». In Yandex Metrica for 2026-10-10…11-06, 11 % of the iOS Safari users and 22 % of the iOS Chrome users who started a generation got neither the success nor the error event, against 0 % in the Google app on iOS, where a download link does nothing; the mean generation time is about 3 s on every OS. Other platforms download as before.
+
+### Fixed
+- **Product events that Metrica goals wait for are sent again.** The Telegram channel buttons send `telegram_channel_cta_click` (the goal's event; since the 3.0 redesign they sent `telegram_channel_footer_click`, so the goal stayed at zero), `history_chains_used` is no longer dropped by the analytics allowlist, and copying the settings link sends `settings_link_copied`. No keys, addresses, presets or config contents are sent.
+- **The Metrica counter script runs only on awgconfig.com.** Local copies, test hosts and third-party mirrors no longer load `tag.js` (17 hosts in the entry-page report of the last 90 days); only the `<noscript>` pixel, for visitors without JavaScript, still fires there.
+
 ## [3.2.0] - 2026-11-01
 
 ### Added

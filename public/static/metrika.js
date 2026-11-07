@@ -7,12 +7,20 @@
  * счётчика 99328227 и та же цель infoLink. Подключается с defer первым из скриптов страницы,
  * поэтому ym уже определён, когда выполняются analytics.js и script.js.
  * <noscript>-пиксель остаётся в HTML.
+ *
+ * Счётчик включается только на боевом домене. Раньше в него писали localhost, тестовые
+ * sslip-хосты, file://-копии страницы и чужие зеркала (в отчёте «Страница входа» за 90 дней
+ * до 2026-11-06 — 17 хостов). Очередь ym определяется всегда: вызовы analytics.js на других
+ * хостах ничего не отправляют и не падают.
  */
+const METRIKA_HOSTS = ['awgconfig.com'];
+
 (function initYandexMetrika(m, e, t, r, i) {
   m[i] = m[i] || function ymQueue() {
     (m[i].a = m[i].a || []).push(arguments);
   };
   m[i].l = 1 * new Date();
+  if (!METRIKA_HOSTS.includes(m.location.hostname)) return;
   for (let j = 0; j < document.scripts.length; j++) {
     if (document.scripts[j].src === r) {
       return;

@@ -19,6 +19,10 @@
     'history_item_downloaded',
     'healthcheck_opened',
     'status_modal_opened',
+    // Имя совпадает с целью Метрики «Переход в Telegram-канал» (JS-событие telegram_channel_cta_click)
+    'telegram_channel_cta_click',
+    'history_chains_used',
+    'settings_link_copied',
   ]);
 
   const ENUMS = {
@@ -39,6 +43,7 @@
     'count_produced',
     'warning_count',
     'duration_ms',
+    'chain_fields',
   ]);
   const BOOLEAN_KEYS = new Set([
     'has_warning',
@@ -47,6 +52,7 @@
     'awg_timing_ranges',
     'awg_content_padding_experimental',
     'awg_warp_safe',
+    'chains_dropped',
   ]);
 
   const sanitizePayload = (payload = {}) => {

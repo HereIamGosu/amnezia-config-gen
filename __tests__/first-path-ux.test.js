@@ -60,8 +60,9 @@ describe('first-path UX wiring', () => {
   });
 
   test('auto-download note appears only when the result carries the file name', () => {
-    assert.match(script, /autoDownloaded: variants\[0\]\.filename/);
-    assert.match(result, /autoNote\.hidden = !currentResult\.autoDownloaded/);
+    // На iPhone и iPad автоскачивания нет: там имя файла не передаётся (growth-telemetry-ios.test.js)
+    assert.match(script, /autoDownloaded: autoDownload \? variants\[0\]\.filename : null/);
+    assert.match(result, /autoNote\.hidden = !currentResult\.autoDownloaded && !currentResult\.manualDownload/);
     assert.match(html, /id="resultAutoNote"[^>]*hidden/);
   });
 

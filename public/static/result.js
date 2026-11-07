@@ -213,14 +213,23 @@ const renderResultSuccess = () => {
     subtitle.textContent = t('result_ready_subtitle', 'Профиль {mode} успешно сгенерирован.')
       .replace('{mode}', getModeLabel(currentResult.mode));
   }
-  // Файл уходит в загрузки сам, сразу после генерации: говорим об этом и называем имя
+  // Файл уходит в загрузки сам, сразу после генерации: говорим об этом и называем имя.
+  // На iPhone и iPad автоскачивания нет (script.js) — подсказываем, какой кнопкой взять конфиг.
   const autoNote = document.getElementById('resultAutoNote');
   if (autoNote) {
-    autoNote.hidden = !currentResult.autoDownloaded;
+    autoNote.hidden = !currentResult.autoDownloaded && !currentResult.manualDownload;
     if (currentResult.autoDownloaded) {
+      autoNote.removeAttribute('data-i18n');
       autoNote.textContent = t('result_autodownload_note',
         'Файл {file} уже скачан. Не нашли его в загрузках — нажмите «Скачать .conf».')
         .replace('{file}', currentResult.autoDownloaded);
+    } else if (currentResult.manualDownload && variant && variant.vpnLink) {
+      setI18nText(autoNote, 'result_manual_download_note',
+        'Конфиг готов. Нажмите «Скачать .conf» или «Скопировать vpn://» для импорта в AmneziaVPN.');
+    } else if (currentResult.manualDownload) {
+      // Без vpn:// (AWG 3.0) кнопка ссылки выключена — называем только скачивание
+      setI18nText(autoNote, 'result_manual_download_note_conf',
+        'Конфиг готов. Нажмите «Скачать .conf», чтобы сохранить файл.');
     }
   }
 

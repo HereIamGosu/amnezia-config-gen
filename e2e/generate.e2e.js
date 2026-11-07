@@ -300,4 +300,80 @@ e2eSuite('generation (stubbed /api/warp)', (openPage) => {
       await page.assertClean(`${width}px`);
     });
   }
+
+  // Считает загрузки через <a download>: их запускает downloadFile (common.js)
+  const countDownloads = () => {
+    window.__downloads = [];
+    const original = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function click() {
+      if (this.download) window.__downloads.push(this.download);
+      return original.call(this);
+    };
+  };
+  const autoNote = () => {
+    const el = document.getElementById('resultAutoNote');
+    return { hidden: el.hidden, text: el.textContent.trim() };
+  };
+
+  test('iPhone: no auto-download, the note names the buttons, «Скачать .conf» still downloads', async () => {
+    const page = await openPage({ width: 390, height: 844, mobile: true });
+    await page.send('Emulation.setUserAgentOverride', {
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1',
+      platform: 'iPhone',
+    });
+    await page.goto('/');
+    stubWarp(page, (u) => ({ json: fixtures.warpSuccess({ mode: u.searchParams.get('mode') }) }));
+    await page.evaluate(countDownloads);
+
+    await page.tap('#generateButton');
+    await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success', { message: 'success view' });
+    assert.deepEqual(await page.evaluate(() => window.__downloads), [], 'no automatic download on iOS');
+    const note = await page.evaluate(autoNote);
+    assert.equal(note.hidden, false);
+    assert.match(note.text, /«Скачать \.conf».*«Скопировать vpn:\/\/»/);
+
+    await page.tap('#resultDownload');
+    const downloads = await page.evaluate(() => window.__downloads);
+    assert.equal(downloads.length, 1, 'the download button gives the file');
+    assert.match(downloads[0], /\.conf$/);
+    await page.assertClean('iPhone');
+  });
+
+  test('iPhone + AWG 3.0: the note names only «Скачать .conf», the vpn:// button stays disabled', async () => {
+    const page = await openPage({ width: 390, height: 844, mobile: true });
+    await page.send('Emulation.setUserAgentOverride', {
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1',
+      platform: 'iPhone',
+    });
+    await page.goto('/');
+    stubWarp(page, () => ({ json: fixtures.warpSuccess({ mode: 'awg3' }) }));
+    await page.evaluate(countDownloads);
+
+    await page.tap('label.profile-card:has(#profileAwg3)');
+    await page.tap('#generateButton');
+    await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success', { message: 'success view' });
+    assert.deepEqual(await page.evaluate(() => window.__downloads), []);
+    const note = await page.evaluate(autoNote);
+    assert.equal(note.hidden, false);
+    assert.match(note.text, /«Скачать \.conf»/);
+    assert.doesNotMatch(note.text, /vpn:\/\//);
+    assert.equal(await page.evaluate(() => document.getElementById('resultCopyLink').getAttribute('aria-disabled')), 'true');
+    await page.assertClean('iPhone AWG 3.0');
+  });
+
+  test('desktop: one automatic download and the note with the file name', async () => {
+    const page = await openPage();
+    await page.goto('/');
+    stubWarp(page, (u) => ({ json: fixtures.warpSuccess({ mode: u.searchParams.get('mode') }) }));
+    await page.evaluate(countDownloads);
+
+    await page.click('#generateButton');
+    await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success', { message: 'success view' });
+    const downloads = await page.evaluate(() => window.__downloads);
+    assert.equal(downloads.length, 1, 'auto-download stays on desktop');
+    const note = await page.evaluate(autoNote);
+    assert.equal(note.hidden, false);
+    assert.ok(note.text.includes(downloads[0]), 'the note names the downloaded file');
+    await page.assertClean('desktop');
+  });
 });

@@ -29,6 +29,17 @@ const TG_CHANNEL_URL = 'https://t.me/amnezia_config';
 
 const API_WARP_TIMEOUT_MS = 120000;
 
+/**
+ * iPhone, iPad, iPod — WebKit на iOS во всех браузерах (Safari, Chrome, Яндекс). iPadOS в режиме
+ * «как на компьютере» называет себя Macintosh, его выдаёт сенсорный экран. Живёт здесь, рядом с
+ * единственным вызовом: script.js из нового релиза не зависит от закэшированного старого common.js.
+ */
+const isAppleMobile = () => {
+  const nav = window.navigator || {};
+  const ua = nav.userAgent || '';
+  return /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && nav.maxTouchPoints > 1);
+};
+
 const telemetryNow = () =>
   window.performance && typeof window.performance.now === 'function'
     ? window.performance.now()
@@ -282,16 +293,23 @@ const generateConfig = async () => {
       }))
       : [{ filename, decodedConfig: atob(data.content), vpnLink: data.vpnLink || null }];
 
+    // На iPhone и iPad автоскачивание уводит или замораживает страницу (окно «Скачать / Просмотреть»):
+    // в Метрике 11–22 % начавших генерацию в Safari и Chrome на iOS теряются без успеха и без ошибки,
+    // а панель результата с vpn:// пропадает. Там файл скачивается кнопкой «Скачать .conf».
+    const autoDownload = !isAppleMobile();
     showResult({
       mode,
       variants,
       hasWarnings: warningCount > 0,
-      autoDownloaded: variants[0].filename,
+      autoDownloaded: autoDownload ? variants[0].filename : null,
+      manualDownload: !autoDownload,
       telemetryContext: completedContext,
       snapshot: resultState,
     });
-    downloadFile(variants[0].decodedConfig, variants[0].filename);
-    telemetry.trackEvent('config_downloaded', completedContext);
+    if (autoDownload) {
+      downloadFile(variants[0].decodedConfig, variants[0].filename);
+      telemetry.trackEvent('config_downloaded', completedContext);
+    }
     saveToHistory(mode, variants[0].decodedConfig, variants[0].filename, resultState);
 
     status.textContent = data.warning
@@ -321,9 +339,9 @@ const generateConfig = async () => {
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-tg-channel]').forEach((el) => {
     el.href = TG_CHANNEL_URL;
-    el.addEventListener('click', () => {
-      if (typeof ym === 'function') ym(99328227, 'reachGoal', 'telegram_channel_footer_click');
-    });
+    // Цель Метрики «Переход в Telegram-канал» ждёт telegram_channel_cta_click: с редизайна 3.0 (dfa8f54)
+    // уходило другое имя, и переходы не считались
+    el.addEventListener('click', () => telemetry.trackEvent('telegram_channel_cta_click'));
   });
 
   initProfileSelector();
