@@ -395,6 +395,22 @@ e2eSuite('generation (stubbed /api/warp)', (openPage) => {
     };
   };
 
+  /**
+   * Ждёт конца плавной прокрутки. Шаги «Нет» ведут к кнопке генерации плавной прокруткой; клик, посчитанный
+   * посреди неё, на медленной машине попадает мимо (CI 2026-11-07: окно FAQ не открылось; повторено локально
+   * при замедлении CPU в 6 раз — 5 из 5 мимо, с ожиданием — 5 из 5 точно). Человек тоже нажимает после прокрутки.
+   */
+  const scrollSettled = async (page) => {
+    let prev = await page.evaluate(() => window.scrollY);
+    for (let i = 0; i < 60; i += 1) {
+      await page.sleep(100);
+      const now = await page.evaluate(() => window.scrollY);
+      if (now === prev) return;
+      prev = now;
+    }
+    throw new Error('the page keeps scrolling');
+  };
+
   /** Цели, ушедшие в очередь ym (на localhost tag.js не грузится, очередь остаётся в window.ym.a). */
   const goals = () => Array.from((window.ym && window.ym.a) || [], (args) => Array.from(args))
     .filter((args) => args[1] === 'reachGoal')
@@ -528,10 +544,13 @@ e2eSuite('generation (stubbed /api/warp)', (openPage) => {
     assert.equal(await page.evaluate(() => document.getElementById('warpEndpointSelect').value), 'hostname');
     await page.waitFor(() => document.activeElement && document.activeElement.id === 'generateButton', { message: 'focus on generate' });
     assert.equal(await page.evaluate(() => document.getElementById('connectStepEndpointBtn').disabled), true);
+    await scrollSettled(page);
 
     await page.click('#connectStepProfileBtn');
     await page.waitFor(() => document.querySelector('[name="awgProfile"]:checked').value === 'legacy', { message: 'profile set' });
     assert.equal(await page.evaluate(() => localStorage.getItem('awg_profile')), 'legacy', 'remembered like a card click');
+    await page.waitFor(() => document.activeElement && document.activeElement.id === 'generateButton', { message: 'focus on generate' });
+    await scrollSettled(page);
 
     await page.click('#connectStepFaqBtn');
     await page.waitFor(() => document.getElementById('faqModal').getAttribute('aria-hidden') === 'false', { message: 'FAQ open' });
