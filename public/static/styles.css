@@ -1544,6 +1544,159 @@ kbd {
   font-size: inherit;
 }
 
+/* «Подключилось?» (result-feedback.js): подсказка «Дальше», вопрос и итог ответа лежат в одной ячейке —
+   высота равна большей из них, и вопрос, появившийся без клика (возврат на вкладку), не сдвигает панель */
+.connect-slot {
+  display: grid;
+  margin-top: 12px;
+}
+
+.connect-slot > * {
+  grid-area: 1 / 1;
+  margin: 0;
+  visibility: hidden;
+}
+
+.connect-check[data-stage="idle"] [data-slot="next"],
+.connect-check[data-stage="closed"] [data-slot="next"],
+.connect-check[data-stage="ask"] [data-slot="ask"],
+.connect-check[data-stage="yes"] [data-slot="yes"],
+.connect-check[data-stage="no"] [data-slot="no"] {
+  visibility: visible;
+}
+
+.connect-ask {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.connect-ask__q {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.connect-ask__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.connect-ask__actions .btn {
+  min-width: 64px;
+}
+
+.connect-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-2);
+  font-size: 13.5px;
+}
+
+.connect-panel {
+  margin: 12px 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface-2);
+}
+
+.connect-panel__title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.connect-panel__title:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.connect-panel__text {
+  margin: 6px 0 0;
+  color: var(--color-text-2);
+  font-size: 13px;
+}
+
+.connect-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.connect-steps {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: connect-step;
+}
+
+.connect-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  counter-increment: connect-step;
+}
+
+/* Номер шага: скрытые шаги (hidden) не считаются, нумерация остаётся сплошной */
+.connect-step::before {
+  content: counter(connect-step);
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 50%;
+  color: var(--color-text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.connect-step__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.connect-step__title {
+  margin: 2px 0 0;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.connect-step__text {
+  margin: 2px 0 0;
+  color: var(--color-text-2);
+  font-size: 13px;
+}
+
+.connect-step > .btn {
+  flex: none;
+}
+
+@media (max-width: 560px) {
+  .connect-step {
+    flex-wrap: wrap;
+  }
+
+  .connect-step__body {
+    flex-basis: calc(100% - 36px);
+  }
+
+  .connect-step > .btn {
+    margin-left: 36px;
+  }
+}
+
 .result__actions {
   display: flex;
   flex-wrap: wrap;

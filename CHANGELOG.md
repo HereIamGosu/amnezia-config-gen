@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **«Подключилось?» after the result.** Once the visitor has done something with the config (downloaded it, copied the `vpn://` link or the text, opened it in full) or came back to the tab after an automatic download, the result panel asks whether the tunnel connected, with «Да», «Нет» and a close button; one answer per generation, no text field. «Нет» lists what to try in order: the other endpoint (Lab Auto ↔ hostname), a profile more clients accept (AWG 3.x → 2.0, 2.0 → 1.5), the FAQ answer on configs that import but do not connect, the Telegram channel. The buttons only change the setting: every generation registers a new WARP device, so the visitor starts the next one. Metrica gets `connection_works` or `connection_fails` with the profile, endpoint and CPS fields of the generation, and `connection_next_step` with the chosen step. In Metrica for 2026-10-10…11-06 visits with a successful generation had 1.9 of them on average, and whether the tunnel connected was not measured at all.
+- **«Поделиться» after «Да».** Telegram, copy link and, on phones, the system share sheet; the link is the home page of the page language with `utm_source=share&utm_medium=telegram|copy|native`, never the config or the `vpn://` link (they hold the private key). Metrica gets `share_clicked` with the channel.
+
 ## [3.2.1] - 2026-11-07
 
 ### Changed

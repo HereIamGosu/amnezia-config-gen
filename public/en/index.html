@@ -50,6 +50,7 @@
     <script defer src="/static/common.js?v=3.2.1"></script>
     <script defer src="/static/status.js?v=3.2.1"></script>
     <script defer src="/static/result.js?v=3.2.1"></script>
+    <script defer src="/static/result-feedback.js?v=3.2.1"></script>
     <script defer src="/static/settings.js?v=3.2.1"></script>
     <script defer src="/static/cps-editor.js?v=3.2.1"></script>
     <script defer src="/static/settings-link.js?v=3.2.1"></script>
@@ -627,10 +628,85 @@
                 </div>
 
                 <p class="result__note" id="resultAutoNote" role="status" hidden></p>
-                <p class="result__next">
-                  <span data-i18n="result_next_steps">Next: import the .conf into AmneziaVPN or AmneziaWG (or paste the vpn:// link into AmneziaVPN) and turn the tunnel on.</span>
-                  <button type="button" class="link-btn" data-open-modal="instructionModal" data-i18n="result_next_instruction">Full instructions</button>
-                </p>
+                <!-- «Подключилось?» (result-feedback.js): подсказка, вопрос и итог ответа в одной ячейке, панель не прыгает -->
+                <div class="connect-check" id="connectCheck" data-stage="idle">
+                  <div class="connect-slot" aria-live="polite">
+                    <p class="result__next" data-slot="next">
+                      <span data-i18n="result_next_steps">Next: import the .conf into AmneziaVPN or AmneziaWG (or paste the vpn:// link into AmneziaVPN) and turn the tunnel on.</span>
+                      <button type="button" class="link-btn" data-open-modal="instructionModal" data-i18n="result_next_instruction">Full instructions</button>
+                    </p>
+                    <div class="connect-ask" data-slot="ask" role="group" aria-labelledby="connectAskTitle">
+                      <p class="connect-ask__q" id="connectAskTitle" data-i18n="connect_ask_title">Did it connect?</p>
+                      <div class="connect-ask__actions">
+                        <button type="button" class="btn btn--sm" id="connectYes" data-connect-answer="yes" data-i18n="connect_yes">Yes</button>
+                        <button type="button" class="btn btn--sm" id="connectNo" data-connect-answer="no" data-i18n="connect_no">No</button>
+                        <button type="button" class="icon-btn" id="connectClose" data-connect-close aria-label="Close the question without answering" data-i18n-aria-label="connect_close_aria" title="Close the question without answering" data-i18n-title="connect_close_aria"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-x"/></svg></button>
+                      </div>
+                    </div>
+                    <p class="connect-done" data-slot="yes">
+                      <span class="state-icon state-icon--ok" aria-hidden="true"><svg class="icon"><use href="#i-check"/></svg></span>
+                      <span data-i18n="connect_done_yes">It connected — thanks for answering!</span>
+                    </p>
+                    <p class="connect-done" data-slot="no">
+                      <span class="state-icon state-icon--degraded" aria-hidden="true"><svg class="icon"><use href="#i-alert"/></svg></span>
+                      <span data-i18n="connect_done_no">It did not connect — thanks for answering. What to try, in order:</span>
+                    </p>
+                  </div>
+
+                  <section class="connect-panel" id="connectSharePanel" aria-labelledby="connectShareTitle" hidden>
+                    <h3 class="connect-panel__title" id="connectShareTitle" tabindex="-1" data-i18n="share_title">Did it help? Share it with people who cannot connect either</h3>
+                    <p class="connect-panel__text" data-i18n="share_note">The link leads to the awgconfig.com home page. Your config and keys are not in it.</p>
+                    <div class="connect-panel__actions">
+                      <a class="btn btn--sm btn--blue" id="shareTelegram" href="https://t.me/share/url" target="_blank" rel="noopener noreferrer" data-share="telegram">
+                        <svg class="icon icon--sm icon--fill" aria-hidden="true"><use href="#i-telegram"/></svg>
+                        <span data-i18n="share_telegram">Telegram</span>
+                      </a>
+                      <button type="button" class="btn btn--sm" id="shareCopy" data-share="copy">
+                        <svg class="icon icon--sm" aria-hidden="true"><use href="#i-link"/></svg>
+                        <span data-i18n="share_copy">Copy link</span>
+                      </button>
+                      <button type="button" class="btn btn--sm" id="shareNative" data-share="native" hidden>
+                        <svg class="icon icon--sm" aria-hidden="true"><use href="#i-external"/></svg>
+                        <span data-i18n="share_native">Share…</span>
+                      </button>
+                    </div>
+                  </section>
+
+                  <section class="connect-panel" id="connectStepsPanel" aria-labelledby="connectStepsTitle" hidden>
+                    <h3 class="connect-panel__title" id="connectStepsTitle" tabindex="-1" data-i18n="connect_steps_title">What to try</h3>
+                    <p class="connect-panel__text" data-i18n="connect_steps_note">Every generation registers a new WARP device, so the buttons below only change a setting. You create the new config yourself with “Generate config”.</p>
+                    <ol class="connect-steps">
+                      <li class="connect-step" id="connectStepEndpoint">
+                        <div class="connect-step__body">
+                          <p class="connect-step__title" id="connectStepEndpointTitle"></p>
+                          <p class="connect-step__text" data-i18n="connect_step_endpoint_text">If the network blocks the chosen WARP address or port, the tunnel does not come up. Endpoint Lab picks addresses that answered recently; hostname is the default Cloudflare address.</p>
+                        </div>
+                        <button type="button" class="btn btn--sm" id="connectStepEndpointBtn" data-connect-step="endpoint"></button>
+                      </li>
+                      <li class="connect-step" id="connectStepProfile">
+                        <div class="connect-step__body">
+                          <p class="connect-step__title" id="connectStepProfileTitle"></p>
+                          <p class="connect-step__text" id="connectStepProfileText"></p>
+                        </div>
+                        <button type="button" class="btn btn--sm" id="connectStepProfileBtn" data-connect-step="profile"></button>
+                      </li>
+                      <li class="connect-step" id="connectStepFaq">
+                        <div class="connect-step__body">
+                          <p class="connect-step__title" data-i18n="connect_step_faq_title">Port, mobile profile, DNS and routes</p>
+                          <p class="connect-step__text" data-i18n="connect_step_faq_text">The other causes and what to change are in the answer to “The config imports but does not connect”.</p>
+                        </div>
+                        <button type="button" class="btn btn--sm" id="connectStepFaqBtn" data-connect-step="faq" data-i18n="connect_step_faq_btn">Open the answer</button>
+                      </li>
+                      <li class="connect-step" id="connectStepTelegram">
+                        <div class="connect-step__body">
+                          <p class="connect-step__title" data-i18n="connect_step_tg_title">Ask in the Telegram channel</p>
+                          <p class="connect-step__text" data-i18n="connect_step_tg_text">Name the profile, the client and the network type. Do not send keys or the config itself.</p>
+                        </div>
+                        <a class="btn btn--sm" id="connectStepTelegramBtn" href="https://t.me/amnezia_config" data-tg-channel data-connect-step="telegram" target="_blank" rel="noopener noreferrer" data-i18n="community_open_telegram">Open Telegram</a>
+                      </li>
+                    </ol>
+                  </section>
+                </div>
 
                 <dl class="summary-list" id="resultQuickSummary"></dl>
 

@@ -6,7 +6,7 @@
 //
 // Классический скрипт (defer), не модуль: верхнеуровневые const/let/функции всех скриптов генератора
 // живут в одной глобальной лексической области. Порядок загрузки — в public/index.html:
-// i18n.js → common.js → status.js → result.js → settings.js → cps-editor.js → settings-link.js → history.js →
+// i18n.js → common.js → status.js → result.js → result-feedback.js → settings.js → cps-editor.js → settings-link.js → history.js →
 // script.js. При загрузке файл вызывает только своё и уже загруженное;
 // остальное — из обработчиков после DOMContentLoaded. /* global */ — что файл берёт у других,
 // /* exported */ — что отдаёт им (проверяют ESLint и __tests__/frontend-scripts.test.js).
@@ -15,6 +15,7 @@
 /* global
    makeIcon, renderVpnLinkHtml, renderConfigHtml, uiShell, downloadFile, telemetry, toast, copyText,
    openPreviewModal, openModal -- common.js */
+/* global noteResultAction, renderConnectionCheck, initConnectionCheck -- result-feedback.js */
 /* global cfgState, ROUTE_MODES -- settings.js */
 /* exported
    resultExplanation, lastResultSummary, lastCompatibility, currentResult, showResultLoading, showResultError,
@@ -24,6 +25,12 @@
 const resultExplanation = window.ResultExplanation || null;
 let lastResultSummary = null;
 let lastCompatibility = null;
+
+// «Подключилось?» живёт в result-feedback.js. Не загрузился он (сеть, блокировщик, старый кэш) — результат
+// показывается как прежде, только без вопроса: typeof не бросает на необъявленном имени.
+const afterResultAction = () => {
+  if (typeof noteResultAction === 'function') noteResultAction();
+};
 
 // ─────────────────────────────────────────────────────────────
 // Панель результата: загрузка → успех (варианты, превью, действия) / ошибка
@@ -36,6 +43,7 @@ let lastCompatibility = null;
  *   active: number,
  *   tab: 'conf' | 'link',
  *   hasWarnings: boolean,
+ *   connection: 'idle' | 'ask' | 'yes' | 'no' | 'closed',
  *   telemetryContext: Record<string, unknown>,
  *   snapshot: ReturnType<typeof getResultStateSnapshot>,
  * }}
@@ -275,6 +283,7 @@ const renderResultSuccess = () => {
 
   renderQuickSummary();
   renderResultCode();
+  if (typeof renderConnectionCheck === 'function') renderConnectionCheck();
   showResultView('success');
 };
 
@@ -283,7 +292,8 @@ const renderResultSuccess = () => {
  * @param {{ mode: string, variants: Array<{ filename: string, decodedConfig: string, vpnLink: string | null }>, hasWarnings: boolean, telemetryContext: Record<string, unknown>, snapshot: object }} result
  */
 const showResult = (result) => {
-  currentResult = { ...result, active: 0, tab: 'conf' };
+  // Новая генерация — новый вопрос «Подключилось?»: прежний ответ к ней не относится
+  currentResult = { ...result, active: 0, tab: 'conf', connection: 'idle' };
   if (uiShell) uiShell.selectTab('resultTabConf');
   renderResultSuccess();
   scrollResultIntoView();
@@ -300,6 +310,7 @@ const initResultPanel = () => {
     lastDownloadAt = now;
     downloadFile(variant.decodedConfig, variant.filename);
     telemetry.trackEvent('config_downloaded', currentResult.telemetryContext);
+    afterResultAction();
   });
 
   document.getElementById('resultCopyLink')?.addEventListener('click', async () => {
@@ -312,6 +323,7 @@ const initResultPanel = () => {
     if (await copyText(variant.vpnLink)) {
       telemetry.trackEvent('vpn_link_copied', currentResult.telemetryContext);
       toast(t('vpn_link_copied', 'Ссылка скопирована, откройте AmneziaVPN на телефоне.'));
+      afterResultAction();
     } else {
       toast(t('vpn_link_copy_failed', 'Не удалось скопировать ссылку.'), 'info');
     }
@@ -323,6 +335,7 @@ const initResultPanel = () => {
     const text = currentResult.tab === 'link' && variant.vpnLink ? variant.vpnLink : variant.decodedConfig;
     const copied = await copyText(text);
     toast(copied ? t('btn_copied', 'Скопировано!') : t('copy_failed', 'Не удалось скопировать.'), copied ? 'success' : 'info');
+    if (copied) afterResultAction();
   });
 
   document.getElementById('resultTabConf')?.closest('[role="tablist"]')?.addEventListener('tabs:change', (ev) => {
@@ -340,6 +353,7 @@ const initResultPanel = () => {
       case 'preview':
         openPreviewModal(variant.decodedConfig, variant.filename, moreBtn);
         telemetry.trackEvent('config_preview_opened', currentResult.telemetryContext);
+        afterResultAction();
         break;
       case 'explain':
         openModal('resultInfoModal', moreBtn);
@@ -357,6 +371,8 @@ const initResultPanel = () => {
         break;
     }
   });
+
+  if (typeof initConnectionCheck === 'function') initConnectionCheck();
 };
 
 const summaryValue = (key, value) => {

@@ -23,6 +23,12 @@
     'telegram_channel_cta_click',
     'history_chains_used',
     'settings_link_copied',
+    // «Подключилось?» в панели результата (итерация роста 2): ответ и выбранный следующий шаг
+    'connection_works',
+    'connection_fails',
+    'connection_next_step',
+    // «Поделиться» после ответа «Да»: ссылка на главную с utm, никогда не конфиг и не vpn://
+    'share_clicked',
   ]);
 
   const ENUMS = {
@@ -36,6 +42,8 @@
     cps_resolved: new Set(['quic', 'dns', 'stun', 'dtls', 'sip', 'static', 'custom', 'none', 'unknown']),
     cps_stability: new Set(['stable', 'experimental', 'custom', 'none', 'unknown']),
     error_code: new Set(['timeout', 'http', 'network', 'invalid_response', 'unknown']),
+    next_step: new Set(['endpoint', 'profile', 'faq', 'telegram']),
+    share_channel: new Set(['telegram', 'copy', 'native']),
   };
 
   const INTEGER_KEYS = new Set([

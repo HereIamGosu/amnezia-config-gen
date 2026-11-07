@@ -15,6 +15,7 @@ const APP_SCRIPTS = Object.freeze([
   'common.js',
   'status.js',
   'result.js',
+  'result-feedback.js',
   'settings.js',
   'cps-editor.js',
   'settings-link.js',

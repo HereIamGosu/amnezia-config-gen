@@ -376,4 +376,282 @@ e2eSuite('generation (stubbed /api/warp)', (openPage) => {
     assert.ok(note.text.includes(downloads[0]), 'the note names the downloaded file');
     await page.assertClean('desktop');
   });
+
+  // ── «Подключилось?» (ACT-2) и «Поделиться» (REF-1), result-feedback.js ──
+
+  const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
+
+  /** Состояние блока: стадия, видимая ячейка, панели ответа. */
+  const connectState = () => {
+    const box = document.getElementById('connectCheck');
+    const visibleSlot = [...box.querySelectorAll('[data-slot]')]
+      .filter((el) => getComputedStyle(el).visibility === 'visible')
+      .map((el) => el.dataset.slot);
+    return {
+      stage: box.dataset.stage,
+      slots: visibleSlot,
+      share: !document.getElementById('connectSharePanel').hidden,
+      steps: !document.getElementById('connectStepsPanel').hidden,
+    };
+  };
+
+  /** Цели, ушедшие в очередь ym (на localhost tag.js не грузится, очередь остаётся в window.ym.a). */
+  const goals = () => Array.from((window.ym && window.ym.a) || [], (args) => Array.from(args))
+    .filter((args) => args[1] === 'reachGoal')
+    .map((args) => ({ name: args[2], params: args[3] }));
+
+  /** Вкладка уходит в фон и возвращается (человек открыл клиент VPN и вернулся). */
+  const leaveAndReturn = () => {
+    const flip = (state) => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => state === 'hidden' });
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    flip('hidden');
+    flip('visible');
+  };
+
+  /** Ссылки на t.me не открываем: внешний переход из теста недопустим, клик и события — настоящие. */
+  const blockTelegramNavigation = () => {
+    document.addEventListener('click', (ev) => {
+      const link = ev.target.closest && ev.target.closest('a[href^="https://t.me/"]');
+      if (link) {
+        ev.preventDefault();
+        window.__telegramHref = link.href;
+      }
+    });
+  };
+
+  test('desktop: no question right after the auto-download; asked on return to the tab; «Да» → share without the config', async () => {
+    const page = await openPage({ width: 1280, height: 900 });
+    await page.goto('/');
+    stubWarp(page, (u) => ({ json: fixtures.warpSuccess({ mode: u.searchParams.get('mode') }) }), 200);
+    await page.evaluate(blockTelegramNavigation);
+
+    await page.click('#generateButton');
+    await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success');
+    await page.sleep(300);
+    assert.deepEqual(await page.evaluate(connectState), { stage: 'idle', slots: ['next'], share: false, steps: false },
+      'not asked right after the generation, the «Дальше» hint stays');
+
+    // Вопрос появляется без клика: проверяем, что ячейка не сдвигает раскладку
+    const since = await page.evaluate(() => performance.now());
+    await page.evaluate(leaveAndReturn);
+    await page.waitFor(() => document.getElementById('connectCheck').dataset.stage === 'ask', { message: 'asked on return' });
+    await page.sleep(300);
+    const { cls, counted } = await shiftsSince(page, since);
+    assert.ok(cls < 0.001, `the question appears without a layout shift: ${cls} ${JSON.stringify(counted)}`);
+    assert.deepEqual((await page.evaluate(connectState)).slots, ['ask']);
+    assert.equal(await page.evaluate(() => document.getElementById('connectAskTitle').textContent.trim()), 'Подключилось?');
+
+    await page.click('#connectYes');
+    await page.waitFor(() => !document.getElementById('connectSharePanel').hidden, { message: 'share panel' });
+    assert.deepEqual(await page.evaluate(connectState), { stage: 'yes', slots: ['yes'], share: true, steps: false });
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'connectShareTitle', 'focus moves to the new block');
+    assert.equal(await page.evaluate(() => document.getElementById('shareNative').hidden), true, 'no native share on a desktop pointer');
+
+    const href = await page.evaluate(() => document.getElementById('shareTelegram').href);
+    const tg = new URL(href);
+    assert.equal(tg.origin + tg.pathname, 'https://t.me/share/url');
+    assert.equal(tg.searchParams.get('url'), 'https://awgconfig.com/?utm_source=share&utm_medium=telegram');
+    const fixture = fixtures.warpSuccess();
+    for (const secret of ['vpn://', 'PrivateKey', fixtures.FAKE_PRIVATE_KEY, fixture.vpnLink.slice(6, 40)]) {
+      assert.ok(!decodeURIComponent(href).includes(secret), `the Telegram link does not carry ${secret.slice(0, 12)}`);
+    }
+
+    await page.click('#shareTelegram');
+    assert.equal(await page.waitFor(() => window.__telegramHref), href, 'the click goes to t.me/share');
+    await page.click('#shareCopy');
+    const copied = await page.waitFor(() => window.__e2e.clipboard.slice(-1)[0]);
+    assert.equal(copied, 'https://awgconfig.com/?utm_source=share&utm_medium=copy');
+
+    // Повторный ответ невозможен: кнопки скрыты, а программный клик отсекается
+    assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById('connectNo')).visibility), 'hidden');
+    await page.evaluate(() => document.getElementById('connectNo').click());
+    assert.equal((await page.evaluate(connectState)).stage, 'yes');
+
+    const sent = await page.evaluate(goals);
+    const works = sent.filter((g) => g.name === 'connection_works');
+    assert.equal(works.length, 1, 'one answer event');
+    assert.deepEqual(Object.keys(works[0].params).sort(), [
+      'cps_mode', 'cps_requested', 'cps_resolved', 'cps_stability', 'endpoint_mode', 'endpoint_source', 'mobile_profile',
+      'mode', 'router_profile',
+    ]);
+    assert.equal(works[0].params.mode, 'awg2');
+    assert.equal(sent.filter((g) => g.name === 'connection_fails').length, 0);
+    assert.deepEqual(sent.filter((g) => g.name === 'share_clicked').map((g) => g.params),
+      [{ share_channel: 'telegram' }, { share_channel: 'copy' }]);
+
+    // Новая генерация — новый вопрос
+    await page.click('#generateButton');
+    await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success'
+      && document.getElementById('connectCheck').dataset.stage === 'idle', { message: 'reset for a new result' });
+    assert.deepEqual(await page.evaluate(connectState), { stage: 'idle', slots: ['next'], share: false, steps: false });
+    await page.assertClean('connection yes');
+  });
+
+  test('«Нет»: steps only set a parameter, no /api/warp request; FAQ q5 and Telegram', async () => {
+    const page = await openPage({ width: 1280, height: 900 });
+    await page.goto('/');
+    const requests = stubWarp(page, (u) => ({ json: fixtures.warpSuccess({ mode: u.searchParams.get('mode') }) }), 200);
+    await page.evaluate(blockTelegramNavigation);
+    // Конфиг через Lab Auto: шаг endpoint предложит hostname
+    await page.evaluate(() => {
+      const select = document.getElementById('warpEndpointSelect');
+      select.value = 'lab';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    await page.click('#generateButton');
+    await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success');
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].searchParams.get('endpointMode'), 'lab');
+
+    await page.click('#resultCopyLink');
+    await page.waitFor(() => document.getElementById('connectCheck').dataset.stage === 'ask', { message: 'asked after the vpn:// copy' });
+    await page.click('#connectNo');
+    await page.waitFor(() => !document.getElementById('connectStepsPanel').hidden, { message: 'steps panel' });
+    assert.deepEqual(await page.evaluate(connectState), { stage: 'no', slots: ['no'], share: false, steps: true });
+
+    const steps = () => [...document.querySelectorAll('#connectStepsPanel .connect-step')]
+      .filter((li) => !li.hidden)
+      .map((li) => ({ id: li.id, title: li.querySelector('.connect-step__title').textContent.trim(), button: li.querySelector('.btn').textContent.trim() }));
+    assert.deepEqual(await page.evaluate(steps), [
+      { id: 'connectStepEndpoint', title: 'Другой endpoint: Hostname', button: 'Выбрать Hostname' },
+      { id: 'connectStepProfile', title: 'Другой профиль: AWG 1.5', button: 'Выбрать AWG 1.5' },
+      { id: 'connectStepFaq', title: 'Порт, мобильный профиль, DNS и маршруты', button: 'Открыть ответ' },
+      { id: 'connectStepTelegram', title: 'Спросить в Telegram-канале', button: 'Открыть Telegram' },
+    ]);
+
+    await page.click('#connectStepEndpointBtn');
+    await page.waitFor(() => document.getElementById('chipEndpoint').textContent.trim() === 'Hostname', { message: 'endpoint set' });
+    assert.equal(await page.evaluate(() => document.getElementById('warpEndpointSelect').value), 'hostname');
+    await page.waitFor(() => document.activeElement && document.activeElement.id === 'generateButton', { message: 'focus on generate' });
+    assert.equal(await page.evaluate(() => document.getElementById('connectStepEndpointBtn').disabled), true);
+
+    await page.click('#connectStepProfileBtn');
+    await page.waitFor(() => document.querySelector('[name="awgProfile"]:checked').value === 'legacy', { message: 'profile set' });
+    assert.equal(await page.evaluate(() => localStorage.getItem('awg_profile')), 'legacy', 'remembered like a card click');
+
+    await page.click('#connectStepFaqBtn');
+    await page.waitFor(() => document.getElementById('faqModal').getAttribute('aria-hidden') === 'false', { message: 'FAQ open' });
+    assert.equal(await page.evaluate(() => document.querySelector('#faqModal [data-i18n="faq_q5"]').closest('details').open), true, 'q5 expanded');
+    await page.press('Escape');
+    await page.waitFor(() => document.getElementById('faqModal').getAttribute('aria-hidden') === 'true');
+
+    await page.click('#connectStepTelegramBtn');
+    assert.equal(await page.waitFor(() => window.__telegramHref), 'https://t.me/amnezia_config');
+
+    await page.sleep(500);
+    assert.equal(requests.length, 1, 'no generation started by the steps');
+    assert.equal(page.apiCalls.filter((c) => c.url.includes('/api/warp')).length, 1);
+    assert.equal((await page.evaluate(() => document.getElementById('resultPanel').dataset.view)), 'success');
+
+    const sent = await page.evaluate(goals);
+    const fails = sent.filter((g) => g.name === 'connection_fails');
+    assert.equal(fails.length, 1);
+    assert.equal(fails[0].params.endpoint_mode, 'lab');
+    assert.deepEqual(sent.filter((g) => g.name === 'connection_next_step').map((g) => g.params.next_step),
+      ['endpoint', 'profile', 'faq', 'telegram']);
+    assert.equal(sent.filter((g) => g.name === 'telegram_channel_cta_click').length, 1, 'the channel goal counts too');
+    await page.assertClean('connection no');
+  });
+
+  test('closing without an answer: no event, and the same result is not asked again', async () => {
+    const page = await openPage();
+    await page.goto('/');
+    stubWarp(page, () => ({ json: fixtures.warpSuccess() }), 200);
+    await page.click('#generateButton');
+    await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success');
+    await page.click('#resultMoreBtn');
+    await page.click('[data-result-action="preview"]');
+    await page.waitFor(() => document.getElementById('connectCheck').dataset.stage === 'ask', { message: 'asked after the preview' });
+    await page.press('Escape');
+    await page.click('#connectClose');
+    assert.deepEqual(await page.evaluate(connectState), { stage: 'closed', slots: ['next'], share: false, steps: false });
+    await page.click('#resultDownload');
+    await page.evaluate(leaveAndReturn);
+    await page.sleep(200);
+    assert.equal((await page.evaluate(connectState)).stage, 'closed', 'not asked again for this result');
+    const names = (await page.evaluate(goals)).map((g) => g.name);
+    assert.ok(!names.some((n) => n.startsWith('connection_')), names.join(' '));
+    await page.assertClean('connection closed');
+  });
+
+  test('RU → EN after «Нет»: the answer survives, texts are English, no second event', async () => {
+    const page = await openPage();
+    await page.goto('/');
+    stubWarp(page, () => ({ json: fixtures.warpSuccess() }), 200);
+    await page.click('#generateButton');
+    await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success');
+    await page.click('#resultDownload');
+    await page.waitFor(() => document.getElementById('connectCheck').dataset.stage === 'ask');
+    await page.click('#connectNo');
+    await page.waitFor(() => !document.getElementById('connectStepsPanel').hidden);
+
+    await page.click('.lang-btn[data-lang="en"]');
+    await page.waitFor(() => location.pathname === '/en' && document.readyState === 'complete'
+      && document.getElementById('resultPanel').dataset.view === 'success', { message: 'result restored on /en' });
+    await page.waitForNetworkIdle();
+    await page.waitFor(() => document.getElementById('connectStepsTitle').textContent.trim() === 'What to try', { message: 'English steps' });
+    const state = await page.evaluate(() => ({
+      stage: document.getElementById('connectCheck').dataset.stage,
+      done: document.querySelector('[data-slot="no"]').textContent.trim(),
+      profile: document.getElementById('connectStepProfileBtn').textContent.trim(),
+      profileText: document.getElementById('connectStepProfileText').textContent.trim(),
+      steps: !document.getElementById('connectStepsPanel').hidden,
+    }));
+    assert.equal(state.stage, 'no');
+    assert.equal(state.steps, true);
+    assert.match(state.done, /did not connect/);
+    assert.equal(state.profile, 'Choose AWG 1.5');
+    assert.match(state.profileText, /AWG 2\.0 parameters/);
+    const names = (await page.evaluate(goals)).map((g) => g.name);
+    assert.ok(!names.some((n) => n.startsWith('connection_')), `no answer event on /en: ${names.join(' ')}`);
+    await page.assertClean('RU → EN');
+  });
+
+  test('without result-feedback.js (blocked or failed) the result still shows and the actions work', async () => {
+    const page = await openPage();
+    page.route((u) => u.pathname === '/static/result-feedback.js', () => ({ status: 404, body: 'blocked (e2e)' }));
+    page.allowErrors(/result-feedback\.js|status of 404/);
+    await page.goto('/');
+    stubWarp(page, () => ({ json: fixtures.warpSuccess() }), 200);
+    await page.click('#generateButton');
+    await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success', { message: 'success view without the module' });
+    await page.click('#resultDownload');
+    await page.click('#resultCopyLink');
+    assert.equal((await page.clipboard()).length, 1, 'vpn:// copied');
+    assert.equal(await page.evaluate(() => document.getElementById('connectCheck').dataset.stage), 'idle', 'no question, no error');
+    await page.assertClean('no feedback module');
+  });
+
+  test('iPhone: the result stays, the question follows «Скачать .conf», «Да» offers the native share with utm', async () => {
+    const page = await openPage({ width: 390, height: 844, mobile: true });
+    await page.send('Emulation.setUserAgentOverride', { userAgent: IPHONE_UA, platform: 'iPhone' });
+    await page.goto('/en');
+    stubWarp(page, (u) => ({ json: fixtures.warpSuccess({ mode: u.searchParams.get('mode') }) }));
+    await page.evaluate(() => {
+      window.__shared = [];
+      navigator.share = (data) => { window.__shared.push(data); return Promise.resolve(); };
+    });
+
+    await page.tap('#generateButton');
+    await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success');
+    assert.equal((await page.evaluate(connectState)).stage, 'idle');
+    await page.tap('#resultDownload');
+    await page.waitFor(() => document.getElementById('connectCheck').dataset.stage === 'ask', { message: 'asked after the download tap' });
+    assert.equal(await page.evaluate(() => document.getElementById('connectAskTitle').textContent.trim()), 'Did it connect?');
+    await page.tap('#connectYes');
+    await page.waitFor(() => !document.getElementById('connectSharePanel').hidden);
+    assert.equal(await page.evaluate(() => document.getElementById('shareNative').hidden), false, 'native share on a phone');
+    await page.tap('#shareNative');
+    const shared = await page.waitFor(() => window.__shared[0]);
+    assert.equal(shared.url, 'https://awgconfig.com/en?utm_source=share&utm_medium=native');
+    assert.ok(!JSON.stringify(shared).includes('vpn://'), 'nothing of the config is shared');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'no horizontal scroll');
+    const sent = await page.evaluate(goals);
+    assert.deepEqual(sent.filter((g) => g.name === 'share_clicked').map((g) => g.params), [{ share_channel: 'native' }]);
+    await page.assertClean('iPhone share');
+  });
 });
