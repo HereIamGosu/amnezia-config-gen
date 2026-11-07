@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.2.1] - 2026-11-07
 
 ### Changed
 - **iPhone and iPad keep the result on screen.** On iOS (Safari, Chrome, Yandex and iPadOS in desktop mode) the config is no longer downloaded automatically after generation; the result panel says to press «Скачать .conf» or «Скопировать vpn://». In Yandex Metrica for 2026-10-10…11-06, 11 % of the iOS Safari users and 22 % of the iOS Chrome users who started a generation got neither the success nor the error event, against 0 % in the Google app on iOS, where a download link does nothing; the mean generation time is about 3 s on every OS. Other platforms download as before.
