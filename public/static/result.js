@@ -44,6 +44,7 @@ const afterResultAction = () => {
  *   tab: 'conf' | 'link',
  *   hasWarnings: boolean,
  *   connection: 'idle' | 'ask' | 'yes' | 'no' | 'closed',
+ *   attempt: number,
  *   telemetryContext: Record<string, unknown>,
  *   snapshot: ReturnType<typeof getResultStateSnapshot>,
  * }}
@@ -287,13 +288,30 @@ const renderResultSuccess = () => {
   showResultView('success');
 };
 
+// Номер успешной генерации во вкладке (для «Подключилось?»): sessionStorage переживает переход / ↔ /en,
+// без него счёт идёт в памяти страницы
+const RESULT_ATTEMPT_KEY = 'awg_result_attempt';
+let resultAttemptMemory = 0;
+const nextResultAttempt = () => {
+  let attempt = resultAttemptMemory + 1;
+  try {
+    const stored = Number.parseInt(sessionStorage.getItem(RESULT_ATTEMPT_KEY) || '0', 10);
+    attempt = Math.max(attempt, (Number.isFinite(stored) ? stored : 0) + 1);
+    sessionStorage.setItem(RESULT_ATTEMPT_KEY, String(attempt));
+  } catch {
+    // Без sessionStorage счёт только в этой странице
+  }
+  resultAttemptMemory = attempt;
+  return attempt;
+};
+
 /**
  * Показывает результат генерации.
  * @param {{ mode: string, variants: Array<{ filename: string, decodedConfig: string, vpnLink: string | null }>, hasWarnings: boolean, telemetryContext: Record<string, unknown>, snapshot: object }} result
  */
 const showResult = (result) => {
   // Новая генерация — новый вопрос «Подключилось?»: прежний ответ к ней не относится
-  currentResult = { ...result, active: 0, tab: 'conf', connection: 'idle' };
+  currentResult = { ...result, active: 0, tab: 'conf', connection: 'idle', attempt: nextResultAttempt() };
   if (uiShell) uiShell.selectTab('resultTabConf');
   renderResultSuccess();
   scrollResultIntoView();

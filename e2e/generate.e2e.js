@@ -489,11 +489,15 @@ e2eSuite('generation (stubbed /api/warp)', (openPage) => {
     const sent = await page.evaluate(goals);
     const works = sent.filter((g) => g.name === 'connection_works');
     assert.equal(works.length, 1, 'one answer event');
-    assert.deepEqual(Object.keys(works[0].params).sort(), [
-      'cps_mode', 'cps_requested', 'cps_resolved', 'cps_stability', 'endpoint_mode', 'endpoint_source', 'mobile_profile',
-      'mode', 'router_profile',
+    // Параметры ответа лежат под именем события: Метрика не смешивает их с параметрами других генераций визита
+    assert.deepEqual(Object.keys(works[0].params), ['connection_works']);
+    const answer = works[0].params.connection_works;
+    assert.deepEqual(Object.keys(answer).sort(), [
+      'attempt', 'cps_mode', 'cps_requested', 'cps_resolved', 'cps_stability', 'endpoint_mode', 'endpoint_source',
+      'mobile_profile', 'mode', 'route_mode', 'router_profile',
     ]);
-    assert.equal(works[0].params.mode, 'awg2');
+    assert.equal(answer.mode, 'awg2');
+    assert.equal(answer.attempt, 1, 'the first generation of the tab');
     assert.equal(sent.filter((g) => g.name === 'connection_fails').length, 0);
     assert.deepEqual(sent.filter((g) => g.name === 'share_clicked').map((g) => g.params),
       [{ share_channel: 'telegram' }, { share_channel: 'copy' }]);
@@ -503,6 +507,8 @@ e2eSuite('generation (stubbed /api/warp)', (openPage) => {
     await page.waitFor(() => document.getElementById('resultPanel').dataset.view === 'success'
       && document.getElementById('connectCheck').dataset.stage === 'idle', { message: 'reset for a new result' });
     assert.deepEqual(await page.evaluate(connectState), { stage: 'idle', slots: ['next'], share: false, steps: false });
+    // currentResult — глобальная let-переменная скриптов страницы (result.js), поэтому выражение строкой
+    assert.equal(await page.evaluate('currentResult.attempt'), 2, 'the second generation of the tab');
     await page.assertClean('connection yes');
   });
 
@@ -569,8 +575,9 @@ e2eSuite('generation (stubbed /api/warp)', (openPage) => {
     const sent = await page.evaluate(goals);
     const fails = sent.filter((g) => g.name === 'connection_fails');
     assert.equal(fails.length, 1);
-    assert.equal(fails[0].params.endpoint_mode, 'lab');
-    assert.deepEqual(sent.filter((g) => g.name === 'connection_next_step').map((g) => g.params.next_step),
+    assert.equal(fails[0].params.connection_fails.endpoint_mode, 'lab');
+    assert.equal(fails[0].params.connection_fails.attempt, 1);
+    assert.deepEqual(sent.filter((g) => g.name === 'connection_next_step').map((g) => g.params.connection_next_step.next_step),
       ['endpoint', 'profile', 'faq', 'telegram']);
     assert.equal(sent.filter((g) => g.name === 'telegram_channel_cta_click').length, 1, 'the channel goal counts too');
     await page.assertClean('connection no');

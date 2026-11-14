@@ -35,7 +35,7 @@ const resultOnScreen = () => {
 // Тот же обезличенный контекст генерации, что у generation_succeeded, — только поля для разбивки ответа
 const CONNECTION_CONTEXT_KEYS = [
   'mode', 'endpoint_mode', 'endpoint_source', 'cps_mode', 'cps_requested', 'cps_resolved', 'cps_stability',
-  'mobile_profile', 'router_profile',
+  'mobile_profile', 'router_profile', 'route_mode',
 ];
 
 const connectionContext = (extra = {}) => {
@@ -44,6 +44,8 @@ const connectionContext = (extra = {}) => {
   CONNECTION_CONTEXT_KEYS.forEach((key) => {
     if (source[key] !== undefined) context[key] = source[key];
   });
+  // Номер генерации во вкладке (result.js): ответ на первый конфиг отличается от ответа после нескольких попыток
+  if (currentResult && Number.isInteger(currentResult.attempt)) context.attempt = currentResult.attempt;
   return { ...context, ...extra };
 };
 

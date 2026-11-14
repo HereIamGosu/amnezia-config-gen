@@ -52,6 +52,8 @@
     'warning_count',
     'duration_ms',
     'chain_fields',
+    // Номер успешной генерации во вкладке: «Подключилось?» на первом конфиге или на пятом — разные истории
+    'attempt',
   ]);
   const BOOLEAN_KEYS = new Set([
     'has_warning',
@@ -91,12 +93,18 @@
     return 'unknown';
   };
 
+  // Параметры reachGoal Метрика хранит на уровне визита, без имени цели: ответ «Подключилось?» смешивался с
+  // параметрами всех генераций визита. Под именем события ({ connection_fails: { mode, … } }) он остаётся
+  // привязан к той генерации, о которой спросили (paramsLevel1 = имя события).
+  const NESTED_PARAMS_EVENTS = new Set(['connection_works', 'connection_fails', 'connection_next_step']);
+
   const trackEvent = (eventName, payload = {}) => {
     if (!EVENT_NAMES.has(eventName)) return false;
     const safePayload = sanitizePayload(payload);
+    const params = NESTED_PARAMS_EVENTS.has(eventName) ? { [eventName]: safePayload } : safePayload;
     try {
       if (root && typeof root.ym === 'function') {
-        root.ym(YANDEX_COUNTER_ID, 'reachGoal', eventName, safePayload);
+        root.ym(YANDEX_COUNTER_ID, 'reachGoal', eventName, params);
         return true;
       }
     } catch {

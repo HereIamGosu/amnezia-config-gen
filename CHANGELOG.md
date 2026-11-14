@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **«Подключилось?» answers are tied to the generation they are about.** Yandex Metrica keeps goal parameters per visit, so in the first week the profile and endpoint of an answer were mixed with those of every other generation of the visit: after «Нет» people generated 4.2 configs per visit on average. `connection_works`, `connection_fails` and `connection_next_step` now send their fields under the event name, and they carry `route_mode` and `attempt`, the number of the successful generation in the browser tab. Other events keep their flat parameters. Still no keys, addresses, presets or text.
+
 ## [3.2.2] - 2026-11-07
 
 ### Added

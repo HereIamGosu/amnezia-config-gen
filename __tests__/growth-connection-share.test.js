@@ -50,15 +50,37 @@ describe('adapter: connection and share events', () => {
       cps_stability: 'stable',
       mobile_profile: true,
       router_profile: false,
+      route_mode: 'split',
+      attempt: 3,
     };
     const calls = withYm(() => {
       assert.equal(trackEvent('connection_works', context), true);
       assert.equal(trackEvent('connection_fails', context), true);
     });
+    // Под именем события (2026-11-14): Метрика хранит параметры на уровне визита, и плоский ответ смешивался с
+    // параметрами всех генераций визита (в визитах с «Нет» — 4,2 генерации в среднем)
     assert.deepEqual(calls, [
-      [99328227, 'reachGoal', 'connection_works', context],
-      [99328227, 'reachGoal', 'connection_fails', context],
+      [99328227, 'reachGoal', 'connection_works', { connection_works: context }],
+      [99328227, 'reachGoal', 'connection_fails', { connection_fails: context }],
     ]);
+  });
+
+  test('other events keep flat params, so the earlier reports and goals read them as before', () => {
+    const calls = withYm(() => {
+      trackEvent('generation_succeeded', { mode: 'awg2', attempt: 1 });
+      trackEvent('vpn_link_copied', { mode: 'awg31' });
+    });
+    assert.deepEqual(calls, [
+      [99328227, 'reachGoal', 'generation_succeeded', { mode: 'awg2', attempt: 1 }],
+      [99328227, 'reachGoal', 'vpn_link_copied', { mode: 'awg31' }],
+    ]);
+  });
+
+  test('attempt is a bounded integer like the other counters', () => {
+    assert.deepEqual(sanitizePayload({ attempt: 2 }), { attempt: 2 });
+    assert.deepEqual(sanitizePayload({ attempt: 2.4 }), { attempt: 2 });
+    assert.deepEqual(sanitizePayload({ attempt: -1 }), {});
+    assert.deepEqual(sanitizePayload({ attempt: '3' }), {});
   });
 
   test('connection_next_step and share_clicked accept only their bounded values', () => {
@@ -75,7 +97,7 @@ describe('adapter: connection and share events', () => {
       trackEvent('share_clicked', { share_channel: 'copy' });
     });
     assert.deepEqual(calls, [
-      [99328227, 'reachGoal', 'connection_next_step', { mode: 'awg31', next_step: 'profile' }],
+      [99328227, 'reachGoal', 'connection_next_step', { connection_next_step: { mode: 'awg31', next_step: 'profile' } }],
       [99328227, 'reachGoal', 'share_clicked', { share_channel: 'copy' }],
     ]);
   });
@@ -150,18 +172,33 @@ describe('call sites in result.js and result-feedback.js', () => {
   test('the generation context of the answer is a fixed subset of keys', () => {
     const ctx = runFeedback('currentResult.connection = "ask"; connectionContext({ next_step: "faq" })', {
       currentResult: {
+        attempt: 2,
         telemetryContext: {
           mode: 'awg3', endpoint_mode: 'hostname', endpoint_source: 'hostname', cps_mode: 'auto',
           cps_requested: 'auto', cps_resolved: 'dns', cps_stability: 'stable', mobile_profile: false,
-          router_profile: true, count_requested: 1, duration_ms: 900, routes_source: 'catalog',
+          router_profile: true, route_mode: 'split', count_requested: 1, duration_ms: 900, routes_source: 'catalog',
         },
       },
     });
     assert.deepEqual(JSON.parse(JSON.stringify(ctx)), {
       mode: 'awg3', endpoint_mode: 'hostname', endpoint_source: 'hostname', cps_mode: 'auto',
       cps_requested: 'auto', cps_resolved: 'dns', cps_stability: 'stable', mobile_profile: false,
-      router_profile: true, next_step: 'faq',
+      router_profile: true, route_mode: 'split', attempt: 2, next_step: 'faq',
     });
+  });
+
+  test('every generation gets the next attempt number of the tab, kept across / ↔ /en', () => {
+    const body = result.slice(result.indexOf('const RESULT_ATTEMPT_KEY'), result.indexOf('const showResult ='));
+    const store = new Map();
+    const sessionStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)) };
+    const first = vm.runInNewContext(`${body}\n[nextResultAttempt(), nextResultAttempt()]`, { sessionStorage });
+    assert.deepEqual(Array.from(first), [1, 2]);
+    // a new page of the same tab (language switch) continues the count
+    assert.equal(vm.runInNewContext(`${body}\nnextResultAttempt()`, { sessionStorage }), 3);
+    // without sessionStorage the page still counts
+    const broken = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
+    assert.deepEqual(Array.from(vm.runInNewContext(`${body}\n[nextResultAttempt(), nextResultAttempt()]`, { sessionStorage: broken })), [1, 2]);
+    assert.match(result, /connection: 'idle', attempt: nextResultAttempt\(\) \}/);
   });
 });
 
