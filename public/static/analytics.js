@@ -8,6 +8,8 @@
   const YANDEX_COUNTER_ID = 99328227;
 
   const EVENT_NAMES = new Set([
+    // Кнопка генерации попала на экран (раз за загрузку страницы): отделяет «не дошёл до кнопки» от «увидел и ушёл»
+    'generate_button_seen',
     'generation_started',
     'generation_succeeded',
     'generation_partially_succeeded',

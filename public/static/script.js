@@ -336,6 +336,22 @@ const generateConfig = async () => {
   }
 };
 
+/**
+ * Событие generate_button_seen: кнопка генерации хотя бы наполовину попала на экран, один раз за загрузку страницы.
+ * До кнопки около двух экранов на телефоне и больше одного на ПК (замер 2026-11-15), а пятая часть новых посетителей
+ * генерацию не начинает; без события «не дошёл до кнопки» не отличить от «увидел и ушёл».
+ * Параметров нет: устройство, источник и адрес Метрика знает сама. Без IntersectionObserver событие не уходит.
+ */
+const watchGenerateButtonSeen = (button) => {
+  if (typeof IntersectionObserver !== 'function') return;
+  const observer = new IntersectionObserver((entries) => {
+    if (!entries.some((entry) => entry.isIntersecting)) return;
+    observer.disconnect();
+    telemetry.trackEvent('generate_button_seen');
+  }, { threshold: 0.5 });
+  observer.observe(button);
+};
+
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-tg-channel]').forEach((el) => {
     el.href = TG_CHANNEL_URL;
@@ -348,6 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const generateButton = document.getElementById('generateButton');
   if (generateButton) {
     generateButton.addEventListener('click', () => generateConfig());
+    watchGenerateButtonSeen(generateButton);
   } else {
     console.error('Кнопка "generateButton" не найдена.');
   }

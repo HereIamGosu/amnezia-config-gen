@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Product event `generate_button_seen`.** Sent once per page load when at least half of the generate button is on screen. The button sits below the first screen on phones and desktops, and about a fifth of new visitors never start a generation; the event tells "did not reach the button" from "saw it and left". It carries no parameters and changes nothing on the page.
+
 ## [3.2.3] - 2026-11-14
 
 ### Changed

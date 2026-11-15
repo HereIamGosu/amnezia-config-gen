@@ -652,6 +652,37 @@ e2eSuite('generation (stubbed /api/warp)', (openPage) => {
     await page.assertClean('no feedback module');
   });
 
+  test('generate_button_seen: not on load of a phone screen, once when the button scrolls in, never twice', async () => {
+    const page = await openPage({ width: 390, height: 844, mobile: true });
+    await page.goto('/');
+    const seen = async () => (await page.evaluate(goals)).filter((g) => g.name === 'generate_button_seen');
+    const below = await page.evaluate(() => document.getElementById('generateButton').getBoundingClientRect().top > innerHeight);
+    assert.equal(below, true, 'the button is below the first phone screen');
+    await page.sleep(300);
+    assert.deepEqual(await seen(), [], 'no event while the button is off screen');
+
+    await page.evaluate(() => document.getElementById('generateButton').scrollIntoView({ block: 'center' }));
+    await page.waitFor(() => (window.ym.a || []).some((args) => args[2] === 'generate_button_seen'), { message: 'event after the button came on screen' });
+    assert.deepEqual(await seen(), [{ name: 'generate_button_seen', params: {} }]);
+
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.sleep(300);
+    await page.evaluate(() => document.getElementById('generateButton').scrollIntoView({ block: 'center' }));
+    await page.sleep(300);
+    assert.equal((await seen()).length, 1, 'one event per page load');
+    await page.assertClean('button seen, phone');
+  });
+
+  test('generate_button_seen: sent on load when the screen is tall enough to show the button', async () => {
+    const page = await openPage({ width: 1280, height: 1400 });
+    await page.goto('/');
+    const onScreen = await page.evaluate(() => document.getElementById('generateButton').getBoundingClientRect().bottom <= innerHeight);
+    assert.equal(onScreen, true, 'the button fits the first screen at 1280×1400');
+    await page.waitFor(() => (window.ym.a || []).some((args) => args[2] === 'generate_button_seen'), { message: 'event without scrolling' });
+    assert.equal((await page.evaluate(goals)).filter((g) => g.name === 'generate_button_seen').length, 1);
+    await page.assertClean('button seen, tall desktop');
+  });
+
   test('iPhone: the result stays, the question follows «Скачать .conf», «Да» offers the native share with utm', async () => {
     const page = await openPage({ width: 390, height: 844, mobile: true });
     await page.send('Emulation.setUserAgentOverride', { userAgent: IPHONE_UA, platform: 'iPhone' });
