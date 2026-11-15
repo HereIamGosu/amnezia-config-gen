@@ -79,9 +79,9 @@ Endpoint Lab работает на том же сервере отдельной
 
 Продуктовые события отправляются через существующую Yandex.Metrika с помощью no-op-safe adapter `public/static/analytics.js`. Если аналитика недоступна или заблокирована, генерация и остальные действия продолжают работать без ошибок.
 
-События: `generation_started`, `generation_succeeded`, `generation_partially_succeeded`, `generation_failed`, `config_downloaded`, `config_preview_opened`, `vpn_link_copied`, `history_item_previewed`, `history_item_downloaded`, `healthcheck_opened`, `status_modal_opened`.
+События: `generate_button_seen`, `generation_started`, `generation_succeeded`, `generation_partially_succeeded`, `generation_failed`, `config_downloaded`, `config_preview_opened`, `vpn_link_copied`, `history_item_previewed`, `history_item_downloaded`, `history_chains_used`, `status_modal_opened`, `telegram_channel_cta_click`, `settings_link_copied`, `connection_works`, `connection_fails`, `connection_next_step`, `share_clicked`.
 
-Разрешены только ограниченные продуктовые метаданные: режим, количества конфигов, категории источников endpoint/маршрутов, предупреждения, full/split, mobile/router, CPS, безопасные boolean-флаги WARP-safe/timing/experimental padding, длительность и категория ошибки. Adapter **не собирает** содержимое `.conf`, ключи, WARP-токены, полные endpoint-строки, `AllowedIPs`, custom CIDR, исходные сообщения ошибок и полный user agent.
+Разрешены только ограниченные продуктовые метаданные: режим, количества конфигов, категории источников endpoint/маршрутов, предупреждения, full/split, mobile/router, CPS, безопасные boolean-флаги WARP-safe/timing/experimental padding, длительность и категория ошибки, выбранный шаг после ответа «Нет», канал «Поделиться» и номер генерации во вкладке. Adapter **не собирает** содержимое `.conf`, ключи, WARP-токены, полные endpoint-строки, `AllowedIPs`, custom CIDR, исходные сообщения ошибок и полный user agent.
 
 ## Структура репозитория
 
