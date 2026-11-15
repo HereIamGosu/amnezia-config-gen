@@ -51,6 +51,20 @@ const loadWatcher = ({ withObserver = true } = {}) => {
   return { watch: sandbox.watch, events, observers };
 };
 
+describe('a page load alone sends no product event', () => {
+  test('healthcheck_opened is gone: it fired on every load and only repeated the visit', () => {
+    assert.ok(!/trackEvent\('healthcheck_opened'/.test(script), 'no call in script.js');
+    const calls = withYm(() => assert.equal(trackEvent('healthcheck_opened'), false, 'the name left the allowlist'));
+    assert.deepEqual(calls, []);
+  });
+
+  test('the status modal keeps its own event', () => {
+    assert.match(readAppScript('status.js'), /telemetry\.trackEvent\('status_modal_opened'\)/);
+    const calls = withYm(() => assert.equal(trackEvent('status_modal_opened'), true));
+    assert.deepEqual(calls, [[99328227, 'reachGoal', 'status_modal_opened', {}]]);
+  });
+});
+
 describe('generate_button_seen', () => {
   test('passes the allowlist and carries no parameters, whatever the caller hands over', () => {
     const calls = withYm(() => {

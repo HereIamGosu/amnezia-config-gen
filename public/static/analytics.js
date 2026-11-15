@@ -19,7 +19,6 @@
     'vpn_link_copied',
     'history_item_previewed',
     'history_item_downloaded',
-    'healthcheck_opened',
     'status_modal_opened',
     // Имя совпадает с целью Метрики «Переход в Telegram-канал» (JS-событие telegram_channel_cta_click)
     'telegram_channel_cta_click',

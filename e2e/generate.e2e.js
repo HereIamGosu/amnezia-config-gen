@@ -679,7 +679,8 @@ e2eSuite('generation (stubbed /api/warp)', (openPage) => {
     const onScreen = await page.evaluate(() => document.getElementById('generateButton').getBoundingClientRect().bottom <= innerHeight);
     assert.equal(onScreen, true, 'the button fits the first screen at 1280×1400');
     await page.waitFor(() => (window.ym.a || []).some((args) => args[2] === 'generate_button_seen'), { message: 'event without scrolling' });
-    assert.equal((await page.evaluate(goals)).filter((g) => g.name === 'generate_button_seen').length, 1);
+    const onLoad = (await page.evaluate(goals)).map((g) => g.name).sort();
+    assert.deepEqual(onLoad, ['generate_button_seen', 'infoLink'], 'nothing else is sent by a page load');
     await page.assertClean('button seen, tall desktop');
   });
 

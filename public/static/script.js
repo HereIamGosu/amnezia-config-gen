@@ -423,7 +423,8 @@ document.addEventListener('DOMContentLoaded', () => {
   restoreLangHandoff();
 
   // ── Статус сервисов: карточка в hero и модал ──
-  telemetry.trackEvent('healthcheck_opened');
+  // Событие healthcheck_opened отсюда убрано: оно уходило при каждой загрузке страницы и повторяло визит.
+  // Открытие окна статуса считает status_modal_opened (status.js).
   initHeroStatus();
   fetchServiceStatus();
   const statusModalBtn = document.getElementById('statusModalBtn');
